@@ -40,7 +40,7 @@ Each workstream owns a directory under `src/examples/<product-name>/`. Cross-wor
 
 1. `git checkout main && git pull dirac main` — start from latest stable
 2. `git checkout -b feature/<your-branch>` — create or reuse your branch
-3. `npm install` — sync deps (only if `package*.json` changed on main)
+3. `npm ci` — sync deps (only if `package*.json` changed on main)
 4. `node ./scripts/build.mjs -e mn-compiler-lab --prd` — verify baseline still builds
 5. Read the latest `git log --oneline main -10` to know what changed recently
 
