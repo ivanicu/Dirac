@@ -638,7 +638,7 @@ class MolecularVfxLab {
             });
             this.setRdkitAvailability('donor-acceptor-rdkit', {
                 available: counts.donors + counts.acceptors > 0,
-                text: `${counts.donors} donors · ${counts.acceptors} acceptors (Lipinski SMARTS)`,
+                text: `${counts.donors} donor${counts.donors === 1 ? '' : 's'} · ${counts.acceptors} acceptor${counts.acceptors === 1 ? '' : 's'} (Lipinski SMARTS)`,
                 signal: counts.donors + counts.acceptors > 0 ? 'ready' : 'empty',
             });
             this.setRdkitAvailability('partial-charge-rdkit', {
@@ -1094,7 +1094,10 @@ class MolecularVfxLab {
             byId('status').textContent = 'Ready';
         } catch (error) {
             console.error(error);
-            byId('status').textContent = error instanceof Error ? error.message : String(error);
+            const message = error instanceof Error ? error.message : String(error);
+            const status = byId('status');
+            status.textContent = message;
+            status.title = message; // the pill ellipsizes; the full error must stay reachable
         } finally {
             this.setControlsDisabled(false);
             this.busy = false;
@@ -1146,5 +1149,8 @@ const lab = new MolecularVfxLab();
 (window as unknown as { molecularVfxLab: MolecularVfxLab }).molecularVfxLab = lab;
 void lab.init().catch(error => {
     console.error(error);
-    byId('status').textContent = error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error ? error.message : String(error);
+    const status = byId('status');
+    status.textContent = message;
+    status.title = message; // the pill ellipsizes; the full error must stay reachable
 });
