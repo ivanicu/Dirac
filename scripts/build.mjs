@@ -16,7 +16,7 @@ const Apps = [
     { kind: 'app', name: 'viewer', themes: ['light', 'dark', 'blue'] },
     { kind: 'app', name: 'docking-viewer' },
     { kind: 'app', name: 'mesoscale-explorer' },
-    { kind: 'app', name: 'dirac', filename: 'dirac.js', entryRoot: './src/app.frontend.facets.molstar-rdkit.editable' },
+    { kind: 'app', name: 'dirac', filename: 'dirac.js', entryRoot: './src/app.frontend.facets.molstar-rdkit.editable', staticDirs: ['assets/rdkit'] },
     { kind: 'app', name: 'mvs-stories', globalName: 'mvsStories', filename: 'mvs-stories.js' },
 
     // Examples
@@ -131,6 +131,7 @@ function getPaths(app) {
             prefix: `./build/${app.name}`,
             entry: resolveEntryPath(`${entryRoot}/index.ts`),
             outfile: `./build/${app.name}/${app.filename || 'molstar.js'}`,
+            entryRoot,
         };
     }
     if (app.kind === 'example') {
@@ -152,7 +153,7 @@ function getPaths(app) {
 
 async function createBundle(app) {
     const { name, kind } = app;
-    const { prefix, entry, outfile } = getPaths(app);
+    const { prefix, entry, outfile, entryRoot } = getPaths(app);
 
     const ctx = await esbuild.context({
         entryPoints: [entry],
@@ -189,6 +190,12 @@ async function createBundle(app) {
     });
 
     await ctx.rebuild();
+
+    // Static dirs referenced by the app's HTML at runtime (script tag / fetch), which
+    // esbuild never sees as imports — e.g. Dirac's vendored RDKit_minimal.{js,wasm}.
+    for (const dir of app.staticDirs ?? []) {
+        await fs.promises.cp(path.resolve(entryRoot, dir), path.resolve(prefix, dir), { recursive: true });
+    }
 
     if (!isProduction) await ctx.watch();
 }
