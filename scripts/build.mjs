@@ -31,7 +31,7 @@ const Apps = [
     { kind: 'example', name: 'volume-mask' },
     { kind: 'example', name: 'react' },
     { kind: 'example', name: 'kernel-interface' },
-    { kind: 'example', name: 'mn-compiler-lab' },
+    { kind: 'example', name: 'dirac' },
 ];
 
 function findApp(name, kind) {

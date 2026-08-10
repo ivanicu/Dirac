@@ -1,4 +1,4 @@
-# Molecular VFX Lab — `mn-compiler-lab`
+# Dirac lab facet — `dirac`
 
 A browser-native, **chemistry-aware** molecular visualization workbench built on [mol*](https://github.com/molstar/molstar). It pairs mol*'s 3D structural engine with an embedded [RDKit-JS](https://github.com/rdkit/rdkit-js) (WASM) chemistry perception layer, exposing both through a curated master-detail UI.
 
@@ -54,8 +54,8 @@ The lab is built as a mol* example. From the repo root:
 
 ```bash
 npm install
-node ./scripts/build.mjs -e mn-compiler-lab --prd    # one-shot production build
-node_modules/.bin/http-server build/examples/mn-compiler-lab -p 1338 -g
+node ./scripts/build.mjs -e dirac --prd    # one-shot production build
+node_modules/.bin/http-server build/examples/dirac -p 1338 -g
 # Open http://localhost:1338/
 ```
 
@@ -86,7 +86,7 @@ The first page load pulls `RDKit_minimal.wasm` (~7 MB) from `./assets/rdkit/`. T
 ## File map
 
 ```
-src/examples/mn-compiler-lab/
+src/examples/dirac/
 ├── index.html        — topbar + sidebar + Ligand master-tab markup, all design tokens
 ├── index.ts          — lab orchestration; wires RDKit layers + pharmacophore + 2D panel
 ├── typings.d.ts      — WASM module + RDKit global declarations

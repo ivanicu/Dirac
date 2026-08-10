@@ -1,36 +1,38 @@
 # Dirac
 
-**A browser-native, single-molecule deep design workbench** — pairs the mol\* 3D engine with an in-browser RDKit-JS (WASM) chemistry perception layer, surfaced through a curated master-detail UI. The reference implementation of a single thesis: *a ligand in a deposited structure carries far more information than any one visualization channel can show, so the most chemically meaningful subsets must be exposed as orthogonal, toggleable overlays that never replace the underlying mol\* geometry.*
+> **Dirac is to Schrödinger (the company) what the Dirac equation is to the Schrödinger equation: an open-source, browser-native upgrade.**
 
-> Named for Paul Dirac — because the project treats chemistry the way Dirac treated mechanics: a single, principled notation in which many phenomena become special cases.
+Schrödinger's Maestro / LiveDesign stack is the commercial state-of-the-art for structure-based molecular design. It is closed, expensive, and desktop-native. **Dirac is the open-source, browser-native answer** — built on the [mol\*](https://github.com/molstar/molstar) 3D engine and the [RDKit-JS](https://github.com/rdkit/rdkit-js) cheminformatics runtime, with every computation happening in the browser via WebAssembly. No license server, no install, no Python backend required for the core workflow.
 
-## State of the project
+The name is intentional. In physics, Schrödinger's equation describes matter at non-relativistic energies; Dirac's equation is its upgrade to the relativistic regime, predicting spin, antimatter, and the fine structure of hydrogen. **Dirac the project aims to be that kind of upgrade over Schrödinger the product** — same domain, deeper formulation, open and accessible.
 
-Dirac ships one running product today and has three more in active development on parallel feature branches.
+## What Dirac is today
 
-| Status | Product | Branch |
+Dirac is **one integrated app** with multiple facets, all sharing the same mol\* scene, the same RDKit-JS session, and the same focused ligand. Facets are organized as sub-directories of `src/examples/dirac/facets/`; agents develop them in parallel against the shared substrate in `src/mol-plugin-chem/`.
+
+| Status | Facet | What it does |
 |---|---|---|
-| ✅ shipped | **mn-compiler-lab** — 3D + RDKit chemistry + 2D ligand + 3D pharmacophore | `main` (`src/examples/mn-compiler-lab/`) |
-| 🚧 in progress | **Pharmacophore Designer** — draggable HBA/HBD/aromatic/hydrophobic features with live SMARTS screening | `feature/pharmacophore-designer` |
-| 🚧 in progress | **Conformer Explorer** — RDKit ETKDG conformers, mol\* morph animation, energy landscape | `feature/conformer-explorer` |
-| 🚧 in progress | **Property Optimization Cockpit** — Lipinski/Veber dashboard driven by `mol.get_descriptors()` | `feature/property-cockpit` |
+| ✅ shipped | **Lab** (in `index.ts`) | 3D structure + RDKit chemistry perception (aromaticity / donor / acceptor / Gasteiger stub) + 2D ligand depiction with click-sync + 3D pharmacophore primitives (HBA cones / HBD sticks / aromatic disks / hydrophobic halos) |
+| 🚧 next | **Pharmacophore Designer** (`facets/pharmacophore-designer/`) | Drag-editable pharmacophore features, live SMARTS screening against a ligand library |
+| 🚧 next | **Conformer Explorer** (`facets/conformer-explorer/`) | RDKit ETKDG conformer generation, mol\* morph animation, energy landscape |
+| 🚧 next | **Property Optimization Cockpit** (`facets/property-cockpit/`) | Lipinski / Veber dashboard driven by `mol.get_descriptors()` |
 
-## Run the shipped product
+## Run it
 
 ```bash
 git clone https://github.com/ivanicu/Dirac.git
 cd Dirac
-npm ci                                                            # use ci, not install (see AGENTS.md)
-node ./scripts/build.mjs -e mn-compiler-lab --prd                 # one-shot production build
-node_modules/.bin/http-server build/examples/mn-compiler-lab -p 1338 -g
+npm ci                                                       # use ci, not install (see AGENTS.md)
+node ./scripts/build.mjs -e dirac --prd                       # one-shot production build
+node_modules/.bin/http-server build/examples/dirac -p 1338 -g
 # open http://localhost:1338/
 ```
 
-First page load fetches `RDKit_minimal.wasm` (~7 MB) from `src/examples/mn-compiler-lab/assets/rdkit/`. Browser-cached afterwards.
+First page load fetches `RDKit_minimal.wasm` (~7 MB) from `src/examples/dirac/assets/rdkit/`. Browser-cached afterwards.
 
-## Demo scenes (try these first)
+## Demo scenes
 
-| Structure | Enable | What you'll see |
+| Structure | What to enable | What you'll see |
 |---|---|---|
 | **1CBS** (retinoic-acid binding protein) | Focus → `REA · A:200`, then Semantics → RDKit → **H-bond donor / acceptor** | 1 HBD + 2 HBA on the carboxylate. Switch to Ligand tab for the 2D depiction with the same atoms highlighted. |
 | **4HHB** (hemoglobin) | Focus → `HEM · A:142`, then Pharmacophore → **Pharmacophore features · 3D** | 8 HBA cones, 2 HBD sticks, 2 aromatic disks over pyrrole rings, 24 hydrophobic halos. |
@@ -54,7 +56,7 @@ The atom-index contract is the load-bearing seam: ligand loci iteration order is
 
 ## Visual channel allocation
 
-Every overlay is assigned a channel that doesn't conflict with others — the project treats color, geometry, label, and halo as orthogonal carriers.
+Dirac treats color, geometry, label, and halo as orthogonal carriers — each piece of chemistry information is assigned exactly one channel so they never compete.
 
 | Information | Channel |
 |---|---|
@@ -69,25 +71,25 @@ Every overlay is assigned a channel that doesn't conflict with others — the pr
 ## What's deliberately not here
 
 - **MMFF / OPLS ligand strain**: RDKit-JS does not expose force-field APIs in the 2025.03.4 build. Implemented as a clean "unavailable" badge, not silently missing.
-- **Trajectory variance envelope**: would require ensemble data and custom geometry; deferred.
-- **APBS electrostatics**: would require an external service; deferred.
+- **FEP / ΔΔG**: requires HPC backend; not faked.
+- **APBS electrostatics**: requires an external service; deferred.
+- **Retrosynthesis**: RDKit-JS does not expose the retrosynthesis API; would need a Python backend.
 - **3D bond-order double-line rendering**: data is available (CCD `ComponentBond.order`), the renderer is not yet written. The 2D RDKit depiction shows proper bond orders today.
-- **3D→2D selection sync** (clicking in 3D highlights in 2D): the data path is built (`ligandDepictionAtomPositions` is populated), the wire is not.
 
 ## Honest limitations
 
 - **Single-residue ligand assumption.** The molfile generator and atom-index walker assume one `LigandFocusTarget` bundle = one residue. Covalent multi-residue ligands and UNL entries are not supported.
 - **CCD dependency.** mol*'s `MolEncoder` requires `ComponentBond` data from the Chemical Component Dictionary. Novel ligands not in CCD will report "RDKit cannot parse this ligand" rather than silently failing.
-- **Porphyrin aromaticity undercount.** RDKit's default aromaticity model perceives only 2 of the 4 pyrrole rings in HEME. The chemistry engine faithfully reports what RDKit perceives — not a bug, a known aromaticity-model limitation.
+- **Porphyrin aromaticity undercount.** RDKit's default aromaticity model perceives only 2 of the 4 pyrrole rings in HEME. Faithfully reported, not a bug.
 
 ## Repository topology
 
 ```
-origin   → github.com/molstar/molstar.git   (UPSTREAM, read-only sync via cherry-pick)
 origin   → github.com/ivanicu/Dirac.git     (canonical)
+master   → tracks upstream mol* locally for cherry-pick (never pushed to origin)
 ```
 
-`master` tracks upstream mol\* for cherry-pick; `main` is the Dirac integration branch. See `AGENTS.md` for branch model, workstream ownership, and PR rules.
+Single-tree model: all facets live in `main`. See `AGENTS.md` for directory-based ownership and the `[coord]` issue protocol for shared substrate changes.
 
 ## Acknowledgments
 
