@@ -1,132 +1,153 @@
 # Dirac — Agent Operating Guide
 
-> **Mission:** A browser-native single-molecule deep design workbench built on mol* + RDKit-JS. Three product workstreams operate in parallel on top of a shared chemistry-aware substrate.
+> **Single-tree model.** All workstreams live in `main` together. Dirac is ONE integrated product with multiple facets, not three products that might merge someday. Agents work in different directories of the same tree, not in different branches.
 
-This file is the **source of truth for any agent** working in this repo. Read it before opening a branch.
+This file is the **source of truth for any agent** working in this repo. Read it before committing.
 
-## Repo topology
+## Repository topology
 
 ```
-origin    → github.com/molstar/molstar.git   (UPSTREAM, read-only sync)
-dirac     → github.com/ivanicu/Dirac.git     (OUR canonical remote)
+origin   → github.com/ivanicu/Dirac.git     (canonical, the only remote that matters)
+upstream → github.com/molstar/molstar.git   (reference only, cherry-pick incoming)
 ```
 
-## Branch model
+There is one branch that anyone develops against: **`main`**.
 
-| Branch | Owner | Purpose |
+| Branch | Purpose |
+|---|---|
+| `main` | Canonical integrated state. The whole product, all facets, all the time. |
+| `wip/<topic>` | Short-lived (< 1 day) branches for individual changes too big for a single commit. Must merge or delete within 24 hours. |
+| `master` | Read-only local pointer to upstream mol\*. Never pushed to `origin`. Used only for `git cherry-pick master` to absorb mol\* fixes. |
+
+**Forbidden:** long-lived per-feature branches. If you need to develop in isolation for more than a day, you are doing two things at once — split the work into smaller commits against `main`.
+
+## Workstream ownership (by directory, not by branch)
+
+Three facets of Dirac are developed in parallel. Each lives in its own directory under `src/examples/`. Conflicts are prevented by directory isolation, not branch isolation.
+
+| Facet | Owner scope | Read-only for others |
 |---|---|---|
-| `master` | nobody (sync only) | Tracks upstream mol\* master. Never commit here. Use `git pull upstream master` to absorb mol\* releases. |
-| `main` | lead agent | Our stable integration branch. All PRs merge here. Must always build + run. |
-| `feature/<product>` | one agent each | Long-lived product workstreams. See "Workstreams" below. |
-| `feature/<topic>` | any agent | Short-lived topic branches for cross-cutting work (bug fixes, refactors). |
-| `docs/<topic>` | any agent | Documentation-only branches. No code changes. |
+| **mn-compiler-lab** (existing baseline + RDKit + 2D ligand + 3D pharmacophore) | `src/examples/mn-compiler-lab/**` | Everyone reads this for the chemistry substrate. |
+| **Pharmacophore Designer** | `src/examples/pharmacophore-designer/**` | Other agents do not commit here. |
+| **Conformer Explorer** | `src/examples/conformer-explorer/**` | Other agents do not commit here. |
+| **Property Optimization Cockpit** | `src/examples/property-cockpit/**` | Other agents do not commit here. |
 
-**Forbidden:** direct push to `main` or `master`. All changes via PR.
+**Shared substrate** (modifications need explicit coordination via GitHub issue before push):
 
-## Workstreams (the 3 product directions)
+- `src/mol-plugin-chem/semantic-chemistry-rdkit.ts` — RDKit singleton + SMARTS + LigandChemistry contract
+- `src/mol-plugin-chem/ligand-depiction.ts` — 2D SVG with click sync
+- `src/mol-plugin-chem/pharmacophore-features.ts` — 3D pharmacophore primitives
+- `package.json` and `package-lock.json` — adding deps requires a coordination issue
+- `AGENTS.md`, root `README.md`, `CHANGELOG.md` — docs
 
-Each workstream owns a directory under `src/examples/<product-name>/`. Cross-workstream coordination happens through `src/mol-plugin-chem/` (shared chemistry substrate) via PR review.
-
-| Branch | Owns | May modify with PR | May NOT touch |
-|---|---|---|---|
-| `feature/pharmacophore-designer` | `src/examples/pharmacophore-designer/**` | `src/mol-plugin-chem/pharmacophore-features.ts`, `src/mol-plugin-chem/ligand-depiction.ts` | Other workstreams' `src/examples/<other>/` |
-| `feature/conformer-explorer` | `src/examples/conformer-explorer/**` | `src/mol-plugin-chem/semantic-chemistry-rdkit.ts` (extend conformer API) | Other workstreams' dirs |
-| `feature/property-cockpit` | `src/examples/property-cockpit/**` | `src/mol-plugin-chem/semantic-chemistry-rdkit.ts` (descriptor accessors) | Other workstreams' dirs |
-| `feature/lab-*` (existing) | `src/examples/mn-compiler-lab/**` | All `src/mol-plugin-chem/**` | Other workstreams' dirs |
-
-**Conflict rule:** if you need to change `src/mol-plugin-chem/semantic-chemistry-rdkit.ts` and another agent also needs to, coordinate via GitHub issue before pushing.
+If you need to change a shared file, open a `[coord]` issue first.
 
 ## Pre-flight checklist (every agent, every session)
 
-1. `git checkout main && git pull dirac main` — start from latest stable
-2. `git checkout -b feature/<your-branch>` — create or reuse your branch
-3. `npm ci` — sync deps (only if `package*.json` changed on main)
-4. `node ./scripts/build.mjs -e mn-compiler-lab --prd` — verify baseline still builds
-5. Read the latest `git log --oneline main -10` to know what changed recently
+```bash
+git checkout main && git pull origin main         # start from latest canonical
+npm ci                                             # only if package*.json changed
+node ./scripts/build.mjs -e mn-compiler-lab --prd  # verify baseline still builds
+git log --oneline main -10                         # know what changed recently
+```
 
-## Verification gate (before any PR)
+## Daily workflow
 
-A PR is mergeable only if ALL of these pass:
+1. `git pull origin main` before each session.
+2. Develop in your facet directory. Commit to `main` directly when the change builds and is logically atomic.
+3. For changes that take more than a few hours, use a `wip/<topic>` branch and merge into `main` as soon as it builds. Don't accumulate.
+4. Push to `origin main` after each logical unit of work. Don't batch.
+5. If you touched shared substrate (`src/mol-plugin-chem/`, `package.json`), open a `[coord]` issue describing the change after pushing.
+
+## Verification gate (before push to main)
 
 ```bash
 # 1. TypeScript clean
 node_modules/.bin/tsc --noEmit -p tsconfig.json
 
-# 2. Lab example builds
+# 2. Your facet builds
+node ./scripts/build.mjs -e <your-facet-name> --prd
+
+# 3. Baseline lab still builds (regression check)
 node ./scripts/build.mjs -e mn-compiler-lab --prd
 
-# 3. (If you touched mol-plugin-chem/*) chem packs test
+# 4. (If you touched mol-plugin-chem/*)
 npm run test:chem-packs
-
-# 4. (If you touched RDKit integration) smoke-test in browser
-#    Load 1CBS and 4HHB, verify donor/acceptor + pharmacophore counts
-#    match expected (see scripts/brutal-test*.mjs in /tmp or docs)
 ```
+
+If any step fails, fix before pushing. Do not push red.
+
+## Conflict resolution
+
+Because facets are isolated by directory, real conflicts should be rare. When they happen:
+
+1. **Shared file conflict** (someone else changed `semantic-chemistry-rdkit.ts` while you did): rebase on latest `main`, re-test, push.
+2. **Semantic conflict** (your change depends on an assumption that someone else invalidated): open a `[coord]` issue, talk it out, then commit a fix.
+3. **Build break on main**: the agent who broke it owns the fix. Others can `git revert` if the breaker is offline.
 
 ## Commit message convention
 
-Use neural commit format from CLAUDE.md:
+Use neural commit format:
 
 ```
-[type.region.impact.Dx{valence}] WHY in one line
+[type.facet.impact.Dx{valence}] WHY in one line
 
 (optional) Body explaining WHY, not WHAT. diff already shows what.
 ```
 
-- `type`: `sense`/`think`/`act`/`fix`/`guard`/`memory`/`prune`/`reflex`/`predict`/`verify`/`feat`/`meta`/`docs`
-- `region`: `lab`/`rdkit`/`pharmacophore`/`conformer`/`property`/`infra`/etc.
+- `type`: `feat`/`fix`/`docs`/`meta`/`reflex`/`guard`/`verify`
+- `facet`: `lab`/`pharmacophore`/`conformer`/`property`/`rdkit`/`infra`/`docs`
 - `impact`: `mu` (micro) / `lambda` (local) / `rho` (regional) / `sigma` (system) / `Omega` (paradigm)
 - `Dx`: D0-D9 confidence
 - `valence`: `+` positive / `-` negative / `~` neutral / `!` breaking
 
 Examples:
-- `[feat.pharmacophore.sigma.D7+] editable HBA cone with mouse drag`
-- `[fix.rdkit.lambda.D7+] exclude positively charged atoms from acceptor SMARTS`
-- `[docs.lab.mu.D8~] clarify pharmacophore feature rendering in README`
+- `[feat.pharmacophore.sigma.D7+] drag-editable HBA cone with mouse`
+- `[fix.rdkit.lambda.D7+] exclude positive charges from acceptor SMARTS`
+- `[docs.lab.mu.D8~] clarify pharmacophore rendering in README`
 
 ## Build and run
 
 ```bash
-# One-shot production build of the lab
+# Baseline (existing shipped facet)
 node ./scripts/build.mjs -e mn-compiler-lab --prd
-
-# Serve
 node_modules/.bin/http-server build/examples/mn-compiler-lab -p 1338 -g
-# Open http://localhost:1338/
-```
+# open http://localhost:1338/
 
-Other examples (when added by feature branches): same pattern with `-e <example-name>`.
+# Each new facet uses the same pattern with its own -e <facet-name>
+```
 
 ## RDKit-JS notes (critical)
 
-- Vendored at `src/examples/mn-compiler-lab/assets/rdkit/RDKit_minimal.{js,wasm}` (7MB)
-- Loaded via `<script>` tag in `index.html` — exposes `window.initRDKitModule`
+- Vendored at `src/examples/mn-compiler-lab/assets/rdkit/RDKit_minimal.{js,wasm}` (7 MB).
+- All facets **reuse the same vendored WASM**. Do not duplicate it per-facet.
+- Loaded via `<script>` tag in each facet's `index.html`. Exposes `window.initRDKitModule`.
 - **2025.03.4 build limitations (verified):**
-  - `compute_gasteiger_charges` is NOT exposed (partial-charge layer is a stub)
-  - `forceCoords: true` in `get_svg_with_highlights` does NOT regenerate 2D coords — use `get_new_coords()` + re-parse instead
-  - `<metadata>` block is NOT emitted regardless of `includeMetadata` flag — fall back to bond-path centroid for atom click mapping
-  - Retrosynthesis, force fields, OPLS — not available
+  - `compute_gasteiger_charges` is NOT exposed (partial-charge layer is a stub).
+  - `forceCoords: true` in `get_svg_with_highlights` does NOT regenerate 2D coords. Use `get_new_coords()` + re-parse instead.
+  - `<metadata>` block is NOT emitted. Use bond-path centroid fallback for atom click mapping.
+  - Retrosynthesis, force fields, OPLS — not available.
 
 If you need any of the missing APIs, escalate to a Python backend; do not fake it in JS.
 
 ## What NOT to commit
 
-- `node_modules/`
-- `build/` (regenerated)
-- `*.tsbuildinfo`
-- Local credentials, API keys, browser login state (per CLAUDE.md constitution)
-- PDB structure files > 5MB — use Git LFS or external hosting
+- `node_modules/`, `build/`, `*.tsbuildinfo`
+- Local credentials, API keys, browser login state
+- PDB structure files > 5 MB — use Git LFS or external hosting
+- Per-facet copies of the RDKit WASM (reuse the existing one)
 
 ## Source-of-truth docs
 
-- `src/examples/mn-compiler-lab/README.md` — the existing lab (UI + chemistry + 2D + 3D pharmacophore)
-- This file (`AGENTS.md`) — agent operating rules
-- Per-product README under `src/examples/<product>/README.md` — written by each workstream agent
+- `README.md` — Dirac product overview, what facets exist, how to run
+- `CHANGELOG.md` — what's new in each Dirac version
+- `AGENTS.md` (this file) — agent operating rules
+- `src/examples/<facet>/README.md` — per-facet design notes, written by the agent owning that facet
 
-## Issue protocol (for cross-workstream coordination)
+## Issue protocol (for cross-facet coordination)
 
-When an agent's work affects another agent's scope:
-1. Open a GitHub issue titled `[coord] <topic>` describing the proposed change
-2. `@` mention the affected workstream
-3. Wait 1 business day (or use PR review as the coordination point)
-4. Proceed with PR; reference the issue in the PR description
+When your work affects another facet's scope:
+1. Open a GitHub issue titled `[coord] <topic>` describing the proposed change.
+2. Reference the affected facet directories.
+3. Proceed with the commit but mention the issue in the commit body.
+4. The other facet's agent reads open `[coord]` issues at session start.
