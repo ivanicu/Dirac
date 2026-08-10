@@ -91,6 +91,8 @@ interface JSMol {
     get_prop_list(includePrivate?: boolean, includeComputed?: boolean): string[];
     /** Returns a fresh V3000 molblock with 2D coordinates computed by RDDepict. */
     get_new_coords(useCoordGen: boolean): string;
+    /** Mutate the mol's conformer in place with new 2D coords (CoordGen if true). */
+    set_new_coords(useCoordGen: boolean): void;
     is_valid(): boolean;
     /** Returns JSON with 40+ RDKit descriptors (MW, LogP, TPSA, HBD/HBA, rings, etc.). */
     get_descriptors(): string;

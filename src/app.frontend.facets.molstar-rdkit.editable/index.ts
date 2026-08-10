@@ -849,8 +849,10 @@ class MolecularVfxLab {
 
         const result = await LigandDepiction.depict(analysis.molfile, {
             atomHighlights: highlights,
-            width: 340,
-            height: 220,
+            // 2× density — SVG viewBox keeps it crisp, CSS scales for the panel.
+            // Verified necessary to avoid atom overlap on macrocycles (HEM, C8E).
+            width: 760,
+            height: 500,
         });
         if (!result) {
             target.innerHTML = '<p class="ledger-empty">RDKit depiction failed.</p>';
