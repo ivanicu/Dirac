@@ -1,0 +1,393 @@
+{
+  "blender": "5.2.0 LTS",
+  "molecularNodes": "5.2.0",
+  "schema": "molecular-compiler-lab@1",
+  "source": "/home/ivan/molstar/examples/1crn.cif",
+  "variants": [
+    {
+      "asset": "spheres",
+      "blendBytes": 155843,
+      "buildSeconds": 0.382316,
+      "exportSeconds": 0.087147,
+      "geometry": {
+        "attributes": [
+          ".corner_edge",
+          ".corner_vert",
+          ".edge_verts",
+          "position"
+        ],
+        "edges": 0,
+        "materials": [],
+        "polygons": 0,
+        "triangles": 0,
+        "vertices": 0
+      },
+      "glbBytes": 172,
+      "id": "spheres-point",
+      "parameters": {
+        "quality": 2,
+        "scale": 0.8,
+        "sphere_geometry": "Point"
+      },
+      "source": "1crn.cif",
+      "web_strategy": "point-cloud"
+    },
+    {
+      "asset": "spheres",
+      "blendBytes": 155877,
+      "buildSeconds": 0.082026,
+      "exportSeconds": 0.002003,
+      "geometry": {
+        "attributes": [
+          ".corner_edge",
+          ".corner_vert",
+          ".edge_verts",
+          "position"
+        ],
+        "edges": 0,
+        "materials": [],
+        "polygons": 0,
+        "triangles": 0,
+        "vertices": 0
+      },
+      "glbBytes": 172,
+      "id": "spheres-instance-q1",
+      "parameters": {
+        "quality": 1,
+        "scale": 0.8,
+        "sphere_geometry": "Instance"
+      },
+      "source": "1crn.cif",
+      "web_strategy": "instance-source"
+    },
+    {
+      "asset": "spheres",
+      "blendBytes": 155884,
+      "buildSeconds": 0.080098,
+      "exportSeconds": 0.002122,
+      "geometry": {
+        "attributes": [
+          ".corner_edge",
+          ".corner_vert",
+          ".edge_verts",
+          "position"
+        ],
+        "edges": 0,
+        "materials": [],
+        "polygons": 0,
+        "triangles": 0,
+        "vertices": 0
+      },
+      "glbBytes": 172,
+      "id": "spheres-instance-q3",
+      "parameters": {
+        "quality": 3,
+        "scale": 0.8,
+        "sphere_geometry": "Instance"
+      },
+      "source": "1crn.cif",
+      "web_strategy": "instance-source-high"
+    },
+    {
+      "asset": "spheres",
+      "blendBytes": 155840,
+      "buildSeconds": 0.13128,
+      "exportSeconds": 0.016307,
+      "geometry": {
+        "attributes": [
+          ".corner_edge",
+          ".corner_vert",
+          ".edge_verts",
+          ".select_edge",
+          ".select_vert",
+          ".uv_select_edge",
+          ".uv_select_face",
+          ".uv_select_vert",
+          "Color",
+          "atom_id",
+          "atom_name",
+          "atom_types",
+          "atomic_number",
+          "b_factor",
+          "bond_type",
+          "chain_id",
+          "charge",
+          "entity_id",
+          "is_alpha_carbon",
+          "is_backbone",
+          "is_carb",
+          "is_hetero",
+          "is_instanced",
+          "is_lipid",
+          "is_nucleic",
+          "is_peptide",
+          "is_side_chain",
+          "is_solvent",
+          "lipophobicity",
+          "mass",
+          "material_index",
+          "occupancy",
+          "position",
+          "res_id",
+          "res_name",
+          "sec_struct",
+          "segid",
+          "ures_id",
+          "vdw_radii"
+        ],
+        "edges": 39240,
+        "materials": [
+          "MN Default"
+        ],
+        "polygons": 26160,
+        "triangles": 26160,
+        "vertices": 13734
+      },
+      "glbBytes": 652760,
+      "id": "spheres-mesh-q2",
+      "parameters": {
+        "quality": 2,
+        "scale": 0.8,
+        "sphere_geometry": "Mesh"
+      },
+      "source": "1crn.cif",
+      "web_strategy": "realized-mesh"
+    },
+    {
+      "asset": "cartoon",
+      "blendBytes": 497856,
+      "buildSeconds": 0.112131,
+      "exportSeconds": 0.009887,
+      "geometry": {
+        "attributes": [
+          ".corner_edge",
+          ".corner_vert",
+          ".edge_verts",
+          ".selection",
+          "Color",
+          "atom_id",
+          "atom_name",
+          "atom_types",
+          "atomic_number",
+          "b_factor",
+          "bond_type",
+          "chain_id",
+          "charge",
+          "entity_id",
+          "is_alpha_carbon",
+          "is_backbone",
+          "is_carb",
+          "is_hetero",
+          "is_lipid",
+          "is_nucleic",
+          "is_peptide",
+          "is_side_chain",
+          "is_solvent",
+          "lipophobicity",
+          "mass",
+          "material_index",
+          "occupancy",
+          "position",
+          "res_id",
+          "res_name",
+          "sec_struct",
+          "segid",
+          "sharp_edge",
+          "ures_id",
+          "vdw_radii"
+        ],
+        "edges": 1450,
+        "materials": [
+          "MN Default"
+        ],
+        "polygons": 723,
+        "triangles": 1454,
+        "vertices": 743
+      },
+      "glbBytes": 65312,
+      "id": "cartoon-q1",
+      "parameters": {
+        "quality": 1
+      },
+      "source": "1crn.cif",
+      "web_strategy": "evaluated-mesh-low"
+    },
+    {
+      "asset": "cartoon",
+      "blendBytes": 497817,
+      "buildSeconds": 0.117183,
+      "exportSeconds": 0.012413,
+      "geometry": {
+        "attributes": [
+          ".corner_edge",
+          ".corner_vert",
+          ".edge_verts",
+          ".selection",
+          "Color",
+          "atom_id",
+          "atom_name",
+          "atom_types",
+          "atomic_number",
+          "b_factor",
+          "bond_type",
+          "chain_id",
+          "charge",
+          "entity_id",
+          "is_alpha_carbon",
+          "is_backbone",
+          "is_carb",
+          "is_hetero",
+          "is_lipid",
+          "is_nucleic",
+          "is_peptide",
+          "is_side_chain",
+          "is_solvent",
+          "lipophobicity",
+          "mass",
+          "material_index",
+          "occupancy",
+          "position",
+          "res_id",
+          "res_name",
+          "sec_struct",
+          "segid",
+          "sharp_edge",
+          "ures_id",
+          "vdw_radii"
+        ],
+        "edges": 4368,
+        "materials": [
+          "MN Default"
+        ],
+        "polygons": 2172,
+        "triangles": 4392,
+        "vertices": 2212
+      },
+      "glbBytes": 134136,
+      "id": "cartoon-q2",
+      "parameters": {
+        "quality": 2
+      },
+      "source": "1crn.cif",
+      "web_strategy": "evaluated-mesh-medium"
+    },
+    {
+      "asset": "cartoon",
+      "blendBytes": 497991,
+      "buildSeconds": 0.119418,
+      "exportSeconds": 0.015006,
+      "geometry": {
+        "attributes": [
+          ".corner_edge",
+          ".corner_vert",
+          ".edge_verts",
+          ".selection",
+          "Color",
+          "atom_id",
+          "atom_name",
+          "atom_types",
+          "atomic_number",
+          "b_factor",
+          "bond_type",
+          "chain_id",
+          "charge",
+          "entity_id",
+          "is_alpha_carbon",
+          "is_backbone",
+          "is_carb",
+          "is_hetero",
+          "is_lipid",
+          "is_nucleic",
+          "is_peptide",
+          "is_side_chain",
+          "is_solvent",
+          "lipophobicity",
+          "mass",
+          "material_index",
+          "occupancy",
+          "position",
+          "res_id",
+          "res_name",
+          "sec_struct",
+          "segid",
+          "sharp_edge",
+          "ures_id",
+          "vdw_radii"
+        ],
+        "edges": 8786,
+        "materials": [
+          "MN Default"
+        ],
+        "polygons": 4371,
+        "triangles": 8830,
+        "vertices": 4431
+      },
+      "glbBytes": 252888,
+      "id": "cartoon-q3",
+      "parameters": {
+        "quality": 3
+      },
+      "source": "1crn.cif",
+      "web_strategy": "evaluated-mesh-high"
+    },
+    {
+      "asset": "ribbon",
+      "blendBytes": 363791,
+      "buildSeconds": 0.100615,
+      "exportSeconds": 0.006789,
+      "geometry": {
+        "attributes": [
+          ".corner_edge",
+          ".corner_vert",
+          ".edge_verts",
+          ".selection",
+          "Color",
+          "atom_id",
+          "atom_name",
+          "atom_types",
+          "atomic_number",
+          "b_factor",
+          "bond_type",
+          "chain_id",
+          "charge",
+          "entity_id",
+          "is_alpha_carbon",
+          "is_backbone",
+          "is_carb",
+          "is_hetero",
+          "is_lipid",
+          "is_nucleic",
+          "is_peptide",
+          "is_side_chain",
+          "is_solvent",
+          "lipophobicity",
+          "mass",
+          "material_index",
+          "occupancy",
+          "position",
+          "res_id",
+          "res_name",
+          "sec_struct",
+          "segid",
+          "sharp_edge",
+          "ures_id",
+          "vdw_radii"
+        ],
+        "edges": 2166,
+        "materials": [
+          "MN Default"
+        ],
+        "polygons": 1082,
+        "triangles": 2168,
+        "vertices": 1086
+      },
+      "glbBytes": 53900,
+      "id": "ribbon-q2",
+      "parameters": {
+        "quality": 2
+      },
+      "source": "1crn.cif",
+      "web_strategy": "evaluated-ribbon-mesh"
+    }
+  ]
+}

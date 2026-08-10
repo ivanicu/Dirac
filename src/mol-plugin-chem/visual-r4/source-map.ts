@@ -1,0 +1,33 @@
+/** Exact upstream snapshot used to derive the browser-side semantic operators. */
+export const MolecularNodesR4Source = Object.freeze({
+    repository: 'https://github.com/BradyAJohnston/MolecularNodes',
+    commit: '5b52da2e29a07fd3e8f545f70c252ace591375bb',
+    packageVersion: '5.2.0',
+    blenderVersion: '5.2.0 LTS',
+    asset: 'molecularnodes/assets/node_data_file.blend',
+    totalNodeGroups: 524,
+    recursivelyInspectedGroups: 173,
+    roots: Object.freeze({
+        cartoon: { nodes: 32, links: 64 },
+        ribbon: { nodes: 19, links: 42 },
+        surface: { nodes: 70, links: 80 },
+        ballAndStick: { nodes: 21, links: 35 },
+        spheres: { nodes: 10, links: 19 },
+        sticks: { nodes: 17, links: 27 },
+        preset1: { nodes: 11, links: 19 },
+        preset2: { nodes: 23, links: 36 },
+        preset3: { nodes: 7, links: 15 },
+        preset4: { nodes: 12, links: 21 },
+        flat: { nodes: 8, links: 9 },
+        transparentOutline: { nodes: 17, links: 16 },
+    }),
+    materials: Object.freeze({
+        ambientOcclusion: { nodes: 4, links: 3 },
+        default: { nodes: 4, links: 4 },
+        flat: { nodes: 2, links: 1 },
+        flatOutline: { nodes: 15, links: 12 },
+        squishy: { nodes: 3, links: 3 },
+        transparentOutline: { nodes: 2, links: 1 },
+        micrograph: { nodes: 10, links: 9 },
+    }),
+});
