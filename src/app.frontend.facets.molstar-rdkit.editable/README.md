@@ -86,7 +86,7 @@ The first page load pulls `RDKit_minimal.wasm` (~7 MB) from `./assets/rdkit/`. T
 ## File map
 
 ```
-src/app/
+src/app.frontend.facets.molstar-rdkit.editable/
 ├── index.html        — topbar + sidebar + Ligand master-tab markup, all design tokens
 ├── index.ts          — lab orchestration; wires RDKit layers + pharmacophore + 2D panel
 ├── typings.d.ts      — WASM module + RDKit global declarations
@@ -94,7 +94,7 @@ src/app/
     ├── rdkit/        — vendored RDKit_minimal.js + .wasm
     └── structures/   — fixture .cif files
 
-src/chemistry/
+src/chemistry.backend.perception.rdkit-wasm.editable/
 ├── semantic-chemistry-rdkit.ts  — RDKit singleton, molfile builder, SMARTS, Overpaint applier
 ├── ligand-depiction.ts          — 2D SVG with highlights + click-to-atom (no mol* deps)
 └── pharmacophore-features.ts    — 3D HBA/HBD/aromatic/hydrophobic primitives via mol* Shape

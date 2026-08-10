@@ -27,16 +27,16 @@ Three facets of Dirac are developed in parallel. Each lives in its own directory
 
 | Facet | Owner scope | Read-only for others |
 |---|---|---|
-| **mn-compiler-lab** (existing baseline + RDKit + 2D ligand + 3D pharmacophore) | `src/app/**` | Everyone reads this for the chemistry substrate. |
+| **mn-compiler-lab** (existing baseline + RDKit + 2D ligand + 3D pharmacophore) | `src/app.frontend.facets.molstar-rdkit.editable/**` | Everyone reads this for the chemistry substrate. |
 | **Pharmacophore Designer** | `src/examples/pharmacophore-designer/**` | Other agents do not commit here. |
 | **Conformer Explorer** | `src/examples/conformer-explorer/**` | Other agents do not commit here. |
 | **Property Optimization Cockpit** | `src/examples/property-cockpit/**` | Other agents do not commit here. |
 
 **Shared substrate** (modifications need explicit coordination via GitHub issue before push):
 
-- `src/chemistry/semantic-chemistry-rdkit.ts` — RDKit singleton + SMARTS + LigandChemistry contract
-- `src/chemistry/ligand-depiction.ts` — 2D SVG with click sync
-- `src/chemistry/pharmacophore-features.ts` — 3D pharmacophore primitives
+- `src/chemistry.backend.perception.rdkit-wasm.editable/semantic-chemistry-rdkit.ts` — RDKit singleton + SMARTS + LigandChemistry contract
+- `src/chemistry.backend.perception.rdkit-wasm.editable/ligand-depiction.ts` — 2D SVG with click sync
+- `src/chemistry.backend.perception.rdkit-wasm.editable/pharmacophore-features.ts` — 3D pharmacophore primitives
 - `package.json` and `package-lock.json` — adding deps requires a coordination issue
 - `AGENTS.md`, root `README.md`, `CHANGELOG.md` — docs
 
@@ -57,7 +57,7 @@ git log --oneline main -10                         # know what changed recently
 2. Develop in your facet directory. Commit to `main` directly when the change builds and is logically atomic.
 3. For changes that take more than a few hours, use a `wip/<topic>` branch and merge into `main` as soon as it builds. Don't accumulate.
 4. Push to `origin main` after each logical unit of work. Don't batch.
-5. If you touched shared substrate (`src/chemistry/`, `package.json`), open a `[coord]` issue describing the change after pushing.
+5. If you touched shared substrate (`src/chemistry.backend.perception.rdkit-wasm.editable/`, `package.json`), open a `[coord]` issue describing the change after pushing.
 
 ## Verification gate (before push to main)
 
@@ -119,7 +119,7 @@ node_modules/.bin/http-server build/examples/mn-compiler-lab -p 1338 -g
 
 ## RDKit-JS notes (critical)
 
-- Vendored at `src/app/assets/rdkit/RDKit_minimal.{js,wasm}` (7 MB).
+- Vendored at `src/app.frontend.facets.molstar-rdkit.editable/assets/rdkit/RDKit_minimal.{js,wasm}` (7 MB).
 - All facets **reuse the same vendored WASM**. Do not duplicate it per-facet.
 - Loaded via `<script>` tag in each facet's `index.html`. Exposes `window.initRDKitModule`.
 - **2025.03.4 build limitations (verified):**

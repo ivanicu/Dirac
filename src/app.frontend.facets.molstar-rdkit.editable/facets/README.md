@@ -8,7 +8,7 @@ with the app shell via a master-tab.
 ## Layout
 
 ```
-src/app/
+src/app.frontend.facets.molstar-rdkit.editable/
 ├── index.html                  # app shell, all master-tabs
 ├── index.ts                    # router, mounts every facet
 ├── facets/
@@ -41,10 +41,10 @@ shell calls to register it. Exact shape to be defined when the first new facet
 ships; the existing lab facet is currently inlined in `../index.ts` and will
 be refactored when the second facet arrives.
 
-## Shared substrate (in src/chemistry/, not here)
+## Shared substrate (in src/chemistry.backend.perception.rdkit-wasm.editable/, not here)
 
 Facets DO NOT own chemistry — they consume the shared substrate at
-`src/chemistry/`:
+`src/chemistry.backend.perception.rdkit-wasm.editable/`:
 
 - `semantic-chemistry-rdkit.ts` — RDKit singleton, molfile builder, SMARTS
 - `ligand-depiction.ts` — 2D SVG with click sync

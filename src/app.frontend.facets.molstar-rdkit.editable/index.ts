@@ -7,17 +7,17 @@ import {
     restoreMolstarVisualState,
     type MolstarVisualSnapshot,
     type MolstarVisualUpgradeId,
-} from '../chemistry';
+} from '../chemistry.backend.perception.rdkit-wasm.editable';
 import {
     applyChemicalSemanticLayers,
     ChemicalSemanticLayers,
     type ChemicalSemanticLayerId,
-} from '../chemistry/semantic-chemistry';
+} from '../chemistry.backend.perception.rdkit-wasm.editable/semantic-chemistry';
 import {
     applyStructuralSemanticLayers,
     StructuralSemanticLayers,
     type StructuralSemanticLayerId,
-} from '../chemistry/semantic-structural';
+} from '../chemistry.backend.perception.rdkit-wasm.editable/semantic-structural';
 import {
     applyInteractionSemanticLayers,
     getInteractionSemanticLayerCounts,
@@ -25,12 +25,12 @@ import {
     SemanticInteractionLayers,
     type SemanticInteractionRecord,
     type SemanticInteractionLayerId,
-} from '../chemistry/semantic-interactions';
+} from '../chemistry.backend.perception.rdkit-wasm.editable/semantic-interactions';
 import {
     applyContextSemanticLayers,
     ContextSemanticLayers,
     type ContextSemanticLayerId,
-} from '../chemistry/semantic-context';
+} from '../chemistry.backend.perception.rdkit-wasm.editable/semantic-context';
 import {
     applyFocusSemanticLayers,
     FocusSemanticLayers,
@@ -39,26 +39,26 @@ import {
     getLigandFocusTargets,
     type LigandFocusTarget,
     type FocusSemanticLayerId,
-} from '../chemistry/semantic-focus';
+} from '../chemistry.backend.perception.rdkit-wasm.editable/semantic-focus';
 import {
     applyEvidenceSemanticLayers,
     EvidenceSemanticLayers,
     type EvidenceSemanticLayerId,
-} from '../chemistry/semantic-evidence';
+} from '../chemistry.backend.perception.rdkit-wasm.editable/semantic-evidence';
 import {
     applyRdkitChemicalLayers,
     getRdkitChemicalLayerCounts,
     prepareLigandAnalysis,
     RdkitChemicalLayers,
     type RdkitChemicalLayerId,
-} from '../chemistry/semantic-chemistry-rdkit';
+} from '../chemistry.backend.perception.rdkit-wasm.editable/semantic-chemistry-rdkit';
 import {
     applyPharmacophoreFeatures,
     getPharmacophoreFeatureCounts,
     PharmacophoreLayers,
     type PharmacophoreLayerId,
-} from '../chemistry/pharmacophore-features';
-import { LigandDepiction, type AtomHighlight, type AtomPosition } from '../chemistry/ligand-depiction';
+} from '../chemistry.backend.perception.rdkit-wasm.editable/pharmacophore-features';
+import { LigandDepiction, type AtomHighlight, type AtomPosition } from '../chemistry.backend.perception.rdkit-wasm.editable/ligand-depiction';
 import { PresetStructureRepresentations } from '../mol-plugin-state/builder/structure/representation-preset';
 import { StateTransforms } from '../mol-plugin-state/transforms';
 import { Loci } from '../mol-model/loci';

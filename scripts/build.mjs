@@ -16,7 +16,7 @@ const Apps = [
     { kind: 'app', name: 'viewer', themes: ['light', 'dark', 'blue'] },
     { kind: 'app', name: 'docking-viewer' },
     { kind: 'app', name: 'mesoscale-explorer' },
-    { kind: 'app', name: 'dirac', filename: 'dirac.js', entryRoot: './src/app' },
+    { kind: 'app', name: 'dirac', filename: 'dirac.js', entryRoot: './src/app.frontend.facets.molstar-rdkit.editable' },
     { kind: 'app', name: 'mvs-stories', globalName: 'mvsStories', filename: 'mvs-stories.js' },
 
     // Examples

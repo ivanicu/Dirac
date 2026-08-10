@@ -6,8 +6,8 @@
  */
 
 import { Vec3 } from '../../mol-math/linear-algebra';
-import { ChemWorkbench, createChemWorkbench } from '../../chemistry';
-import { allChemPacks } from '../../chemistry/presets';
+import { ChemWorkbench, createChemWorkbench } from '../../chemistry.backend.perception.rdkit-wasm.editable';
+import { allChemPacks } from '../../chemistry.backend.perception.rdkit-wasm.editable/presets';
 import { PluginCommands } from '../../mol-plugin/commands';
 import { Color } from '../../mol-util/color';
 import './index.html';

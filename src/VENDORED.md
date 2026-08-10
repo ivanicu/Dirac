@@ -16,8 +16,8 @@ Other vendored locations:
 
 ## What's ours (editable)
 
-- `src/app/` — the Dirac application (UI, facets, assets)
-- `src/chemistry/` — Dirac chemistry substrate (RDKit, depiction, pharmacophore)
+- `src/app.frontend.facets.molstar-rdkit.editable/` — the Dirac application (UI, facets, assets)
+- `src/chemistry.backend.perception.rdkit-wasm.editable/` — Dirac chemistry substrate (RDKit, depiction, pharmacophore)
 
 If a directory is not in the two lists above and not prefixed with `mol-`, ask before modifying.
 
