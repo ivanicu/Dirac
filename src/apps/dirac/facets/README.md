@@ -8,7 +8,7 @@ with the app shell via a master-tab.
 ## Layout
 
 ```
-src/examples/dirac/
+src/apps/dirac/
 ├── index.html                  # app shell, all master-tabs
 ├── index.ts                    # router, mounts every facet
 ├── facets/

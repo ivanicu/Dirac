@@ -16,6 +16,7 @@ const Apps = [
     { kind: 'app', name: 'viewer', themes: ['light', 'dark', 'blue'] },
     { kind: 'app', name: 'docking-viewer' },
     { kind: 'app', name: 'mesoscale-explorer' },
+    { kind: 'app', name: 'dirac', filename: 'dirac.js' },
     { kind: 'app', name: 'mvs-stories', globalName: 'mvsStories', filename: 'mvs-stories.js' },
 
     // Examples
@@ -31,7 +32,6 @@ const Apps = [
     { kind: 'example', name: 'volume-mask' },
     { kind: 'example', name: 'react' },
     { kind: 'example', name: 'kernel-interface' },
-    { kind: 'example', name: 'dirac' },
 ];
 
 function findApp(name, kind) {

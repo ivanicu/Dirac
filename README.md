@@ -8,7 +8,7 @@ The name is intentional. In physics, Schrödinger's equation describes matter at
 
 ## What Dirac is today
 
-Dirac is **one integrated app** with multiple facets, all sharing the same mol\* scene, the same RDKit-JS session, and the same focused ligand. Facets are organized as sub-directories of `src/examples/dirac/facets/`; agents develop them in parallel against the shared substrate in `src/mol-plugin-chem/`.
+Dirac is **one integrated app** with multiple facets, all sharing the same mol\* scene, the same RDKit-JS session, and the same focused ligand. Facets are organized as sub-directories of `src/apps/dirac/facets/`; agents develop them in parallel against the shared substrate in `src/mol-plugin-chem/`.
 
 | Status | Facet | What it does |
 |---|---|---|
@@ -23,12 +23,12 @@ Dirac is **one integrated app** with multiple facets, all sharing the same mol\*
 git clone https://github.com/ivanicu/Dirac.git
 cd Dirac
 npm ci                                                       # use ci, not install (see AGENTS.md)
-node ./scripts/build.mjs -e dirac --prd                       # one-shot production build
-node_modules/.bin/http-server build/examples/dirac -p 1338 -g
+node ./scripts/build.mjs -a dirac --prd                       # one-shot production build
+node_modules/.bin/http-server build/dirac -p 1338 -g
 # open http://localhost:1338/
 ```
 
-First page load fetches `RDKit_minimal.wasm` (~7 MB) from `src/examples/dirac/assets/rdkit/`. Browser-cached afterwards.
+First page load fetches `RDKit_minimal.wasm` (~7 MB) from `src/apps/dirac/assets/rdkit/`. Browser-cached afterwards.
 
 ## Demo scenes
 

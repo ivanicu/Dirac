@@ -27,7 +27,7 @@ Three facets of Dirac are developed in parallel. Each lives in its own directory
 
 | Facet | Owner scope | Read-only for others |
 |---|---|---|
-| **mn-compiler-lab** (existing baseline + RDKit + 2D ligand + 3D pharmacophore) | `src/examples/mn-compiler-lab/**` | Everyone reads this for the chemistry substrate. |
+| **mn-compiler-lab** (existing baseline + RDKit + 2D ligand + 3D pharmacophore) | `src/apps/dirac/**` | Everyone reads this for the chemistry substrate. |
 | **Pharmacophore Designer** | `src/examples/pharmacophore-designer/**` | Other agents do not commit here. |
 | **Conformer Explorer** | `src/examples/conformer-explorer/**` | Other agents do not commit here. |
 | **Property Optimization Cockpit** | `src/examples/property-cockpit/**` | Other agents do not commit here. |
@@ -47,7 +47,7 @@ If you need to change a shared file, open a `[coord]` issue first.
 ```bash
 git checkout main && git pull origin main         # start from latest canonical
 npm ci                                             # only if package*.json changed
-node ./scripts/build.mjs -e mn-compiler-lab --prd  # verify baseline still builds
+node ./scripts/build.mjs -a dirac --prd  # verify baseline still builds
 git log --oneline main -10                         # know what changed recently
 ```
 
@@ -66,10 +66,10 @@ git log --oneline main -10                         # know what changed recently
 node_modules/.bin/tsc --noEmit -p tsconfig.json
 
 # 2. Your facet builds
-node ./scripts/build.mjs -e <your-facet-name> --prd
+node ./scripts/build.mjs -a dirac --prd
 
 # 3. Baseline lab still builds (regression check)
-node ./scripts/build.mjs -e mn-compiler-lab --prd
+node ./scripts/build.mjs -a dirac --prd
 
 # 4. (If you touched mol-plugin-chem/*)
 npm run test:chem-packs
@@ -110,16 +110,16 @@ Examples:
 
 ```bash
 # Baseline (existing shipped facet)
-node ./scripts/build.mjs -e mn-compiler-lab --prd
+node ./scripts/build.mjs -a dirac --prd
 node_modules/.bin/http-server build/examples/mn-compiler-lab -p 1338 -g
 # open http://localhost:1338/
 
-# Each new facet uses the same pattern with its own -e <facet-name>
+# Each new facet uses the same pattern with its own -a dirac
 ```
 
 ## RDKit-JS notes (critical)
 
-- Vendored at `src/examples/mn-compiler-lab/assets/rdkit/RDKit_minimal.{js,wasm}` (7 MB).
+- Vendored at `src/apps/dirac/assets/rdkit/RDKit_minimal.{js,wasm}` (7 MB).
 - All facets **reuse the same vendored WASM**. Do not duplicate it per-facet.
 - Loaded via `<script>` tag in each facet's `index.html`. Exposes `window.initRDKitModule`.
 - **2025.03.4 build limitations (verified):**

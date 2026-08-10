@@ -54,8 +54,8 @@ The lab is built as a mol* example. From the repo root:
 
 ```bash
 npm install
-node ./scripts/build.mjs -e dirac --prd    # one-shot production build
-node_modules/.bin/http-server build/examples/dirac -p 1338 -g
+node ./scripts/build.mjs -a dirac --prd    # one-shot production build
+node_modules/.bin/http-server build/dirac -p 1338 -g
 # Open http://localhost:1338/
 ```
 
@@ -86,7 +86,7 @@ The first page load pulls `RDKit_minimal.wasm` (~7 MB) from `./assets/rdkit/`. T
 ## File map
 
 ```
-src/examples/dirac/
+src/apps/dirac/
 ├── index.html        — topbar + sidebar + Ligand master-tab markup, all design tokens
 ├── index.ts          — lab orchestration; wires RDKit layers + pharmacophore + 2D panel
 ├── typings.d.ts      — WASM module + RDKit global declarations
