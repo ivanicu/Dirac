@@ -10,8 +10,8 @@ Anything in `src/` that starts with `mol-` is vendored. The full list:
 
 Other vendored locations:
 
-- `src/apps/{viewer,docking-viewer,mesoscale-explorer,mvs-stories,kernel-interface}/` — mol\*'s own apps, reference only
-- `src/examples/` — mol\*'s own example demos, reference only (Dirac is NOT here)
+- `src/apps.reference.viewer-demos.vendored-readonly/{viewer,docking-viewer,mesoscale-explorer,mvs-stories,kernel-interface}/` — mol\*'s own apps, reference only
+- `src/examples.reference.mini-demos.vendored-readonly/` — mol\*'s own example demos, reference only (Dirac is NOT here)
 - `examples/` (top-level) — fixture data (CIF, PDB files) used by mol\*'s examples and by Dirac
 
 ## What's ours (editable)

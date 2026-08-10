@@ -6,7 +6,7 @@
 
 
 import { createRoot } from 'react-dom/client';
-import { Viewer } from '../../apps/viewer/app';
+import { Viewer } from '../../apps.reference.viewer-demos.vendored-readonly/viewer/app';
 import { MAPairwiseScorePlot } from '../../extensions/model-archive/quality-assessment/pairwise/ui';
 import { QualityAssessment } from '../../extensions/model-archive/quality-assessment/prop';
 import { Model, ResidueIndex } from '../../mol-model/structure';

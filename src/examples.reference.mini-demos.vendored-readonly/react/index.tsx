@@ -13,7 +13,7 @@ import { PluginCanvas } from '../../extensions/plugin/react';
 import { Plugin } from '../../mol-plugin-ui/plugin';
 import '../../mol-plugin-ui/skin/light.scss';
 import './index.html';
-import { createViewerSpec } from '../../apps/viewer/plugin-spec';
+import { createViewerSpec } from '../../apps.reference.viewer-demos.vendored-readonly/viewer/plugin-spec';
 import { PluginViewModel } from '../../extensions/plugin/view-model';
 import { MVSData } from '../../extensions/mvs';
 import { MolViewSpecBehavior } from '../../extensions/mvs/behavior';

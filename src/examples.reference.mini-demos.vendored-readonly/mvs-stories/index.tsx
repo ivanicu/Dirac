@@ -9,12 +9,12 @@ import { BehaviorSubject } from 'rxjs';
 import { Stories } from './stories';
 import { useBehavior } from '../../mol-plugin-ui/hooks/use-behavior';
 import { createRoot } from 'react-dom/client';
-import { getMVSStoriesContext } from '../../apps/mvs-stories/context';
-import '../../apps/mvs-stories/elements';
+import { getMVSStoriesContext } from '../../apps.reference.viewer-demos.vendored-readonly/mvs-stories/context';
+import '../../apps.reference.viewer-demos.vendored-readonly/mvs-stories/elements';
 
 import './favicon.ico';
 import '../../mol-plugin-ui/skin/light.scss';
-import '../../apps/mvs-stories/styles.scss';
+import '../../apps.reference.viewer-demos.vendored-readonly/mvs-stories/styles.scss';
 import './index.html';
 
 function getContext(name?: string) {

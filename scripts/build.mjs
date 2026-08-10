@@ -135,9 +135,9 @@ function getPaths(app) {
     }
     if (app.kind === 'example') {
         return {
-            prefix: `./build/examples/${app.name}`,
-            entry: resolveEntryPath(`./src/examples/${app.name}/index.ts`),
-            outfile: `./build/examples/${app.name}/${app.filename || 'index.js'}`,
+            prefix: `./build/examples.reference.mini-demos.vendored-readonly/${app.name}`,
+            entry: resolveEntryPath(`./src/examples.reference.mini-demos.vendored-readonly/${app.name}/index.ts`),
+            outfile: `./build/examples.reference.mini-demos.vendored-readonly/${app.name}/${app.filename || 'index.js'}`,
         };
     }
     if (app.kind === 'browser-test') {

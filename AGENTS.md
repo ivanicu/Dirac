@@ -23,14 +23,14 @@ There is one branch that anyone develops against: **`main`**.
 
 ## Workstream ownership (by directory, not by branch)
 
-Three facets of Dirac are developed in parallel. Each lives in its own directory under `src/examples/`. Conflicts are prevented by directory isolation, not branch isolation.
+Three facets of Dirac are developed in parallel. Each lives in its own directory under `src/examples.reference.mini-demos.vendored-readonly/`. Conflicts are prevented by directory isolation, not branch isolation.
 
 | Facet | Owner scope | Read-only for others |
 |---|---|---|
 | **mn-compiler-lab** (existing baseline + RDKit + 2D ligand + 3D pharmacophore) | `src/app.frontend.facets.molstar-rdkit.editable/**` | Everyone reads this for the chemistry substrate. |
-| **Pharmacophore Designer** | `src/examples/pharmacophore-designer/**` | Other agents do not commit here. |
-| **Conformer Explorer** | `src/examples/conformer-explorer/**` | Other agents do not commit here. |
-| **Property Optimization Cockpit** | `src/examples/property-cockpit/**` | Other agents do not commit here. |
+| **Pharmacophore Designer** | `src/examples.reference.mini-demos.vendored-readonly/pharmacophore-designer/**` | Other agents do not commit here. |
+| **Conformer Explorer** | `src/examples.reference.mini-demos.vendored-readonly/conformer-explorer/**` | Other agents do not commit here. |
+| **Property Optimization Cockpit** | `src/examples.reference.mini-demos.vendored-readonly/property-cockpit/**` | Other agents do not commit here. |
 
 **Shared substrate** (modifications need explicit coordination via GitHub issue before push):
 
@@ -142,7 +142,7 @@ If you need any of the missing APIs, escalate to a Python backend; do not fake i
 - `README.md` — Dirac product overview, what facets exist, how to run
 - `CHANGELOG.md` — what's new in each Dirac version
 - `AGENTS.md` (this file) — agent operating rules
-- `src/examples/<facet>/README.md` — per-facet design notes, written by the agent owning that facet
+- `src/examples.reference.mini-demos.vendored-readonly/<facet>/README.md` — per-facet design notes, written by the agent owning that facet
 
 ## Issue protocol (for cross-facet coordination)
 
