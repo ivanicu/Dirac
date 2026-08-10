@@ -92,6 +92,8 @@ interface JSMol {
     /** Returns a fresh V3000 molblock with 2D coordinates computed by RDDepict. */
     get_new_coords(useCoordGen: boolean): string;
     is_valid(): boolean;
+    /** Returns JSON with 40+ RDKit descriptors (MW, LogP, TPSA, HBD/HBA, rings, etc.). */
+    get_descriptors(): string;
 }
 
 interface RDKitModule {

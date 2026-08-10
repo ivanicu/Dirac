@@ -542,6 +542,95 @@
         .ligand-legend-item i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
         .ligand-legend-note { color: var(--text-3); line-height: 1.4; }
 
+        /* Properties panel */
+        .desc-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+        .desc-cell {
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: var(--surface-2);
+        }
+        .desc-cell[data-pass="false"] { border-color: #5a3030; background: #22151533; }
+        .desc-cell[data-pass="true"]  { border-color: var(--accent-soft); }
+        .desc-cell-label {
+            color: var(--text-3);
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .desc-cell-value {
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            margin-top: 2px;
+        }
+        .desc-cell-unit {
+            color: var(--text-3);
+            font-size: 9px;
+            font-weight: 500;
+            margin-left: 3px;
+        }
+        .desc-cell-threshold {
+            color: var(--text-3);
+            font-size: 8px;
+            margin-top: 2px;
+        }
+        .rule-summary {
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            background: var(--surface-2);
+            margin-bottom: 8px;
+        }
+        .rule-summary[data-overall="false"] { border-color: #5a3030; }
+        .rule-summary[data-overall="true"]  { border-color: var(--accent-soft); }
+        .rule-summary-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 6px;
+        }
+        .rule-summary-heading strong {
+            color: var(--text);
+            font-size: 11px;
+        }
+        .rule-summary-verdict {
+            font-size: 10px;
+            font-weight: 800;
+            padding: 2px 8px;
+            border-radius: 999px;
+        }
+        .rule-summary-verdict[data-pass="true"] {
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+        .rule-summary-verdict[data-pass="false"] {
+            background: #34201d;
+            color: var(--high);
+        }
+        .rule-line {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--text-2);
+            font-size: 10px;
+            padding: 3px 0;
+            font-variant-numeric: tabular-nums;
+        }
+        .rule-line-status {
+            font-weight: 800;
+            color: var(--accent);
+        }
+        .rule-line-status[data-pass="false"] { color: var(--high); }
+        .rule-line-status[data-pass="true"]  { color: var(--accent); }
+
         main { position: relative; background: #050810; }
         #viewport { position: absolute; inset: 0; }
         .badge {
@@ -597,6 +686,7 @@
                 <button type="button" class="master-tab" data-jump="focus">Focus</button>
                 <button type="button" class="master-tab" data-jump="semantic" aria-selected="true">Semantics</button>
                 <button type="button" class="master-tab" data-jump="ligand">Ligand</button>
+                <button type="button" class="master-tab" data-jump="properties">Properties</button>
                 <button type="button" class="master-tab" data-jump="vfx">VFX</button>
                 <button type="button" class="master-tab" data-jump="ledger">Ledger</button>
             </nav>
@@ -679,6 +769,20 @@
                             <p class="ledger-empty">The ledger and 3D contact geometry share the same computed records.</p>
                         </div>
                     </section>
+                </section>
+
+                <section class="panel" data-section="properties">
+                    <div class="panel-heading">
+                        <h2>Property optimization cockpit</h2>
+                        <span class="panel-index">DESCRIPTORS</span>
+                    </div>
+                    <div class="ligand-meta">
+                        <span id="properties-summary">No ligand loaded</span>
+                        <span id="properties-summary-stats"></span>
+                    </div>
+                    <div id="properties-content">
+                        <p class="ledger-empty">Switch to a structure with a deposited ligand to compute descriptors.</p>
+                    </div>
                 </section>
 
                 <section class="panel ligand-panel" data-section="ligand">

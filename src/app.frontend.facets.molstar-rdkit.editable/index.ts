@@ -59,6 +59,7 @@ import {
     type PharmacophoreLayerId,
 } from '../chemistry.backend.perception.rdkit-wasm.editable/pharmacophore-features';
 import { LigandDepiction, type AtomHighlight, type AtomPosition } from '../chemistry.backend.perception.rdkit-wasm.editable/ligand-depiction';
+import { renderPropertiesPanel } from './facets/property-cockpit';
 import { PresetStructureRepresentations } from '../mol-plugin-state/builder/structure/representation-preset';
 import { StateTransforms } from '../mol-plugin-state/transforms';
 import { Loci } from '../mol-model/loci';
@@ -866,6 +867,10 @@ class MolecularVfxLab {
         const donorCount = analysis.chemistry ? countSetBits8(analysis.chemistry.donors) : 0;
         const acceptorCount = analysis.chemistry ? countSetBits8(analysis.chemistry.acceptors) : 0;
         stats.textContent = `${analysis.atomCount} atoms · ${aromCount} aromatic · ${donorCount} HBD · ${acceptorCount} HBA`;
+
+        // Property Optimization Cockpit facet reuses the same molfile
+        // (computed once here) rather than re-running ligandLociToMolfile.
+        void renderPropertiesPanel(analysis.molfile, ligandTarget?.label ?? null);
     }
 
     private handleLigandDepictionClick(event: MouseEvent) {
