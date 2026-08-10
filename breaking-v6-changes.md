@@ -1,1 +1,0 @@
-- Remove `checkeredCanvasBackground` from `PluginContext` and `PluginContainer`
