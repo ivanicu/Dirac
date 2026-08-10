@@ -6,8 +6,8 @@
  */
 
 import { Vec3 } from '../../mol-math/linear-algebra';
-import { ChemWorkbench, createChemWorkbench } from '../../mol-plugin-chem';
-import { allChemPacks } from '../../mol-plugin-chem/presets';
+import { ChemWorkbench, createChemWorkbench } from '../../chemistry';
+import { allChemPacks } from '../../chemistry/presets';
 import { PluginCommands } from '../../mol-plugin/commands';
 import { Color } from '../../mol-util/color';
 import './index.html';

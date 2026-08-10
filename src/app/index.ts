@@ -7,17 +7,17 @@ import {
     restoreMolstarVisualState,
     type MolstarVisualSnapshot,
     type MolstarVisualUpgradeId,
-} from '../../mol-plugin-chem';
+} from '../chemistry';
 import {
     applyChemicalSemanticLayers,
     ChemicalSemanticLayers,
     type ChemicalSemanticLayerId,
-} from '../../mol-plugin-chem/semantic-chemistry';
+} from '../chemistry/semantic-chemistry';
 import {
     applyStructuralSemanticLayers,
     StructuralSemanticLayers,
     type StructuralSemanticLayerId,
-} from '../../mol-plugin-chem/semantic-structural';
+} from '../chemistry/semantic-structural';
 import {
     applyInteractionSemanticLayers,
     getInteractionSemanticLayerCounts,
@@ -25,12 +25,12 @@ import {
     SemanticInteractionLayers,
     type SemanticInteractionRecord,
     type SemanticInteractionLayerId,
-} from '../../mol-plugin-chem/semantic-interactions';
+} from '../chemistry/semantic-interactions';
 import {
     applyContextSemanticLayers,
     ContextSemanticLayers,
     type ContextSemanticLayerId,
-} from '../../mol-plugin-chem/semantic-context';
+} from '../chemistry/semantic-context';
 import {
     applyFocusSemanticLayers,
     FocusSemanticLayers,
@@ -39,41 +39,41 @@ import {
     getLigandFocusTargets,
     type LigandFocusTarget,
     type FocusSemanticLayerId,
-} from '../../mol-plugin-chem/semantic-focus';
+} from '../chemistry/semantic-focus';
 import {
     applyEvidenceSemanticLayers,
     EvidenceSemanticLayers,
     type EvidenceSemanticLayerId,
-} from '../../mol-plugin-chem/semantic-evidence';
+} from '../chemistry/semantic-evidence';
 import {
     applyRdkitChemicalLayers,
     getRdkitChemicalLayerCounts,
     prepareLigandAnalysis,
     RdkitChemicalLayers,
     type RdkitChemicalLayerId,
-} from '../../mol-plugin-chem/semantic-chemistry-rdkit';
+} from '../chemistry/semantic-chemistry-rdkit';
 import {
     applyPharmacophoreFeatures,
     getPharmacophoreFeatureCounts,
     PharmacophoreLayers,
     type PharmacophoreLayerId,
-} from '../../mol-plugin-chem/pharmacophore-features';
-import { LigandDepiction, type AtomHighlight, type AtomPosition } from '../../mol-plugin-chem/ligand-depiction';
-import { PresetStructureRepresentations } from '../../mol-plugin-state/builder/structure/representation-preset';
-import { StateTransforms } from '../../mol-plugin-state/transforms';
-import { Loci } from '../../mol-model/loci';
-import { QueryContext, StructureElement, StructureSelection, Unit } from '../../mol-model/structure';
-import { ShapeGroup } from '../../mol-model/shape';
-import { OrderedSet } from '../../mol-data/int';
-import { StructureSelectionQueries } from '../../mol-plugin-state/helpers/structure-selection-query';
-import { Mat4, Vec3 } from '../../mol-math/linear-algebra';
-import { StateSelection } from '../../mol-state';
-import { Color } from '../../mol-util/color';
-import bDnaUrl from '../../../examples/1bna_confal_pyramids.cif';
-import crambinUrl from '../../../examples/1crn.cif';
-import retinoidUrl from '../../../examples/1cbs_updated.cif';
-import gramicidinUrl from '../../../examples/1grm_updated.cif';
-import mhcComplexUrl from '../../../examples/7qpd.fw2.cif';
+} from '../chemistry/pharmacophore-features';
+import { LigandDepiction, type AtomHighlight, type AtomPosition } from '../chemistry/ligand-depiction';
+import { PresetStructureRepresentations } from '../mol-plugin-state/builder/structure/representation-preset';
+import { StateTransforms } from '../mol-plugin-state/transforms';
+import { Loci } from '../mol-model/loci';
+import { QueryContext, StructureElement, StructureSelection, Unit } from '../mol-model/structure';
+import { ShapeGroup } from '../mol-model/shape';
+import { OrderedSet } from '../mol-data/int';
+import { StructureSelectionQueries } from '../mol-plugin-state/helpers/structure-selection-query';
+import { Mat4, Vec3 } from '../mol-math/linear-algebra';
+import { StateSelection } from '../mol-state';
+import { Color } from '../mol-util/color';
+import bDnaUrl from '../../examples/1bna_confal_pyramids.cif';
+import crambinUrl from '../../examples/1crn.cif';
+import retinoidUrl from '../../examples/1cbs_updated.cif';
+import gramicidinUrl from '../../examples/1grm_updated.cif';
+import mhcComplexUrl from '../../examples/7qpd.fw2.cif';
 import gfpUrl from './assets/structures/1ema.cif';
 import p53DnaUrl from './assets/structures/1tup.cif';
 import porinUrl from './assets/structures/2por.cif';

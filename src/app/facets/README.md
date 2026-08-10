@@ -8,7 +8,7 @@ with the app shell via a master-tab.
 ## Layout
 
 ```
-src/apps/dirac/
+src/app/
 ├── index.html                  # app shell, all master-tabs
 ├── index.ts                    # router, mounts every facet
 ├── facets/
@@ -41,10 +41,10 @@ shell calls to register it. Exact shape to be defined when the first new facet
 ships; the existing lab facet is currently inlined in `../index.ts` and will
 be refactored when the second facet arrives.
 
-## Shared substrate (in src/mol-plugin-chem/, not here)
+## Shared substrate (in src/chemistry/, not here)
 
 Facets DO NOT own chemistry — they consume the shared substrate at
-`src/mol-plugin-chem/`:
+`src/chemistry/`:
 
 - `semantic-chemistry-rdkit.ts` — RDKit singleton, molfile builder, SMARTS
 - `ligand-depiction.ts` — 2D SVG with click sync

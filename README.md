@@ -8,7 +8,7 @@ The name is intentional. In physics, Schrödinger's equation describes matter at
 
 ## What Dirac is today
 
-Dirac is **one integrated app** with multiple facets, all sharing the same mol\* scene, the same RDKit-JS session, and the same focused ligand. Facets are organized as sub-directories of `src/apps/dirac/facets/`; agents develop them in parallel against the shared substrate in `src/mol-plugin-chem/`.
+Dirac is **one integrated app** with multiple facets, all sharing the same mol\* scene, the same RDKit-JS session, and the same focused ligand. Facets are organized as sub-directories of `src/app/facets/`; agents develop them in parallel against the shared substrate in `src/chemistry/`.
 
 | Status | Facet | What it does |
 |---|---|---|
@@ -28,7 +28,7 @@ node_modules/.bin/http-server build/dirac -p 1338 -g
 # open http://localhost:1338/
 ```
 
-First page load fetches `RDKit_minimal.wasm` (~7 MB) from `src/apps/dirac/assets/rdkit/`. Browser-cached afterwards.
+First page load fetches `RDKit_minimal.wasm` (~7 MB) from `src/app/assets/rdkit/`. Browser-cached afterwards.
 
 ## Demo scenes
 

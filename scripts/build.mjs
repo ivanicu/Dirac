@@ -16,7 +16,7 @@ const Apps = [
     { kind: 'app', name: 'viewer', themes: ['light', 'dark', 'blue'] },
     { kind: 'app', name: 'docking-viewer' },
     { kind: 'app', name: 'mesoscale-explorer' },
-    { kind: 'app', name: 'dirac', filename: 'dirac.js' },
+    { kind: 'app', name: 'dirac', filename: 'dirac.js', entryRoot: './src/app' },
     { kind: 'app', name: 'mvs-stories', globalName: 'mvsStories', filename: 'mvs-stories.js' },
 
     // Examples
@@ -123,9 +123,13 @@ function resolveEntryPath(path) {
 
 function getPaths(app) {
     if (app.kind === 'app') {
+        // `entryRoot` lets an app live outside the default `src/apps/<name>/`
+        // location. Dirac uses this to live at `src/app/` (peer with vendored
+        // mol-* dirs) rather than inside mol*'s own `src/apps/` collection.
+        const entryRoot = app.entryRoot ?? `./src/apps/${app.name}`;
         return {
             prefix: `./build/${app.name}`,
-            entry: resolveEntryPath(`./src/apps/${app.name}/index.ts`),
+            entry: resolveEntryPath(`${entryRoot}/index.ts`),
             outfile: `./build/${app.name}/${app.filename || 'molstar.js'}`,
         };
     }
