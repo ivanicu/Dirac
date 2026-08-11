@@ -316,7 +316,10 @@ class MolecularVfxLab {
         this.workbench = await createChemWorkbench({ target: byId('viewport') });
         this.workbench.plugin.selectionMode = true;
         this.workbench.plugin.managers.interactivity.setProps({ granularity: 'residue' });
-        this.workbench.plugin.managers.structure.selection.events.changed.subscribe(() => this.refreshMetrics());
+        this.workbench.plugin.managers.structure.selection.events.changed.subscribe(() => {
+            this.refreshMetrics();
+            this.updateLigandDepictionSelectionHighlights();
+        });
         this.workbench.plugin.behaviors.interaction.click.subscribe(({ current }) => this.handleInteractionClick(current.loci));
         initFieldWellsPanel(this.workbench.plugin);
         initFieldWellsPanel(this.workbench.plugin);
@@ -1070,6 +1073,89 @@ class MolecularVfxLab {
         document.querySelectorAll<HTMLElement>('[data-contact-id]').forEach(row => {
             row.dataset.active = String(Number(row.dataset.contactId) === id);
         });
+    }
+
+    /**
+     * 3D→2D selection sync. When the user picks atoms in the 3D viewport,
+     * draw highlight rings on the 2D SVG at the corresponding positions.
+     * Uses the same atom-index walker as ligandLociToMolfile + selectLigandAtomByIndex.
+     */
+    private updateLigandDepictionSelectionHighlights() {
+        const container = document.getElementById('ligand-depiction');
+        const svg = container?.querySelector('svg');
+        if (!svg || !this.workbench) {
+            this.clearLigandDepictionHighlights();
+            return;
+        }
+        if (this.ligandDepictionAtomPositions.length === 0) {
+            this.clearLigandDepictionHighlights();
+            return;
+        }
+
+        const plugin = this.workbench.plugin;
+        const structure = plugin.managers.structure.component.pivotStructure?.cell.obj?.data;
+        if (!structure) { this.clearLigandDepictionHighlights(); return; }
+        const ligandTarget = this.currentLigandTarget();
+        if (!ligandTarget) { this.clearLigandDepictionHighlights(); return; }
+
+        const ligandLoci = StructureElement.Bundle.toLoci(ligandTarget.bundle, structure);
+        // Walk ligand loci in the same order as ligandLociToMolfile → atom index.
+        // For each ligand atom, check whether the equivalent 3D element is selected.
+        const selected = new Set<number>();
+        let counter = 0;
+        for (const e of ligandLoci.elements) {
+            if (!Unit.isAtomic(e.unit)) continue;
+            const count = OrderedSet.size(e.indices);
+            for (let i = 0; i < count; i++) {
+                const unitIndex = OrderedSet.getAt(e.indices, i);
+                const atomLoci = StructureElement.Loci(structure, [{
+                    unit: e.unit,
+                    indices: OrderedSet.ofSingleton(unitIndex),
+                }]);
+                // intersects returns 0 if not selected, >0 if selected
+                const intersection = StructureElement.Loci.intersect(plugin.managers.structure.selection.getLoci(structure) as StructureElement.Loci, atomLoci);
+                if (!StructureElement.Loci.isEmpty(intersection)) {
+                    selected.add(counter);
+                }
+                counter++;
+            }
+        }
+
+        this.renderLigandDepictionHighlights(svg as unknown as SVGSVGElement, selected);
+    }
+
+    private clearLigandDepictionHighlights() {
+        document.querySelectorAll('.selection-highlight-ring').forEach(el => el.remove());
+    }
+
+    private renderLigandDepictionHighlights(svg: SVGSVGElement, selectedIndices: Set<number>) {
+        // Remove old rings
+        svg.querySelectorAll('.selection-highlight-ring').forEach(el => el.remove());
+        if (selectedIndices.size === 0) return;
+
+        const ns = 'http://www.w3.org/2000/svg';
+        // Find or create the highlight group
+        let group = svg.querySelector<SVGGElement>('#selection-highlights');
+        if (!group) {
+            group = document.createElementNS(ns, 'g');
+            group.id = 'selection-highlights';
+            svg.appendChild(group);
+        }
+
+        for (const idx of selectedIndices) {
+            const pos = this.ligandDepictionAtomPositions.find(p => p.idx === idx);
+            if (!pos) continue;
+            const ring = document.createElementNS(ns, 'circle');
+            ring.setAttribute('cx', String(pos.x));
+            ring.setAttribute('cy', String(pos.y));
+            ring.setAttribute('r', '14');
+            ring.setAttribute('fill', 'none');
+            ring.setAttribute('stroke', '#ff6b35');
+            ring.setAttribute('stroke-width', '2.5');
+            ring.setAttribute('stroke-dasharray', '4 3');
+            ring.classList.add('selection-highlight-ring');
+            group.appendChild(ring);
+        }
     }
 
     private async openSemanticDebug(id: Exclude<MolecularLayerId, MolstarVisualUpgradeId>, guide: SemanticLayerGuide) {
