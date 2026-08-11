@@ -77,10 +77,11 @@ import { initFieldWellsPanel, updateFieldWellsLigand, autoRenderElectrostaticWel
 import { initLigandPhysicsPanel, updateLigandPhysics } from './facets/ligand-physics';
 import { initPharmacophoreDesigner, updatePharmacophoreDesigner } from './facets/pharmacophore-designer';
 import { initBondAtlas, updateBondAtlas } from './facets/bond-atlas';
+import { updateHalogenAudit } from './facets/halogen-audit';
 import { PresetStructureRepresentations } from '../mol-plugin-state/builder/structure/representation-preset';
 import { StateTransforms } from '../mol-plugin-state/transforms';
 import { Loci } from '../mol-model/loci';
-import { QueryContext, StructureElement, StructureSelection, Unit } from '../mol-model/structure';
+import { QueryContext, Structure, StructureElement, StructureSelection, Unit } from '../mol-model/structure';
 import { ShapeGroup } from '../mol-model/shape';
 import { OrderedSet } from '../mol-data/int';
 import { StructureSelectionQueries } from '../mol-plugin-state/helpers/structure-selection-query';
@@ -108,6 +109,7 @@ import gfpUrl from './assets/structures/1ema.cif';
 import p53DnaUrl from './assets/structures/1tup.cif';
 import porinUrl from './assets/structures/2por.cif';
 import hemoglobinUrl from './assets/structures/4hhb.cif';
+import lapatinibUrl from './assets/structures/1xkk.cif';
 import { focusLociKeepingSlab, restoreSceneSlab } from './camera-slab';
 import './index.html';
 
@@ -125,6 +127,11 @@ const MolecularControls: readonly MolecularControl[] = [
     { id: '1CBS', label: '1CBS · Retinoid-binding protein', category: 'Protein–ligand complex', stress: 'β-rich binding pocket plus a small-molecule ligand; tests semantic focus and occlusion.', url: retinoidUrl },
     { id: '1BNA', label: '1BNA · B-DNA dodecamer', category: 'Pure nucleic acid', stress: 'Nucleotide rings, bonds and helical depth without any protein cartoon.', url: bDnaUrl },
     { id: '1EMA', label: '1EMA · Green fluorescent protein', category: 'β-barrel protein + chromophore', stress: 'Dense curved β-sheets around an internal chromophore.', url: gfpUrl },
+    // Added because the halogen audit could not fire on anything in this catalogue: across
+    // all ten bundled structures the halogen count was zero, so a feature about what a
+    // halogen points at had no data to point with. Lapatinib carries both a chloride and a
+    // fluoride in a kinase pocket, which is the case the audit exists for.
+    { id: '1XKK', label: '1XKK · EGFR + lapatinib', category: 'Protein–ligand complex · halogenated', stress: 'A chloro- and fluoro-substituted inhibitor in a kinase pocket; the only bundled structure on which a halogen-bond claim can be tested at all.', url: lapatinibUrl },
     { id: '4HHB', label: '4HHB · Hemoglobin', category: 'Multimeric protein + heme', stress: 'Four-chain assembly with cofactors; tests chain separation and internal depth.', url: hemoglobinUrl },
     { id: '1TUP', label: '1TUP · p53–DNA complex', category: 'Protein–DNA complex', stress: 'Two polymer classes in contact; tests representation and selection semantics.', url: p53DnaUrl },
     { id: '2POR', label: '2POR · Porin', category: 'Membrane β-barrel', stress: 'Long β-strands and a central pore; exposes sheet edges and depth contours.', url: porinUrl },
@@ -246,7 +253,7 @@ type SemanticLayerGuide = {
     readonly use: string;
     readonly empty: string;
     /** A checked fixture from this lab's control suite; absent means no honest fixture exists yet. */
-    readonly fixture?: '1CRN' | '1GRM' | '1CBS' | '1BNA' | '1EMA' | '4HHB' | '1TUP' | '2POR' | '7QPD';
+    readonly fixture?: '1CRN' | '1GRM' | '1CBS' | '1BNA' | '1EMA' | '1XKK' | '4HHB' | '1TUP' | '2POR' | '7QPD';
     readonly representation: RepresentationId;
 };
 
@@ -374,9 +381,10 @@ class MolecularVfxLab {
     private smilesMolfile: string | null = null;
     private readonly chemistryCache = new ChemistryCache();
     private smartsSearchTimer: ReturnType<typeof setTimeout> | null = null;
-    /** Set when the current scene came from /embed — the authoritative molfile
-     * for the whole facet cascade (no CCD data exists for imports). */
-
+    /* The comment that used to live here described `importedMolfile`, a field
+     * S0 deleted. An orphaned docstring is worse than none: it reads as a
+     * description of code that exists. The role it described now belongs to
+     * `smilesMolfile` above (see importMolecule). */
     private busy = false;
 
 
@@ -1045,8 +1053,10 @@ class MolecularVfxLab {
             const donorCount = chem ? countSetBits8(chem.donors) : 0;
             const acceptorCount = chem ? countSetBits8(chem.acceptors) : 0;
             stats.textContent = `${atomCount} atoms · ${aromCount} aromatic · ${donorCount} HBD · ${acceptorCount} HBA`;
-            void renderPropertiesPanel(this.smilesMolfile, 'SMILES molecule');
-            void this.refreshLigandIdentifiers(this.smilesMolfile);
+            // The SAME fan-out the deposited-ligand path uses. This line is the
+            // fix for "import a molecule, click a field, nothing happens".
+            this.fanOutLigand(this.smilesMolfile, summary.textContent || 'Imported molecule',
+                this.workbench.plugin.managers.structure.component.pivotStructure?.cell.obj?.data);
             return;
         }
 
@@ -1075,6 +1085,7 @@ class MolecularVfxLab {
             this.ligandDepictionAtomPositions = [];
             updateFieldWellsLigand(null, null);
             void updateBondAtlas(null);
+            updateHalogenAudit(null, this.currentFocusOptions());
             void updatePharmacophoreDesigner(null, this.currentFocusOptions(), { structureId: this.currentMolecule.id, ligandLabel: null });
             return;
         }
@@ -1092,6 +1103,7 @@ class MolecularVfxLab {
             stats.textContent = '';
             updateFieldWellsLigand(null, null);
             void updateBondAtlas(null);
+            updateHalogenAudit(null, this.currentFocusOptions());
             void updatePharmacophoreDesigner(null, this.currentFocusOptions(), { structureId: this.currentMolecule.id, ligandLabel: null });
             return;
         }
@@ -1136,18 +1148,49 @@ class MolecularVfxLab {
         const acceptorCount = chemistry ? countSetBits8(chemistry.acceptors) : 0;
         stats.textContent = `${atomCount} atoms · ${aromCount} aromatic · ${donorCount} HBD · ${acceptorCount} HBA`;
 
-        // S0: all downstream consumers read from cache, not independent RDKit calls.
-        void renderPropertiesPanel(molfile, ligandTarget?.label ?? null);
-        updateFieldWellsLigand(molfile, ligandTarget?.label ?? null);
-        updateLigandPhysics(molfile, ligandTarget?.label ?? null);
-        // The atlas gets the SAME molfile the 2D depiction was built from, so the two views
-        // cannot end up describing different molecules.
+        this.fanOutLigand(molfile, ligandTarget?.label ?? null, structure);
+    }
+
+    /**
+     * ONE home for "a new active molecule exists" — every facet that must hear
+     * about it, in one place.
+     *
+     * It exists because there were TWO cascades and they had drifted. The PDB
+     * path told seven consumers; the SMILES/import path told two (the depiction
+     * and the properties panel) and returned. So an imported molecule reached
+     * the screen with a 2D picture, a Lipinski table — and a Fields facet whose
+     * `molfile` was still null, which makes every field button a silent no-op
+     * *under a status line that says "rendering electrostatic well…"*. Also
+     * silently absent on that path: ligand physics, the bond atlas, the halogen
+     * audit and the pharmacophore designer.
+     *
+     * Adding the five missing calls to the second branch would have been the
+     * third copy of this list. The list is the thing that must not be
+     * duplicated: a new facet added by anyone gets wired here once, and cannot
+     * be wired into one entry path and not the other.
+     *
+     * `structure` is optional because the two paths differ in what they have —
+     * an import has no deposited-ligand loci, and the two audits that take a
+     * mol* Structure are skipped rather than fed a substitute. Skipped-and-said
+     * is a scope statement; fed-a-substitute is a wrong answer.
+     */
+    private fanOutLigand(molfile: string, label: string | null, structure?: Structure) {
+        void renderPropertiesPanel(molfile, label);
+        updateFieldWellsLigand(molfile, label);
+        updateLigandPhysics(molfile, label);
+        // The atlas gets the SAME molfile the 2D depiction was built from, so the
+        // two views cannot end up describing different molecules.
         void updateBondAtlas(molfile);
-        void updatePharmacophoreDesigner(structure, this.currentFocusOptions(), { structureId: this.currentMolecule.id, ligandLabel: ligandTarget?.label ?? 'Ligand' });
+        if (structure) {
+            // Geometry only until the QM field has been run for this ligand; the
+            // panel says so rather than guessing a V_S,max.
+            updateHalogenAudit(structure, this.currentFocusOptions());
+            void updatePharmacophoreDesigner(structure, this.currentFocusOptions(),
+                { structureId: this.currentMolecule.id, ligandLabel: label ?? 'Ligand' });
+        }
         this.smartsSearchMolfile = molfile;
         const smartsInput = byId<HTMLInputElement>('smarts-input');
         if (smartsInput?.value) void this.runSmartsSearch(smartsInput.value);
-        // Compute and display canonical identifiers.
         void this.refreshLigandIdentifiers(molfile);
     }
 
@@ -1186,6 +1229,7 @@ class MolecularVfxLab {
             status.textContent = 'Type a SMILES to analyze any molecule — no PDB structure needed.';
             this.smilesMolfile = null;
             void updateBondAtlas(null);
+            updateHalogenAudit(null, this.currentFocusOptions());
             return;
         }
 
@@ -1494,7 +1538,27 @@ class MolecularVfxLab {
         this.framedLigandMolecule = undefined;
         this.ligandTargets = [];
         this.selectedLigandTargetId = undefined;
-        // importedMolfile removed in S0
+        // THE AUTHORITATIVE MOLFILE FOR AN IMPORT, and its absence was a
+        // regression I introduced. S0 (the ligand-pipeline dedup) removed the
+        // `importedMolfile` field and left only the comment that described it,
+        // so nothing on this path set an active molfile at all: with no CCD
+        // data for a bare small molecule, renderLigandDepiction() found no
+        // ligand loci, field-wells' `molfile` stayed null, and every field
+        // button below was a silent no-op — under a status line that says
+        // "rendering electrostatic well…". Confident wrong status over a
+        // no-op is the exact failure this whole app is built to refuse, and it
+        // sat in the one flow that was requested by name (导入一个分子自动生成).
+        // Reproduced 3x in an isolated browser before this fix; the mechanism
+        // is then visible in two lines of source.
+        //
+        // NAMING DEBT, stated rather than silently tolerated: this field is
+        // called smilesMolfile because it began as the paste-SMILES path, and
+        // it is now what every facet reads as "the active molecule". Renaming
+        // it touches ~10 call sites in a file two other sessions are editing
+        // today, so it waits — but a reader must not conclude that an /embed
+        // import is a SMILES paste.
+        this.smilesMolfile = payload.molfile;
+        this.smartsSearchMolfile = payload.molfile;
         this.currentMolecule = {
             id: meta.inchikey,
             label: `Imported · ${meta.smiles_canonical}`,
