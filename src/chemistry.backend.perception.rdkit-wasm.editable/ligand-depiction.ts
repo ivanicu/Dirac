@@ -185,8 +185,8 @@ export class LigandDepiction {
                 continuousHighlight: true,
                 bondLineWidth: 2,
                 padding: 0.08,
-                fixedFontSize: 18,
-                additionalAtomLabelPadding: 0.15,
+                fixedFontSize: 12,
+                additionalAtomLabelPadding: 0.2,
             };
 
             const svgString = mol.get_svg_with_highlights(JSON.stringify(details));
