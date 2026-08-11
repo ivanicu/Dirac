@@ -43,6 +43,32 @@ DEFAULT_ISOVALUE = 0.001          # a.u., the Politzer/Murray surface
 DEFAULT_BASIS = 'def2-svp'
 MAX_QM_ATOMS = 120
 
+# def2 basis sets replace the core of every element from Rb (Z=37) onward with
+# an effective core potential, and pyscf does NOT attach it just because you
+# asked for 'def2-svp'. Without it iodine is treated all-electron by a basis
+# never designed for that, and the result is WRONG WITHOUT COMPLAINING:
+# charge balances, the potential still decays to zero at infinity, the SCF
+# converges — and iodobenzene's σ-hole comes out at -37 kcal/mol instead of
+# +21, with the anisotropy INVERTED. The one element this module exists for
+# was the one it got wrong, and nothing in the output said so.
+ECP_FROM_Z = 37
+
+
+def _ecp_for(atoms, basis: str) -> dict:
+    """Attach the matching ECP to every heavy element the basis defines one for."""
+    from rdkit.Chem import GetPeriodicTable
+    table = GetPeriodicTable()
+    ecp = {}
+    for symbol in {s for s, _ in atoms}:
+        if table.GetAtomicNumber(symbol) < ECP_FROM_Z:
+            continue
+        try:
+            gto.basis.load_ecp(basis, symbol)
+        except Exception:                       # noqa: BLE001 — basis defines none
+            continue
+        ecp[symbol] = basis
+    return ecp
+
 # Atoms that can carry a σ-hole (group 15-17 heavy elements). Fluorine is
 # included deliberately: it almost never has one, and a tool that silently
 # omits the negative case cannot be checked.
@@ -250,7 +276,8 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
     rdmol, atoms, charge, spin = _prepare(molblock)
 
     mol = gto.M(atom=[(s, c) for s, c in atoms], unit='Angstrom',
-                basis=basis, charge=charge, spin=spin, verbose=0)
+                basis=basis, ecp=_ecp_for(atoms, basis) or None,
+                charge=charge, spin=spin, verbose=0)
     mf = scf.RHF(mol) if spin == 0 else scf.UHF(mol)
     mf.max_cycle = 120
     energy = mf.kernel()
@@ -316,6 +343,7 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
         'meta': {
             'method': 'RHF' if spin == 0 else 'UHF',
             'basis': basis,
+            'ecp': sorted(_ecp_for(atoms, basis)) or None,
             'scf_energy_ha': float(energy),
             'converged': True,
             'charge': charge,
@@ -343,7 +371,8 @@ def mep_at_points(molblock: str, points_ang, basis: str = DEFAULT_BASIS):
     """
     _, atoms, charge, spin = _prepare(molblock)
     mol = gto.M(atom=[(s, c) for s, c in atoms], unit='Angstrom',
-                basis=basis, charge=charge, spin=spin, verbose=0)
+                basis=basis, ecp=_ecp_for(atoms, basis) or None,
+                charge=charge, spin=spin, verbose=0)
     mf = scf.RHF(mol) if spin == 0 else scf.UHF(mol)
     mf.max_cycle = 120
     energy = mf.kernel()

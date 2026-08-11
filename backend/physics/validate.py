@@ -78,6 +78,36 @@ def sigma_hole_gates() -> None:
          holes['CF3Br'] > 0,
          'positive cap coexists with the negative belt')
 
+    # The gate that was missing. Iodine is the strongest halogen-bond donor and
+    # the case this module most exists for, and it was silently WRONG: def2
+    # basis sets replace the core from Rb onward with an ECP that pyscf does
+    # not attach on its own, so iodine ran all-electron under a basis never
+    # built for it. Charge balanced, the potential still decayed to zero, the
+    # SCF converged, and iodobenzene's σ-hole came out at -37 kcal/mol with the
+    # anisotropy inverted. Only a value fixed by chemistry catches that.
+    print('halogen ordering with heavy-element ECPs')
+    aryl = {}
+    for name, smiles in (('iodobenzene', 'Ic1ccccc1'), ('bromobenzene', 'Brc1ccccc1'),
+                         ('chlorobenzene', 'Clc1ccccc1')):
+        mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
+        AllChem.EmbedMolecule(mol, randomSeed=42)
+        AllChem.MMFFOptimizeMolecule(mol, maxIters=500)
+        out = compute_surface_mep(Chem.MolToMolBlock(mol), points_per_atom=60)
+        found = [e for e in out['extrema']
+                 if e.get('sigma_hole', {}).get('is_sigma_hole')
+                 and e['element'] in ('I', 'Br', 'Cl')]
+        aryl[name] = max((e['value_kcal_per_mol'] for e in found), default=None)
+        print(f"    {name}: {aryl[name]} kcal/mol, ecp={out['meta']['ecp']}")
+
+    gate('iodobenzene has a POSITIVE σ-hole',
+         aryl['iodobenzene'] is not None and aryl['iodobenzene'] > 5,
+         f"{aryl['iodobenzene']} kcal/mol (literature +12 to +20; -37 means the ECP is missing)")
+    gate('the halogen-bond ordering holds: I > Br > Cl',
+         None not in (aryl['iodobenzene'], aryl['bromobenzene'])
+         and aryl['iodobenzene'] > aryl['bromobenzene']
+         and (aryl['chlorobenzene'] is None or aryl['bromobenzene'] > aryl['chlorobenzene']),
+         f"I {aryl['iodobenzene']} > Br {aryl['bromobenzene']} > Cl {aryl['chlorobenzene']}")
+
 
 def _molblock_from_atomstring(atoms: str) -> str:
     """Build a molfile from a 'Sym x y z; ...' string without bond perception
