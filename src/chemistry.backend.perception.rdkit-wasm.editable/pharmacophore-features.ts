@@ -29,12 +29,9 @@ import { addSphere } from '../mol-geo/geometry/mesh/builder/sphere';
 import { Circle } from '../mol-geo/primitive/circle';
 import { Shape } from '../mol-model/shape';
 import { PluginStateObject as SO } from '../mol-plugin-state/objects';
-import { Structure, StructureElement, Unit, StructureProperties } from '../mol-model/structure';
-import { OrderedSet } from '../mol-data/int';
-import { ComponentBond } from '../mol-model-formats/structure/property/bonds/chem_comp';
-import { StructureSelectionQueries } from '../mol-plugin-state/helpers/structure-selection-query';
-import { QueryContext, StructureSelection } from '../mol-model/structure';
+import { Structure, StructureElement } from '../mol-model/structure';
 import { computeLigandChemistry } from './semantic-chemistry-rdkit';
+import { ligandLociToMolfile, lociFromFocusOptions, extractLigandAtomData } from './ligand-pipeline';
 import type { LigandFocusOptions } from './semantic-focus';
 
 export type PharmacophoreLayerId = 'pharmacophore-features-rdkit';
@@ -89,12 +86,13 @@ export async function computePharmacophoreFeatures(structure: Structure, options
     const loci = lociFromFocusOptions(structure, options);
     if (StructureElement.Loci.isEmpty(loci)) return [];
 
-    const parsed = parseLigandLoci(loci);
-    if (!parsed) return [];
-    const { atomPositions, atomElements, bonds } = parsed;
+    const data = extractLigandAtomData(loci);
+    if (!data) return [];
+    const { atomPositions, atomElements, bonds } = data;
 
-    const molfile = buildMolfile(parsed);
-    const chemistry = await computeLigandChemistry(molfile, atomPositions.length);
+    const molfile = ligandLociToMolfile(loci);
+    if (!molfile) return [];
+    const chemistry = await computeLigandChemistry(molfile.molfile, atomPositions.length);
     if (!chemistry) return [];
 
     const features: Feature[] = [];
@@ -183,92 +181,8 @@ export async function computePharmacophoreFeatures(structure: Structure, options
 
 // === Loci → atoms + bonds ===
 
-interface ParsedLigand {
-    atomPositions: Vec3[];
-    atomElements: string[];
-    atomNames: string[];
-    atomCompId: string;
-    bonds: Array<{ a1: number; a2: number; order: number }>;
-}
 
-function parseLigandLoci(loci: StructureElement.Loci): ParsedLigand | null {
-    if (StructureElement.Loci.isEmpty(loci)) return null;
-    const structure = loci.structure;
-    const model = structure.models[0];
-    const bondData = ComponentBond.Provider.get(model);
-    if (!bondData) return null;
 
-    const atomPositions: Vec3[] = [];
-    const atomElements: string[] = [];
-    const atomNames: string[] = [];
-    const position = Vec3();
-    const location = StructureElement.Location.create(structure);
-    let compId = '';
-
-    for (const e of loci.elements) {
-        if (!Unit.isAtomic(e.unit)) continue;
-        const count = OrderedSet.size(e.indices);
-        for (let i = 0; i < count; i++) {
-            const unitIndex = OrderedSet.getAt(e.indices, i);
-            location.unit = e.unit;
-            location.element = e.unit.elements[unitIndex];
-            const element = StructureProperties.atom.type_symbol(location);
-            const atomName = StructureProperties.atom.label_atom_id(location);
-            if (!compId) compId = StructureProperties.residue.label_comp_id(location);
-            e.unit.conformation.position(location.element, position);
-            atomPositions.push(Vec3.clone(position));
-            atomElements.push(element);
-            atomNames.push(atomName);
-        }
-    }
-    if (atomPositions.length === 0) return null;
-
-    const nameToIdx = new Map<string, number>();
-    for (let i = 0; i < atomNames.length; i++) nameToIdx.set(atomNames[i], i);
-
-    const bonds: Array<{ a1: number; a2: number; order: number }> = [];
-    const compBonds = bondData.entries.get(compId);
-    if (compBonds?.map) {
-        for (const [name1, pairs] of compBonds.map) {
-            const a1 = nameToIdx.get(name1);
-            if (a1 === undefined) continue;
-            for (const [name2, bond] of pairs.map) {
-                const a2 = nameToIdx.get(name2);
-                if (a2 === undefined) continue;
-                if (a1 < a2) bonds.push({ a1, a2, order: bond.order ?? 1 });
-            }
-        }
-    }
-
-    return { atomPositions, atomElements, atomNames, atomCompId: compId, bonds };
-}
-
-function buildMolfile(parsed: ParsedLigand): string {
-    const lines: string[] = ['', '  mol*', ''];
-    lines.push(
-        parsed.atomPositions.length.toString().padStart(3, ' ')
-        + parsed.bonds.length.toString().padStart(3, ' ')
-        // 8 zero fields + '999' — spec-exact V2000 counts line (see the note in
-        // semantic-chemistry-rdkit.ts: a 9th field breaks desktop RDKit parsing).
-        + '  0  0  0  0  0  0  0  0999 V2000'
-    );
-    for (let i = 0; i < parsed.atomPositions.length; i++) {
-        const p = parsed.atomPositions[i];
-        const x = p[0].toFixed(4).padStart(10, ' ');
-        const y = p[1].toFixed(4).padStart(10, ' ');
-        const z = p[2].toFixed(4).padStart(10, ' ');
-        const sym = parsed.atomElements[i].padEnd(2, ' ');
-        lines.push(`${x}${y}${z} ${sym}  0   0  0  0  0  0  0  0  0  0  0  0`);
-    }
-    for (const b of parsed.bonds) {
-        const a1 = (b.a1 + 1).toString().padStart(3, ' ');
-        const a2 = (b.a2 + 1).toString().padStart(3, ' ');
-        const order = b.order.toString().padStart(3, ' ');
-        lines.push(`${a1}${a2}${order}  0  0  0  0`);
-    }
-    lines.push('M  END');
-    return lines.join('\n');
-}
 
 // === Geometry helpers ===
 
@@ -455,13 +369,6 @@ const PharmacophoreShapeProvider = PharmacophoreShapeProviderFactory({
 
 // === Loci helper ===
 
-function lociFromFocusOptions(structure: Structure, options: LigandFocusOptions): StructureElement.Loci {
-    if (options.target && options.target.hash === structure.hashCode) {
-        return StructureElement.Bundle.toLoci(options.target, structure);
-    }
-    const selection = StructureSelectionQueries.ligand.query(new QueryContext(structure.root));
-    return StructureSelection.toLociWithCurrentUnits(selection);
-}
 
 // === Public attach/detach ===
 

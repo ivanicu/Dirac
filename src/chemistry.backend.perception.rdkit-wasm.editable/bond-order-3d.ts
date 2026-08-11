@@ -24,12 +24,11 @@ import { MeshBuilder } from '../mol-geo/geometry/mesh/mesh-builder';
 import { addSimpleCylinder, BasicCylinderProps } from '../mol-geo/geometry/mesh/builder/cylinder';
 import { Shape } from '../mol-model/shape';
 import { PluginStateObject as SO } from '../mol-plugin-state/objects';
-import { Structure, StructureElement, Unit, StructureProperties } from '../mol-model/structure';
 import { OrderedSet } from '../mol-data/int';
 import { ComponentBond } from '../mol-model-formats/structure/property/bonds/chem_comp';
-import { StructureSelectionQueries } from '../mol-plugin-state/helpers/structure-selection-query';
-import { QueryContext, StructureSelection } from '../mol-model/structure';
 import type { LigandFocusOptions } from './semantic-focus';
+import { lociFromFocusOptions } from './ligand-pipeline';
+import { Structure, StructureElement, Unit, StructureProperties } from '../mol-model/structure';
 
 export type BondOrder3DLayerId = 'bond-order-3d-rdkit';
 
@@ -60,11 +59,7 @@ interface BondInfo {
 }
 
 function collectBondOrderGeometry(structure: Structure, options: LigandFocusOptions): BondInfo[] {
-    const loci = options.target && options.target.hash === structure.hashCode
-        ? StructureElement.Bundle.toLoci(options.target, structure)
-        : StructureSelection.toLociWithCurrentUnits(
-            StructureSelectionQueries.ligand.query(new QueryContext(structure.root))
-        );
+    const loci = lociFromFocusOptions(structure, options);
     if (StructureElement.Loci.isEmpty(loci)) return [];
 
     const model = structure.models[0];

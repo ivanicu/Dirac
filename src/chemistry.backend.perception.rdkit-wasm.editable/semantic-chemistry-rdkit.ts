@@ -15,18 +15,15 @@
  * by other modules are never touched.
  */
 
-import { Structure, StructureElement, Unit, StructureProperties, StructureSelection, QueryContext } from '../mol-model/structure';
+import { Structure, StructureElement } from '../mol-model/structure';
 import { PluginContext } from '../mol-plugin/context';
 import { StateTransforms } from '../mol-plugin-state/transforms';
 import { StateSelection } from '../mol-state';
 import { Overpaint } from '../mol-theme/overpaint';
 import { Color } from '../mol-util/color';
-import { OrderedSet, SortedArray } from '../mol-data/int';
-import { Vec3 } from '../mol-math/linear-algebra';
-import { ComponentBond } from '../mol-model-formats/structure/property/bonds/chem_comp';
-import { StructureSelectionQueries } from '../mol-plugin-state/helpers/structure-selection-query';
 import type { LigandFocusOptions } from './semantic-focus';
 import { PAINS_SMARTS } from './pains-smarts';
+import { ligandLociToMolfile, lociFromFocusOptions, filterLociByAtomIndex } from './ligand-pipeline';
 
 export type RdkitChemicalLayerId =
     | 'partial-charge-rdkit'
@@ -179,135 +176,6 @@ export async function getRDKit(): Promise<RDKitModule> {
 
 // === Ligand loci → V2000 molfile ===
 
-interface MolfileBuild {
-    molfile: string;
-    atomCount: number;
-}
-
-interface AtomRecord {
-    element: string;
-    x: number;
-    y: number;
-    z: number;
-    charge: number;
-    name: string;
-    compId: string;
-}
-
-function mapChargeToMolfileCode(formalCharge: number): number {
-    if (formalCharge === 1) return 3;
-    if (formalCharge === 2) return 2;
-    if (formalCharge === 3) return 1;
-    if (formalCharge === -1) return 5;
-    if (formalCharge === -2) return 6;
-    if (formalCharge === -3) return 7;
-    return 0;
-}
-
-/**
- * Build a V2000 molfile from a single-residue ligand loci. Iteration order
- * over the loci defines the molfile atom order; downstream code must use the
- * same walker to map RDKit results back.
- */
-function ligandLociToMolfile(loci: StructureElement.Loci): MolfileBuild | null {
-    if (StructureElement.Loci.isEmpty(loci)) return null;
-    const structure = loci.structure;
-    const model = structure.models[0];
-    const bondData = ComponentBond.Provider.get(model);
-    if (!bondData) return null;
-
-    const atoms: AtomRecord[] = [];
-    const position = Vec3();
-    const location = StructureElement.Location.create(structure);
-
-    for (const e of loci.elements) {
-        const unit = e.unit;
-        if (!Unit.isAtomic(unit)) continue;
-        const count = OrderedSet.size(e.indices);
-        for (let i = 0; i < count; i++) {
-            const unitIndex = OrderedSet.getAt(e.indices, i);
-            location.unit = unit;
-            location.element = unit.elements[unitIndex];
-            const element = StructureProperties.atom.type_symbol(location);
-            const compId = StructureProperties.residue.label_comp_id(location);
-            const atomName = StructureProperties.atom.label_atom_id(location);
-            const charge = StructureProperties.atom.pdbx_formal_charge(location) || 0;
-            unit.conformation.position(location.element, position);
-            atoms.push({
-                element,
-                x: position[0],
-                y: position[1],
-                z: position[2],
-                charge,
-                name: atomName,
-                compId,
-            });
-        }
-    }
-
-    if (atoms.length === 0) return null;
-    if (atoms.length > 999) return null;
-
-    // Single-residue assumption: a LigandFocusTarget bundle is one residue.
-    const compId = atoms[0].compId;
-    const nameToIdx = new Map<string, number>();
-    for (let i = 0; i < atoms.length; i++) nameToIdx.set(atoms[i].name, i);
-
-    interface BondRec { a1: number; a2: number; order: number; }
-    const bonds: BondRec[] = [];
-    const compBonds = bondData.entries.get(compId);
-    if (compBonds?.map) {
-        for (const [name1, pairs] of compBonds.map) {
-            const a1 = nameToIdx.get(name1);
-            if (a1 === undefined) continue;
-            for (const [name2, bond] of pairs.map) {
-                const a2 = nameToIdx.get(name2);
-                if (a2 === undefined) continue;
-                if (a1 < a2) bonds.push({ a1, a2, order: bond.order ?? 1 });
-            }
-        }
-    }
-
-    const lines: string[] = [];
-    lines.push('');
-    lines.push('  mol*');
-    lines.push('');
-    lines.push(
-        atoms.length.toString().padStart(3, ' ')
-        + bonds.length.toString().padStart(3, ' ')
-        // 8 zero fields + '999' per the V2000 spec (11 fields total before the
-        // version). A 9th zero field shifts 'V2000' off its fixed column; the
-        // RDKit-JS parser tolerates that, desktop RDKit (fields backend)
-        // rejects the molfile. This fix has been reverted once already by a
-        // stale-context file rewrite — if you regenerate this file, KEEP IT.
-        + '  0  0  0  0  0  0  0  0999 V2000'
-    );
-
-    for (const a of atoms) {
-        const x = a.x.toFixed(4).padStart(10, ' ');
-        const y = a.y.toFixed(4).padStart(10, ' ');
-        const z = a.z.toFixed(4).padStart(10, ' ');
-        const sym = a.element.padEnd(2, ' ');
-        const chargeCode = mapChargeToMolfileCode(a.charge).toString().padStart(3, ' ');
-        lines.push(`${x}${y}${z} ${sym}  0 ${chargeCode}  0  0  0  0  0  0  0  0  0  0`);
-    }
-
-    for (const b of bonds) {
-        const a1 = (b.a1 + 1).toString().padStart(3, ' ');
-        const a2 = (b.a2 + 1).toString().padStart(3, ' ');
-        const order = b.order.toString().padStart(3, ' ');
-        lines.push(`${a1}${a2}${order}  0  0  0  0`);
-    }
-
-    lines.push('M  END');
-
-    const out = { molfile: lines.join('\n'), atomCount: atoms.length };
-    // Debug hook — expose last molfile for diagnostic tests.
-    if (typeof window !== 'undefined') {
-        (window as unknown as { __lastRdkitMolfile?: string }).__lastRdkitMolfile = out.molfile;
-    }
-    return out;
-}
 
 /**
  * One-shot preparation of ligand molfile + computed chemistry. Used by both
@@ -682,48 +550,12 @@ function partialChargeColor(v: number, bound: number): Color {
 
 // === Loci helpers ===
 
-function lociFromFocusOptions(structure: Structure, options: LigandFocusOptions): StructureElement.Loci {
-    if (options.target && options.target.hash === structure.hashCode) {
-        return StructureElement.Bundle.toLoci(options.target, structure);
-    }
-    const selection = StructureSelectionQueries.ligand.query(new QueryContext(structure.root));
-    return StructureSelection.toLociWithCurrentUnits(selection);
-}
 
 /**
  * Filter a loci by an atom-index predicate. The atom index counter walks the
  * loci in the same order as ligandLociToMolfile, so the predicate receives
  * the SAME index that RDKit used.
  */
-function filterLociByAtomIndex(
-    loci: StructureElement.Loci,
-    predicate: (atomIndex: number) => boolean,
-): StructureElement.Loci {
-    if (StructureElement.Loci.isEmpty(loci)) return loci;
-    const newElements: Array<{ unit: Unit.Atomic; indices: OrderedSet<StructureElement.UnitIndex> }> = [];
-    let counter = 0;
-    for (const e of loci.elements) {
-        if (!Unit.isAtomic(e.unit)) {
-            counter += OrderedSet.size(e.indices);
-            continue;
-        }
-        const kept: number[] = [];
-        const count = OrderedSet.size(e.indices);
-        for (let i = 0; i < count; i++) {
-            const unitIndex = OrderedSet.getAt(e.indices, i);
-            if (predicate(counter)) kept.push(unitIndex);
-            counter++;
-        }
-        if (kept.length > 0) {
-            kept.sort((a, b) => a - b);
-            newElements.push({
-                unit: e.unit,
-                indices: OrderedSet.ofSortedArray(SortedArray.ofSortedArray<StructureElement.UnitIndex>(kept)),
-            });
-        }
-    }
-    return StructureElement.Loci(loci.structure, newElements);
-}
 
 // === Public layer application ===
 
