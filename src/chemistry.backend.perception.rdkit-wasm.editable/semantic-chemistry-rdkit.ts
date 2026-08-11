@@ -33,7 +33,8 @@ export type RdkitChemicalLayerId =
     | 'aromaticity-rdkit'
     | 'stereo-rdkit'
     | 'ring-atoms-rdkit'
-    | 'sp3-carbons-rdkit';
+    | 'sp3-carbons-rdkit'
+    | 'reactive-groups-rdkit';
 
 export type RdkitChemicalLayerCost = 'low' | 'medium';
 
@@ -88,6 +89,13 @@ export const RdkitChemicalLayers: readonly RdkitChemicalLayerDefinition[] = Obje
         source: 'RDKit hybridization perception via [CX4] SMARTS',
         description: 'Highlights saturated sp³-hybridized carbons (tetrahedral, 4 single bonds). Indicates the 3D-character of the ligand scaffold — high sp³ fraction correlates with drug-likeness and lead-likeness.',
     },
+    {
+        id: 'reactive-groups-rdkit',
+        label: 'Reactive groups alert',
+        cost: 'low',
+        source: 'RDKit SMARTS patterns for common assay-interference and covalent-reactive groups',
+        description: 'Highlights atoms in known problematic substructures: aldehyde, Michael acceptor, epoxide, acyl halide, alkyl halide, nitro, disulfide, peroxide, azide, diazonium. These are the top-10 most common flags in medicinal chemistry screening cascade (complement to full PAINS which requires a 400-pattern library).',
+    },
 ]);
 
 export interface RdkitChemicalLayerCounts {
@@ -102,6 +110,7 @@ export interface RdkitChemicalLayerCounts {
     readonly chiralCentersUndefined: number;
     readonly ringAtoms: number;
     readonly sp3Carbons: number;
+    readonly reactiveGroups: readonly string[];
 }
 
 const RdkitChemicalLayerTag = 'rdkit-chemical-semantic-layers';
@@ -311,6 +320,8 @@ export interface LigandChemistry {
     chiralCenters: Map<number, 'R' | 'S' | '?'>;
     ringAtoms: Uint8Array;            // [R] SMARTS — any SSSR ring atom
     sp3Carbons: Uint8Array;           // [CX4] SMARTS — tetrahedral saturated C
+    reactiveGroups: Uint8Array;       // union of reactive SMARTS matches
+    reactiveGroupLabels: string[];    // human-readable list of found groups
 }
 
 function smartsAtomIndices(RDKit: RDKitModule, mol: JSMol, smarts: string, atomCount: number): Uint8Array {
@@ -460,6 +471,32 @@ export async function computeLigandChemistry(molfile: string, atomCount: number)
         // [CX4] = carbon with 4 explicit single bonds → sp3-hybridized
         const sp3Carbons = smartsAtomIndices(RDKit, mol, '[CX4]', atomCount);
 
+        // Reactive groups: top-10 most common assay-interference / covalent-reactive
+        // substructures. Each is a separate SMARTS match; union into one flag array
+        // and collect readable labels for the availability badge.
+        const REACTIVE_GROUPS: Array<[string, string]> = [
+            ['aldehyde',         '[CX3H1](=O)[#6]'],
+            ['Michael acceptor', '[$([CX3]=[CX3]);![$(*#[#6])]]'],
+            ['acyl halide',      '[CX3](=O)[F,Cl,Br,I]'],
+            ['alkyl halide',     '[CX4][F,Cl,Br,I]'],
+            ['nitro',            '[$([NX3](=O)=O)]'],
+            ['disulfide',        '[SX2][SX2]'],
+            ['peroxide',         '[OX2][OX2]'],
+            ['azide',            '[NX2]=[NX2]=[NX1]'],
+            ['epoxide',          '[OX2r3]'],
+            ['isocyanate',       '[NX2]=[CX1]=[OX1]'],
+        ];
+        const reactiveGroups = new Uint8Array(atomCount);
+        const reactiveGroupLabels: string[] = [];
+        for (const [name, smarts] of REACTIVE_GROUPS) {
+            const flags = smartsAtomIndices(RDKit, mol, smarts, atomCount);
+            let found = false;
+            for (let i = 0; i < atomCount; i++) {
+                if (flags[i]) { reactiveGroups[i] = 1; found = true; }
+            }
+            if (found) reactiveGroupLabels.push(name);
+        }
+
         let partialCharges: Float32Array | null = null;
         let partialChargeMin = 0;
         let partialChargeMax = 0;
@@ -484,6 +521,8 @@ export async function computeLigandChemistry(molfile: string, atomCount: number)
             chiralCenters,
             ringAtoms,
             sp3Carbons,
+            reactiveGroups,
+            reactiveGroupLabels,
         };
     } finally {
         if (mol) mol.delete();
@@ -559,15 +598,15 @@ function filterLociByAtomIndex(
 export async function getRdkitChemicalLayerCounts(structure: Structure, options: LigandFocusOptions = {}): Promise<RdkitChemicalLayerCounts> {
     const loci = lociFromFocusOptions(structure, options);
     if (StructureElement.Loci.isEmpty(loci)) {
-        return { hasLigand: false, atomCount: 0, aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0 };
+        return { hasLigand: false, atomCount: 0, aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0, reactiveGroups: [] };
     }
     const build = ligandLociToMolfile(loci);
     if (!build) {
-        return { hasLigand: true, atomCount: StructureElement.Loci.size(loci), aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0 };
+        return { hasLigand: true, atomCount: StructureElement.Loci.size(loci), aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0, reactiveGroups: [] };
     }
     const chem = await computeLigandChemistry(build.molfile, build.atomCount);
     if (!chem) {
-        return { hasLigand: true, atomCount: build.atomCount, aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0 };
+        return { hasLigand: true, atomCount: build.atomCount, aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0, reactiveGroups: [] };
     }
     const range = chem.partialCharges ? ([chem.partialChargeMin, chem.partialChargeMax] as const) : null;
     let chirR = 0, chirS = 0, chirU = 0;
@@ -586,6 +625,7 @@ export async function getRdkitChemicalLayerCounts(structure: Structure, options:
         chiralCentersUndefined: chirU,
         ringAtoms: countSetBits(chem.ringAtoms),
         sp3Carbons: countSetBits(chem.sp3Carbons),
+        reactiveGroups: chem.reactiveGroupLabels,
     };
 }
 
@@ -674,6 +714,11 @@ async function buildRdkitOverpaintLayers(
     if (enabledIds.has('sp3-carbons-rdkit')) {
         const filtered = filterLociByAtomIndex(loci, i => chem.sp3Carbons[i] === 1);
         if (!StructureElement.Loci.isEmpty(filtered)) out.push({ loci: filtered, color: Color(0x7dd3c0) });
+    }
+
+    if (enabledIds.has('reactive-groups-rdkit') && chem.reactiveGroupLabels.length > 0) {
+        const filtered = filterLociByAtomIndex(loci, i => chem.reactiveGroups[i] === 1);
+        if (!StructureElement.Loci.isEmpty(filtered)) out.push({ loci: filtered, color: Color(0xff4444) });
     }
 
     return out;
