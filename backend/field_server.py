@@ -1374,6 +1374,42 @@ def _allowed_hosts() -> set[str]:
         s.close()
     except OSError:
         pass
+
+    # EVERY address on EVERY interface, because the routing trick above only
+    # finds the DEFAULT route's source address. Measured symptom: the Mac
+    # reached the page over Tailscale (100.78.155.10:1338 → 200) and the fields
+    # daemon answered 403, so the UI said "backend offline" — a security refusal
+    # wearing the costume of a dead service. The default route goes out the LAN
+    # interface, so the Tailscale address was never in this set, and
+    # gethostname() does not resolve to it either.
+    #
+    # This does NOT widen the threat model: the rebinding attack this check
+    # exists to stop is a page resolving ITS OWN hostname to one of this box's
+    # addresses. Allowing all of the box's own addresses is precisely the
+    # intent; what must never be allowed is a name that is not ours.
+    try:
+        import subprocess
+        out = subprocess.run(['ip', '-o', 'addr', 'show'],
+                             capture_output=True, text=True, timeout=5)
+        for line in out.stdout.splitlines():
+            parts = line.split()
+            if len(parts) >= 4 and parts[2] in ('inet', 'inet6'):
+                addr = parts[3].split('/')[0]
+                hosts.add(addr)
+                if parts[2] == 'inet6':
+                    hosts.add(f'[{addr}]')          # Host headers bracket v6
+    except Exception as e:                                          # noqa: BLE001
+        # LOUD: a silent failure here means every non-default-route client gets
+        # a 403 that reads as an outage, which is the bug this block fixes.
+        print(f'[host] could not enumerate interfaces ({e}) — only localhost and '
+              f'the default-route address are allowed; a client on another '
+              f'interface (Tailscale, a second NIC) will see 403', flush=True)
+
+    # Names cannot be enumerated from an interface — MagicDNS names, a LAN
+    # hostname, a reverse-proxy name. One documented escape hatch instead of
+    # a wildcard.
+    extra = os.environ.get('DIRAC_EXTRA_HOSTS', '')
+    hosts.update(h.strip() for h in extra.split(',') if h.strip())
     return hosts
 
 
@@ -1384,7 +1420,18 @@ ALLOWED_BASIS = ('sto-3g', '6-31g', '6-31g*', 'def2-svp')  # = DB CHECK minus 'n
 class Handler(BaseHTTPRequestHandler):
     def _host_ok(self) -> bool:
         host = (self.headers.get('Host') or '').rsplit(':', 1)[0]
-        return host in ALLOWED_HOSTS
+        ok = host in ALLOWED_HOSTS
+        if not ok:
+            # The RESPONSE stays opaque — echoing the allowlist would hand an
+            # attacker this box's addresses. The LOG is where the diagnosis
+            # lives, because the 403 is otherwise indistinguishable from a dead
+            # daemon from the client's side, and that cost a Mac-side debugging
+            # session already.
+            print(f'[host] REFUSED Host={host!r} — not one of this box\'s '
+                  f'{len(ALLOWED_HOSTS)} known names/addresses. If this is a real '
+                  f'interface or DNS name, add it: DIRAC_EXTRA_HOSTS={host}',
+                  flush=True)
+        return ok
 
     def _cors_origin(self) -> str | None:
         origin = self.headers.get('Origin')
