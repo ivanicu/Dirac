@@ -205,8 +205,46 @@ SELECT pg_temp.expect_reject('A14 blob whose hash does not match its bytes', '23
     VALUES (digest('hello', 'sha256'), 'text/plain', 7, 'goodbye'::bytea) $$);
 
 SELECT pg_temp.expect_reject('A15 cached quantum field whose SCF never converged', '23514', $$
-    INSERT INTO app.field_cube (molfile_sha256, kind, basis, blob_sha256, converged, toolkit_id)
-    SELECT digest('mol', 'sha256'), 'homo', 'sto-3g', digest('hello', 'sha256'), false, toolkit FROM fx $$);
+    INSERT INTO app.field_cube (molfile_sha256, kind, basis, blob_sha256, converged,
+                                scf_reference, scf_converger, toolkit_id)
+    SELECT digest('mol', 'sha256'), 'homo', 'sto-3g', digest('hello', 'sha256'), false,
+           'RHF', 'diis', toolkit FROM fx $$);
+
+-- The exact case the fields workstream had just unblocked when this schema was
+-- written: an Fe-heme HOMO that only converged under second-order SCF. The
+-- original free-text method CHECK would have rejected it.
+SELECT pg_temp.expect_accept('P10 SOSCF-rescued quantum field caches', $$
+    INSERT INTO app.field_cube (molfile_sha256, kind, basis, blob_sha256, converged,
+                                scf_reference, scf_converger, scf_energy_ha, n_atoms,
+                                n_basis, seconds, toolkit_id)
+    SELECT digest('heme', 'sha256'), 'homo', 'sto-3g', digest('hello', 'sha256'), true,
+           'RHF', 'soscf', -2244.123456, 75, 430, 365.0, toolkit FROM fx $$);
+
+SELECT pg_temp.expect_reject('A21 quantum field claiming no SCF reference', '23514', $$
+    INSERT INTO app.field_cube (molfile_sha256, kind, basis, blob_sha256, converged,
+                                scf_reference, scf_converger, toolkit_id)
+    SELECT digest('mol2', 'sha256'), 'lumo', 'sto-3g', digest('hello', 'sha256'), true,
+           'none', 'none', toolkit FROM fx $$);
+
+SELECT pg_temp.expect_reject('A22 classical MEP borrowing a quantum reference', '23514', $$
+    INSERT INTO app.field_cube (molfile_sha256, kind, basis, blob_sha256,
+                                scf_reference, scf_converger, toolkit_id)
+    SELECT digest('mol3', 'sha256'), 'mep', 'none', digest('hello', 'sha256'),
+           'RHF', 'diis', toolkit FROM fx $$);
+
+-- A new solver must arrive as a migration, never as an unrecognised string.
+SELECT pg_temp.expect_reject('A23 unknown SCF method label', 'P0001', $$
+    SELECT app.parse_scf_method('B3LYP/def2-TZVP') $$);
+
+DO $$
+DECLARE label text;
+BEGIN
+    SELECT app.scf_method_label((p).scf_reference, (p).scf_converger) INTO label
+      FROM (SELECT app.parse_scf_method('RHF+SOSCF') AS p) x;
+    INSERT INTO gate (name, kind, expect, got, ok)
+    VALUES ('P11 SCF label survives split and reassembly', 'compute',
+            'RHF+SOSCF', label, label = 'RHF+SOSCF');
+END $$;
 
 SELECT pg_temp.expect_reject('A16 conformer whose coordinate buffer is truncated', '23514', $$
     WITH s AS (

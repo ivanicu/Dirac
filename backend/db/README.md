@@ -27,8 +27,9 @@ createdb dirac                                    # once
 psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/migrations/001_core.sql
 psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/migrations/002_vocabulary.sql
 psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/migrations/003_audit_partition_root.sql
+psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/migrations/004_scf_method_split.sql
 
-# gates — run after EVERY migration; 19 attacks + 10 positive controls
+# gates — run after EVERY migration; 22 attacks + 12 positive controls
 psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/check_constraints.sql
 
 # register the Designer screening library (68 molecules, RDKit-standardized parents)
@@ -87,3 +88,8 @@ index; nothing else in the schema has to change.
   store cannot hold a mislabelled object.
 - A cached quantum field must carry `converged = true`. The backend refuses to
   ship a decorative field and the cache may not resurrect one.
+- The SCF method is two columns, not one string: `scf_reference` (RHF / UHF /
+  ROHF / none) and `scf_converger` (diis / soscf / newton / none). Pass the
+  backend's own label through `app.parse_scf_method('RHF+SOSCF')` to get the
+  pair, and `app.scf_method_label(...)` to get it back for display. An
+  unrecognised label raises: a new solver is a migration, not a free-text row.
