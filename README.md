@@ -13,9 +13,20 @@ Dirac is **one integrated app** with multiple facets, all sharing the same mol\*
 | Status | Facet | What it does |
 |---|---|---|
 | ✅ shipped | **Lab** (in `index.ts`) | 3D structure + RDKit chemistry perception (aromaticity / donor / acceptor / Gasteiger stub) + 2D ligand depiction with click-sync + 3D pharmacophore primitives (HBA cones / HBD sticks / aromatic disks / hydrophobic halos) |
-| 🚧 next | **Pharmacophore Designer** (`facets/pharmacophore-designer/`) | Drag-editable pharmacophore features, live SMARTS screening against a ligand library |
-| 🚧 next | **Conformer Explorer** (`facets/conformer-explorer/`) | RDKit ETKDG conformer generation, mol\* morph animation, energy landscape |
-| 🚧 next | **Property Optimization Cockpit** (`facets/property-cockpit/`) | Lipinski / Veber dashboard driven by `mol.get_descriptors()` |
+| ✅ shipped | **Property Optimization Cockpit** (`facets/property-cockpit/`) | Lipinski / Veber / lead-likeness dashboard driven by `mol.get_descriptors()` — `Properties` master-tab |
+| ✅ shipped | **Pharmacophore Designer** (`facets/pharmacophore-designer/`) | Drag-editable pharmacophore model + topological SMARTS screening against a 68-molecule library — `Designer` master-tab |
+| ✅ shipped | **Field Wells** (`facets/field-wells/` + `backend/`) | 3D energy wells rendered in the pocket: classical electrostatic well (Gasteiger/Coulomb), quantum HOMO / LUMO / electron density / QM potential via pyscf HF — `Fields` master-tab. Needs the optional local Python backend (below) |
+| 🚧 blocked | **Conformer Explorer** (`facets/conformer-explorer/`) | RDKit ETKDG conformer generation, mol\* morph animation, energy landscape. Blocked in-browser: the vendored RDKit-JS wasm has no `ETKDG`/`EmbedMolecule`/force fields (verified against the binary). Route reopens through the fields backend (RDKit 2026.03 with MMFF) |
+
+### Optional fields backend
+
+The core workflow stays 100% in-browser. The **Fields** facet is the one exception by design — real SCF does not belong in wasm. It talks to a local daemon that turns the focused ligand's molfile into Gaussian-cube scalar fields (already in scene coordinates):
+
+```bash
+backend/env/bin/python backend/field_server.py     # 127.0.0.1:8901; the Fields tab shows online/offline honestly
+```
+
+Self-contained conda env in `backend/env` (RDKit 2026.03 + pyscf 2.14). MEP is instant; HOMO/LUMO/density/QM-MEP run a real RHF/UHF (STO-3G default, 6-31G optional) and refuse to render if SCF does not converge.
 
 ## Run it
 

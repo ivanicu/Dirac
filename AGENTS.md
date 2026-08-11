@@ -31,6 +31,7 @@ Three facets of Dirac are developed in parallel. Each lives in its own directory
 | **Pharmacophore Designer** | `src/examples.reference.mini-demos.vendored-readonly/pharmacophore-designer/**` | Other agents do not commit here. |
 | **Conformer Explorer** | `src/examples.reference.mini-demos.vendored-readonly/conformer-explorer/**` | Other agents do not commit here. |
 | **Property Optimization Cockpit** | `src/examples.reference.mini-demos.vendored-readonly/property-cockpit/**` | Other agents do not commit here. |
+| **Field Wells** | `src/app.frontend.facets.molstar-rdkit.editable/facets/field-wells/**` + `backend/**` | Other agents do not commit here. Backend daemon: `backend/env/bin/python backend/field_server.py` (:8901). |
 
 **Shared substrate** (modifications need explicit coordination via GitHub issue before push):
 
@@ -41,6 +42,13 @@ Three facets of Dirac are developed in parallel. Each lives in its own directory
 - `AGENTS.md`, root `README.md`, `CHANGELOG.md` — docs
 
 If you need to change a shared file, open a `[coord]` issue first.
+
+**Multi-session worktree discipline** (learned 2026-08-10, three sessions on one tree):
+1. `git pull --rebase` before editing a shared file, and again immediately before committing.
+2. Shared files take **anchored incremental edits only** — never whole-file rewrites from your session's stale context. A stale-context rewrite has already (a) erased two sessions' uncommitted hunks, (b) reverted a committed one-line fix, and (c) swallowed another session's uncommitted hunk into an unrelated commit.
+3. Commit shared-file hunks within minutes of editing. The measured half-life of an uncommitted shared-file hunk on this tree is ~10 minutes.
+4. Surgical staging (hash-object / update-index) must assert both "anchor count == 1" **and** "payload count == 0" — the second check is the one that prevents double-injection.
+5. The V2000 counts line in the molfile builders is spec-exact (8 zero fields + `999`); desktop RDKit rejects the 9-field variant. If it regresses a third time, extract a single shared molfile-writer.
 
 ## Pre-flight checklist (every agent, every session)
 
