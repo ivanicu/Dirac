@@ -287,6 +287,12 @@ _V1_REASON_FOR_CODE: dict[str, str] = {
     'BAD_HOST': 'internal',
     'CANCELLED': 'internal',
     'INTERNAL': 'internal',
+    # Ops codes (added with the admin router). v1's three-word reason vocabulary
+    # has no bucket for infrastructure, so both land in 'internal' — which is
+    # exactly the flattening that made v1 useless for reacting to a failure, and
+    # exactly why v2 carries the code itself. The lossiness is the argument.
+    'NOT_FOUND': 'internal',
+    'DB_UNAVAILABLE': 'internal',
 }
 assert set(_V1_REASON_FOR_CODE) == set(CODES), (
     'the v1 reason bucket table has drifted from the vocabulary it buckets')

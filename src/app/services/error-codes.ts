@@ -20,6 +20,8 @@ export const ERROR_CODES = {
     BAD_HOST: { user_copy: "Refused: unrecognised host.", retryable: false, points_at: null },
     CANCELLED: { user_copy: "Cancelled.", retryable: true, points_at: null },
     INTERNAL: { user_copy: "Something failed on our side.", retryable: true, points_at: null },
+    NOT_FOUND: { user_copy: "Not found.", retryable: false, points_at: null },
+    DB_UNAVAILABLE: { user_copy: "The database is unreachable — showing no data is not the same as there being none.", retryable: true, points_at: null },
 } as const;
 
 /** The full, and only, error vocabulary — derived from the object above so

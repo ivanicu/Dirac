@@ -15,7 +15,8 @@
     "Every entry carries what the CALLER should do, not what the implementer",
     "saw. An error described from the implementer's point of view is not",
     "documented. `points_at` is the working alternative when one exists — the",
-    "product's rule is that a refusal names the actor and the way forward."
+    "product's rule is that a refusal names the actor and the way forward.",
+    "NOT_FOUND and DB_UNAVAILABLE were added 2026-08-11 after the admin router found that err() could not express either: every registered code mapped to http 200/403/413, so the router hand-rolled the envelope shape instead. A vocabulary that cannot say \"the database is down\" forces every caller to invent its own way of saying it, which is how three vocabularies happened."
   ],
   "version": 1,
   "codes": {
@@ -98,13 +99,34 @@
       "http": 200,
       "user_copy": "Something failed on our side.",
       "points_at": null
+    },
+    "NOT_FOUND": {
+      "meaning": "No such route or resource.",
+      "caller_action": "Read the valid_routes list the response carries; an error that does not name the alternatives is a dead end.",
+      "retryable": false,
+      "http": 404,
+      "user_copy": "Not found.",
+      "points_at": null
+    },
+    "DB_UNAVAILABLE": {
+      "meaning": "The database could not be reached. This is DEGRADED, not empty and not offline.",
+      "caller_action": "Say degraded, keep the compute path usable, and never render this as \"there is no data\" — an unreachable database and an empty queue must be visually distinguishable.",
+      "retryable": true,
+      "http": 503,
+      "user_copy": "The database is unreachable — showing no data is not the same as there being none.",
+      "points_at": null
     }
   },
   "db_enum_note": [
-    "app.job_error (migration 007) is a SUBSET: it omits BAD_HOST (rejected",
-    "before a job exists) and OPEN_SHELL_SPIN_REQUIRED (added here after 007",
-    "shipped). backend/envelope.py asserts the subset relation at import time,",
-    "so the two can never drift silently — adding a code here that a job could",
-    "carry, without adding it to the enum, is an import-time failure."
+    "app.job_error (migration 007) is a SUBSET, and the omissions are deliberate:",
+    "BAD_HOST (rejected before a job exists), OPEN_SHELL_SPIN_REQUIRED (added here",
+    "after 007 shipped), and the two ops codes NOT_FOUND / DB_UNAVAILABLE — neither",
+    "of which can ever be a job's error, because a job that failed BECAUSE the",
+    "database was unreachable has no row to record it in. That is not a gap; it is",
+    "the one error class this ledger structurally cannot hold, and saying so here is",
+    "cheaper than someone later 'fixing' the enum to match.",
+    "backend/envelope.py asserts the subset relation at import time, and the test",
+    "asserts the reverse difference EXACTLY, so a fifth divergence cannot join the",
+    "four quietly."
   ]
 }
