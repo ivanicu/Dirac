@@ -92,7 +92,7 @@ import gfpUrl from './assets/structures/1ema.cif';
 import p53DnaUrl from './assets/structures/1tup.cif';
 import porinUrl from './assets/structures/2por.cif';
 import hemoglobinUrl from './assets/structures/4hhb.cif';
-import { focusLociKeepingSlab } from './camera-slab';
+import { focusLociKeepingSlab, restoreSceneSlab } from './camera-slab';
 import './index.html';
 
 interface MolecularControl {
@@ -1298,6 +1298,15 @@ class MolecularVfxLab {
     }
 
     private handleInteractionClick(loci: Loci) {
+        // Clicking empty space is the user saying they are done with the detail they
+        // focused. Focusing anything narrows the clipping slab to that object's radius
+        // (see camera-slab.ts), and zooming out cannot widen it again, so the background
+        // click is the way back — no control to discover, and it matches what the gesture
+        // already means everywhere else.
+        if (Loci.isEmpty(loci)) {
+            if (this.workbench) restoreSceneSlab(this.workbench.plugin);
+            return;
+        }
         if (!ShapeGroup.isLoci(loci) || loci.shape.name !== 'Interactions' || loci.groups.length === 0) return;
         const id = OrderedSet.getAt(loci.groups[0].ids, 0);
         this.setActiveContact(id);
