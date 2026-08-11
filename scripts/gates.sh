@@ -129,7 +129,15 @@ if wanted contracts; then
     printf '%s\n' "$contract_out"
     case "$contract_code" in
         0) PASSED+=('gate-7-contracts') ;;
-        2) PASSED+=('gate-7-contracts (contracts clean; src/ drift REPORTED above)') ;;
+        # ⚠ EXIT 2 IS NOW A FAILURE. It was non-blocking while the frontend
+        # interface was legitimately 21-25 keys behind a backend that gained keys
+        # by the hour — failing then would have trained everyone to pass --skip,
+        # and a suite people skip enforces nothing. As of 2026-08-11 the gap
+        # reached ZERO, and the whole value of reaching zero is that the next key
+        # to diverge is caught while it is one key instead of twenty-five. Twice
+        # today an undeclared key was live in production; both times the drift was
+        # found by this gate within the hour, and both fixes were two minutes.
+        2) FAILED+=('gate-7-contracts (frontend FieldMeta has drifted again — see FIND above)') ;;
         *) FAILED+=('gate-7-contracts') ;;
     esac
 fi

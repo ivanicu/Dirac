@@ -522,6 +522,14 @@ if (process.argv.includes('--redproof')) {
             transform: replacingOnce("'single_signed'", "'single_signed_RENAMED'"),
             expect: /FIELD_META_SCHEMA does not declare.*single_signed/s,
         },
+        {
+            name: 'a key removed from the FRONTEND FieldMeta (exit 2 path)',
+            file: path.join(tmp,
+                'src/app.frontend.facets.molstar-rdkit.editable/facets/field-wells/index.ts'),
+            transform: replacingOnce('    method?: string;', ''),
+            expect: /BACKEND-VS-FRONTEND DRIFT/,
+            code: 2,
+        },
     ];
 
     let allOk = true;
@@ -536,15 +544,20 @@ if (process.argv.includes('--redproof')) {
             allOk = false;
             continue;
         }
-        const convicted = verdict.code === 1 && c.expect.test(verdict.out);
+        // Each case declares the exit code it must produce. Asserting "1" for all
+        // of them would let the frontend-drift case pass on a CONTRACT failure,
+        // i.e. the right verdict for the wrong reason — the distinction between
+        // exit 1 and exit 2 is the whole point of the three-valued design.
+        const want = c.code ?? 1;
+        const convicted = verdict.code === want && c.expect.test(verdict.out);
         console.log(`  ${convicted ? 'OK  ' : 'FAIL'}  ${c.name} → exit ${verdict.code}`
-            + (convicted ? '' : ' (expected exit 1 naming the mutated symbol)'));
+            + (convicted ? '' : ` (expected exit ${want} naming the mutated symbol)`));
         if (!convicted) allOk = false;
     }
     fs.rmSync(tmp, { recursive: true, force: true });
     console.log(allOk
-        ? 'REDPROOF PASS — both mutations convicted, and both were verified to have '
-          + 'changed the bytes before the verdict was read'
+        ? `REDPROOF PASS — ${cases.length} mutations convicted at their own exit codes, `
+          + 'each verified to have changed the bytes before its verdict was read'
         : 'REDPROOF FAIL — this gate has not been shown to convict; a green run against '
           + 'the real contracts proves nothing');
     process.exit(allOk ? 0 : 1);

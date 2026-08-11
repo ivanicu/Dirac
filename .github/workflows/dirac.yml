@@ -83,9 +83,11 @@ jobs:
         run: |
           node scripts/check_contract_drift.mjs --redproof
           node scripts/check_contract_drift.mjs; code=$?
-          if [ "$code" = "1" ]; then exit 1; fi
-          if [ "$code" = "2" ]; then echo "::warning::frontend FieldMeta trails the backend (see FIND lines)"; fi
-          exit 0
+          # Both 1 and 2 fail now. The frontend gap reached zero on 2026-08-11,
+          # and the point of zero is that the next divergence is one key instead
+          # of twenty-five. Declaring a key is a two-minute fix; finding out from
+          # a chemist that a caveat never rendered is not.
+          exit "$code"
 
       # The selftest runs FIRST and its failure is the gate's failure: this one
       # is green against the real files, so a crafted broken source is the only

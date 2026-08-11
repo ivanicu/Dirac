@@ -181,7 +181,19 @@ _REGION = ('n_sources_sent', 'n_sources_used', 'cutoff_angstrom',
            # contributes a fictitious monopole, and an invented orientation
            # points the dipole confidently wrong. The count travels so the
            # caller can see how much was excluded, not just that something was.
-           'waters_excluded', 'waters_note')
+           'waters_excluded', 'waters_note',
+           # THE SCREENING MODEL, named in the response so the picture cannot be
+           # mistaken for an interaction energy: eps(r)=4r is the standard
+           # distance-dependent dielectric, cheap and far closer than vacuum, and
+           # it is NOT Poisson-Boltzmann. A field whose model is unnamed invites
+           # exactly the reading it cannot support.
+           'dielectric',
+           # And the two things the model STRUCTURALLY cannot contain — mutual
+           # polarisation and charge transfer (measured non-additive at ~14% of
+           # peak on an H-bonded water dimer at RHF/6-31G*), plus any solvent
+           # beyond that dielectric. A caveat with a number in it is a scope
+           # statement; without one it is a disclaimer.
+           'physics_caveat')
 
 FIELD_META_SCHEMA: dict[str, frozenset[str]] = {
     'mep': frozenset(_COMMON + _GRID + _CLASSICAL_CAVEAT

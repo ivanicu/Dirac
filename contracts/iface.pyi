@@ -72,6 +72,8 @@ class FieldMeta(TypedDict, total=False):
     charge_model: str               # where the charges came from (region route)
     waters_excluded: int            # [count] crystallographic waters left out
     waters_note: str | None         # why they were left out; None when there were none
+    dielectric: str | None          # screening model, e.g. 'r-dependent' (eps=4r); None off the region route
+    physics_caveat: str | None      # what the model structurally cannot contain, with the measured size
     contour_closes_in_box: bool     # False = surface runs off the grid edge
                                      # and is drawn as a flat face
 
