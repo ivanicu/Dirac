@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dirac · Operations</title>
+<link rel="stylesheet" href="../design/tokens.css">
+<script>
+// Applied before first paint, synchronously, so a returning operator never
+// sees a flash of the wrong theme. Same convention as design/index.html:
+// [data-theme="chamber"] or no attribute at all (Night, the default).
+try {
+    if (localStorage.getItem('dirac-ops-theme') === 'chamber') {
+        document.documentElement.dataset.theme = 'chamber';
+    }
+} catch (e) { /* localStorage unavailable (private mode) — Night is fine */ }
+</script>
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+    background: var(--bg); color: var(--text);
+    font-family: var(--font-ui); font-size: var(--fs-md); line-height: var(--lh-body);
+    transition: background var(--t-base) var(--ease), color var(--t-base) var(--ease);
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: var(--sp-6) var(--sp-6) 80px; }
+a { color: var(--accent); }
+
+/* ── numbers ──────────────────────────────────────────────────────────── */
+.num { font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+.unit { color: var(--text-3); font-size: var(--fs-2xs); margin-left: 3px; font-family: var(--font-ui); }
+code, .mono { font-family: var(--font-mono); font-size: var(--fs-sm); }
+
+/* ── topbar ───────────────────────────────────────────────────────────── */
+header.topbar {
+    display: flex; flex-wrap: wrap; gap: var(--sp-4); align-items: flex-start;
+    justify-content: space-between; margin-bottom: var(--sp-3);
+    padding-bottom: var(--sp-4); border-bottom: 1px solid var(--border);
+}
+.brand .eyebrow { color: var(--accent); font-size: var(--fs-2xs); font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; }
+.brand h1 { font-size: var(--fs-xl); letter-spacing: -0.02em; margin: 2px 0 0; }
+.controls { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; }
+.control-group { display: flex; align-items: center; gap: 6px; }
+
+/* ── status pill (5 variants: busy/error/warn/ok/route — every honest
+   state gets its own colour, per DESIGN.md §6: "degraded ≠ offline ≠ busy") */
+.pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 5px 12px; border-radius: var(--r-pill);
+    font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.02em;
+    border: 1px solid var(--border); white-space: nowrap;
+}
+.pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+.pill.ok    { color: var(--ok);    background: var(--ok-soft);    border-color: transparent; }
+.pill.warn  { color: var(--warn);  background: var(--warn-soft);  border-color: transparent; }
+.pill.error { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
+.pill.busy  { color: var(--info);  background: var(--info-soft);  border-color: transparent; }
+.pill.busy::before  { animation: breathe var(--t-breathe) ease-in-out infinite; }
+/* route = "this isn't wired up yet", not an alarm — deliberately muted,
+   visually distinct from all four alarm/ok colours above. */
+.pill.route { color: var(--text-3); background: var(--surface-3); border-color: var(--border-strong); }
+.pill.route::before { background: var(--text-3); }
+@keyframes breathe { 50% { opacity: .3; } }
+
+.age { color: var(--text-3); font-size: var(--fs-xs); }
+.age.stale-warn { color: var(--warn); font-weight: 700; }
+
+button.btn {
+    font: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer;
+    padding: 7px 13px; border-radius: var(--r-md);
+    border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text-2);
+    transition: border-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+button.btn:hover { border-color: var(--accent); color: var(--accent); }
+button.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.btn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+
+.theme-toggle { display: flex; gap: 2px; border: 1px solid var(--border-strong); border-radius: var(--r-md); overflow: hidden; }
+.theme-toggle button { border: 0; background: transparent; color: var(--text-2); font: inherit; font-size: var(--fs-sm); padding: 6px 12px; cursor: pointer; }
+.theme-toggle button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+
+/* ── connection banner — only shown when the state is not "ok" ─────────── */
+.conn-banner {
+    display: none; gap: var(--sp-3); align-items: flex-start;
+    padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md);
+    border: 1px solid var(--border-strong); margin-bottom: var(--sp-5);
+    font-size: var(--fs-sm);
+}
+.conn-banner b { display: block; margin-bottom: 3px; }
+.conn-banner .start-cmd {
+    display: inline-block; margin-top: 6px; padding: 3px 8px;
+    background: var(--surface-3); border-radius: var(--r-sm);
+    font-family: var(--font-mono); font-size: var(--fs-xs);
+}
+.conn-banner.error   { border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: var(--danger-soft); }
+.conn-banner.warn    { border-color: color-mix(in srgb, var(--warn) 40%, transparent);   background: var(--warn-soft); }
+.conn-banner.route   { border-color: var(--border-strong); background: var(--surface-2); }
+
+/* ── panels ──────────────────────────────────────────────────────────── */
+.panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+    padding: var(--sp-4) var(--sp-5); margin-bottom: var(--sp-5);
+}
+.panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; }
+.panel-head h2 { font-size: var(--fs-lg); margin: 0; }
+.panel-sub { color: var(--text-3); font-size: var(--fs-xs); max-width: 640px; margin: 3px 0 var(--sp-3); }
+.panel-body { margin-top: var(--sp-2); }
+
+/* ── tables ──────────────────────────────────────────────────────────── */
+.tbl-wrap { overflow-x: auto; }
+table.tbl { border-collapse: collapse; width: 100%; font-size: var(--fs-sm); min-width: 480px; }
+.tbl th { text-align: left; font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: var(--track-wide); color: var(--text-3); padding: 6px 10px; border-bottom: 1px solid var(--border-strong); white-space: nowrap; }
+.tbl td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.tbl tr:hover td { background: var(--surface-2); }
+.tbl tr.overdue td { background: var(--danger-soft); }
+.tbl tr.overdue td:first-child { border-left: 3px solid var(--danger); }
+.tbl td.muted { color: var(--text-3); }
+
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--r-pill); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
+.badge.current { color: var(--ok); background: var(--ok-soft); }
+.badge.superseded { color: var(--text-3); background: var(--surface-3); }
+.badge.overdue { color: var(--danger); background: var(--danger-soft); }
+
+.tag { display: inline-block; padding: 2px 7px; margin: 1px 3px 1px 0; border-radius: var(--r-sm); font-size: var(--fs-2xs); font-family: var(--font-mono); color: var(--warn); background: var(--warn-soft); }
+.tag-none { color: var(--text-3); font-size: var(--fs-2xs); font-style: italic; }
+
+/* ── stat tiles ──────────────────────────────────────────────────────── */
+.stat-row { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.stat { flex: 1 1 130px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); }
+.stat .l { color: var(--text-3); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: var(--track-wide); text-transform: uppercase; }
+.stat .v { font-size: var(--fs-2xl); font-weight: 700; margin-top: 2px; }
+.stat.danger { border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: var(--danger-soft); }
+.stat.danger .v { color: var(--danger); }
+.stat.ok .v { color: var(--ok); }
+
+/* generations pairing — item 2's required side-by-side + explanation */
+.pair-row { display: flex; gap: var(--sp-4); align-items: stretch; flex-wrap: wrap; }
+.pair-row .stat { flex: 1 1 160px; }
+.pair-explain { flex: 2 1 320px; padding: 10px 12px; border: 1px dashed var(--border-strong); border-radius: var(--r-md); color: var(--text-2); font-size: var(--fs-xs); }
+.pair-explain b { color: var(--text); }
+.pair-explain .unavailable { color: var(--text-3); font-style: italic; }
+
+.total-banner { padding: var(--sp-3); border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--border-strong); margin-bottom: var(--sp-3); font-size: var(--fs-sm); }
+.total-banner .v { font-size: var(--fs-lg); font-weight: 700; }
+.boundary-note { margin-top: var(--sp-3); padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); border-left: 3px solid var(--border-strong); color: var(--text-2); font-size: var(--fs-xs); }
+.boundary-note code { color: var(--text); }
+
+.empty-ok { padding: var(--sp-3); border-radius: var(--r-md); background: var(--ok-soft); color: var(--ok); font-size: var(--fs-sm); font-weight: 600; }
+.empty-neutral { padding: var(--sp-3); color: var(--text-3); font-size: var(--fs-sm); }
+
+.skeleton { border-radius: var(--r-sm); height: 14px; margin: 6px 0; background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%); background-size: 200% 100%; animation: shimmer 1.6s linear infinite; }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+footer.foot { color: var(--text-3); font-size: var(--fs-xs); margin-top: var(--sp-6); padding-top: var(--sp-4); border-top: 1px solid var(--border); }
+footer.foot a { color: var(--text-2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="topbar">
+    <div class="brand">
+        <p class="eyebrow">Dirac · shell access is the auth boundary</p>
+        <h1>Operations console</h1>
+    </div>
+    <div class="controls">
+        <div class="control-group">
+            <span class="pill busy" id="conn-pill"><span>checking backend&hellip;</span></span>
+            <span class="age" id="age-text">&mdash;</span>
+        </div>
+        <div class="control-group">
+            <button class="btn" id="btn-refresh" title="Fetch /admin/snapshot now">Refresh now</button>
+            <button class="btn" id="btn-pause" aria-pressed="false" title="Pause auto-refresh">Pause</button>
+            <span class="age" id="interval-text">every 5s</span>
+        </div>
+        <div class="theme-toggle" role="group" aria-label="Theme">
+            <button id="btn-theme-night" aria-pressed="true" >Night</button>
+            <button id="btn-theme-chamber" aria-pressed="false">Chamber</button>
+        </div>
+    </div>
+</header>
+
+<div class="conn-banner" id="conn-banner" role="status" aria-live="polite"></div>
+
+<!-- 1. QUEUE -->
+<section class="panel" id="panel-queue" aria-labelledby="h-queue">
+    <div class="panel-head"><h2 id="h-queue">Queue</h2></div>
+    <p class="panel-sub">Running / queued jobs, age vs budget. A row goes red the moment it is <b>overdue</b> —
+        this is the 36-minute runaway made visible, instead of found by a human watching <code>top</code>.</p>
+    <div class="panel-body" id="body-queue"><div class="skeleton" style="width:90%"></div><div class="skeleton" style="width:70%"></div></div>
+</section>
+
+<!-- 2. CACHE HEALTH -->
+<section class="panel" id="panel-cache" aria-labelledby="h-cache">
+    <div class="panel-head"><h2 id="h-cache">Cache health</h2></div>
+    <p class="panel-sub">What the field cache is holding, and whether a request can actually be served from it
+        instead of forcing a recompute.</p>
+    <div class="panel-body" id="body-cache"><div class="skeleton" style="width:95%"></div><div class="skeleton" style="width:60%"></div></div>
+</section>
+
+<!-- 3. STALE SWEEP -->
+<section class="panel" id="panel-stale" aria-labelledby="h-stale">
+    <div class="panel-head"><h2 id="h-stale">Stale sweep list</h2></div>
+    <p class="panel-sub">Rows left behind by a superseded producer generation — reclaimable bytes and the
+        compute time they represent, so delete-vs-recompute is a number, not a guess.</p>
+    <div class="panel-body" id="body-stale"><div class="skeleton" style="width:85%"></div></div>
+</section>
+
+<!-- 4. BLOB HEALTH -->
+<section class="panel" id="panel-blobs" aria-labelledby="h-blobs">
+    <div class="panel-head"><h2 id="h-blobs">Blob health</h2></div>
+    <p class="panel-sub">Content-addressed blob store. An orphan is a real defect's residue — a blob a
+        two-statement write left behind after no <code>field_cube</code> row references it any more — not a
+        normal steady-state metric.</p>
+    <div class="panel-body" id="body-blobs"><div class="skeleton" style="width:70%"></div></div>
+</section>
+
+<!-- 5. METHODS REGISTRY -->
+<section class="panel" id="panel-methods" aria-labelledby="h-methods">
+    <div class="panel-head"><h2 id="h-methods">Methods registry</h2></div>
+    <p class="panel-sub">Every compute unit this database has seen, with what it <b>refuses</b> — so an
+        operator can read the boundary before a chemist hits it.</p>
+    <div class="panel-body" id="body-methods"><div class="skeleton" style="width:92%"></div><div class="skeleton" style="width:80%"></div></div>
+</section>
+
+<!-- 6. PRODUCERS -->
+<section class="panel" id="panel-producers" aria-labelledby="h-producers">
+    <div class="panel-head"><h2 id="h-producers">Producers</h2></div>
+    <p class="panel-sub">Producer generation history — which service version is current, which were
+        superseded, and when.</p>
+    <div class="panel-body" id="body-producers"><div class="skeleton" style="width:88%"></div></div>
+</section>
+
+<!-- 7. TOOLKITS -->
+<section class="panel" id="panel-toolkits" aria-labelledby="h-toolkits">
+    <div class="panel-head"><h2 id="h-toolkits">Toolkits</h2></div>
+    <p class="panel-sub">rdkit / pyscf versions this database has seen verified.</p>
+    <div class="panel-body" id="body-toolkits"><div class="skeleton" style="width:60%"></div></div>
+</section>
+
+<footer class="foot">
+    Reads <code id="foot-url">GET /admin/snapshot</code> on a fixed interval. No write path exists on this
+    page — see <a href="./README.md">README.md</a> for why deletion is a shell command, not a button.
+</footer>
+
+</div>
+<script src="./ops.js" defer></script>
+</body>
+</html>
