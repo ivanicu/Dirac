@@ -445,8 +445,15 @@ function updateIsoReadout() {
     let note = '';
     // Whether the surface actually closes is a fact about this picture, and it
     // is the one the crate bug turned on. Stated, not inferred from the shape.
-    if (lastMeta && lastMeta.contour_closes_in_box === false) {
-        note = ` · open surface (field is ${lastMeta.wall_max ?? '?'} at the box edge)`;
+    // Recomputed against the CURRENT slider position, not the value the
+    // backend sized the box for. The slider multiplies the contour by
+    // 10^[-1,1], so a box that closes at the default can still be exited at
+    // the low end — that is where the cut-off lobes came from.
+    const wall = lastMeta?.wall_max;
+    const open = typeof wall === 'number' && currentIso() <= wall;
+    if (open) {
+        note = ` · OPEN SURFACE — field reaches ${wall} at the box edge, `
+             + `so the lobes are cut off. Raise the isovalue.`;
     } else if (lastMeta && lastMeta.single_signed) {
         note = ' · field is single-signed — no negative lobe exists';
     }

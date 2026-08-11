@@ -699,6 +699,17 @@ FIXED_ISO = {
     'mep_qm': 10.0,     # kcal/mol, converted to Ha/e for the cube
     'mlp': 0.25,        # Crippen/Fauchere units
 }
+# The UI slider multiplies the contour by 10^[-1,1]. The box must therefore be
+# sized for the LOWEST contour the slider can reach, not for the default one —
+# otherwise the bottom of the slider walks the contour below the box's wall and
+# the surface exits through the side, drawn as a flat face. Measured on 1CBS:
+# wall 3.75 against a default contour of 10, so truncation began at slider
+# -0.43 and the bottom 29% of the range produced cut-off lobes.
+#
+# Classical fields cost ~0.1 s, so sizing for the floor is free. The quantum
+# grid belongs to pyscf's cubegen and cannot be grown this way, so those report
+# the wall instead and the UI says the surface is open.
+ISO_SLIDER_FLOOR = 0.1
 PAD_START = 4.0
 PAD_MAX = 12.0
 PAD_STEP = 2.0
@@ -738,7 +749,7 @@ def field_mep(mol: Chem.Mol, spacing=0.4, pad=4.0):
         raise ValueError('all Gasteiger charges are zero — classical MEP would '
                          'be an empty picture; use mep_qm')
 
-    iso = FIXED_ISO['mep']
+    iso = FIXED_ISO['mep'] * ISO_SLIDER_FLOOR
 
     def evaluate(pad_a: float):
         lo = coords.min(axis=0) - pad_a
@@ -784,7 +795,8 @@ def field_mep(mol: Chem.Mol, spacing=0.4, pad=4.0):
         'model_caveat': ('Gasteiger point charges: no lone-pair or sigma-hole '
                          'anisotropy, and ~0.4x the QM molecular dipole. A '
                          'qualitative map, not an interaction energy.'),
-        'iso_fixed': iso,
+        'iso_fixed': FIXED_ISO['mep'],
+        'iso_sized_for': round(iso, 4),
         'pad_used_angstrom': round(pad_used, 1),
         'wall_max': round(wall_max(v), 3),
         # False means the surface still runs off the edge of the grid and is
@@ -811,7 +823,7 @@ def field_mlp(mol: Chem.Mol, spacing=0.4, pad=4.0):
         raise ValueError('Crippen contributions undefined for this molecule')
     syms, coords = mol_atoms(mol)
 
-    iso = FIXED_ISO['mlp']
+    iso = FIXED_ISO['mlp'] * ISO_SLIDER_FLOOR
 
     def evaluate(pad_a: float):
         lo = coords.min(axis=0) - pad_a
@@ -844,7 +856,8 @@ def field_mlp(mol: Chem.Mol, spacing=0.4, pad=4.0):
         'total_logp': float(f.sum()),
         'dims': dims.tolist(), **grid_spacing_meta(lo, hi, dims, spacing),
         'vmin': float(v.min()), 'vmax': float(v.max()),
-        'iso_fixed': iso,
+        'iso_fixed': FIXED_ISO['mlp'],
+        'iso_sized_for': round(iso, 4),
         'pad_used_angstrom': round(pad_used, 1),
         'wall_max': round(wall_max(v), 4),
         'contour_closes_in_box': bool(clear),
