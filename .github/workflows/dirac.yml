@@ -1,0 +1,66 @@
+name: Dirac gates
+
+# Triggers on EVERY branch, deliberately. The two pre-existing workflows
+# (node.yml, docs.yml) are pinned to `branches: master`, but this repo's branch
+# is `main` — so neither has ever run a single time. Unqualified `push` cannot
+# repeat that mistake.
+on:
+  push:
+  pull_request:
+
+# A second push to the same branch cancels the first: these gates are cheap, but
+# not free, and only the tip matters.
+concurrency:
+  group: dirac-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: S1 gates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # package.json engines says node >=22.0.0. Pinned to the major rather than
+      # resolved from the range: a range silently follows the newest release, so
+      # a green CI could turn red without a single commit.
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # design/check_palette.py imports only math, re, sys and pathlib — all
+      # stdlib. There is deliberately no pip install step; adding one would be a
+      # dependency this suite does not have.
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: npm ci
+        id: npm_ci
+        run: npm ci
+
+      # ---- the four gates, one step each, so a failure names itself ----------
+
+      - name: 'Gate 1 — typecheck (tsc --noEmit)'
+        if: ${{ !cancelled() && steps.npm_ci.outcome == 'success' }}
+        run: node_modules/.bin/tsc --noEmit -p tsconfig.json
+
+      - name: 'Gate 2 — build dirac (production)'
+        if: ${{ !cancelled() && steps.npm_ci.outcome == 'success' }}
+        run: node ./scripts/build.mjs -a dirac --prd
+
+      # Gates 3 and 4 touch neither node_modules nor the build output, so they
+      # run even when the install or an earlier gate failed. One red gate must
+      # not hide the other three.
+      - name: 'Gate 3 — palette chroma / contrast / ΔE'
+        if: ${{ !cancelled() }}
+        run: python3 design/check_palette.py
+
+      - name: 'Gate 4 — CSS brace balance (regression: a93c175)'
+        if: ${{ !cancelled() }}
+        run: node scripts/check_css_braces.mjs src/app.frontend.facets.molstar-rdkit.editable/index.html

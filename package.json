@@ -45,7 +45,7 @@
     "version": "npm run rebuild && cpx .npmignore lib/",
     "postversion": "git push && git push --tags",
     "build:dirac": "node ./scripts/build.mjs -a dirac --prd && node -e \"require('fs').cpSync('src/app.frontend.facets.molstar-rdkit.editable/assets/rdkit', 'build/dirac/assets/rdkit', {recursive: true})\"",
-    "check:css": "node scripts/check-css-braces.mjs src/app.frontend.facets.molstar-rdkit.editable/index.html",
+    "check:css": "node scripts/check_css_braces.mjs src/app.frontend.facets.molstar-rdkit.editable/index.html",
     "prebuild": "npm run check:css"
   },
   "files": [
