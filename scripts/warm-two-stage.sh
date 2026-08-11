@@ -23,6 +23,23 @@
 # about — and then it leaves. Python computes, with no clock over it.
 set -u
 
+# Chrome must die with its run. `timeout` kills the launcher; the zygote and
+# the GPU process survive it, and a headless GPU process idles at 100-300% CPU
+# forever. Measured 2026-08-11: FOURTEEN orphans accumulated over one session,
+# aged 1.5 to 20 hours, holding the box at load 163 — which then corrupted the
+# very timings the screenshots were taken to check. The harness was poisoning
+# its own measurement.
+#
+# Each run gets its own profile dir so cleanup targets exactly this run's
+# processes and can never touch a peer's long-lived browser.
+CHROME_PROFILE=$(mktemp -d /tmp/dirac-shot-XXXXXX)
+cleanup_chrome() {
+    pkill -f "user-data-dir=$CHROME_PROFILE" 2>/dev/null
+    sleep 1
+    pkill -9 -f "user-data-dir=$CHROME_PROFILE" 2>/dev/null
+}
+trap cleanup_chrome EXIT INT TERM
+
 ROOT=/home/ivan/dirac
 OUT=${1:-/tmp/claude-1000/-home-ivan/ff9c7c07-88fe-4345-a0cc-59d17b42683e/scratchpad/warm}
 STAGE=$OUT/_dom
@@ -69,7 +86,7 @@ cat > "$STAGE/index.html.driver" <<EOF
 EOF
   cat "$ROOT/build/dirac/index.html" "$STAGE/index.html.driver" > "$STAGE/index.html"
   echo "extracting $MOL ..."
-  timeout 180 google-chrome --headless=new --enable-unsafe-swiftshader \
+  timeout 180 google-chrome --headless=new --user-data-dir="$CHROME_PROFILE" --enable-unsafe-swiftshader \
       --use-angle=swiftshader --virtual-time-budget=60000 --dump-dom \
       "http://127.0.0.1:$PORT/index.html" > "$OUT/molfiles/$MOL.dom" 2>/dev/null
   python3 - "$OUT/molfiles/$MOL.dom" "$OUT/molfiles/$MOL.mol" <<'PY'

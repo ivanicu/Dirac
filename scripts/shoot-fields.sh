@@ -14,6 +14,23 @@
 # headless -- the geometry and the compositing are real, the frame rate is not.
 set -u
 
+# Chrome must die with its run. `timeout` kills the launcher; the zygote and
+# the GPU process survive it, and a headless GPU process idles at 100-300% CPU
+# forever. Measured 2026-08-11: FOURTEEN orphans accumulated over one session,
+# aged 1.5 to 20 hours, holding the box at load 163 — which then corrupted the
+# very timings the screenshots were taken to check. The harness was poisoning
+# its own measurement.
+#
+# Each run gets its own profile dir so cleanup targets exactly this run's
+# processes and can never touch a peer's long-lived browser.
+CHROME_PROFILE=$(mktemp -d /tmp/dirac-shot-XXXXXX)
+cleanup_chrome() {
+    pkill -f "user-data-dir=$CHROME_PROFILE" 2>/dev/null
+    sleep 1
+    pkill -9 -f "user-data-dir=$CHROME_PROFILE" 2>/dev/null
+}
+trap cleanup_chrome EXIT INT TERM
+
 ROOT=/home/ivan/dirac
 OUT=${1:-/tmp/claude-1000/-home-ivan/ff9c7c07-88fe-4345-a0cc-59d17b42683e/scratchpad/shots}
 STAGE=$OUT/_app
@@ -136,13 +153,14 @@ EOF
 
   ( cd "$STAGE" && python3 -m http.server $PORT --bind 127.0.0.1 >/dev/null 2>&1 & echo $! > "$OUT/.srv" )
   sleep 1
-  timeout 220 google-chrome --headless=new --enable-unsafe-swiftshader \
+  timeout 220 google-chrome --headless=new --user-data-dir="$CHROME_PROFILE" --enable-unsafe-swiftshader \
       --use-angle=swiftshader --window-size=1600,1000 \
       --virtual-time-budget=120000 \
       --screenshot="$OUT/field_$FIELD.png" \
       "http://127.0.0.1:$PORT/index.html" >/dev/null 2>&1
   kill "$(cat "$OUT/.srv")" 2>/dev/null
   sleep 1
+  cleanup_chrome
   echo "shot $FIELD -> $OUT/field_$FIELD.png"
 done
 rm -f "$OUT/.srv" "$STAGE/index.html.driver"
