@@ -179,26 +179,10 @@ async function prefetchAll() {
     if (molfile !== startedFor) return;
     const skipNote = heavy > PREFETCH_QM_MAX_HEAVY ? ` (quantum on demand — ${heavy} heavy atoms)` : '';
     setPrefetchNote(failed.length
-        ? `Fields cached in browser; unavailable: ${failed.join(', ')}${skipNote}`
-        : `All ${kinds.length} fields cached in browser${skipNote}.`);
+        ? `Fields cached in browser + auto-saved to DB; unavailable: ${failed.join(', ')}${skipNote}`
+        : `All ${kinds.length} fields cached in browser + auto-saved to DB${skipNote}.`);
 }
 
-/** Export the active field to the database — the user's explicit 入库. */
-async function saveActiveField() {
-    if (!activeKind || !molfile || busy) return;
-    const kind = activeKind;
-    setStatus(`Exporting ${Kinds[kind].label} to the database…`, 'busy');
-    try {
-        const entry = await fetchField(kind, true);
-        if (entry?.meta && (entry.meta as { stored?: boolean }).stored) {
-            setStatus(`${Kinds[kind].label} exported to the database.`, 'ok');
-        } else {
-            setStatus(`Export did not confirm storage — see backend log.`, 'error');
-        }
-    } catch (e) {
-        setStatus(`Export failed: ${e instanceof Error ? e.message : e}`, 'error');
-    }
-}
 
 function byId<T extends HTMLElement>(id: string): T | null {
     return document.getElementById(id) as T | null;
@@ -418,7 +402,6 @@ export function initFieldWellsPanel(p: PluginContext) {
         void clearField();
         setStatus('Field cleared.', 'idle');
     });
-    byId('field-save')?.addEventListener('click', () => void saveActiveField());
     // Changing basis invalidates the quantum entries only; classical fields
     // have no basis. Cheapest correct move: refetch on demand.
     byId<HTMLSelectElement>('field-basis')?.addEventListener('change', () => {

@@ -74,15 +74,10 @@ _producer_id: str | None = None
 # this version is re-registered with different source — a forgotten bump is a
 # loud startup error, never a silently stale cache (design: migration 006).
 PRODUCER_SERVICE = 'dirac-fields'
-PRODUCER_VERSION = '1.5'
-PRODUCER_NOTES = ('explicit store flag: fields live in the browser cache, '
-                  'the DB is an export the user asks for (Ivan architecture)')
+PRODUCER_VERSION = '1.6'
+PRODUCER_NOTES = ('auto-store: every computed field persists in a background '
+                  'thread; browser cache serves the interaction (Ivan: 自动入库自动缓存)')
 
-# Ivan's ruling, and the stale sweep proved it: 36 MB of stored cubes
-# represented 4.0 s of compute. Fields are REAL-TIME by default; the database
-# is for results whose recompute would make a human wait — a 365 s Fe-heme
-# SOSCF survives a restart, a 0.6 s caffeine SCF just runs again.
-CACHE_MIN_SECONDS = 10.0
 
 
 def _db(): return psycopg.connect(DB_DSN, autocommit=True)
@@ -716,12 +711,14 @@ class Handler(BaseHTTPRequestHandler):
             meta['cache'] = 'computed'
             print(f"[field] kind={kind} atoms={mol.GetNumAtoms()} "
                   f"t={meta['total_seconds']}s", flush=True)
-            # Real-time is the default; a row is earned by being expensive to
-            # recompute, or REQUESTED: the browser holds the working cache and
-            # store=true is the user's explicit "export this to the database".
-            store = bool(req.get('store'))
-            if cacheable and (store or meta['total_seconds'] >= CACHE_MIN_SECONDS):
-                db_put_cube(molfile_sha, kind, basis_key, cube, meta, mol=mol)
+            # 自动入库自动缓存 (Ivan): the browser cache serves the interaction,
+            # and every computed field ALSO persists — in a background thread,
+            # so the render never waits on the database write.
+            if cacheable:
+                threading.Thread(
+                    target=db_put_cube,
+                    args=(molfile_sha, kind, basis_key, cube, meta),
+                    kwargs={'mol': mol}, daemon=True).start()
                 meta['stored'] = True
             self._send(200, {'ok': True, 'cube': cube, 'meta': meta})
         except Exception as e:
