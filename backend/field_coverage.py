@@ -221,6 +221,53 @@ def run_case(name: str, molfile: str, kind: str, budget: float,
             'reason': out.get('reason', '')}
 
 
+
+def additivity_control(budget: float, timeout: float) -> tuple[bool, str]:
+    """The positive control for /field/region: a classical field must be
+    EXACTLY additive over its source set, on a shared frame.
+
+    This is the gate that catches grid registration. If V(A∪B) ever differs
+    from V(A)+V(B) by more than the serialisation floor, the three runs did not
+    land on the same grid and every difference field built on this route is
+    meaningless — which is the whole reason the route exists.
+
+    THE FLOOR IS THE POINT. Gaussian cube values are written `%13.5e`, six
+    significant figures, so the round-trip through the file cannot resolve
+    better than ~1e-6 relative. In-process the same comparison is 5.2e-16.
+    A first version of this check used 1e-9 and "failed" at 2.6e-6 — comparing
+    a difference to a threshold below the noise floor of the instrument it was
+    measured through, which manufactures a defect out of arithmetic.
+    """
+    import numpy as np
+
+    def grid(cube: str):
+        lines = cube.split('\n')
+        nat = abs(int(lines[2].split()[0]))
+        d = [int(lines[3 + i].split()[0]) for i in range(3)]
+        return np.array(' '.join(lines[6 + nat:]).split(), dtype=float).reshape(d)
+
+    A = [{'element': 'O', 'x': 0, 'y': 0, 'z': 0, 'charge': -0.6},
+         {'element': 'H', 'x': 0.96, 'y': 0, 'z': 0, 'charge': 0.3},
+         {'element': 'H', 'x': -0.3, 'y': 0.9, 'z': 0, 'charge': 0.3}]
+    B = [{'element': 'N', 'x': 8, 'y': 0, 'z': 0, 'charge': -0.9},
+         {'element': 'H', 'x': 9, 'y': 0, 'z': 0, 'charge': 0.45},
+         {'element': 'H', 'x': 7.6, 'y': 0.9, 'z': 0, 'charge': 0.45}]
+    frame = {'lo': [-6, -6, -6], 'hi': [14, 6, 6], 'spacing': 0.5}
+    try:
+        gA = grid(post('/field/region', {'sources': A, 'frame': frame, 'kind': 'mep'}, timeout)['cube'])
+        gB = grid(post('/field/region', {'sources': B, 'frame': frame, 'kind': 'mep'}, timeout)['cube'])
+        gAB = grid(post('/field/region', {'sources': A + B, 'frame': frame, 'kind': 'mep'}, timeout)['cube'])
+    except Exception as e:                                   # noqa: BLE001
+        return False, f'HARNESS: {e}'
+    rel = float(np.abs(gAB - (gA + gB)).max() / np.abs(gAB).max())
+    CUBE_ASCII_FLOOR = 5e-6      # %13.5e -> 6 significant figures
+    ok = rel <= CUBE_ASCII_FLOOR
+    return ok, (f'relative deviation {rel:.2e} against a {CUBE_ASCII_FLOOR:.0e} '
+                f'cube-ASCII floor — '
+                + ('grids register exactly' if ok
+                   else 'GRIDS DISAGREE, difference fields are meaningless'))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--set', choices=['all', 'core', 'edge'], default='all')
@@ -301,6 +348,11 @@ def main() -> int:
     # if it comes back OK the daemon invented a field out of garbage, and if it
     # comes back BROKEN the daemon failed without saying why. Either way this
     # block is what proves the three verdicts are distinguishable at all.
+    ok, detail = additivity_control(args.budget, timeout)
+    print(f'\nregion additivity (positive control): {"PASS" if ok else "FAIL"} — {detail}')
+    if not ok:
+        surprises.append(f'region additivity: {detail}')
+
     print('\nmalformed input (positive control — each must be REFUSED, not OK):')
     control_ok = True
     for name, junk in MALFORMED:

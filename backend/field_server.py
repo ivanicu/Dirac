@@ -38,6 +38,28 @@ import traceback
 from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+# The ops surface, imported defensively at two levels of failure that must NOT
+# look alike. A bare import would let a broken admin module kill the compute
+# daemon, and a silent `handle_admin = lambda p: None` would make every ops
+# route 404 — indistinguishable from "no such route", which is the fallback-
+# hides-the-primary's-death shape. So a failed import is REMEMBERED and served
+# as a 503 that names the exception, while /field keeps working.
+_ADMIN_IMPORT_ERROR: str | None = None
+try:
+    from admin_routes import handle_admin as _handle_admin
+except Exception as _exc:                                        # noqa: BLE001
+    _ADMIN_IMPORT_ERROR = f'{type(_exc).__name__}: {_exc}'
+
+    def _handle_admin(path: str):
+        if not path.startswith('/admin/'):
+            return None
+        return 503, {'ok': False,
+                     'error': {'code': 'DB_UNAVAILABLE',
+                               'message': 'the ops module failed to import',
+                               'detail': _ADMIN_IMPORT_ERROR,
+                               'retryable': True},
+                     'meta': {'envelope': 2}}
+
 import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -164,7 +186,8 @@ PRODUCER_NOTES = ('wall-clock deadline inside the SCF loop + measured cube-cost 
                   'for mep/mlp RETIRED — it was a measurement of the padding (7.6x '
                   'swing on aspirin); fixed physical contour + adaptive box instead; '
                   '_eri dropped and the SCF cache bounded to 6 LRU; '
-                  'molblock refusals name the defect')
+                  'molblock refusals name the defect; /field/region separates SOURCE '
+                  'from FRAME for arbitrary classical atom sets')
 
 
 
@@ -1112,6 +1135,134 @@ def field_quantum(mol: Chem.Mol, kind: str, basis: str,
     return cube, meta
 
 
+
+# ── SOURCE ⊥ FRAME: a classical field of an arbitrary atom set ──────────────
+
+MAX_REGION_SOURCES = 20000
+MAX_REGION_VOXELS = 2_200_000     # ~128³, the same ceiling the ligand path uses
+
+
+def field_region(sources, lo, hi, spacing: float, kind: str):
+    """The classical field of an arbitrary SOURCE set, sampled in a given FRAME.
+
+    Why this route exists at all, and why it needs no chemistry:
+
+    Both classical fields are EXACTLY linear in the atom set —
+        MEP  V(r) = 332.06 * sum_i q_i / max(|r-r_i|, 0.5)
+        MLP  V(r) = sum_i f_i * exp(-d_i / 2)
+    so V_{A∪B} = V_A + V_B pointwise. MEASURED on a shared grid, benzene plus
+    acetate: |V_AB - (V_A + V_B)| / |V_AB| = 5.2e-16. Machine precision.
+
+    Therefore a group field needs NO bond perception, NO capping, NO valence,
+    NO molfile. It needs (element, position, charge) per atom and a box. That
+    is the whole reason this is a separate route rather than a wider molfile:
+    the molfile path has to perceive topology, and the topology builder cannot
+    currently express more than one residue without silently dropping bonds.
+    This route cannot hit that class of bug because it never asks.
+
+    SOURCE and FRAME are separate arguments, which is the actual architectural
+    move. Today they are welded — the grid is derived from the same molecule
+    that generates the field — so you can only ever ask "what does my ligand
+    look like?". Split, the interesting question becomes expressible: SOURCE =
+    the pocket, FRAME = the ligand's box. That is "what field does my ligand
+    SIT IN", and it is the one a designer actually has. It also keeps the grid
+    ligand-sized while the source is the whole protein, which is what makes it
+    cheap.
+
+    The CHARGES are the caller's responsibility and are not invented here. The
+    same additivity measurement shows why: Gasteiger is computed per-MOLECULE,
+    so a truncated pocket gets different charges than the real one. A group
+    needs a charge model that is well defined per atom without seeing the whole
+    system — residue templates. Refusing beats guessing.
+    """
+    if kind not in ('mep', 'mlp'):
+        raise ValueError(f'region fields are classical only; {kind!r} is not '
+                         f'one of mep, mlp. A quantum field of a cut protein '
+                         f'region needs capping and a basis this route does '
+                         f'not attempt.')
+    if not sources:
+        raise ValueError('no source atoms were sent')
+    if len(sources) > MAX_REGION_SOURCES:
+        raise ValueError(f'{len(sources)} source atoms exceeds the '
+                         f'{MAX_REGION_SOURCES} cap for one region field')
+
+    syms, coords, weights = [], [], []
+    for i, a in enumerate(sources):
+        w = a.get('charge') if kind == 'mep' else a.get('logp')
+        if w is None:
+            raise ValueError(
+                f'source atom {i} ({a.get("element", "?")}) has no '
+                f'{"charge" if kind == "mep" else "logp"}. This route does not '
+                f'invent one: a per-molecule charge model gives a truncated '
+                f'region different values than the intact system, so the '
+                f'caller must supply a per-atom model (residue templates).')
+        if not math.isfinite(float(w)):
+            raise ValueError(f'source atom {i} has a non-finite weight')
+        syms.append(str(a.get('element', 'C')))
+        coords.append([float(a['x']), float(a['y']), float(a['z'])])
+        weights.append(float(w))
+    coords = np.asarray(coords, dtype=float)
+    weights = np.asarray(weights, dtype=float)
+
+    lo = np.asarray(lo, dtype=float)
+    hi = np.asarray(hi, dtype=float)
+    if not np.all(hi > lo):
+        raise ValueError('frame hi must exceed lo on every axis')
+    dims = np.maximum(np.ceil((hi - lo) / spacing).astype(int) + 1, 8)
+    if int(np.prod(dims)) > MAX_REGION_VOXELS:
+        raise ValueError(
+            f'frame {dims.tolist()} is {int(np.prod(dims)):,} voxels, over the '
+            f'{MAX_REGION_VOXELS:,} cap. Shrink the FRAME — it is meant to be '
+            f'the size of what you are looking at, not the size of the source.')
+
+    xs = np.linspace(lo[0], hi[0], dims[0])
+    ys = np.linspace(lo[1], hi[1], dims[1])
+    zs = np.linspace(lo[2], hi[2], dims[2])
+    gx, gy, gz = np.meshgrid(xs, ys, zs, indexing='ij')
+    pts = np.stack([gx, gy, gz], axis=-1)
+
+    # A distance cutoff, because the ligand path's per-atom full-grid temporary
+    # is ~50 MB at 128³ and a pocket has thousands of atoms. Sources far from
+    # the frame contribute below the noise of the model itself.
+    cutoff = 25.0 if kind == 'mep' else 12.0
+    near = ((coords >= lo - cutoff).all(axis=1) & (coords <= hi + cutoff).all(axis=1))
+    used = int(near.sum())
+
+    v = np.zeros(tuple(dims), dtype=float)
+    for w, c in zip(weights[near], coords[near]):
+        d = np.linalg.norm(pts - c, axis=-1)
+        if kind == 'mep':
+            v += w / np.maximum(d, 0.5)
+        else:
+            v += w * np.exp(-d / 2.0)
+    if kind == 'mep':
+        v *= 332.06
+
+    axes = np.diag((hi - lo) / (dims - 1))
+    iso = FIXED_ISO[kind]
+    cube = write_cube(lo, axes, dims, v,
+                      [syms[i] for i in np.where(near)[0]],
+                      coords[near],
+                      f'kind={kind}_region units='
+                      f'{"kcal/mol" if kind == "mep" else "logP"} source=caller')
+    meta = {
+        'kind': f'{kind}_region', 'method': 'caller-supplied point weights',
+        'units': 'kcal/mol' if kind == 'mep' else 'MLP (Crippen/Fauchère)',
+        'n_sources_sent': len(sources), 'n_sources_used': used,
+        'cutoff_angstrom': cutoff,
+        'net_charge': round(float(weights.sum()), 3),
+        'dims': dims.tolist(), **grid_spacing_meta(lo, hi, dims, spacing),
+        'vmin': float(v.min()), 'vmax': float(v.max()),
+        'iso_fixed': iso,
+        'wall_max': round(wall_max(v), 3),
+        # The frame is the CALLER's, so this route cannot grow the box to close
+        # the contour the way the ligand path does. It reports instead.
+        'contour_closes_in_box': bool(wall_max(v) < iso),
+        'frame_is_callers': True,
+    }
+    return cube, meta
+
+
 # ── HTTP layer ──────────────────────────────────────────────────────────────
 
 def _allowed_hosts() -> set[str]:
@@ -1182,6 +1333,14 @@ class Handler(BaseHTTPRequestHandler):
         if not self._host_ok():
             self._send(403, {'ok': False, 'error': 'unrecognized Host'})
             return
+        # Ops surface. ONE dispatch line by design: handle_admin returns None
+        # for a path it does not own, so this daemon's routing table stays
+        # readable here while the query bodies live in one auditable module.
+        # Read-only: there is no admin route that writes or deletes.
+        admin = _handle_admin(self.path)
+        if admin is not None:
+            self._send(*admin)
+            return
         if self.path == '/health':
             import pyscf
             import rdkit
@@ -1212,6 +1371,28 @@ class Handler(BaseHTTPRequestHandler):
             # entirely; requiring JSON forces the preflight so the Origin
             # allowlist actually gates compute.
             self._send(415, {'ok': False, 'error': 'Content-Type must be application/json'})
+            return
+        if self.path == '/field/region':
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                if length > MAX_BODY_BYTES:
+                    self._send(413, {'ok': False, 'error': 'request body too large'})
+                    return
+                req = json.loads(self.rfile.read(length))
+                t0 = time.time()
+                frame = req['frame']
+                cube, meta = field_region(
+                    req['sources'], frame['lo'], frame['hi'],
+                    float(frame.get('spacing', 0.5)), req.get('kind', 'mep'))
+                meta['total_seconds'] = round(time.time() - t0, 2)
+                print(f"[field/region] kind={meta['kind']} "
+                      f"sources={meta['n_sources_used']}/{meta['n_sources_sent']} "
+                      f"t={meta['total_seconds']}s", flush=True)
+                self._send(200, {'ok': True, 'cube': cube, 'meta': meta})
+            except Exception as e:
+                traceback.print_exc()
+                reason = 'unsupported' if isinstance(e, (ValueError, KeyError)) else 'internal'
+                self._send(200, {'ok': False, 'error': str(e), 'reason': reason})
             return
         if self.path == '/embed':
             try:
