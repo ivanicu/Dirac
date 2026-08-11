@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""Dirac physics backend — surface electrostatics and torsional strain.
+
+    backend/env/bin/python backend/physics/server.py     # 127.0.0.1:8902
+
+Deliberately a SECOND daemon rather than new routes on field_server.py: that
+file belongs to the Field Wells workstream and is under active edit, and one
+shared tree has already lost work to concurrent whole-file writes. The physics
+lives in importable modules (`mep_surface`, `torsion`), so whoever wants one
+process later merges by importing, not by copying.
+
+Protocol (JSON in, JSON out; errors arrive as 200 with ok:false, matching the
+fields backend so the front end has one error path):
+
+  GET  /health
+  POST /surface/mep       {molfile, basis?, isovalue?, points_per_atom?}
+       → {ok, points_b64, values_b64, n_points, extrema, meta}
+  POST /surface/mep_at    {molfile, points | points_b64, basis?}
+       → {ok, values_b64, meta}
+  POST /torsion/strain    {molfile, steps?, relax_hydrogens?, max_torsions?, variant?}
+       → {ok, torsions, total_strain_kcal, total_verdict, meta}
+
+Binary payloads are base64 little-endian float32: `points_b64` is xyz triples
+in Ångström in the molfile's own frame, `values_b64` one potential per point
+in kcal/mol. JSON numbers would triple the size of a 10 000-point cloud for no
+added precision.
+
+`/surface/mep_at` exists so the front end can colour mol*'s OWN molecular
+surface: mol* builds a better surface than this module should duplicate, and
+the wavefunction stays where the wavefunction is.
+"""
+from __future__ import annotations
+
+import base64
+import json
+import sys
+import time
+import traceback
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from physics.mep_surface import compute_surface_mep, mep_at_points   # noqa: E402
+from physics.torsion import compute_torsion_strain                   # noqa: E402
+
+PORT = 8902
+
+
+def b64(array: np.ndarray) -> str:
+    return base64.b64encode(np.ascontiguousarray(array, dtype='<f4').tobytes()).decode()
+
+
+def unb64(text: str) -> np.ndarray:
+    return np.frombuffer(base64.b64decode(text), dtype='<f4').reshape(-1, 3)
+
+
+class Handler(BaseHTTPRequestHandler):
+    def _send(self, code: int, payload: dict):
+        body = json.dumps(payload).encode()
+        self.send_response(code)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+
+    def do_GET(self):
+        if self.path != '/health':
+            self._send(404, {'ok': False, 'error': 'not found'})
+            return
+        import pyscf
+        import rdkit
+        self._send(200, {'ok': True, 'service': 'dirac-physics',
+                         'rdkit': rdkit.__version__, 'pyscf': pyscf.__version__,
+                         'endpoints': ['/surface/mep', '/surface/mep_at', '/torsion/strain']})
+
+    def do_POST(self):
+        try:
+            length = int(self.headers.get('Content-Length', '0'))
+            req = json.loads(self.rfile.read(length)) if length else {}
+            t0 = time.time()
+
+            if self.path == '/surface/mep':
+                out = compute_surface_mep(
+                    req['molfile'],
+                    basis=req.get('basis', '6-31g*'),
+                    isovalue=float(req.get('isovalue', 0.001)),
+                    points_per_atom=int(req.get('points_per_atom', 120)),
+                )
+                self._send(200, {
+                    'ok': True,
+                    'points_b64': b64(out['points']),
+                    'values_b64': b64(out['values']),
+                    'n_points': int(len(out['values'])),
+                    'extrema': out['extrema'],
+                    'meta': out['meta'],
+                })
+                print(f"[surface/mep] {out['meta']['n_atoms']} atoms "
+                      f"V_S,max {out['meta']['v_s_max_kcal_per_mol']:+.1f} "
+                      f"σ-holes {out['meta']['sigma_holes_found']} "
+                      f"t={out['meta']['total_seconds']}s", flush=True)
+
+            elif self.path == '/surface/mep_at':
+                points = (unb64(req['points_b64']) if 'points_b64' in req
+                          else np.asarray(req['points'], dtype=float))
+                values, meta = mep_at_points(req['molfile'], points,
+                                             basis=req.get('basis', '6-31g*'))
+                meta['total_seconds'] = round(time.time() - t0, 2)
+                self._send(200, {'ok': True, 'values_b64': b64(values), 'meta': meta})
+                print(f"[surface/mep_at] {len(values)} points t={meta['total_seconds']}s", flush=True)
+
+            elif self.path == '/torsion/strain':
+                out = compute_torsion_strain(
+                    req['molfile'],
+                    steps=int(req.get('steps', 24)),
+                    relax_hydrogens=bool(req.get('relax_hydrogens', True)),
+                    max_torsions=int(req.get('max_torsions', 12)),
+                    variant=req.get('variant', 'MMFF94s'),
+                )
+                self._send(200, {'ok': True, **out})
+                print(f"[torsion/strain] {out['meta']['n_scanned']} torsions "
+                      f"total {out['total_strain_kcal']:+.2f} kcal "
+                      f"t={out['meta']['seconds']}s", flush=True)
+
+            else:
+                self._send(404, {'ok': False, 'error': 'not found'})
+
+        except Exception as exc:                       # noqa: BLE001 — reported, never swallowed
+            traceback.print_exc()
+            self._send(200, {'ok': False, 'error': str(exc)})
+
+    def log_message(self, *args):
+        pass
+
+
+if __name__ == '__main__':
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else PORT
+    print(f'Dirac physics backend on http://127.0.0.1:{port}', flush=True)
+    ThreadingHTTPServer(('127.0.0.1', port), Handler).serve_forever()
