@@ -1674,6 +1674,21 @@ def _allowed_hosts() -> set[str]:
 ALLOWED_HOSTS = _allowed_hosts()
 ALLOWED_BASIS = ('sto-3g', '6-31g', '6-31g*', 'def2-svp')  # = DB CHECK minus 'none'
 
+# How long a duplicate request may wait for the one already running. Bounded
+# because the alternative — waiting as long as the winner's budget allows — makes
+# a client's own timeout the only thing that ends the request, and a client
+# socket timeout does not stop anything on this side.
+JOIN_WAIT_CEILING = 120.0
+# After the winner reports 'done', its cube is written by a BACKGROUND thread. So
+# 'done' and 'readable' are different moments and this is the gap between them.
+JOIN_CACHE_GRACE = 3.0
+# Codes that cannot come out differently on a second attempt: the same molecule
+# and the same method will refuse the same way, so the waiter serves the refusal
+# instead of spending the CPU to reproduce it. BUDGET / UNCONVERGED / INTERNAL are
+# deliberately absent — those CAN differ on a retry.
+NON_RETRYABLE_JOB_ERRORS = frozenset({'PARSE', 'UNSUPPORTED', 'UNPARAMETERIZED',
+                                      'TOO_LARGE'})
+
 
 class Handler(BaseHTTPRequestHandler):
     def _host_ok(self) -> bool:
@@ -1886,12 +1901,60 @@ class Handler(BaseHTTPRequestHandler):
             import method_registry as _mr
             method_row_id = _method_ids.get(_mr.KIND_TO_METHOD.get(kind, ''))
             job_id = None
+            job_params = {'kind': kind, 'basis': basis_key,
+                          'spin': spin, 'max_seconds': max_seconds}
             if _jobs is not None and method_row_id is not None:
-                job_id = _jobs.open(
+                job_id, conflicted = _jobs.open(
                     method_row_id=method_row_id, input_sha256=molfile_sha,
-                    params={'kind': kind, 'basis': basis_key,
-                            'spin': spin, 'max_seconds': max_seconds},
-                    budget_seconds=max_seconds)
+                    params=job_params, budget_seconds=max_seconds)
+                if conflicted:
+                    # SOMEONE ELSE IS ALREADY COMPUTING EXACTLY THIS. Until today
+                    # both requests computed, and the counter proved that happens
+                    # in production. Now the second one waits — which is the point
+                    # of job_one_inflight and the difference between a ledger that
+                    # observes and one that coordinates.
+                    outcome = _jobs.wait_for(
+                        method_row_id=method_row_id, input_sha256=molfile_sha,
+                        params=job_params,
+                        timeout=min(max_seconds or JOIN_WAIT_CEILING,
+                                    JOIN_WAIT_CEILING))
+                    print(f"[job] joined an in-flight {kind} "
+                          f"({outcome['state']} after {outcome.get('waited')}s)",
+                          flush=True)
+                    if outcome['state'] == 'done' and cacheable:
+                        # The winner's persist runs in a BACKGROUND thread, so
+                        # 'done' does not yet imply a readable row. Poll the cache
+                        # briefly rather than either racing it or trusting it.
+                        for _ in range(int(JOIN_CACHE_GRACE / 0.25)):
+                            hit = db_get_cube(molfile_sha, kind, basis_key)
+                            if hit is not None:
+                                cube, meta = hit
+                                print(f'[field] kind={kind} basis={basis_key} '
+                                      f'cache=db (joined)', flush=True)
+                                self._send(200, {'ok': True, 'cube': cube,
+                                                 'meta': meta})
+                                return
+                            time.sleep(0.25)
+                    if outcome['state'] in ('failed', 'cancelled') and \
+                            outcome.get('error_code') in NON_RETRYABLE_JOB_ERRORS:
+                        # A DETERMINISTIC refusal does not become true on a second
+                        # attempt: the same molecule and the same method will fail
+                        # the same way. Serving the winner's refusal spends no CPU
+                        # and says the same thing. A RETRYABLE failure (BUDGET,
+                        # UNCONVERGED, INTERNAL) falls through and computes,
+                        # because those can differ on a second run.
+                        self._send(200, {'ok': False,
+                                        'error': outcome.get('error_detail')
+                                        or f"identical request failed: "
+                                           f"{outcome.get('error_code')}",
+                                        'reason': 'unsupported'})
+                        return
+                    # done-but-uncached, timeout, or a retryable failure: compute
+                    # it ourselves. A waiter that gives up must degrade to doing
+                    # the work, never to an error the molecule did not cause.
+                    job_id, _ = _jobs.open(
+                        method_row_id=method_row_id, input_sha256=molfile_sha,
+                        params=job_params, budget_seconds=max_seconds)
             mol = prepare_mol(molblock)
             if kind == 'mep':
                 cube, meta = field_mep(mol)

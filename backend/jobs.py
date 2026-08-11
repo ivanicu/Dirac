@@ -29,13 +29,15 @@ Three properties that are the actual content:
    them and deliberately does not pre-validate — a duplicated rule drifts, and
    the copy is never the one that gets corrected.
 
-③ A CONFLICT ON `job_one_inflight` IS A MEASUREMENT, NOT AN ERROR. That index
-   makes an identical (method, input, params) impossible to have twice in
-   flight. Today two identical concurrent requests both compute — nothing
-   queues, nothing waits — so the conflict is how often that duplicated work
-   actually happens. It is counted, the request proceeds, and the number is the
-   evidence for building the wait-for-result path. Guessing at that number was
-   never going to justify the work.
+③ A CONFLICT ON `job_one_inflight` IS AN INSTRUCTION, and it used to be only a
+   measurement. The index makes an identical (method, input, params) impossible
+   to have twice in flight; for one day the conflict was merely COUNTED while
+   both requests computed anyway, which was the honest intermediate state — the
+   counter is what proved the duplicated work was real (it fired in production)
+   rather than a story about concurrency. `wait_for` now acts on it: the second
+   request waits for the first and uses its outcome. The counter stays, because
+   `joined` vs `join_timeout` is how we will know whether waiting was the right
+   call.
 """
 from __future__ import annotations
 
@@ -50,6 +52,8 @@ _counters = {
     'done': 0,            # reached state='done'
     'failed': 0,          # reached state='failed'
     'inflight_conflict': 0,   # an identical job was ALREADY running (see ③)
+    'joined': 0,          # waited for that job and used its outcome
+    'join_timeout': 0,    # waited, gave up, computed it after all
     'write_failed': 0,    # the ledger write itself failed; compute unaffected
     'last_error': None,   # type: ignore[dict-item]
 }
@@ -101,8 +105,14 @@ class JobLedger:
     def open(self, *, method_row_id: str, input_sha256: bytes, params: dict,
              budget_seconds: float | None = None, est_seconds: float | None = None,
              compound_id: str | None = None,
-             conformer_hash: bytes | None = None) -> str | None:
-        """Insert a 'running' row and return its id, or None.
+             conformer_hash: bytes | None = None) -> tuple[str | None, bool]:
+        """Insert a 'running' row. Returns (job_id, conflicted).
+
+        THE SECOND VALUE EXISTS BECAUSE None HAD THREE MEANINGS — database
+        unreachable, write failed, and "an identical job is already running" —
+        and only the third one is an instruction to the caller. Collapsing them
+        made the dedup signal unusable by the very code that could act on it,
+        which is the same shape as a 403 that reads as an outage.
 
         Inserted directly as RUNNING with started_at set: in a synchronous
         service the row would be 'queued' for microseconds, and a state the
@@ -131,19 +141,19 @@ class JobLedger:
                      est_seconds, compound_id, conformer_hash, self.worker))
                 row = cur.fetchone()
             _bump('opened')
-            return str(row[0]) if row else None
+            return (str(row[0]) if row else None), False
         except Exception as e:                                       # noqa: BLE001
             # A unique-violation on job_one_inflight is the DEDUP signal, not a
             # fault. Distinguished by SQLSTATE 23505 rather than by message text
             # so a locale or a version change cannot turn a measurement into an
             # error count.
-            if getattr(getattr(e, 'sqlstate', None), 'strip', None) and e.sqlstate == '23505':
+            conflict = False
+            if str(getattr(e, 'sqlstate', '')) == '23505' or 'job_one_inflight' in str(e):
                 _bump('inflight_conflict')
-            elif '23505' in str(getattr(e, 'sqlstate', '')) or 'job_one_inflight' in str(e):
-                _bump('inflight_conflict')
+                conflict = True
             else:
                 _bump('write_failed', f'{type(e).__name__}: {e}')
-            return None
+            return None, conflict
 
     def done(self, job_id: str | None, *, seconds: float,
              field_cube_id: str | None = None, peak_rss_mb: int | None = None) -> None:
@@ -183,6 +193,74 @@ class JobLedger:
             _bump('failed')
         except Exception as e:                                        # noqa: BLE001
             _bump('write_failed', f'{type(e).__name__}: {e}')
+
+    # ── coordination ─────────────────────────────────────────────────────
+    def wait_for(self, *, method_row_id: str, input_sha256: bytes, params: dict,
+                 timeout: float, poll: float = 0.25) -> dict:
+        """Wait for the identical job someone else is already running.
+
+        THIS IS THE LEDGER BECOMING A COORDINATOR RATHER THAN AN OBSERVER, and
+        it is the whole reason `job_one_inflight` exists. Until now two identical
+        concurrent requests both computed: nothing queued, nothing waited, and the
+        second one duplicated a six-minute SCF on 22 cores while the first was
+        still running. The conflict counter had already fired in production, so
+        the duplicated work was measured, not hypothesised.
+
+        WHY POLL THE DATABASE INSTEAD OF AN IN-PROCESS EVENT. An in-process dict
+        of Events would be faster and would dedup only within one process — and
+        the requests that hurt most come from DIFFERENT clients (a Mac and a
+        laptop on the LAN, two browser tabs) which land on different threads
+        today and will land on different HOSTS at ROADMAP P2. The ledger is the
+        one place both can see, so it is the only correct place to wait. Polling
+        is unglamorous and survives the architecture; a shared Event does not.
+
+        Returns {state, error_code, error_detail, waited}. `state` is 'done',
+        'failed', 'cancelled' or 'timeout' — 'timeout' meaning the caller should
+        compute it after all, because a waiter that gives up must degrade to
+        doing the work rather than to an error the molecule did not cause.
+        """
+        import json
+        import time
+        deadline = time.time() + max(0.0, timeout)
+        t0 = time.time()
+        params_json = json.dumps(params)
+        last: dict = {}          # observations, never a verdict
+        while time.time() < deadline:
+            try:
+                with self._connect() as conn, conn.cursor() as cur:
+                    cur.execute(
+                        'SELECT state::text, error_code::text, error_detail '
+                        '  FROM app.job '
+                        ' WHERE method_row_id = %s AND input_sha256 = %s '
+                        "   AND md5(params::text) = md5(%s::jsonb::text) "
+                        ' ORDER BY created_at DESC LIMIT 1',
+                        (method_row_id, input_sha256, params_json))
+                    row = cur.fetchone()
+            except Exception as e:                                   # noqa: BLE001
+                _bump('write_failed', f'{type(e).__name__}: {e}')
+                break
+            if row is None:
+                # The row vanished — the winner's transaction rolled back, or the
+                # conflict was with a row that has since been reaped. Nothing to
+                # wait for, so stop waiting rather than block until the deadline.
+                break
+            state, code, detail = row
+            if state in ('done', 'failed', 'cancelled'):
+                _bump('joined')
+                return {'state': state, 'error_code': code, 'error_detail': detail,
+                        'waited': round(time.time() - t0, 3)}
+            # NOT stored as `state`: the caller branches on this value, and
+            # returning the last OBSERVED state ('running') from a function
+            # documented to return 'timeout' makes the caller's fall-through
+            # depend on an undocumented value — it happens to work today because
+            # 'running' is not terminal either, which is the kind of accident that
+            # survives until someone writes `if state == 'timeout'`. Caught by
+            # this module's own test.
+            last = {'last_state': state, 'error_code': code, 'error_detail': detail}
+            time.sleep(poll)
+        _bump('join_timeout')
+        return {'state': 'timeout', 'waited': round(time.time() - t0, 3),
+                'error_code': None, 'error_detail': None, **last}
 
     # ── startup ──────────────────────────────────────────────────────────
     def reap(self) -> dict[str, int]:
