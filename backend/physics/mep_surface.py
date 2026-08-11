@@ -302,6 +302,38 @@ def _classify_sigma_hole(rdmol, atom_positions: np.ndarray, point: np.ndarray,
     return best
 
 
+
+class PhysicsBudgetExceeded(Exception):
+    """Wall-clock budget exhausted inside the SCF loop."""
+
+
+def _install_watchdog(mf, deadline: float, max_seconds: float, label: str):
+    """Bound the SCF from INSIDE its loop.
+
+    This module predicts the cost and refuses up front (line ~339), which is
+    the right guard for work whose size is known. It is not a guard on the
+    ITERATION COUNT, and the iteration count is what ran away on the other
+    daemon: one click held 22 cores for 36 minutes under a prediction that said
+    it would be fine. A prediction can be wrong; a deadline cannot.
+
+    Ported here because the fix landed on one of two daemons and the review
+    measured the gap. Same lesson as the SCF-vs-cube split and the iodine basis
+    that survived on one of two routes: name the invariant, then enumerate the
+    callers.
+    """
+    cycles = [0]
+
+    def _cb(envs):
+        cycles[0] += 1
+        if time.time() > deadline:
+            raise PhysicsBudgetExceeded(
+                f'{label} SCF exceeded its {max_seconds:.0f} s budget after '
+                f'{cycles[0]} cycles. Raise "max_seconds", pick a smaller basis, '
+                f'or trim the ligand.')
+    mf.callback = _cb
+    return cycles
+
+
 def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
                         isovalue: float = DEFAULT_ISOVALUE,
                         points_per_atom: int = 120,
@@ -362,6 +394,7 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
     else:
         mf = scf.RHF(mol) if spin == 0 else scf.UHF(mol)
     mf.max_cycle = 120
+    _install_watchdog(mf, time.time() + max_seconds, max_seconds, 'surface/mep')
     energy = mf.kernel()
     if not mf.converged:
         # Same rule as the fields backend: a field from an unconverged SCF is
@@ -459,7 +492,8 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
     }
 
 
-def mep_at_points(molblock: str, points_ang, basis: str = DEFAULT_BASIS):
+def mep_at_points(molblock: str, points_ang, basis: str = DEFAULT_BASIS,
+                  max_seconds: float = DEFAULT_MAX_SECONDS):
     """Potential at caller-supplied coordinates.
 
     Exists so the front end can colour mol*'s OWN molecular surface: mol*
@@ -472,6 +506,10 @@ def mep_at_points(molblock: str, points_ang, basis: str = DEFAULT_BASIS):
                 charge=charge, spin=spin, verbose=0)
     mf = scf.RHF(mol) if spin == 0 else scf.UHF(mol)
     mf.max_cycle = 120
+    # /surface/mep_at had NO cost gate and NO budget of any kind, while the
+    # module README claimed requests are refused before running. That claim was
+    # true of /surface/mep only.
+    _install_watchdog(mf, time.time() + max_seconds, max_seconds, 'surface/mep_at')
     energy = mf.kernel()
     if not mf.converged:
         raise ValueError(f'SCF did not converge (E={energy:.6f} Ha, basis={basis})')

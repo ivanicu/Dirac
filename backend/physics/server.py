@@ -61,6 +61,22 @@ HOST = os.environ.get('DIRAC_PHYSICS_HOST', '0.0.0.0')
 MAX_BODY_BYTES = 8 * 1024 * 1024
 
 
+# pyscf will happily accept an arbitrary string here and fail deep inside a
+# basis parser, or worse, silently pick something. The classical fields daemon
+# already whitelists; this route did not, and it is the one bound to 0.0.0.0.
+ALLOWED_BASIS = {'sto-3g', '6-31g', '6-31g*', 'def2-svp', 'def2-tzvp'}
+
+
+def validated_basis(name: str) -> str:
+    key = str(name).strip().lower()
+    if key not in ALLOWED_BASIS:
+        raise ValueError(
+            f'basis {name!r} is not one of {sorted(ALLOWED_BASIS)}. '
+            f'Note 6-31g has no Br/I/Se/As and 6-31g* has no I — def2-svp is '
+            f'the one with full coverage for halogenated ligands.')
+    return key
+
+
 def b64(array: np.ndarray) -> str:
     return base64.b64encode(np.ascontiguousarray(array, dtype='<f4').tobytes()).decode()
 
@@ -110,7 +126,7 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == '/surface/mep':
                 out = compute_surface_mep(
                     req['molfile'],
-                    basis=req.get('basis', DEFAULT_BASIS),
+                    basis=validated_basis(req.get('basis', DEFAULT_BASIS)),
                     isovalue=float(req.get('isovalue', 0.001)),
                     points_per_atom=int(req.get('points_per_atom', 120)),
                     max_seconds=float(req.get('max_seconds', DEFAULT_MAX_SECONDS)),
@@ -132,8 +148,10 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path == '/surface/mep_at':
                 points = (unb64(req['points_b64']) if 'points_b64' in req
                           else np.asarray(req['points'], dtype=float))
-                values, meta = mep_at_points(req['molfile'], points,
-                                             basis=req.get('basis', DEFAULT_BASIS))
+                values, meta = mep_at_points(
+                    req['molfile'], points,
+                    basis=validated_basis(req.get('basis', DEFAULT_BASIS)),
+                    max_seconds=float(req.get('max_seconds', DEFAULT_MAX_SECONDS)))
                 meta['total_seconds'] = round(time.time() - t0, 2)
                 self._send(200, {'ok': True, 'values_b64': b64(values), 'meta': meta})
                 print(f"[surface/mep_at] {len(values)} points t={meta['total_seconds']}s", flush=True)
