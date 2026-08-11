@@ -1,0 +1,92 @@
+# dirac-backend.service — supervises BOTH python daemons: the fields
+# backend (backend/field_server.py, :8901) and the physics backend
+# (backend/physics/server.py, :8902).
+#
+# WHY ONE UNIT FOR TWO PROCESSES, HONESTLY STATED:
+# backend/physics/README.md documents them as deliberately separate
+# processes ("Separate daemon from field_server.py on purpose... merging
+# into one process later is an import, not a copy") — the correct systemd
+# shape is almost certainly two independent units, so a crash in one does
+# not restart the other. That was not built here because the task that
+# produced this file granted exactly one backend unit path
+# (deploy/systemd/dirac-backend.service) and no second one. The wrapper
+# below is the honest way to get both daemons supervised within that
+# constraint: it starts both, and if EITHER one dies, the wrapper exits and
+# systemd restarts BOTH together. Shared fate on crash-restart is the
+# known cost of this shape — see deploy/README.md for the split-unit
+# alternative if that cost stops being acceptable.
+#
+# Today, without this file, both daemons are started by hand in the
+# foreground and get reparented to PID 1 the instant that shell exits — no
+# supervision, no restart, "backend offline" in the UI is the only symptom.
+#
+# NOT INSTALLED BY THIS COMMIT. Installing a user unit is Ivan's call — see
+# deploy/README.md for the exact `systemctl --user link/enable` commands.
+
+[Unit]
+Description=Dirac backend — fields daemon (:8901) + physics daemon (:8902)
+After=postgresql.service network.target
+
+# Rate-limit restarts so a genuine crash loop (e.g. PostgreSQL down, or a
+# bug that dies on every request) stops hammering PG/the box instead of
+# retrying forever: at most 5 (re)starts inside any rolling 5-minute
+# window, then systemd gives up until `systemctl --user reset-failed`.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ivan/dirac
+
+# Both daemons are stdlib-only HTTP servers launched exactly as documented
+# in AGENTS.md / backend/README.md / backend/physics/README.md:
+#   backend/env/bin/python backend/field_server.py
+#   backend/env/bin/python backend/physics/server.py
+# wrapped so systemd sees one main process (this shell) and — if either
+# child dies — the wrapper exits non-zero, which is what makes
+# Restart=on-failure below restart BOTH rather than nothing.
+ExecStart=/bin/bash -c 'backend/env/bin/python backend/field_server.py & p1=$!; backend/env/bin/python backend/physics/server.py & p2=$!; wait -n "$p1" "$p2"; ec=$?; kill "$p1" "$p2" 2>/dev/null; wait "$p1" "$p2" 2>/dev/null; exit "$ec"'
+
+Restart=on-failure
+RestartSec=5
+
+# ── memory ceiling, measured and justified (not guessed) ──────────────────
+#
+# pyscf's default max_memory, verified live in this repo's own env:
+#   backend/env/bin/python3 -c "from pyscf import gto,scf; \
+#     print(scf.RHF(gto.M()).max_memory)"   ->  4000  (MB)
+# Neither server sets max_memory explicitly (grepped both files — absent),
+# so every RHF/UHF object either daemon creates plans around a 4000 MB
+# budget. backend/physics/mep_surface.py creates its own RHF/UHF objects
+# too (grepped: lines 358/363/473) — this is not only a field_server.py
+# concern.
+#
+# Baseline RSS measured live with both daemons idle:
+#   fields  (pid at measurement time): ~159-163 MB
+#   physics (pid at measurement time): ~1055-1082 MB  (already high at
+#     idle — CPython/glibc malloc does not hand freed arenas back to the
+#     OS, so a process that has EVER done one big pyscf/numpy allocation
+#     keeps that RSS afterward; this is not a leak, it's how the baseline
+#     got there, and it means "idle" is not a safe stand-in for "low")
+#   -> combined idle baseline ~1.2-1.3 GB, before either daemon is asked to
+#      do anything.
+#
+# A 2 GB cap (the number this comment exists to warn against) leaves under
+# 1 GB of headroom over the measured idle baseline — nowhere near pyscf's
+# own 4000 MB planning budget for a SINGLE in-flight SCF, so it would
+# OOM-kill the daemon mid-field on the very first request that needed one.
+#
+# MemoryHigh=6G / MemoryMax=8G: baseline (~1.3G) + one full 4000 MB pyscf
+# budget leaves >2.5G of slack under MemoryHigh (soft: the cgroup gets
+# throttled/reclaimed harder, not killed) before even approaching the 8G
+# hard ceiling, which itself covers baseline + most of a SECOND concurrent
+# SCF (both daemons use ThreadingHTTPServer, so two simultaneous requests
+# — one per daemon, or two hitting the same one — is a real, not
+# hypothetical, case). 8G is ~14% of this box's 59 GB RAM (34G available
+# at measurement time), so this is a small, safe reservation, not a
+# resource fight with anything else running.
+MemoryHigh=6G
+MemoryMax=8G
+
+[Install]
+WantedBy=default.target

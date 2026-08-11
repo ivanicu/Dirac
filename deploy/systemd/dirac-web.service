@@ -1,0 +1,28 @@
+# dirac-web.service — serves the built dirac bundle (build/dirac/) as a
+# static site on :1338.
+#
+# -g enables gzip. -c-1 DISABLES caching — this is not cosmetic: a cached
+# bundle behind a browser/proxy cache wasted an hour of debugging on this
+# project already (stale JS served after a rebuild, looking like the fix
+# hadn't landed). Do not drop -c-1 to "simplify" this line.
+#
+# Trivial by design: if it dies, restart it, unconditionally, always — a
+# static file server has no state to protect and no crash loop worth
+# rate-limiting (StartLimitBurst on dirac-backend.service exists to protect
+# PostgreSQL from a hammering backend; there is nothing analogous here).
+#
+# NOT INSTALLED BY THIS COMMIT. See deploy/README.md for the install steps.
+
+[Unit]
+Description=Dirac static web bundle (build/dirac) on :1338
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ivan/dirac
+ExecStart=/home/ivan/dirac/node_modules/.bin/http-server build/dirac -p 1338 -g -c-1
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

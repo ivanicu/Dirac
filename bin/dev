@@ -1,0 +1,350 @@
+#!/usr/bin/env bash
+# bin/dev — dev-loop supervisor for the dirac backend daemons + static web bundle.
+#
+# Fixes the failure mode this repo is in today: both python daemons (fields on
+# :8901, physics on :8902) and the static web server (:1338) are started by
+# hand in the foreground, get reparented to PID 1 the moment that shell exits,
+# and run with zero supervision. If one dies, the only symptom a human sees is
+# "backend offline" in the UI. This script does NOT fix that (systemd does —
+# see deploy/systemd/) — it is the everyday dev-loop tool: bring services up,
+# check them, take them back down, without ever touching a daemon this script
+# did not itself start (another session's daemon must survive `bin/dev down`).
+#
+# Subcommands: up | down | status | build | logs
+#
+# Ownership model: a service counts as "mine" only if $STATE_DIR/<name>.pid
+# names a PID that is *currently* the one listening on that service's port.
+# `down` only ever acts on services that pass that test. It never pkills by
+# pattern, and it never touches a service whose pid file doesn't exist or
+# whose pid file is stale (points at a dead process or one that migrated off
+# the port) — those get reported, not killed.
+#
+# No dependencies beyond curl, ss, node, and python — all already present on
+# this box (verified live: node v22.22.1, curl 8.18.0, ss from iproute2,
+# backend/env/bin/python -> python3.12).
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
+STATE_DIR=/tmp/dirac-dev
+LOG_DIR="$STATE_DIR/logs"
+mkdir -p "$LOG_DIR"
+
+PY="$REPO_ROOT/backend/env/bin/python"
+HTTP_SERVER="$REPO_ROOT/node_modules/.bin/http-server"
+
+FIELDS_PORT=8901
+PHYSICS_PORT=8902
+WEB_PORT=1338
+
+FIELDS_PID_FILE="$STATE_DIR/fields.pid"
+PHYSICS_PID_FILE="$STATE_DIR/physics.pid"
+WEB_PID_FILE="$STATE_DIR/web.pid"
+
+FIELDS_LOG="$LOG_DIR/fields.log"
+PHYSICS_LOG="$LOG_DIR/physics.log"
+WEB_LOG="$LOG_DIR/web.log"
+
+BUILD_JS="$REPO_ROOT/build/dirac/dirac.js"
+
+# ── small helpers ───────────────────────────────────────────────────────────
+
+# pid currently listening on a TCP port, or empty if nothing is.
+port_pid() {
+    local port="$1"
+    ss -H -ltnp "( sport = :${port} )" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | head -1
+}
+
+port_listening() {
+    [ -n "$(port_pid "$1")" ]
+}
+
+pid_alive() {
+    kill -0 "$1" 2>/dev/null
+}
+
+rss_mb_of() {
+    local pid="$1" kb
+    kb=$(ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ')
+    if [ -n "${kb:-}" ]; then
+        awk -v kb="$kb" 'BEGIN { printf "%.0f", kb/1024 }'
+    else
+        echo "?"
+    fi
+}
+
+# Is the pid recorded in $1 (a pid-file path) both alive AND the process
+# currently holding $2 (a port)? This is the ownership test everything else
+# is built on: only a "yes" here makes a service "mine" to stop.
+managed_pid() {
+    local pid_file="$1" port="$2"
+    [ -f "$pid_file" ] || { echo ""; return; }
+    local recorded live
+    recorded=$(cat "$pid_file" 2>/dev/null || true)
+    [ -n "$recorded" ] || { echo ""; return; }
+    live=$(port_pid "$port")
+    if [ -n "$live" ] && [ "$live" = "$recorded" ]; then
+        echo "$recorded"
+    else
+        echo ""
+    fi
+}
+
+http_health() {
+    # $1 = url. Prints the raw body on 2xx, else prints nothing.
+    curl -sf --max-time 3 "$1" 2>/dev/null || true
+}
+
+http_status_code() {
+    curl -s -o /dev/null --max-time 3 -w '%{http_code}' "$1" 2>/dev/null || echo "000"
+}
+
+json_field() {
+    # $1 = json text, $2 = field name. Uses python (already a hard dependency
+    # of this whole backend) rather than jq, which is not guaranteed present.
+    "$PY" -c "
+import json, sys
+try:
+    d = json.loads(sys.argv[1])
+    v = d.get(sys.argv[2])
+    print(v if v is not None else '?')
+except Exception:
+    print('?')
+" "$1" "$2" 2>/dev/null || echo "?"
+}
+
+# ── PostgreSQL reachability ─────────────────────────────────────────────────
+
+check_pg() {
+    if pg_isready -d dirac -U ivan -q; then
+        return 0
+    fi
+    echo "PostgreSQL unreachable: database 'dirac' as user ivan (peer auth) did not respond." >&2
+    echo "  Verified fix on THIS box: the cluster is 'postgresql@18-main' (pg_lsclusters)." >&2
+    echo "  Try:  sudo systemctl start postgresql@18-main" >&2
+    echo "  Or:   sudo pg_ctlcluster 18 main start" >&2
+    echo "  Then re-run: pg_isready -d dirac -U ivan" >&2
+    return 1
+}
+
+# ── build ────────────────────────────────────────────────────────────────
+
+build_is_stale() {
+    if [ ! -f "$BUILD_JS" ]; then
+        echo "missing"
+        return 0
+    fi
+    # -quit stops at the first hit; ~1850 files, ~35ms measured.
+    if find "$REPO_ROOT/src" -type f -newer "$BUILD_JS" -print -quit | grep -q .; then
+        echo "stale"
+        return 0
+    fi
+    return 1
+}
+
+do_build() {
+    # NOTE: this deliberately runs `npm run build:dirac`, not the bare
+    # `node ./scripts/build.mjs -a dirac --prd` — verified live that
+    # package.json's build:dirac script is that command PLUS a second step
+    # (`fs.cpSync(...assets/rdkit...)`) that build.mjs itself never performs.
+    # scripts/build.mjs only ever mkdirs and copyFiles from its own explicit
+    # asset manifest (checked: no rmSync/rimraf of the output dir, and no
+    # rdkit-specific copy in it), so a from-scratch checkout built with the
+    # bare command would produce an app whose index.html requests
+    # ./assets/rdkit/RDKit_minimal.js and gets a 404 — silently broken, not
+    # "backend offline" but the same class of failure. The full npm script is
+    # the actually-correct build recipe; using it here is not a deviation.
+    echo "== build: npm run build:dirac (see comment in bin/dev for why not the bare build.mjs command) =="
+    ( cd "$REPO_ROOT" && npm run build:dirac )
+}
+
+# ── start / stop each service ────────────────────────────────────────────
+
+start_fields() {
+    if port_listening "$FIELDS_PORT"; then
+        echo "fields   :$FIELDS_PORT already listening (pid $(port_pid "$FIELDS_PORT")) — not starting a second copy"
+        return 0
+    fi
+    echo "fields   :$FIELDS_PORT starting..."
+    ( cd "$REPO_ROOT" && setsid "$PY" backend/field_server.py >>"$FIELDS_LOG" 2>&1 < /dev/null & echo $! >"$FIELDS_PID_FILE" )
+    sleep 0.3
+}
+
+start_physics() {
+    if port_listening "$PHYSICS_PORT"; then
+        echo "physics  :$PHYSICS_PORT already listening (pid $(port_pid "$PHYSICS_PORT")) — not starting a second copy"
+        return 0
+    fi
+    echo "physics  :$PHYSICS_PORT starting..."
+    ( cd "$REPO_ROOT" && setsid "$PY" backend/physics/server.py >>"$PHYSICS_LOG" 2>&1 < /dev/null & echo $! >"$PHYSICS_PID_FILE" )
+    sleep 0.3
+}
+
+start_web() {
+    if port_listening "$WEB_PORT"; then
+        echo "web      :$WEB_PORT already listening (pid $(port_pid "$WEB_PORT")) — not starting a second copy"
+        return 0
+    fi
+    echo "web      :$WEB_PORT starting..."
+    # -g: gzip; -c-1: DISABLE caching. Losing -c-1 is what wasted an hour on a
+    # stale cached bundle — it is not a style choice, keep it.
+    ( cd "$REPO_ROOT" && setsid "$HTTP_SERVER" build/dirac -p "$WEB_PORT" -g -c-1 >>"$WEB_LOG" 2>&1 < /dev/null & echo $! >"$WEB_PID_FILE" )
+    sleep 0.3
+}
+
+stop_one() {
+    local name="$1" pid_file="$2" port="$3"
+    local pid
+    pid=$(managed_pid "$pid_file" "$port")
+    if [ -z "$pid" ]; then
+        if [ -f "$pid_file" ]; then
+            echo "$name: pid file exists but does not match who's on :$port now — NOT stopping it (not mine to kill), removing stale pid file"
+            rm -f "$pid_file"
+        elif port_listening "$port"; then
+            echo "$name: something is listening on :$port but bin/dev never recorded starting it — leaving it running"
+        else
+            echo "$name: not running, nothing to stop"
+        fi
+        return 0
+    fi
+    echo "$name: stopping pid $pid (started by this script)..."
+    kill -TERM "$pid" 2>/dev/null || true
+    for _ in $(seq 1 20); do
+        pid_alive "$pid" || break
+        sleep 0.25
+    done
+    if pid_alive "$pid"; then
+        echo "$name: pid $pid still alive after SIGTERM, sending SIGKILL"
+        kill -KILL "$pid" 2>/dev/null || true
+    fi
+    rm -f "$pid_file"
+    echo "$name: stopped"
+}
+
+# ── subcommands ──────────────────────────────────────────────────────────
+
+cmd_up() {
+    echo "== bin/dev up =="
+    check_pg
+    echo "PostgreSQL: reachable (dirac, peer auth as ivan)"
+
+    if reason=$(build_is_stale); then
+        echo "build/dirac/dirac.js: $reason — rebuilding"
+        do_build
+    else
+        echo "build/dirac/dirac.js: up to date with src/ — skipping build"
+    fi
+
+    start_fields
+    start_physics
+    start_web
+
+    echo
+    echo "-- idempotency: safe to run 'bin/dev up' again; already-listening services are left alone --"
+    echo
+    cmd_status_table
+}
+
+cmd_status_table() {
+    printf '%-8s %-6s %-10s %-8s %-8s %-8s  %s\n' SERVICE PORT LISTENING PID RSS_MB MANAGED HEALTH
+    local name port pidfile url pid listen rss managed health
+
+    for row in "fields $FIELDS_PORT $FIELDS_PID_FILE http://127.0.0.1:$FIELDS_PORT/health" \
+               "physics $PHYSICS_PORT $PHYSICS_PID_FILE http://127.0.0.1:$PHYSICS_PORT/health" \
+               "web $WEB_PORT $WEB_PID_FILE http://127.0.0.1:$WEB_PORT/"; do
+        read -r name port pidfile url <<<"$row"
+        pid=$(port_pid "$port")
+        if [ -n "$pid" ]; then
+            listen=yes
+            rss=$(rss_mb_of "$pid")
+        else
+            listen=no
+            pid="-"
+            rss="-"
+        fi
+        managed="no"
+        [ -n "$(managed_pid "$pidfile" "$port")" ] && managed="yes"
+
+        if [ "$name" = "web" ]; then
+            if [ "$listen" = yes ]; then
+                code=$(http_status_code "$url")
+                [ "$code" = "200" ] && health="ok (HTTP 200)" || health="BAD (HTTP $code)"
+            else
+                health="unreachable"
+            fi
+        else
+            if [ "$listen" = yes ]; then
+                body=$(http_health "$url")
+                if [ -n "$body" ]; then
+                    ok=$(json_field "$body" ok)
+                    [ "$ok" = "True" ] && health="ok" || health="BAD ($body)"
+                else
+                    health="unreachable (port open, /health did not respond)"
+                fi
+            else
+                health="unreachable"
+            fi
+        fi
+        printf '%-8s %-6s %-10s %-8s %-8s %-8s  %s\n' "$name" ":$port" "$listen" "$pid" "$rss" "$managed" "$health"
+    done
+}
+
+cmd_status() {
+    echo "== bin/dev status =="
+    cmd_status_table
+    echo
+    if port_listening "$FIELDS_PORT"; then
+        body=$(http_health "http://127.0.0.1:$FIELDS_PORT/health")
+        if [ -n "$body" ]; then
+            echo "fields /health detail:"
+            echo "  db_cache    = $(json_field "$body" db_cache)"
+            echo "  scf_cached  = $(json_field "$body" scf_cached)"
+            echo "  rss_mb      = $(json_field "$body" rss_mb)"
+        else
+            echo "fields /health detail: unreachable"
+        fi
+    else
+        echo "fields /health detail: daemon not listening"
+    fi
+}
+
+cmd_down() {
+    echo "== bin/dev down (only stops what this script started) =="
+    stop_one fields "$FIELDS_PID_FILE" "$FIELDS_PORT"
+    stop_one physics "$PHYSICS_PID_FILE" "$PHYSICS_PORT"
+    stop_one web "$WEB_PID_FILE" "$WEB_PORT"
+}
+
+cmd_build() {
+    do_build
+}
+
+cmd_logs() {
+    for f in "$FIELDS_LOG:fields" "$PHYSICS_LOG:physics" "$WEB_LOG:web"; do
+        path="${f%%:*}"; name="${f##*:}"
+        echo "== $name ($path) =="
+        if [ -f "$path" ]; then
+            tail -n 40 "$path"
+        else
+            echo "(no bin/dev-managed log — this service was not started by bin/dev, or hasn't logged yet)"
+        fi
+        echo
+    done
+}
+
+usage() {
+    echo "usage: bin/dev {up|down|status|build|logs}" >&2
+    exit 1
+}
+
+[ $# -ge 1 ] || usage
+case "$1" in
+    up)     cmd_up ;;
+    down)   cmd_down ;;
+    status) cmd_status ;;
+    build)  cmd_build ;;
+    logs)   cmd_logs ;;
+    *)      usage ;;
+esac

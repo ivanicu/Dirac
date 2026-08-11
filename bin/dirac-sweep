@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+# bin/dirac-sweep — the admin DELETE boundary for app.field_cube / app.blob.
+#
+# This exists so that boundary lives in a CLI a human runs by hand, not in an
+# HTTP endpoint. Neither backend/field_server.py nor backend/physics/server.py
+# has ever exposed a DELETE route (verified live: no do_DELETE, no "admin" in
+# either file) — this script is a preventive design decision, made before
+# anyone adds one, not a patch for something already exposed: an
+# unauthenticated LAN endpoint that can delete hours of SCF compute is not an
+# acceptable shape for that capability. Shell access on this box already IS
+# the auth boundary; this script just gives that boundary something safe to
+# operate.
+#
+# What it deletes, and why that's the exact right set:
+#   app.field_cube rows whose producer has been superseded (migration
+#   006_producer_identity.sql: "the sweep list becomes a query
+#   (app.v_field_cube_stale), not a memory") — i.e. exactly the rows
+#   aggregated by app.v_field_cube_stale — and then any app.blob row left
+#   with zero remaining app.field_cube reference (an "orphaned blob").
+#
+# The boundary this script enforces, checked against the live schema
+# (backend/db/migrations/006_producer_identity.sql, 007_*.sql) before writing
+# any SQL below:
+#   - a field_cube row referenced by app.job (job_field_cube_id_fkey, ON
+#     DELETE NO ACTION) is skipped, not deleted, even if its producer is
+#     superseded — reported as "skipped: referenced by a job".
+#   - a blob is deleted only if NO app.field_cube row references it anymore —
+#     re-checked AFTER stale rows are removed, against every SURVIVING row
+#     (current-producer rows AND any stale-but-job-referenced row we chose to
+#     keep). That is "refuses to delete anything referenced by a live
+#     field_cube row" enforced as a live re-query, not a snapshot taken
+#     before the first delete.
+#
+# --dry-run is the default (no flags at all = dry run). --apply is required
+# to delete anything. Nothing here ever runs without printing the full report
+# first.
+
+set -euo pipefail
+
+export PGDATABASE=dirac
+export PGUSER=ivan
+PSQL=(psql -X -q -v ON_ERROR_STOP=1)
+
+APPLY=0
+for arg in "$@"; do
+    case "$arg" in
+        --apply)   APPLY=1 ;;
+        --dry-run) APPLY=0 ;;
+        -h|--help)
+            echo "usage: bin/dirac-sweep [--dry-run|--apply]"
+            echo "  --dry-run  (default) report only, delete nothing"
+            echo "  --apply    actually delete stale field_cube rows + orphaned blobs"
+            exit 0
+            ;;
+        *)
+            echo "unknown argument: $arg" >&2
+            echo "usage: bin/dirac-sweep [--dry-run|--apply]" >&2
+            exit 1
+            ;;
+    esac
+done
+
+echo "== dirac-sweep: app.field_cube / app.blob admin boundary =="
+if ! pg_isready -d dirac -U ivan -q; then
+    echo "PostgreSQL unreachable (dirac, peer auth as ivan). Fix: sudo systemctl start postgresql@18-main" >&2
+    exit 1
+fi
+
+echo
+echo "-- app.v_field_cube_stale (rows whose producer has been superseded) --"
+"${PSQL[@]}" -c "
+SELECT service, producer_version, superseded_at, rows_to_sweep, reclaimable,
+       compute_seconds_represented
+  FROM app.v_field_cube_stale
+ ORDER BY superseded_at;"
+
+read -r TOTAL_ROWS TOTAL_SECONDS < <("${PSQL[@]}" -tA -F' ' -c "
+SELECT count(*), coalesce(sum(c.seconds), 0)
+  FROM app.field_cube c
+  JOIN meta.producer p ON p.id = c.producer_id
+ WHERE p.superseded_at IS NOT NULL;")
+
+TOTAL_RECLAIMABLE=$("${PSQL[@]}" -tA -c "
+SELECT pg_size_pretty(coalesce(sum(b.byte_len), 0)::bigint)
+  FROM app.field_cube c
+  JOIN meta.producer p ON p.id = c.producer_id
+  JOIN app.blob b ON b.sha256 = c.blob_sha256
+ WHERE p.superseded_at IS NOT NULL;")
+
+BLOCKED_BY_JOB=$("${PSQL[@]}" -tA -c "
+SELECT count(*)
+  FROM app.field_cube c
+  JOIN meta.producer p ON p.id = c.producer_id
+ WHERE p.superseded_at IS NOT NULL
+   AND EXISTS (SELECT 1 FROM app.job j WHERE j.field_cube_id = c.id);")
+
+echo "total stale rows: $TOTAL_ROWS   reclaimable: $TOTAL_RECLAIMABLE   compute_seconds_represented: $TOTAL_SECONDS"
+echo "of which referenced by a job row (will be SKIPPED, never deleted): $BLOCKED_BY_JOB"
+
+echo
+echo "-- orphaned blobs (app.blob rows with zero app.field_cube reference) --"
+"${PSQL[@]}" -c "
+SELECT count(*) AS orphaned_blobs,
+       pg_size_pretty(coalesce(sum(byte_len), 0)::bigint) AS reclaimable
+  FROM app.blob b
+ WHERE NOT EXISTS (SELECT 1 FROM app.field_cube c WHERE c.blob_sha256 = b.sha256);"
+
+if [ "$APPLY" -eq 0 ]; then
+    echo
+    echo "-- dry run: nothing deleted. Re-run with --apply to delete the above. --"
+    exit 0
+fi
+
+if [ "${TOTAL_ROWS:-0}" = "0" ]; then
+    echo
+    echo "-- nothing to sweep. --"
+    exit 0
+fi
+
+echo
+echo "-- --apply: deleting stale field_cube rows (skipping any referenced by a job), then orphaned blobs --"
+
+"${PSQL[@]}" <<'SQL'
+BEGIN;
+
+-- 1) stale field_cube rows, excluding any still referenced by app.job.
+--    job_field_cube_id_fkey is ON DELETE NO ACTION, so leaving a referenced
+--    row in the delete set would abort this whole statement; excluding it
+--    up front is the "skip, don't crash" version of that same constraint.
+WITH stale AS (
+    SELECT c.id
+      FROM app.field_cube c
+      JOIN meta.producer p ON p.id = c.producer_id
+     WHERE p.superseded_at IS NOT NULL
+),
+deletable AS (
+    SELECT s.id FROM stale s
+     WHERE NOT EXISTS (SELECT 1 FROM app.job j WHERE j.field_cube_id = s.id)
+)
+DELETE FROM app.field_cube WHERE id IN (SELECT id FROM deletable);
+
+-- 2) blobs with zero remaining field_cube reference, evaluated AFTER (1) —
+--    this is the live re-check: a blob shared by a live (current-producer)
+--    row, or by a stale row we just chose to keep because a job points at
+--    it, survives.
+DELETE FROM app.blob b
+ WHERE NOT EXISTS (SELECT 1 FROM app.field_cube c WHERE c.blob_sha256 = b.sha256);
+
+COMMIT;
+SQL
+
+echo
+echo "-- after --"
+echo "remaining app.v_field_cube_stale rows (should equal only job-blocked groups, if any):"
+"${PSQL[@]}" -c "SELECT service, producer_version, superseded_at, rows_to_sweep FROM app.v_field_cube_stale ORDER BY superseded_at;"
+echo "remaining orphaned blobs (should be 0):"
+"${PSQL[@]}" -tA -c "
+SELECT count(*) FROM app.blob b
+ WHERE NOT EXISTS (SELECT 1 FROM app.field_cube c WHERE c.blob_sha256 = b.sha256);"

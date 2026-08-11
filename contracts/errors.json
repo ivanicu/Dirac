@@ -1,0 +1,110 @@
+{
+  "$comment": [
+    "THE error vocabulary. One home, three consumers: the Python service, the",
+    "TypeScript client (generated — see scripts/gen_error_codes.mjs), and the",
+    "app.job_error enum in migration 007.",
+    "",
+    "It exists because there were three vocabularies and none of them agreed:",
+    "the service emitted free-text 'error' plus a separate reason field with the",
+    "values budget|unsupported|internal; the DB enum used PARSE|UNCONVERGED|",
+    "UNPARAMETERIZED|BUDGET|UNSUPPORTED|TOO_LARGE|INTERNAL|CANCELLED; and the",
+    "frontend branched on neither, because it could only render the free text.",
+    "A UI cannot react to a failure it cannot name, so every refusal degraded",
+    "into the same grey sentence.",
+    "",
+    "Every entry carries what the CALLER should do, not what the implementer",
+    "saw. An error described from the implementer's point of view is not",
+    "documented. `points_at` is the working alternative when one exists — the",
+    "product's rule is that a refusal names the actor and the way forward."
+  ],
+  "version": 1,
+  "codes": {
+    "PARSE": {
+      "meaning": "The molecule could not be read at all.",
+      "caller_action": "Show the offending input and stop. Do not retry the same bytes.",
+      "retryable": false,
+      "http": 200,
+      "user_copy": "This molecule could not be parsed.",
+      "points_at": null
+    },
+    "UNCONVERGED": {
+      "meaning": "The SCF did not reach convergence, including after the second-order rescue.",
+      "caller_action": "Offer a larger budget or a different basis; never render a field from an unconverged wavefunction.",
+      "retryable": true,
+      "http": 200,
+      "user_copy": "The wavefunction did not converge — refusing to ship a decorative field.",
+      "points_at": null
+    },
+    "UNPARAMETERIZED": {
+      "meaning": "The empirical method has no parameters for one or more atoms (Gasteiger on hypervalent P, MMFF on B/Se, Crippen on exotics).",
+      "caller_action": "Name the elements and offer the quantum path, which does not need parameters.",
+      "retryable": false,
+      "http": 200,
+      "user_copy": "This method cannot parameterize {elements}.",
+      "points_at": "fields.qm.mep_qm"
+    },
+    "BUDGET": {
+      "meaning": "The wall-clock deadline fired, or the pre-flight cost model refused before starting.",
+      "caller_action": "Offer max_seconds explicitly, or a smaller basis. The refusal message carries the estimate.",
+      "retryable": true,
+      "http": 200,
+      "user_copy": "This would take longer than the budget allows.",
+      "points_at": null
+    },
+    "OPEN_SHELL_SPIN_REQUIRED": {
+      "meaning": "A transition metal is present whose ground state is not the closed-shell singlet that electron parity implies.",
+      "caller_action": "Resend with an explicit spin. This is a question, not a dead end — the previous vocabulary collapsed it into UNSUPPORTED, which reads as 'give up'.",
+      "retryable": true,
+      "http": 200,
+      "user_copy": "This metal centre needs an explicit spin multiplicity.",
+      "points_at": null
+    },
+    "UNSUPPORTED": {
+      "meaning": "The request is well-formed but outside what this method declares it can do (an element with no basis, an unknown field kind, a basis outside the whitelist).",
+      "caller_action": "Read the method's capabilities and offer a supported alternative.",
+      "retryable": false,
+      "http": 200,
+      "user_copy": "Not supported for this molecule or these settings.",
+      "points_at": null
+    },
+    "TOO_LARGE": {
+      "meaning": "The request body or the molecule exceeds a hard structural bound (8 MB body; V2000's 999-atom count field).",
+      "caller_action": "Reduce the selection. Retrying identical input cannot succeed.",
+      "retryable": false,
+      "http": 413,
+      "user_copy": "Too large for this format or this endpoint.",
+      "points_at": null
+    },
+    "BAD_HOST": {
+      "meaning": "The Host header is not one of this box's own names — the DNS-rebinding shape.",
+      "caller_action": "Nothing. This is a security refusal, not a user error; do not surface it as a chemistry failure.",
+      "retryable": false,
+      "http": 403,
+      "user_copy": "Refused: unrecognised host.",
+      "points_at": null
+    },
+    "CANCELLED": {
+      "meaning": "A job was cancelled, by the user or by a worker restart.",
+      "caller_action": "Clear any progress UI. Offer to run it again.",
+      "retryable": true,
+      "http": 200,
+      "user_copy": "Cancelled.",
+      "points_at": null
+    },
+    "INTERNAL": {
+      "meaning": "An unexpected exception. Nothing about the request is known to be wrong.",
+      "caller_action": "Show that it was our fault, not the molecule's, and keep the request so it can be retried.",
+      "retryable": true,
+      "http": 200,
+      "user_copy": "Something failed on our side.",
+      "points_at": null
+    }
+  },
+  "db_enum_note": [
+    "app.job_error (migration 007) is a SUBSET: it omits BAD_HOST (rejected",
+    "before a job exists) and OPEN_SHELL_SPIN_REQUIRED (added here after 007",
+    "shipped). backend/envelope.py asserts the subset relation at import time,",
+    "so the two can never drift silently — adding a code here that a job could",
+    "carry, without adding it to the enum, is an import-time failure."
+  ]
+}
