@@ -163,6 +163,14 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
+    # backend/env is a conda env with no pyvenv.cfg, so it reads
+    # ~/.local/lib/python3.12/site-packages — where a cupy sits that has no
+    # CUDA libraries behind it. Left alone, importing gpu4pyscf fails there and
+    # the GPU path degrades to CPU silently. Set before anything imports.
+    if not os.environ.get('PYTHONNOUSERSITE'):
+        os.environ['PYTHONNOUSERSITE'] = '1'
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
     port = int(sys.argv[1]) if len(sys.argv) > 1 else PORT
     host = os.environ.get('DIRAC_PHYSICS_HOST', HOST)
     print(f'Dirac physics backend on http://{host}:{port}'

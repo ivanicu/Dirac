@@ -51,17 +51,32 @@ DEFAULT_BASIS = 'def2-svp'
 # which is textbook Hartree-Fock O(N^4), recovered from the data rather than
 # assumed. The gate is therefore a TIME budget applied to a predicted cost,
 # and the refusal says what it predicted and what to do about it.
-# The power law fits the ends (nao 114 → 1.0 s measured, 398 → 181 s measured)
-# but UNDERESTIMATES the middle by up to 2.8× (nao 246 predicted 25 s, measured
-# 69.5 s), so the raw fit errs toward admitting a job that then hangs — the
-# unsafe direction for a gate. The safety factor is that worst measured ratio,
-# stated rather than hidden: this is an order-of-magnitude screen, and the
-# caller's own timeout remains the real protection.
-COST_COEFFICIENT = 5.9e-9
-COST_EXPONENT = 4.03
-COST_SAFETY = 2.8
+# ⚠ THE FIRST CALIBRATION WAS TAKEN IN THE WRONG REGIME AND OVER-PREDICTED BY
+# 41×. It came from a coverage sweep running 8 molecules in parallel at
+# OMP_NUM_THREADS=2 — each job on 2 threads, all of them fighting for memory
+# bandwidth — and was then used to predict SINGLE-JOB latency with all 24
+# threads. Under load the scaling looks like textbook O(N^4); served alone it
+# is closer to O(N^2), because integral screening does most of the work on an
+# extended molecule. Imatinib was refused as "~4120 s" against a measured
+# 100 s: the gate was blocking the main use case with a confident number.
+#
+# Re-measured in the regime the server actually runs in (one job, 24 threads):
+#     nao 114 → 2.3 s   222 → 22.1 s   308 → 25.9 s   673 → 99.9 s
+# A single power law still cannot do better than ~3×, because iteration COUNT
+# depends on how hard the molecule is to converge — aspirin at nao 222 costs
+# nearly as much as naproxen at 308. This is an order-of-magnitude screen and
+# nothing more; the caller's timeout is the real protection.
+COST_COEFFICIENT = 1.0e-4
+COST_EXPONENT = 2.12
+COST_SAFETY = 3.0
 DEFAULT_MAX_SECONDS = 120.0
 MAX_QM_ATOMS = 200        # backstop only: the Mole build itself must stay cheap
+# Below this the GPU is slower than 24 CPU threads — measured, not assumed.
+GPU_CROSSOVER_NAO = 150
+# Measured on this box with the warm-up excluded: 2.4× aspirin, 1.9× naproxen,
+# 3.2× imatinib. Taken as 2× rather than the best case, because a budget that
+# assumes the best observed speedup admits the job that then misses it.
+GPU_SPEEDUP = 2.0
 
 
 def estimated_scf_seconds(nao: int) -> float:
@@ -291,7 +306,8 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
                         isovalue: float = DEFAULT_ISOVALUE,
                         points_per_atom: int = 120,
                         max_seconds: float = DEFAULT_MAX_SECONDS,
-                        xc: str | None = None):
+                        xc: str | None = None,
+                        use_gpu: bool | str = 'auto'):
     """Full σ-hole analysis for one molecule.
 
     Returns a dict with `points` (Å, in the molfile frame), `values`
@@ -305,7 +321,21 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
                 basis=basis, ecp=_ecp_for(atoms, basis) or None,
                 charge=charge, spin=spin, verbose=0)
 
-    predicted = estimated_scf_seconds(mol.nao)
+    # Decide the execution path BEFORE pricing it: the budget must be checked
+    # against the hardware the job will actually run on, or the gate refuses
+    # work the GPU would finish inside the budget.
+    on_gpu = use_gpu is True or (use_gpu == 'auto' and mol.nao >= GPU_CROSSOVER_NAO)
+    gpu_unavailable = None
+    if on_gpu:
+        try:
+            from gpu4pyscf import dft as gdft, scf as gscf    # noqa: F401
+        except ImportError as exc:
+            # A silent fallback is how a GPU deployment quietly becomes a CPU
+            # one: same answers, three times the latency, nothing in the log.
+            # The reason travels with the result instead.
+            on_gpu, gpu_unavailable = False, str(exc)[:80]
+
+    predicted = estimated_scf_seconds(mol.nao) / (GPU_SPEEDUP if on_gpu else 1.0)
     if max_seconds and predicted > max_seconds:
         raise ValueError(
             f'{len(atoms)} atoms in {basis} is {mol.nao} basis functions, predicted '
@@ -313,7 +343,20 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
             f'basis (sto-3g is ~{estimated_scf_seconds(mol.nao // 3):.0f} s here), '
             f'raise max_seconds deliberately, or trim the ligand.')
 
-    if xc:
+    # gpu4pyscf is a drop-in for the SCF only; everything downstream stays on
+    # the host, so the density matrix is pulled back explicitly. Measured on
+    # this box (warm-up excluded): 0.7× on benzene, 2.4× aspirin, 3.2×
+    # imatinib — the GPU loses below nao≈150 where launch overhead dominates
+    # and wins above it, so `use_gpu='auto'` switches on that crossover rather
+    # than switching on wishful thinking.
+    if on_gpu:
+        from gpu4pyscf import dft as gdft, scf as gscf
+        if xc:
+            mf = gdft.RKS(mol) if spin == 0 else gdft.UKS(mol)
+            mf.xc = xc
+        else:
+            mf = gscf.RHF(mol) if spin == 0 else gscf.UHF(mol)
+    elif xc:
         mf = dft.RKS(mol) if spin == 0 else dft.UKS(mol)
         mf.xc = xc
     else:
@@ -326,7 +369,10 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
         raise ValueError(f'SCF did not converge (E={energy:.6f} Ha, basis={basis})')
     t_scf = time.time() - t0
 
-    field = _Field(mol, mf.make_rdm1())
+    dm = mf.make_rdm1()
+    if hasattr(dm, 'get'):          # cupy array from the GPU path
+        dm = dm.get()
+    field = _Field(mol, dm)
     centers = np.array([c for _, c in atoms])
 
     t1 = time.time()
@@ -394,6 +440,8 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
             'ecp': sorted(_ecp_for(atoms, basis)) or None,
             'scf_energy_ha': float(energy),
             'converged': True,
+            'ran_on': 'gpu' if on_gpu else 'cpu',
+            'gpu_unavailable_reason': gpu_unavailable,
             'charge': charge,
             'spin': spin,
             'n_atoms': len(atoms),
