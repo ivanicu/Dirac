@@ -30,7 +30,10 @@ import type { LigandFocusOptions } from './semantic-focus';
 export type RdkitChemicalLayerId =
     | 'partial-charge-rdkit'
     | 'donor-acceptor-rdkit'
-    | 'aromaticity-rdkit';
+    | 'aromaticity-rdkit'
+    | 'stereo-rdkit'
+    | 'ring-atoms-rdkit'
+    | 'sp3-carbons-rdkit';
 
 export type RdkitChemicalLayerCost = 'low' | 'medium';
 
@@ -64,6 +67,27 @@ export const RdkitChemicalLayers: readonly RdkitChemicalLayerDefinition[] = Obje
         source: 'RDKit Gasteiger-Marsili partial charges computed from ligand molfile',
         description: 'Colors ligand atoms by computed partial charge: deep blue (+), white (0), deep red (−). This is an estimate, not deposited experimental data; toggle it deliberately.',
     },
+    {
+        id: 'stereo-rdkit',
+        label: 'Stereochemistry (R / S)',
+        cost: 'low',
+        source: 'RDKit CIP stereochemistry perception via get_stereo_tags',
+        description: 'Highlights chiral atoms with assigned CIP configuration: R = blue, S = red, undefined (? potential center) = yellow. Useful for verifying deposited stereochemistry and spotting ambiguous centers.',
+    },
+    {
+        id: 'ring-atoms-rdkit',
+        label: 'Ring atoms',
+        cost: 'low',
+        source: 'RDKit SSSR ring membership via [R] SMARTS',
+        description: 'Highlights all atoms in any SSSR ring (aliphatic or aromatic). Distinguishes scaffold ring atoms from chain atoms — fundamental for reading the molecular skeleton.',
+    },
+    {
+        id: 'sp3-carbons-rdkit',
+        label: 'sp³ carbons',
+        cost: 'low',
+        source: 'RDKit hybridization perception via [CX4] SMARTS',
+        description: 'Highlights saturated sp³-hybridized carbons (tetrahedral, 4 single bonds). Indicates the 3D-character of the ligand scaffold — high sp³ fraction correlates with drug-likeness and lead-likeness.',
+    },
 ]);
 
 export interface RdkitChemicalLayerCounts {
@@ -73,6 +97,11 @@ export interface RdkitChemicalLayerCounts {
     readonly donors: number;
     readonly acceptors: number;
     readonly partialChargeRange: readonly [number, number] | null;
+    readonly chiralCentersR: number;
+    readonly chiralCentersS: number;
+    readonly chiralCentersUndefined: number;
+    readonly ringAtoms: number;
+    readonly sp3Carbons: number;
 }
 
 const RdkitChemicalLayerTag = 'rdkit-chemical-semantic-layers';
@@ -86,6 +115,7 @@ interface JSMol {
     compute_gasteiger_charges(): void;
     get_substruct_matches(q: JSMol): string;
     get_svg_with_highlights(details: string): string;
+    get_stereo_tags(): string;
     has_prop(name: string): boolean;
     get_prop(name: string): string;
     get_prop_list(includePrivate?: boolean, includeComputed?: boolean): string[];
@@ -93,9 +123,9 @@ interface JSMol {
     get_new_coords(useCoordGen: boolean): string;
     /** Mutate the mol's conformer in place with new 2D coords (CoordGen if true). */
     set_new_coords(useCoordGen: boolean): void;
-    is_valid(): boolean;
     /** Returns JSON with 40+ RDKit descriptors (MW, LogP, TPSA, HBD/HBA, rings, etc.). */
     get_descriptors(): string;
+    is_valid(): boolean;
 }
 
 interface RDKitModule {
@@ -269,6 +299,10 @@ export interface LigandChemistry {
     partialCharges: Float32Array | null;
     partialChargeMin: number;
     partialChargeMax: number;
+    /** Chiral centers from CIP perception: atomIdx → 'R' | 'S' | '?' */
+    chiralCenters: Map<number, 'R' | 'S' | '?'>;
+    ringAtoms: Uint8Array;            // [R] SMARTS — any SSSR ring atom
+    sp3Carbons: Uint8Array;           // [CX4] SMARTS — tetrahedral saturated C
 }
 
 function smartsAtomIndices(RDKit: RDKitModule, mol: JSMol, smarts: string, atomCount: number): Uint8Array {
@@ -365,6 +399,25 @@ export async function computeLigandChemistry(molfile: string, atomCount: number)
         const acceptors = smartsAtomIndices(RDKit, mol, '[#7,#8;H0,H1,H2;!+]', atomCount);
         const aromaticRings = smartsAromaticRings(RDKit, mol);
 
+        // Stereo (CIP) via get_stereo_tags. Format:
+        //   {"CIP_atoms": [[atomIdx, "(R)" | "(S)" | "(?)"], ...], "CIP_bonds": [...]}
+        const chiralCenters = new Map<number, 'R' | 'S' | '?'>();
+        try {
+            const stereoRaw = mol.get_stereo_tags();
+            const parsed = JSON.parse(stereoRaw) as { CIP_atoms?: Array<[number, string]> };
+            if (Array.isArray(parsed.CIP_atoms)) {
+                for (const [idx, label] of parsed.CIP_atoms) {
+                    if (typeof idx !== 'number' || idx < 0 || idx >= atomCount) continue;
+                    const c = label.replace(/[()]/g, '');
+                    if (c === 'R' || c === 'S' || c === '?') chiralCenters.set(idx, c);
+                }
+            }
+        } catch { /* stereo unavailable */ }
+
+        const ringAtoms = smartsAtomIndices(RDKit, mol, '[R]', atomCount);
+        // [CX4] = carbon with 4 explicit single bonds → sp3-hybridized
+        const sp3Carbons = smartsAtomIndices(RDKit, mol, '[CX4]', atomCount);
+
         let partialCharges: Float32Array | null = null;
         let partialChargeMin = 0;
         let partialChargeMax = 0;
@@ -386,6 +439,9 @@ export async function computeLigandChemistry(molfile: string, atomCount: number)
             partialCharges,
             partialChargeMin,
             partialChargeMax,
+            chiralCenters,
+            ringAtoms,
+            sp3Carbons,
         };
     } finally {
         if (mol) mol.delete();
@@ -461,17 +517,21 @@ function filterLociByAtomIndex(
 export async function getRdkitChemicalLayerCounts(structure: Structure, options: LigandFocusOptions = {}): Promise<RdkitChemicalLayerCounts> {
     const loci = lociFromFocusOptions(structure, options);
     if (StructureElement.Loci.isEmpty(loci)) {
-        return { hasLigand: false, atomCount: 0, aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null };
+        return { hasLigand: false, atomCount: 0, aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0 };
     }
     const build = ligandLociToMolfile(loci);
     if (!build) {
-        return { hasLigand: true, atomCount: StructureElement.Loci.size(loci), aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null };
+        return { hasLigand: true, atomCount: StructureElement.Loci.size(loci), aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0 };
     }
     const chem = await computeLigandChemistry(build.molfile, build.atomCount);
     if (!chem) {
-        return { hasLigand: true, atomCount: build.atomCount, aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null };
+        return { hasLigand: true, atomCount: build.atomCount, aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0 };
     }
     const range = chem.partialCharges ? ([chem.partialChargeMin, chem.partialChargeMax] as const) : null;
+    let chirR = 0, chirS = 0, chirU = 0;
+    for (const c of chem.chiralCenters.values()) {
+        if (c === 'R') chirR++; else if (c === 'S') chirS++; else chirU++;
+    }
     return {
         hasLigand: true,
         atomCount: build.atomCount,
@@ -479,6 +539,11 @@ export async function getRdkitChemicalLayerCounts(structure: Structure, options:
         donors: countSetBits(chem.donors),
         acceptors: countSetBits(chem.acceptors),
         partialChargeRange: range,
+        chiralCentersR: chirR,
+        chiralCentersS: chirS,
+        chiralCentersUndefined: chirU,
+        ringAtoms: countSetBits(chem.ringAtoms),
+        sp3Carbons: countSetBits(chem.sp3Carbons),
     };
 }
 
@@ -533,6 +598,40 @@ async function buildRdkitOverpaintLayers(
             const filtered = filterLociByAtomIndex(loci, i => indexSet.has(i));
             if (!StructureElement.Loci.isEmpty(filtered)) out.push({ loci: filtered, color });
         }
+    }
+
+    if (enabledIds.has('stereo-rdkit')) {
+        // R = blue, S = red, ? = yellow. Three orthogonal channels, three colors.
+        const rIndices = new Set<number>();
+        const sIndices = new Set<number>();
+        const undefIndices = new Set<number>();
+        for (const [idx, c] of chem.chiralCenters) {
+            if (c === 'R') rIndices.add(idx);
+            else if (c === 'S') sIndices.add(idx);
+            else undefIndices.add(idx);
+        }
+        if (rIndices.size) {
+            const filtered = filterLociByAtomIndex(loci, i => rIndices.has(i));
+            if (!StructureElement.Loci.isEmpty(filtered)) out.push({ loci: filtered, color: Color(0x5a8ae4) });
+        }
+        if (sIndices.size) {
+            const filtered = filterLociByAtomIndex(loci, i => sIndices.has(i));
+            if (!StructureElement.Loci.isEmpty(filtered)) out.push({ loci: filtered, color: Color(0xe15555) });
+        }
+        if (undefIndices.size) {
+            const filtered = filterLociByAtomIndex(loci, i => undefIndices.has(i));
+            if (!StructureElement.Loci.isEmpty(filtered)) out.push({ loci: filtered, color: Color(0xd4a574) });
+        }
+    }
+
+    if (enabledIds.has('ring-atoms-rdkit')) {
+        const filtered = filterLociByAtomIndex(loci, i => chem.ringAtoms[i] === 1);
+        if (!StructureElement.Loci.isEmpty(filtered)) out.push({ loci: filtered, color: Color(0x9d8cd4) });
+    }
+
+    if (enabledIds.has('sp3-carbons-rdkit')) {
+        const filtered = filterLociByAtomIndex(loci, i => chem.sp3Carbons[i] === 1);
+        if (!StructureElement.Loci.isEmpty(filtered)) out.push({ loci: filtered, color: Color(0x7dd3c0) });
     }
 
     return out;

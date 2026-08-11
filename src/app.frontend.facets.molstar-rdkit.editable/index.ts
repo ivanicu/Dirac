@@ -227,6 +227,9 @@ const SemanticLayerGuides: Readonly<Record<Exclude<MolecularLayerId, MolstarVisu
     'aromaticity-rdkit': { channel: 'recolour native geometry', expected: 'a purple accent on ligand atoms RDKit perceives as aromatic.', use: 'Use for accurate aromaticity on drug fragments where mol* perception misses fused heterocycles.', empty: 'Empty when RDKit perceives no aromatic atoms (no ligand, or fully saturated ligand).', fixture: '1CBS', representation: 'atomic-detail' },
     'donor-acceptor-rdkit': { channel: 'recolour native geometry', expected: 'cyan accent on Lipinski H-bond donor atoms, orange accent on acceptor atoms.', use: 'Use to read pharmacokinetic potential of the ligand; donor/acceptor counts feed Lipinski/Veber rules.', empty: 'Empty when RDKit finds no Lipinski donor or acceptor on the ligand.', fixture: '1CBS', representation: 'atomic-detail' },
     'partial-charge-rdkit': { channel: 'recolour native geometry', expected: 'a red-white-blue gradient on ligand atoms coloured by Gasteiger partial charge.', use: 'Use to estimate electrostatic character of the ligand; this is computed, not experimental.', empty: 'Empty when RDKit fails to compute Gasteiger charges (no ligand, or parsing failure).', fixture: '1CBS', representation: 'atomic-detail' },
+    'stereo-rdkit': { channel: 'recolour native geometry', expected: 'blue accent on R chiral atoms, red on S, yellow on undefined (? potential centers).', use: 'Use to verify deposited stereochemistry and spot ambiguous chiral centers in drug fragments.', empty: 'Empty when the ligand has no chiral centers (fully planar or symmetric).', fixture: '1CBS', representation: 'atomic-detail' },
+    'ring-atoms-rdkit': { channel: 'recolour native geometry', expected: 'a uniform accent on every atom in any SSSR ring (aliphatic or aromatic).', use: 'Use to read the molecular scaffold at a glance — distinguishes the ring backbone from chain substituents.', empty: 'Empty when the ligand is acyclic (no rings at all).', fixture: '1CBS', representation: 'atomic-detail' },
+    'sp3-carbons-rdkit': { channel: 'recolour native geometry', expected: 'an accent on every saturated sp³-hybridized carbon (4 single bonds, tetrahedral).', use: 'Use to read 3D-character of the scaffold — high sp³ fraction correlates with drug-likeness and lead-likeness (see Property Cockpit).', empty: 'Empty when the ligand has no sp³ carbons (fully aromatic / planar / unsaturated).', representation: 'atomic-detail' },
     'pharmacophore-features-rdkit': { channel: 'add ligand-local geometry', expected: 'H-bond acceptor cones (red), donor sticks (blue), aromatic ring disks (amber), and hydrophobic halos (grey) drawn over the ligand.', use: 'Use to read the ligand recognition profile at a glance; this is the chemist\'s shorthand for "what does this molecule bind with".', empty: 'Empty when no ligand is present or RDKit perception yields no features.', fixture: '1CBS', representation: 'atomic-detail' },
 };
 
@@ -615,7 +618,7 @@ class MolecularVfxLab {
         const structure = this.workbench.plugin.managers.structure.component.pivotStructure?.cell.obj?.data;
         if (!structure) return;
 
-        const rdkitLayerIds: RdkitChemicalLayerId[] = ['aromaticity-rdkit', 'donor-acceptor-rdkit', 'partial-charge-rdkit'];
+        const rdkitLayerIds: RdkitChemicalLayerId[] = ['aromaticity-rdkit', 'donor-acceptor-rdkit', 'partial-charge-rdkit', 'stereo-rdkit', 'ring-atoms-rdkit', 'sp3-carbons-rdkit'];
 
         if (!ligandAvailable) {
             for (const id of rdkitLayerIds) this.setRdkitAvailability(id, { available: false, text: 'Not present · no deposited ligand', signal: 'empty' });
@@ -647,6 +650,21 @@ class MolecularVfxLab {
                     ? `Gasteiger range ${counts.partialChargeRange[0].toFixed(2)} .. ${counts.partialChargeRange[1].toFixed(2)}`
                     : 'Gasteiger computation unavailable in this RDKit-JS build',
                 signal: counts.partialChargeRange ? 'ready' : 'empty',
+            });
+            this.setRdkitAvailability('stereo-rdkit', {
+                available: counts.chiralCentersR + counts.chiralCentersS + counts.chiralCentersUndefined > 0,
+                text: `${counts.chiralCentersR}R · ${counts.chiralCentersS}S` + (counts.chiralCentersUndefined > 0 ? ` · ${counts.chiralCentersUndefined} undefined` : '') + ' (CIP)',
+                signal: counts.chiralCentersR + counts.chiralCentersS + counts.chiralCentersUndefined > 0 ? 'ready' : 'empty',
+            });
+            this.setRdkitAvailability('ring-atoms-rdkit', {
+                available: counts.ringAtoms > 0,
+                text: counts.ringAtoms > 0 ? `${counts.ringAtoms} ring atoms (SSSR)` : 'No rings (acyclic ligand)',
+                signal: counts.ringAtoms > 0 ? 'ready' : 'empty',
+            });
+            this.setRdkitAvailability('sp3-carbons-rdkit', {
+                available: counts.sp3Carbons > 0,
+                text: counts.sp3Carbons > 0 ? `${counts.sp3Carbons} sp³ carbons` : 'No sp³ carbons (fully aromatic / unsaturated)',
+                signal: counts.sp3Carbons > 0 ? 'ready' : 'empty',
             });
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
