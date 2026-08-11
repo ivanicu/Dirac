@@ -328,16 +328,35 @@ function selectedBasis(): string {
     return el?.value || 'def2-svp';
 }
 
+/**
+ * The remedy that actually works on a large ligand.
+ *
+ * The cost gate's first suggestion is a smaller basis, and for THIS question that
+ * suggestion is wrong: measured on this backend, STO-3G reports zero σ-holes on both
+ * bromobenzene and chlorobenzene, which carry one at def2-SVP (44.0 and 31.6 kcal/mol).
+ * It does not make the number less precise, it flips the classification the panel exists
+ * to produce. So the basis list stops at 6-31G and the budget is what the user raises —
+ * and max_seconds is now actually SENT, which it never was: post()'s third argument only
+ * ever set the client-side abort, so the server always used its own default and the
+ * refusal's "raise max_seconds deliberately" was unreachable from the interface.
+ */
+function selectedBudget(): number {
+    const el = document.getElementById('phys-budget') as HTMLSelectElement | null;
+    const v = parseInt(el?.value || '', 10);
+    return Number.isFinite(v) && v > 0 ? v : BUDGET_SECONDS;
+}
+
 async function runSurface() {
     if (!molfile || busy) return;
     setBusy(true);
     const basis = selectedBasis();
+    const budget = selectedBudget();
     setStatus('phys-surface-status',
         `Solving surface electrostatics on ${ligandLabel ?? 'ligand'} in ${basis}… `
-        + `(gives up at ${BUDGET_SECONDS} s · Cancel to stop now)`, 'busy');
+        + `(gives up at ${budget} s · Cancel to stop now)`, 'busy');
     const generation = ligandGeneration;
     try {
-        const out = await post('/surface/mep', { molfile, basis }, BUDGET_SECONDS);
+        const out = await post('/surface/mep', { molfile, basis, max_seconds: budget }, budget);
         if (!isCurrentLigandGeneration(generation)) {
             setStatus('phys-surface-status',
                 'Ligand changed while solving — result discarded rather than '

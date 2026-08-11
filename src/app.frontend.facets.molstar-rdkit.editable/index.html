@@ -793,6 +793,7 @@
         .bond-atlas-block { margin-top: var(--sp-4, 16px); padding-top: var(--sp-3, 12px); border-top: 1px solid var(--border); }
         .phys-basis-label { display: inline-flex; align-items: center; gap: var(--sp-1, 4px); color: var(--text-3); font-size: var(--fs-2xs, 9px); letter-spacing: var(--track-wide, .08em); text-transform: uppercase; }
         .phys-basis-label select { text-transform: none; letter-spacing: normal; }
+        .phys-why-warn { border-left: 2px solid var(--warn); padding-left: var(--sp-2, 8px); }
         .halogen-block { margin-top: var(--sp-3, 12px); padding-top: var(--sp-3, 12px); border-top: 1px dashed var(--border); }
         .halogen-note-inline { color: var(--text-3); font-size: var(--fs-2xs, 9px); letter-spacing: var(--track-wide, .08em); text-transform: uppercase; }
         .halogen-row { border-left: 2px solid var(--border-strong); padding: var(--sp-2, 8px) 0 var(--sp-2, 8px) var(--sp-2, 8px); margin-bottom: var(--sp-2, 8px); }
@@ -1476,8 +1477,14 @@
                                 <label class="phys-basis-label">Basis
                                     <select id="phys-basis">
                                         <option value="def2-svp" selected>def2-SVP · has iodine</option>
-                                        <option value="6-31g">6-31G · faster</option>
-                                        <option value="sto-3g">STO-3G · fastest</option>
+                                        <option value="6-31g">6-31G · faster, no Br/I</option>
+                                    </select>
+                                </label>
+                                <label class="phys-basis-label">Budget
+                                    <select id="phys-budget">
+                                        <option value="90" selected>90 s</option>
+                                        <option value="300">300 s</option>
+                                        <option value="900">900 s · large ligand</option>
                                     </select>
                                 </label>
                                 <button type="button" class="phys-btn" id="phys-run-surface">Compute</button>
@@ -1487,6 +1494,12 @@
                         <p class="phys-why">A halogen with no σ-hole cannot make a halogen
                            bond however good the geometry looks. The angle is the evidence:
                            below 150° from the C–X axis a positive cap is not a σ-hole.</p>
+                        <p class="phys-why phys-why-warn">STO-3G is <b>not offered here</b>, although it is
+                           three times faster and the cost gate recommends it. Measured on this backend:
+                           it finds <b>zero</b> σ-holes on bromobenzene and chlorobenzene, both of which
+                           have one at def2-SVP (44.0 and 31.6 kcal/mol). A minimal basis does not shrink
+                           the answer, it erases it — every halogen comes back looking like fluorine. For
+                           a large ligand raise the budget instead; that costs time, not the conclusion.</p>
                         <div id="phys-surface-status" class="field-status" data-tone="idle">Load a ligand first.</div>
                         <div id="phys-surface-body"></div>
 
