@@ -34,6 +34,7 @@ import tempfile
 import threading
 import time
 import traceback
+from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import numpy as np
@@ -96,7 +97,11 @@ CUBE_MEDIA_TYPE = 'chemical/x-gaussian-cube'
 # lets any LAN peer feed it a multi-GB body (peer session's hardening, ported).
 MAX_BODY_BYTES = 8 * 1024 * 1024
 
-_scf_cache: dict[str, object] = {}
+# OrderedDict, not dict: this is an LRU with a hard ceiling. Six is enough for
+# the interaction it exists to serve — the four quantum fields of the molecule
+# in front of you, plus the one you just came from.
+SCF_CACHE_MAX = 6
+_scf_cache: 'OrderedDict[str, dict]' = OrderedDict()
 _scf_lock = threading.Lock()
 
 
@@ -608,6 +613,7 @@ def run_scf(mol: Chem.Mol, basis: str, max_seconds: float = DEFAULT_MAX_SECONDS,
     ).hexdigest()
     with _scf_lock:
         if key in _scf_cache:
+            _scf_cache.move_to_end(key)     # LRU: a hit is a use
             return _scf_cache[key]
 
     gmol = gto.M(
@@ -660,8 +666,26 @@ def run_scf(mol: Chem.Mol, basis: str, max_seconds: float = DEFAULT_MAX_SECONDS,
     # Only positive results are cached: caching an unconverged SCF would make
     # every retry fail instantly from the cache, forever.
     if result['converged']:
+        # Drop the two-electron integrals BEFORE the object is retained. This
+        # cache exists so that homo/lumo/density/mep_qm on one molecule share a
+        # single SCF, and every one of those needs mo_coeff, mo_energy, the
+        # density matrix and the Mole — none of them needs _eri. Measured on
+        # this box: _eri is 29 MB for aspirin, 42 for caffeine, 327 for
+        # porphine, against 0.14 MB of mo_coeff. Keeping it meant retaining
+        # ~2300x the memory the cache is actually for, per molecule, forever.
+        #
+        # This is what killed the daemon mid-sweep: a hard process death with
+        # no traceback, after swap had been driven to zero. The molecule it
+        # died on (a nitroxide radical) runs fine in isolation — the crash
+        # belonged to everything that had been cached BEFORE it, which is
+        # exactly the kind of defect a one-molecule test can never find.
+        mf._eri = None
         with _scf_lock:
             _scf_cache[key] = result
+            # Bounded, LRU. An unbounded cache on a long-lived daemon is not a
+            # cache, it is a leak with a fast path.
+            while len(_scf_cache) > SCF_CACHE_MAX:
+                _scf_cache.popitem(last=False)
     return result
 
 
@@ -837,9 +861,20 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/health':
             import pyscf
             import rdkit
+            # Resident memory is reported because the daemon has already died
+            # of it once, silently, mid-sweep. A number nobody can see is a
+            # number nobody notices growing.
+            try:
+                with open('/proc/self/statm') as fh:
+                    rss_mb = int(fh.read().split()[1]) * os.sysconf('SC_PAGE_SIZE') // (1 << 20)
+            except Exception:                                # noqa: BLE001
+                rss_mb = None
             self._send(200, {'ok': True, 'rdkit': rdkit.__version__,
                              'pyscf': pyscf.__version__,
-                             'db_cache': 'on' if _db_ok else 'off'})
+                             'db_cache': 'on' if _db_ok else 'off',
+                             'scf_cached': len(_scf_cache),
+                             'scf_cache_max': SCF_CACHE_MAX,
+                             'rss_mb': rss_mb})
         else:
             self._send(404, {'ok': False, 'error': 'not found'})
 
