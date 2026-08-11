@@ -348,7 +348,14 @@ function approximatePartialCharges(molfile: string, atomCount: number): { charge
         let delta = 0;
         for (const j of neighbors[i]) {
             const enJ = ELECTRONEGATIVITY[elements[j]] ?? 2.5;
-            delta += (enI - enJ);
+            // enJ - enI, not enI - enJ. The more electronegative atom pulls bonding electrons
+            // TOWARD itself and therefore carries the NEGATIVE partial charge; the original
+            // expression gave a carbonyl oxygen delta = +0.89 and the carboxyl carbon -0.59,
+            // which the colour map then rendered as deep blue on the oxygens against a legend
+            // reading "deep blue (+), white (0), deep red (-)". Every ligand in the app was
+            // painted electrostatically inside out, and since compute_gasteiger_charges is not
+            // exposed in this wasm build (verified) this approximation is the only live path.
+            delta += (enJ - enI);
         }
         charges[i] = delta / deg;
         if (charges[i] < min) min = charges[i];

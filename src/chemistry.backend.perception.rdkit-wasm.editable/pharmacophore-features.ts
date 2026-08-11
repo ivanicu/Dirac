@@ -204,7 +204,13 @@ function outwardDirection(atomIdx: number, neighborMap: Map<number, number[]>, p
     const avg = Vec3.create(0, 0, 0);
     for (const n of neighbors) Vec3.add(avg, avg, positions[n]);
     Vec3.scale(avg, avg, 1 / neighbors.length);
-    Vec3.sub(avg, avg, center);
+    // atom MINUS neighbour-centroid, not the other way round. Vec3.sub(out, a, b) is a - b
+    // (mol-math/linear-algebra/3d/vec3.ts), so `sub(avg, avg, center)` returned the vector
+    // pointing AT the bonded neighbours — into the molecule — from a function named
+    // outwardDirection whose only callers use it as a lone-pair direction. On a carbonyl the
+    // HBA cone was drawn 1 A along the O->C bond, i.e. buried inside the C=O, instead of out
+    // into the half-space where a donor would actually approach.
+    Vec3.sub(avg, center, avg);
     const len = Vec3.magnitude(avg);
     if (len < 1e-4) return null;
     Vec3.scale(avg, avg, 1 / len);
@@ -307,14 +313,22 @@ function buildPharmacophoreShape(features: readonly Feature[], prev?: Mesh): Sha
             case 'aromatic': {
                 const radius = f.radius ?? 1.4;
                 const normal = f.direction ? Vec3.normalize(Vec3(), f.direction) : Vec3.copy(Vec3(), TMP_UP);
+                // Circle() lies in the xz-plane with +Y as its face normal, while targetTo puts
+                // the direction we asked for on the Z axis, so the disk came out perpendicular to
+                // the ring it is supposed to lie in — a flat 90 degrees wrong, on every aromatic
+                // ring the app has ever drawn. mol* hits the same seam in its own plane
+                // representation and documents the remedy at mol-repr/shape/loci/plane.ts:67-70:
+                // rotate the primitive 90 degrees about x so its +Y normal lands on the frame's Z.
                 Vec3.scaleAndAdd(TMP_TARGET, f.position, normal, 1);
                 Mat4.targetTo(TMP_MAT, f.position, TMP_TARGET, TMP_UP);
+                Mat4.mul(TMP_MAT, TMP_MAT, Mat4.rotX90);
                 Mat4.scale(TMP_MAT, TMP_MAT, Vec3.set(Vec3(), radius, radius, radius));
                 const circlePrim = Circle({ radius: 1, segments: 48 });
                 MeshBuilder.addPrimitive(state, TMP_MAT, circlePrim);
                 // Slight offset along normal so the second face doesn't z-fight.
                 Vec3.scaleAndAdd(TMP_TARGET, f.position, normal, 0.03);
                 Mat4.targetTo(TMP_MAT, TMP_TARGET, Vec3.scaleAndAdd(Vec3(), TMP_TARGET, normal, 1), TMP_UP);
+                Mat4.mul(TMP_MAT, TMP_MAT, Mat4.rotX90);
                 Mat4.scale(TMP_MAT, TMP_MAT, Vec3.set(Vec3(), radius, radius, radius));
                 MeshBuilder.addPrimitive(state, TMP_MAT, circlePrim);
                 colorByGroup.set(i, COLOR_ARO);
