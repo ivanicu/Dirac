@@ -82,6 +82,12 @@ import { PresetStructureRepresentations } from '../mol-plugin-state/builder/stru
 import { StateTransforms } from '../mol-plugin-state/transforms';
 import { Loci } from '../mol-model/loci';
 import { ligandStore } from '../app/services/ligand-store';
+// A READ-ONLY handle on the store, for driving the real code from a test rather
+// than reasoning about it. Not a second code path: it exposes the same singleton
+// the facets read. The store's generation advancing on a ligand change is the
+// property that did NOT hold until index.ts wrote through it, and a property that
+// cannot be observed from outside is a property nobody will notice losing.
+(window as unknown as Record<string, unknown>).__diracStore = ligandStore;
 import { QueryContext, Structure, StructureElement, StructureSelection, Unit } from '../mol-model/structure';
 import { ShapeGroup } from '../mol-model/shape';
 import { OrderedSet } from '../mol-data/int';
@@ -1063,7 +1069,8 @@ class MolecularVfxLab {
             // The SAME fan-out the deposited-ligand path uses. This line is the
             // fix for "import a molecule, click a field, nothing happens".
             this.fanOutLigand(this.smilesMolfile, summary.textContent || 'Imported molecule',
-                this.workbench.plugin.managers.structure.component.pivotStructure?.cell.obj?.data);
+                this.workbench.plugin.managers.structure.component.pivotStructure?.cell.obj?.data,
+                'import');
             return;
         }
 
@@ -1207,7 +1214,8 @@ class MolecularVfxLab {
         this.smartsSearchMolfile = molfile;
     }
 
-    private fanOutLigand(molfile: string, label: string | null, structure?: Structure) {
+    private fanOutLigand(molfile: string, label: string | null, structure?: Structure,
+                         origin: 'loci' | 'import' = 'loci') {
         // ── the store's WRITE side, and its absence was the whole problem ──
         // `ligandStore` shipped with a generation token so a late async result
         // could be discarded (isCurrent). Nothing ever WROTE to it, so the
@@ -1221,12 +1229,17 @@ class MolecularVfxLab {
         // the other — the exact defect that had the import flow rendering a stale
         // molecule across five facets this morning.
         //
-        // `structure` present means a deposited ligand inside a loaded structure;
-        // absent means imported or pasted. The store types those differently on
-        // purpose (LociLigand vs ImportedLigand) and both are coordSpace 'scene'
-        // — a 2D-only molfile must never arrive here, which is what
-        // requireScene() enforces on the read side.
-        if (structure) {
+        // `origin` is PASSED, not inferred from whether `structure` is present —
+        // and the first version inferred it, which recorded every imported
+        // molecule as a LociLigand. An import IS loaded into the scene as a
+        // structure, so "structure exists" does not distinguish "a deposited
+        // ligand inside a protein" from "the whole structure is the molecule the
+        // user pasted". Caught by reading the store back in a real browser: kind
+        // was 'loci' for an import. Both call sites know which they are; a type
+        // that lies is worse than no type, because a reader trusts it.
+        // Both are coordSpace 'scene' — a 2D-only molfile must never arrive here,
+        // which is what requireScene() enforces on the read side.
+        if (origin === 'loci' && structure) {
             ligandStore.setFromLoci({
                 molfile, label: label ?? 'Ligand',
                 structureRef: structure,
