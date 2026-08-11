@@ -153,6 +153,9 @@ interface JSMol {
     set_new_coords(useCoordGen: boolean): void;
     /** Returns JSON with 40+ RDKit descriptors (MW, LogP, TPSA, HBD/HBA, rings, etc.). */
     get_descriptors(): string;
+    /** commonchem JSON: atoms, bonds, conformers, and an rdkitRepresentation extension
+     *  carrying aromaticAtoms, aromaticBonds, cipRanks and atomRings. Type-only addition. */
+    get_json(): string;
     is_valid(): boolean;
 }
 

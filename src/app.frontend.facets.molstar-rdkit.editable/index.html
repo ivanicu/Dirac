@@ -718,6 +718,17 @@
             background: var(--surface-2);
         }
         .ligand-depiction svg { display: block; max-width: 100%; height: auto; cursor: pointer; border-radius: 5px; }
+        .bond-atlas-block { margin-top: var(--sp-4, 16px); padding-top: var(--sp-3, 12px); border-top: 1px solid var(--border); }
+        .bond-atlas-note { margin: var(--sp-2, 8px) 0; color: var(--text-3); font-size: var(--fs-xs, 11px); line-height: var(--lh-body, 1.45); }
+        .bond-atlas { display: flex; justify-content: center; padding: 8px 0; }
+        .bond-atlas-svg { display: block; max-width: 100%; height: auto; }
+        .bond-atlas .ledger-empty { width: 100%; text-align: center; margin: 0; }
+        #bond-atlas-readout { display: flex; gap: 10px; flex-wrap: wrap; }
+        .bond-atlas-stat { color: var(--text-3); font-size: var(--fs-2xs, 9px); letter-spacing: var(--track-wide, .08em); text-transform: uppercase; }
+        .bond-atlas-stat b { color: var(--text); font-variant-numeric: tabular-nums; margin-right: 3px; }
+        .bond-atlas-channels { display: flex; flex-wrap: wrap; gap: var(--sp-1, 4px) var(--sp-3, 12px); margin-top: var(--sp-2, 8px); }
+        .bond-atlas-channel { display: inline-flex; align-items: center; gap: var(--sp-1, 4px); color: var(--text-3); font-size: var(--fs-xs, 10px); cursor: pointer; }
+        .bond-atlas-channel input { accent-color: var(--accent); margin: 0; width: 11px; height: 11px; }
         .ligand-depiction .ledger-empty { width: 100%; text-align: center; margin: 0; }
         .ligand-legend {
             display: grid;
@@ -1319,6 +1330,10 @@
                                 <input type="range" id="field-iso" min="-1" max="1" step="0.05" value="0">
                                 <span id="field-iso-readout"></span>
                             </label>
+                            <!-- Only appears once the scale is being HELD from a
+                                 previous molecule, which is the only moment the
+                                 question "should I re-fit?" means anything. -->
+                            <button type="button" class="field-cancel" id="field-refit" hidden>Re-fit scale</button>
                             <label class="field-control">Basis
                                 <select id="field-basis">
                                     <option value="sto-3g" selected>STO-3G · fast</option>
@@ -1403,6 +1418,15 @@
                     </div>
                     <div id="ligand-depiction" class="ligand-depiction">
                         <p class="ledger-empty">Switch to a structure with a deposited ligand to see the 2D depiction.</p>
+                    </div>
+                    <div class="bond-atlas-block">
+                        <div class="ligand-meta">
+                            <span id="bond-atlas-title">Bond atlas</span>
+                            <span id="bond-atlas-readout"></span>
+                        </div>
+                        <p class="bond-atlas-note">The depiction above spends its channels on atoms. This one pays the bond: colour is ring context, thickness is how many heavy atoms swing when the torsion turns, a dashed stroke is a free torsion, a halo means cutting it splits the molecule, and the dashed ring marks its most balanced disconnection. Hover any bond.</p>
+                        <div id="bond-atlas" class="bond-atlas"></div>
+                        <div id="bond-atlas-channels" class="bond-atlas-channels"></div>
                     </div>
                     <div class="ligand-legend">
                         <span class="ligand-legend-item"><i style="background:#c792ea"></i>Aromatic</span>

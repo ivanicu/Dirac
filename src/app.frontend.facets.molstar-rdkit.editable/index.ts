@@ -75,6 +75,7 @@ import { ligandLociToMolfile, lociFromFocusOptions } from '../chemistry.backend.
 import { renderPropertiesPanel } from './facets/property-cockpit';
 import { initFieldWellsPanel, updateFieldWellsLigand, autoRenderElectrostaticWell } from './facets/field-wells';
 import { initPharmacophoreDesigner, updatePharmacophoreDesigner } from './facets/pharmacophore-designer';
+import { initBondAtlas, updateBondAtlas } from './facets/bond-atlas';
 import { PresetStructureRepresentations } from '../mol-plugin-state/builder/structure/representation-preset';
 import { StateTransforms } from '../mol-plugin-state/transforms';
 import { Loci } from '../mol-model/loci';
@@ -385,6 +386,7 @@ class MolecularVfxLab {
         // crash the core lab init and make the UI disappear.
         try { initFieldWellsPanel(this.workbench.plugin); } catch (e) { console.error('[fields] init failed:', e); }
         try { initPharmacophoreDesigner(this.workbench.plugin); } catch (e) { console.error('[designer] init failed:', e); }
+        try { initBondAtlas(); } catch (e) { console.error('[bond-atlas] init failed:', e); }
         // The canvas is part of the theme, so its clear colour comes from the
         // theme's own token. As a literal it was the one surface a theme could
         // not reach: the app booted to a near-black scene and the active theme
@@ -1064,6 +1066,7 @@ class MolecularVfxLab {
             stats.textContent = '';
             this.ligandDepictionAtomPositions = [];
             updateFieldWellsLigand(null, null);
+            void updateBondAtlas(null);
             void updatePharmacophoreDesigner(null, this.currentFocusOptions(), { structureId: this.currentMolecule.id, ligandLabel: null });
             return;
         }
@@ -1080,6 +1083,7 @@ class MolecularVfxLab {
             summary.textContent = 'RDKit parse failed';
             stats.textContent = '';
             updateFieldWellsLigand(null, null);
+            void updateBondAtlas(null);
             void updatePharmacophoreDesigner(null, this.currentFocusOptions(), { structureId: this.currentMolecule.id, ligandLabel: null });
             return;
         }
@@ -1127,6 +1131,9 @@ class MolecularVfxLab {
         // S0: all downstream consumers read from cache, not independent RDKit calls.
         void renderPropertiesPanel(molfile, ligandTarget?.label ?? null);
         updateFieldWellsLigand(molfile, ligandTarget?.label ?? null);
+        // The atlas gets the SAME molfile the 2D depiction was built from, so the two views
+        // cannot end up describing different molecules.
+        void updateBondAtlas(molfile);
         void updatePharmacophoreDesigner(structure, this.currentFocusOptions(), { structureId: this.currentMolecule.id, ligandLabel: ligandTarget?.label ?? 'Ligand' });
         this.smartsSearchMolfile = molfile;
         const smartsInput = byId<HTMLInputElement>('smarts-input');
@@ -1169,6 +1176,7 @@ class MolecularVfxLab {
             input.dataset.error = 'false';
             status.textContent = 'Type a SMILES to analyze any molecule — no PDB structure needed.';
             this.smilesMolfile = null;
+            void updateBondAtlas(null);
             return;
         }
 
@@ -1198,6 +1206,10 @@ class MolecularVfxLab {
 
             // Store as the active molfile for ALL chemistry features.
             this.smilesMolfile = molfile;
+            // "ALL chemistry features" has to include the atlas. Driving the real UI showed the
+            // depiction rendering here while the atlas stayed empty, because the atlas was wired
+            // only into the deposited-ligand path.
+            void updateBondAtlas(molfile);
             this.smartsSearchMolfile = molfile;
             status.dataset.ok = 'true';
             status.textContent = `Parsed: ${smilesCanonical.slice(0, 60)}${smilesCanonical.length > 60 ? '…' : ''}`;
