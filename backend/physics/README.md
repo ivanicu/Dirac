@@ -85,6 +85,11 @@ response.
 
 ## What it cannot do — measured, not estimated
 
+<!-- The two claims in this table are enforced, not proofread:
+     node scripts/check_physics_contract.mjs (gate 8). It derives the
+     protections per route from the source; narrow a claim or fix the code,
+     but do not edit this table to make a red gate green. -->
+
 | limit | detail |
 |---|---|
 | cost | HF is O(N⁴), measured on this box as `seconds ≈ 5.9e-9 × nao^4.03` over 47 molecules. Requests are refused **before** running when the prediction exceeds `max_seconds` (default 120 s), with the estimate and a smaller-basis suggestion in the message. **This was true of `/surface/mep` only** until 2026-08-11: `/surface/mep_at` had no cost gate, no budget parameter and no basis whitelist, while this line claimed otherwise for the whole module. Both routes now carry both. Imatinib in def2-SVP is 673 basis functions ≈ 70 minutes: refused. |
