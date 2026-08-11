@@ -58,7 +58,12 @@ export const ELECTRONIC = {
     CONE_LENGTH: 4.5,
 } as const;
 
-export type HalogenVerdict = 'REAL' | 'MARGINAL' | 'DECORATIVE' | 'ABSENT' | 'MIS-CALLED';
+/**
+ * UNMEASURED is a separate state from ABSENT on purpose. ABSENT asserts that there is no
+ * positive cap on the axis — a finding. Not having run the QM yet is not a finding, and
+ * folding the two together is how a "no" that nobody measured gets quoted as a result.
+ */
+export type HalogenVerdict = 'REAL' | 'MARGINAL' | 'DECORATIVE' | 'ABSENT' | 'MIS-CALLED' | 'UNMEASURED';
 
 export interface PocketAtom {
     position: Vec3;
@@ -80,6 +85,8 @@ export interface HalogenHit {
     /** X···A–Y where Y is the acceptor's neighbour, when one was supplied. */
     acceptorAngleDeg: number | null;
     plipWouldCall: boolean;
+    /** Crystallographic water: shown, but never enough to make a verdict REAL. */
+    isWater: boolean;
 }
 
 export interface HalogenAudit {
@@ -123,6 +130,11 @@ export function auditHalogen(
 
     for (const p of pocket) {
         if (!['N', 'O', 'S'].includes(p.element)) continue;   // Lewis bases only
+        // A crystallographic water IS a Lewis base and is also the weakest thing to hang a
+        // halogen-bond claim on: it is often placed by the refinement rather than observed,
+        // and it moves. Kept in the hit table so the reader can see it, excluded from the
+        // verdict so it cannot promote a contact to REAL on its own.
+        const isWater = /^HOH|^WAT/.test(p.label);
         const toA = Vec3.sub(Vec3(), p.position, halogen);
         const distance = Vec3.magnitude(toA);
         if (distance > PLIP.DIST_MAX + 1.0) continue;
@@ -144,11 +156,11 @@ export function auditHalogen(
             distance <= PLIP.DIST_MAX &&
             Math.abs(donorAngleDeg - PLIP.DON_ANGLE) <= PLIP.ANGLE_DEV &&
             (acceptorAngleDeg === null || Math.abs(acceptorAngleDeg - PLIP.ACC_ANGLE) <= PLIP.ANGLE_DEV);
-        hits.push({ label: p.label, element: p.element, distance, offAxisDeg, donorAngleDeg, acceptorAngleDeg, plipWouldCall });
+        hits.push({ label: p.label, element: p.element, distance, offAxisDeg, donorAngleDeg, acceptorAngleDeg, plipWouldCall, isWater });
     }
     hits.sort((a, b) => a.offAxisDeg - b.offAxisDeg || a.distance - b.distance);
 
-    const onAxis = hits.filter(h => h.offAxisDeg <= ELECTRONIC.ON_AXIS_DEG && h.distance <= PLIP.DIST_MAX);
+    const onAxis = hits.filter(h => !h.isWater && h.offAxisDeg <= ELECTRONIC.ON_AXIS_DEG && h.distance <= PLIP.DIST_MAX);
     const plipCalls = hits.filter(h => h.plipWouldCall);
     const holeIsReal = qm.vsMax !== null && qm.vsMax >= ELECTRONIC.VS_MAX_REAL;
     const holeIsMarginal = qm.vsMax !== null && qm.vsMax >= ELECTRONIC.VS_MAX_REAL * 0.75 && qm.vsMax < ELECTRONIC.VS_MAX_REAL;
@@ -158,8 +170,10 @@ export function auditHalogen(
     const nearest = hits[0] ?? null;
 
     if (qm.vsMax === null) {
-        verdict = 'ABSENT';
-        reading = 'No QM σ-hole computed yet — geometry alone cannot answer this. Run the MEP field for this ligand.';
+        verdict = 'UNMEASURED';
+        reading = nearest
+            ? `No QM σ-hole computed yet, so the electronics are undecided — geometry alone cannot answer this. Nearest Lewis base: ${nearest.label}, ${nearest.distance.toFixed(2)} Å, ${nearest.offAxisDeg.toFixed(0)}° off the C–${element} axis. Run the MEP field for this ligand.`
+            : 'No QM σ-hole computed yet, so the electronics are undecided, and there is no Lewis base near the axis either. Run the MEP field for this ligand.';
     } else if (qm.vsMax < 0) {
         verdict = 'ABSENT';
         reading = `${element} carries no positive cap on the C–${element} extension (V_S,max ${qm.vsMax.toFixed(0)} kcal/mol). There is no σ-hole here to bond with, whatever the geometry looks like.`;

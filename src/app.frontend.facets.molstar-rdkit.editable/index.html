@@ -790,6 +790,25 @@
         }
         .ligand-depiction svg { display: block; max-width: 100%; height: auto; cursor: pointer; border-radius: 5px; }
         .bond-atlas-block { margin-top: var(--sp-4, 16px); padding-top: var(--sp-3, 12px); border-top: 1px solid var(--border); }
+        .halogen-block { margin-top: var(--sp-4, 16px); padding-top: var(--sp-3, 12px); border-top: 1px solid var(--border); }
+        .halogen-note-inline { color: var(--text-3); font-size: var(--fs-2xs, 9px); letter-spacing: var(--track-wide, .08em); text-transform: uppercase; }
+        .halogen-row { border-left: 2px solid var(--border-strong); padding: var(--sp-2, 8px) 0 var(--sp-2, 8px) var(--sp-2, 8px); margin-bottom: var(--sp-2, 8px); }
+        .halogen-row[data-tone="ok"] { border-left-color: var(--accent); }
+        .halogen-row[data-tone="warn"] { border-left-color: var(--warn); }
+        .halogen-row[data-tone="off"] { border-left-color: var(--high); }
+        .halogen-row[data-tone="unknown"] { border-left-color: var(--border-strong); border-left-style: dashed; }
+        .halogen-hits i { color: var(--text-3); font-style: italic; }
+        .halogen-head { display: flex; gap: var(--sp-2, 8px); align-items: baseline; flex-wrap: wrap; }
+        .halogen-head b { color: var(--text); }
+        .halogen-verdict { font-size: var(--fs-2xs, 9px); letter-spacing: var(--track-wide, .08em); color: var(--text); }
+        .halogen-vs { margin-left: auto; color: var(--text-3); font-size: var(--fs-xs, 10px); font-variant-numeric: tabular-nums; }
+        .halogen-reading { margin: var(--sp-1, 4px) 0 0; color: var(--text-2); font-size: var(--fs-xs, 11px); line-height: 1.45; }
+        .halogen-plip { margin: var(--sp-1, 4px) 0 0; color: var(--text-3); font-size: var(--fs-2xs, 10px); line-height: 1.4; font-style: italic; }
+        .halogen-hits { width: 100%; border-collapse: collapse; margin-top: var(--sp-1, 4px); font-size: var(--fs-2xs, 10px); }
+        .halogen-hits th { text-align: left; color: var(--text-3); font-weight: 400; padding: 1px 4px 1px 0; }
+        .halogen-hits td { color: var(--text-3); padding: 1px 4px 1px 0; font-variant-numeric: tabular-nums; }
+        .halogen-hits tr.on-axis td { color: var(--text-2); }
+        .halogen-scope { margin: var(--sp-1, 4px) 0 0; color: var(--text-3); font-size: 9px; line-height: 1.35; opacity: .85; }
         .bond-atlas-note { margin: var(--sp-2, 8px) 0; color: var(--text-3); font-size: var(--fs-xs, 11px); line-height: var(--lh-body, 1.45); }
         .bond-atlas { display: flex; justify-content: center; padding: 8px 0; }
         .bond-atlas-svg { display: block; max-width: 100%; height: auto; }
@@ -1536,6 +1555,14 @@
                     </div>
                     <div id="ligand-depiction" class="ligand-depiction">
                         <p class="ledger-empty">Switch to a structure with a deposited ligand to see the 2D depiction.</p>
+                    </div>
+                    <div class="halogen-block">
+                        <div class="ligand-meta">
+                            <span>Halogen audit</span>
+                            <span class="halogen-note-inline">electronics vs geometry</span>
+                        </div>
+                        <p class="bond-atlas-note">A σ-hole is directional. The row under each verdict is what a purely geometric profiler would report — PLIP's own constants, and PLIP accepts fluorine as a halogen-bond donor on geometry alone. Where the two rows disagree is the point.</p>
+                        <div id="halogen-audit" class="halogen-audit"></div>
                     </div>
                     <div class="bond-atlas-block">
                         <div class="ligand-meta">
