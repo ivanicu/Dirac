@@ -634,6 +634,16 @@
         .ligand-legend-item { display: inline-flex; align-items: center; gap: 5px; color: var(--text-2); font-weight: 700; }
         .ligand-legend-item i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
         .ligand-legend-note { color: var(--text-3); line-height: 1.4; }
+        .ligand-legend-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--text-2);
+            font-size: 9px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .ligand-legend-toggle input { width: 12px; height: 12px; accent-color: var(--accent); }
 
         /* SMARTS substructure search */
         .smarts-search {
@@ -1261,6 +1271,7 @@
                         <span class="ligand-legend-item"><i style="background:#c792ea"></i>Aromatic</span>
                         <span class="ligand-legend-item"><i style="background:#5fd0c8"></i>Donor</span>
                         <span class="ligand-legend-item"><i style="background:#e1a14e"></i>Acceptor</span>
+                        <label class="ligand-legend-toggle"><input id="show-atom-indices" type="checkbox"> Show atom indices</label>
                         <span class="ligand-legend-note">Highlights mirror the Semantics · RDKit toggles. Click an atom to select it in 3D.</span>
                     </div>
                     <div class="smarts-search">

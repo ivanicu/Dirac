@@ -64,7 +64,6 @@ import {
 import { LigandDepiction, type AtomHighlight, type AtomPosition } from '../chemistry.backend.perception.rdkit-wasm.editable/ligand-depiction';
 import { renderPropertiesPanel } from './facets/property-cockpit';
 import { initFieldWellsPanel, updateFieldWellsLigand } from './facets/field-wells';
-import { initFieldWellsPanel, updateFieldWellsLigand } from './facets/field-wells';
 import { initPharmacophoreDesigner, updatePharmacophoreDesigner } from './facets/pharmacophore-designer';
 import { PresetStructureRepresentations } from '../mol-plugin-state/builder/structure/representation-preset';
 import { StateTransforms } from '../mol-plugin-state/transforms';
@@ -405,6 +404,14 @@ class MolecularVfxLab {
             if (this.smartsSearchTimer) clearTimeout(this.smartsSearchTimer);
             this.smartsSearchTimer = setTimeout(() => void this.runSmartsSearch(smartsInput.value), 350);
         });
+
+        // Atom indices toggle on 2D SVG (debug + selection aid)
+        const atomIdxToggle = byId<HTMLInputElement>('show-atom-indices');
+        if (atomIdxToggle) {
+            atomIdxToggle.addEventListener('change', () => {
+                void this.perform(() => this.renderLigandDepiction());
+            });
+        }
 
         // Copy-to-clipboard for canonical identifiers.
         document.querySelectorAll<HTMLButtonElement>('.btn-copy[data-copy]').forEach(btn => {
@@ -906,12 +913,14 @@ class MolecularVfxLab {
             }
         }
 
+        const showAtomIndices = byId<HTMLInputElement>('show-atom-indices')?.checked ?? false;
         const result = await LigandDepiction.depict(analysis.molfile, {
             atomHighlights: highlights,
             // 2× density — SVG viewBox keeps it crisp, CSS scales for the panel.
             // Verified necessary to avoid atom overlap on macrocycles (HEM, C8E).
             width: 760,
             height: 500,
+            showAtomIndices,
         });
         if (!result) {
             target.innerHTML = '<p class="ledger-empty">RDKit depiction failed.</p>';
