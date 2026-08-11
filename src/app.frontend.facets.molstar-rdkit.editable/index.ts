@@ -49,6 +49,7 @@ import {
     applyRdkitChemicalLayers,
     getRdkitChemicalLayerCounts,
     prepareLigandAnalysis,
+    getRDKit,
     computeLigandChemistry,
     searchLigandSmarts,
     applySmartsSearchOverlay,
@@ -347,6 +348,7 @@ class MolecularVfxLab {
     // interactionRecords removed — renderContactLedger now fetches on-demand from all interaction types
     private ligandDepictionAtomPositions: AtomPosition[] = [];
     private smartsSearchMolfile: string | null = null;
+    private smilesMolfile: string | null = null;
     private smartsSearchTimer: ReturnType<typeof setTimeout> | null = null;
     /** Set when the current scene came from /embed — the authoritative molfile
      * for the whole facet cascade (no CCD data exists for imports). */
@@ -454,6 +456,15 @@ class MolecularVfxLab {
         smartsInput.addEventListener('input', () => {
             if (this.smartsSearchTimer) clearTimeout(this.smartsSearchTimer);
             this.smartsSearchTimer = setTimeout(() => void this.runSmartsSearch(smartsInput.value), 350);
+        });
+
+        // SMILES input — loads ANY molecule without needing a PDB structure.
+        // Bypasses ComponentBond entirely; feeds SMILES directly to RDKit.
+        const smilesInput = byId<HTMLInputElement>('smiles-input');
+        let smilesTimer: ReturnType<typeof setTimeout> | null = null;
+        smilesInput.addEventListener('input', () => {
+            if (smilesTimer) clearTimeout(smilesTimer);
+            smilesTimer = setTimeout(() => void this.loadFromSmiles(smilesInput.value), 400);
         });
 
         // Atom indices toggle on 2D SVG (debug + selection aid)
@@ -966,7 +977,46 @@ class MolecularVfxLab {
         const target = byId('ligand-depiction');
         const summary = byId('ligand-depiction-summary');
         const stats = byId('ligand-depiction-stats');
+        if (!target || !summary || !summary) return;
 
+        // SMILES mode: use the SMILES-derived molfile directly, bypass PDB.
+        if (this.smilesMolfile) {
+            summary.textContent = 'Depicting SMILES…';
+            const highlights: AtomHighlight[] = [];
+            // Compute chemistry for highlights (same as PDB path)
+            const { computeLigandChemistry } = await import('../chemistry.backend.perception.rdkit-wasm.editable/semantic-chemistry-rdkit');
+            const countsLine = this.smilesMolfile.split('\n')[3] || '';
+            const atomCount = parseInt(countsLine.slice(0, 3).trim(), 10) || 0;
+            const chem = await computeLigandChemistry(this.smilesMolfile, atomCount);
+            if (chem) {
+                if (this.enabledUpgrades.has('aromaticity-rdkit')) {
+                    for (let i = 0; i < atomCount; i++) if (chem.aromaticAtoms[i]) highlights.push({ atomIndex: i, color: '#c792ea', alpha: 0.55 });
+                }
+                if (this.enabledUpgrades.has('donor-acceptor-rdkit')) {
+                    for (let i = 0; i < atomCount; i++) {
+                        if (chem.donors[i]) highlights.push({ atomIndex: i, color: '#5fd0c8', alpha: 0.55 });
+                        if (chem.acceptors[i]) highlights.push({ atomIndex: i, color: '#e1a14e', alpha: 0.55 });
+                    }
+                }
+            }
+            const showAtomIndices = byId<HTMLInputElement>('show-atom-indices')?.checked ?? false;
+            const result = await LigandDepiction.depict(this.smilesMolfile, { atomHighlights: highlights, width: 760, height: 500, showAtomIndices });
+            if (!result) { target.innerHTML = '<p class="ledger-empty">RDKit depiction failed.</p>'; summary.textContent = 'Depiction failed'; return; }
+            target.innerHTML = result.svgString;
+            this.ligandDepictionAtomPositions = result.atomPositions;
+            const svg = target.querySelector('svg');
+            if (svg) svg.addEventListener('click', (e: Event) => this.handleLigandDepictionClick(e as MouseEvent));
+            summary.textContent = 'SMILES molecule';
+            const aromCount = chem ? countSetBits8(chem.aromaticAtoms) : 0;
+            const donorCount = chem ? countSetBits8(chem.donors) : 0;
+            const acceptorCount = chem ? countSetBits8(chem.acceptors) : 0;
+            stats.textContent = `${atomCount} atoms · ${aromCount} aromatic · ${donorCount} HBD · ${acceptorCount} HBA`;
+            void renderPropertiesPanel(this.smilesMolfile, 'SMILES molecule');
+            void this.refreshLigandIdentifiers(this.smilesMolfile);
+            return;
+        }
+
+        // PDB mode: extract ligand from structure as before.
         const structure = this.workbench.plugin.managers.structure.component.pivotStructure?.cell.obj?.data;
         if (!structure) {
             target.innerHTML = '<p class="ledger-empty">No structure loaded.</p>';
@@ -1090,8 +1140,68 @@ class MolecularVfxLab {
         set('ligand-inchikey', ids.inchiKey);
     }
 
-    private async runSmartsSearch(smarts: string) {
-        const input = byId<HTMLInputElement>('smarts-input');
+    /**
+     * Load ANY molecule from a SMILES string. Bypasses the entire PDB/ComponentBond
+     * pipeline — feeds SMILES directly to RDKit, gets a molfile, and runs all
+     * chemistry + depiction + property computations on it. Also loads the molfile
+     * into mol* so 3D Overpaint layers can color atoms.
+     */
+    private async loadFromSmiles(smiles: string) {
+        const input = byId<HTMLInputElement>('smiles-input');
+        const status = byId<HTMLElement>('smiles-status');
+        if (!input || !status) return;
+
+        if (!smiles.trim()) {
+            input.dataset.error = 'false';
+            status.textContent = 'Type a SMILES to analyze any molecule — no PDB structure needed.';
+            this.smilesMolfile = null;
+            return;
+        }
+
+        if (!this.workbench) return;
+        status.textContent = 'Parsing SMILES…';
+        try {
+            const RDKit = await getRDKit();
+            const mol = RDKit.get_mol(smiles.trim());
+            if (!mol || !mol.is_valid()) {
+                input.dataset.error = 'true';
+                status.dataset.ok = 'false';
+                status.textContent = 'Invalid SMILES — RDKit could not parse.';
+                return;
+            }
+            input.dataset.error = 'false';
+
+            // Generate 2D coords for depiction, then get molblock for all computations.
+            try { mol.set_new_coords(true); } catch { /* keep whatever coords exist */ }
+            const molfile = mol.get_molblock();
+            const smilesCanonical = mol.get_smiles();
+            mol.delete();
+
+            if (!molfile || molfile.length < 50) {
+                status.textContent = 'SMILES parsed but molfile generation failed.';
+                return;
+            }
+
+            // Store as the active molfile for ALL chemistry features.
+            this.smilesMolfile = molfile;
+            this.smartsSearchMolfile = molfile;
+            status.dataset.ok = 'true';
+            status.textContent = `Parsed: ${smilesCanonical.slice(0, 60)}${smilesCanonical.length > 60 ? '…' : ''}`;
+
+            // Render 2D depiction + properties + identifiers directly from molfile.
+            // Do NOT load into mol* — small-molecule-only structures cause
+            // StructureSelectionQueries to throw. 3D Overpaint is skipped in
+            // SMILES mode; the 2D depiction carries the visual load.
+            await this.renderLigandDepiction();
+            void this.refreshLigandIdentifiers(molfile);
+        } catch (error) {
+            input.dataset.error = 'true';
+            status.dataset.ok = 'false';
+            status.textContent = `Error: ${error instanceof Error ? error.message : String(error)}`;
+        }
+    }
+
+    private async runSmartsSearch(smarts: string) {        const input = byId<HTMLInputElement>('smarts-input');
         const status = byId<HTMLElement>('smarts-status');
         if (!input || !status) return;
         if (!this.workbench) return;

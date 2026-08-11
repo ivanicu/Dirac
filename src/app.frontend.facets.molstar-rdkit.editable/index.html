@@ -670,6 +670,44 @@
         .ligand-legend-item i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
         .ligand-legend-note { color: var(--text-3); line-height: 1.4; }
         .ligand-legend-toggle {
+
+        /* SMILES input section */
+        .smiles-input-section {
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        .smiles-input-section label {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--accent);
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        #smiles-input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid var(--accent-soft);
+            border-radius: 7px;
+            background: var(--accent-soft);
+            color: var(--text);
+            font: inherit;
+            font-size: 12px;
+            font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+        }
+        #smiles-input:focus {
+            outline: 0;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgb(125 211 192 / 15%);
+        }
+        #smiles-input[data-error="true"] {
+            border-color: var(--high);
+            background: #22151533;
+        }
+
+        .ligand-legend-toggle {
             display: inline-flex;
             align-items: center;
             gap: 4px;
@@ -1268,6 +1306,11 @@
                     <div class="panel-heading">
                         <h2>2D Ligand depiction</h2>
                         <span class="panel-index">RDKit</span>
+                    </div>
+                    <div class="smiles-input-section">
+                        <label for="smiles-input">Load any molecule · SMILES</label>
+                        <input id="smiles-input" type="text" placeholder="e.g. CC(=O)Oc1ccccc1C(=O)O (aspirin)" autocomplete="off" spellcheck="false">
+                        <div id="smiles-status" class="smarts-status">Type a SMILES to analyze any molecule — no PDB structure needed.</div>
                     </div>
                     <div class="ligand-meta">
                         <span id="ligand-depiction-summary">No ligand loaded</span>
