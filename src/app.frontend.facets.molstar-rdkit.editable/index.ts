@@ -73,7 +73,7 @@ import { LigandDepiction, type AtomHighlight, type AtomPosition } from '../chemi
 import { ChemistryCache } from '../chemistry.backend.perception.rdkit-wasm.editable/chemistry-cache';
 import { ligandLociToMolfile, lociFromFocusOptions } from '../chemistry.backend.perception.rdkit-wasm.editable/ligand-pipeline';
 import { renderPropertiesPanel } from './facets/property-cockpit';
-import { initFieldWellsPanel, updateFieldWellsLigand, autoRenderElectrostaticWell, setFieldFocusOptionsProvider } from './facets/field-wells';
+import { initFieldWellsPanel, updateFieldWellsLigand, autoRenderElectrostaticWell, setFieldFocusOptionsProvider, setFieldStructureId } from './facets/field-wells';
 import { initLigandPhysicsPanel, updateLigandPhysics } from './facets/ligand-physics';
 import { initPharmacophoreDesigner, updatePharmacophoreDesigner } from './facets/pharmacophore-designer';
 import { initBondAtlas, updateBondAtlas } from './facets/bond-atlas';
@@ -81,6 +81,7 @@ import { updateHalogenAudit } from './facets/halogen-audit';
 import { PresetStructureRepresentations } from '../mol-plugin-state/builder/structure/representation-preset';
 import { StateTransforms } from '../mol-plugin-state/transforms';
 import { Loci } from '../mol-model/loci';
+import { ligandStore } from '../app/services/ligand-store';
 import { QueryContext, Structure, StructureElement, StructureSelection, Unit } from '../mol-model/structure';
 import { ShapeGroup } from '../mol-model/shape';
 import { OrderedSet } from '../mol-data/int';
@@ -1089,6 +1090,11 @@ class MolecularVfxLab {
             summary.textContent = 'No deposited ligand';
             stats.textContent = '';
             this.ligandDepictionAtomPositions = [];
+            // No ligand in this structure: CLEAR the store rather than leave it
+            // holding the previous molecule. A stale "current" ligand makes
+            // isCurrent() lie in the direction that matters — it would report a
+            // molecule nobody is looking at as still live.
+            ligandStore.clear();
             updateFieldWellsLigand(null, null);
             void updateBondAtlas(null);
             updateHalogenAudit(null, this.currentFocusOptions());
@@ -1202,7 +1208,43 @@ class MolecularVfxLab {
     }
 
     private fanOutLigand(molfile: string, label: string | null, structure?: Structure) {
+        // ── the store's WRITE side, and its absence was the whole problem ──
+        // `ligandStore` shipped with a generation token so a late async result
+        // could be discarded (isCurrent). Nothing ever WROTE to it, so the
+        // generation never advanced, so any guard built on it was a check that
+        // could not fire — which is why two facets had to grow a second clock
+        // (`RequestGeneration`) just to have a token that moves.
+        //
+        // It goes HERE and nowhere else because fanOutLigand is already the one
+        // home for "a new active molecule exists": every entry path funnels
+        // through it, so the store cannot be updated on one path and missed on
+        // the other — the exact defect that had the import flow rendering a stale
+        // molecule across five facets this morning.
+        //
+        // `structure` present means a deposited ligand inside a loaded structure;
+        // absent means imported or pasted. The store types those differently on
+        // purpose (LociLigand vs ImportedLigand) and both are coordSpace 'scene'
+        // — a 2D-only molfile must never arrive here, which is what
+        // requireScene() enforces on the read side.
+        if (structure) {
+            ligandStore.setFromLoci({
+                molfile, label: label ?? 'Ligand',
+                structureRef: structure,
+                bundleRef: this.currentLigandTarget() ?? null,
+                cutoffA: 0,
+            });
+        } else {
+            ligandStore.setFromImport({
+                molfile, label: label ?? 'Imported molecule',
+                inchikey: this.currentMolecule.id ?? '', seed: 0,
+            });
+        }
         void renderPropertiesPanel(molfile, label);
+        // The structure id is the bake's DURABLE key. sha256(molfile) is exact
+        // but brittle: the app reconstructs the molblock, so any change to that
+        // writer moves every hash and silently empties the baked cache — which
+        // is exactly what the deployed site was showing, as "backend offline".
+        setFieldStructureId(this.currentMolecule?.id ?? null);
         updateFieldWellsLigand(molfile, label);
         updateLigandPhysics(molfile, label);
         // The atlas gets the SAME molfile the 2D depiction was built from, so the

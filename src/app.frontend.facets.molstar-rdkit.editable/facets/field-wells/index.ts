@@ -380,6 +380,11 @@ let inFlight: AbortController | null = null;
  * error — the answers ship with the page instead.
  */
 let backendOnline = false;
+/** The loaded structure's id (e.g. "1CBS"). Durable across rebuilds, unlike the
+ * reconstructed molfile's hash, so the bake can still be found when the app's
+ * molblock writer changes. */
+let structureId: string | null = null;
+export function setFieldStructureId(id: string | null) { structureId = id; }
 
 /** Fetch one field into the browser cache (deduplicated). Throws FieldRefusal;
  * returns null if the focused ligand changed while in flight. */
@@ -399,7 +404,7 @@ async function fetchField(kind: FieldKind, store = false,
     // that predates a physics change — that staleness is exactly what the
     // producer-identity guard exists to prevent, and a bake is a cache too.
     if (!backendOnline && requestMolfile) {
-        const baked = await bakedField(requestMolfile, kind);
+        const baked = await bakedField(requestMolfile, kind, structureId ?? undefined);
         if (baked && 'refused' in baked) throw new FieldRefusal(baked.refused, 'unsupported');
         if (baked) {
             const entry = { cube: baked.cube, meta: baked.meta as unknown as FieldMeta };
@@ -440,7 +445,7 @@ async function fetchField(kind: FieldKind, store = false,
             // A backend that was up at health-check time and is not now: the
             // bake is a better answer than an error, and it says it is baked.
             if (requestMolfile) {
-                const baked = await bakedField(requestMolfile, kind);
+                const baked = await bakedField(requestMolfile, kind, structureId ?? undefined);
                 if (baked && !('refused' in baked)) {
                     const entry = { cube: baked.cube, meta: baked.meta as unknown as FieldMeta };
                     cubeCache.set(key, entry);
@@ -1026,7 +1031,7 @@ async function checkHealth() {
         // On the deployed site this is the NORMAL state, not a fault: the
         // daemons are unauthenticated quantum-chemistry servers and must not
         // be public. Saying "offline" alone would read as breakage.
-        const baked = molfile ? await bakedField(molfile, 'mep') : null;
+        const baked = molfile ? await bakedField(molfile, 'mep', structureId ?? undefined) : null;
         el.textContent = baked
             ? 'precomputed fields — no backend needed'
             : 'backend offline — backend/env/bin/python backend/field_server.py';
@@ -1116,6 +1121,13 @@ export function updateFieldWellsLigand(nextMolfile: string | null, label: string
         }
         // Solve the new molecule's fields into the browser cache right away —
         // by the time a button is clicked, the answer is usually local.
+        // Re-ask the backend label now that a ligand exists. checkHealth runs at
+        // init, when molfile is still null, so it cannot know whether this
+        // structure has a bake — and it printed "backend offline, start it
+        // with..." on a deployed site where that is the NORMAL state and there
+        // is no shell to type it into. Looking broken and being broken are
+        // different failures, and only one of them was real.
+        void checkHealth();
         if (molfile) void prefetchAll();
     }
     if (!activeKind && !changed) {

@@ -103,12 +103,30 @@ export async function bakedNoLigand(name: string): Promise<boolean> {
     return !!m?.molecules.find(x => x.molecule === name && x.no_ligand);
 }
 
-export async function bakedField(molfile: string, kind: string):
+export async function bakedField(molfile: string, kind: string, moleculeId?: string):
 Promise<BakedResult | { refused: string } | null> {
     const m = await loadManifest();
     if (!m) return null;
+
+    // TWO KEYS, and the order matters. sha256(molfile) is EXACT — it proves the
+    // baked cube belongs to these coordinates — but it is also brittle: the
+    // molfile is reconstructed by the app, so any change to that reconstruction
+    // moves every hash and silently empties the bake. That is what happened
+    // here: the deployed bundle rebuilds the molblock slightly differently from
+    // the build the bake was made with, every lookup missed, and the panel
+    // fell back to "backend offline" — blaming the network for a key mismatch.
+    //
+    // The structure ID survives a rebuild. So: hash first (exact, preferred),
+    // molecule ID second (durable), and meta records WHICH matched so a
+    // hash-miss is visible as a fact rather than as silence.
     const key = await molfileKey(molfile);
-    const entry = m.molecules.find(x => x.molfile_sha256 === key);
+    let matchedBy = 'molfile-sha256';
+    let entry = m.molecules.find(x => x.molfile_sha256 === key);
+    if (!entry && moleculeId) {
+        entry = m.molecules.find(x => x.molecule === moleculeId && !x.no_ligand);
+        matchedBy = 'molecule-id (molfile hash did not match — the app rebuilds '
+            + 'the molblock differently than when this was baked)';
+    }
     if (!entry) return null;
     const field = entry.fields[kind];
     if (!field) return null;
@@ -143,6 +161,7 @@ Promise<BakedResult | { refused: string } | null> {
 
     return {
         cube: parts.join('\n'),
-        meta: { ...head.meta, cache: 'baked', baked_precision: 'float16' },
+        meta: { ...head.meta, cache: 'baked', baked_precision: 'float16',
+                baked_matched_by: matchedBy },
     };
 }
