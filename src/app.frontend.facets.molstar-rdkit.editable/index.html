@@ -773,6 +773,135 @@
         .rule-line-status[data-pass="false"] { color: var(--high); }
         .rule-line-status[data-pass="true"]  { color: var(--accent); }
 
+        /* Pharmacophore Designer panel */
+        .designer-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .designer-toolbar .btn-ghost { font-size: 10px; padding: 4px 8px; }
+        .designer-add-row {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 12px;
+        }
+        .designer-add-row button {
+            flex: 1;
+            padding: 4px 0;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: var(--surface-2);
+            color: var(--text-2);
+            font-size: 9px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            cursor: pointer;
+        }
+        .designer-add-row button:hover { border-color: var(--accent); color: var(--accent); }
+        .designer-show-3d {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--text-2);
+            font-size: 10px;
+        }
+        .designer-feature {
+            display: grid;
+            grid-template-columns: auto auto 1fr 72px auto auto;
+            gap: 8px;
+            align-items: center;
+            padding: 4px 8px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: var(--surface-2);
+            margin-bottom: 4px;
+        }
+        .designer-feature[data-enabled="false"] { opacity: 0.55; }
+        .designer-chip { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+        .designer-feature-label {
+            border: 0;
+            background: none;
+            color: var(--text-2);
+            font-size: 10px;
+            text-align: left;
+            cursor: pointer;
+            padding: 0;
+        }
+        .designer-feature-label:hover { color: var(--accent); }
+        .designer-feature-label strong { color: var(--text); font-size: 10px; }
+        .designer-feature-label small { color: var(--text-3); font-size: 9px; margin-left: 4px; }
+        .designer-feature input[type="range"] { width: 72px; }
+        .designer-feature output { color: var(--accent); font-size: 9px; font-variant-numeric: tabular-nums; }
+        .designer-remove {
+            border: 0;
+            background: none;
+            color: var(--text-3);
+            font-size: 13px;
+            cursor: pointer;
+            padding: 0 4px;
+        }
+        .designer-remove:hover { color: var(--high); }
+        .designer-matrix {
+            border-collapse: collapse;
+            font-size: 9px;
+            font-variant-numeric: tabular-nums;
+            margin: 8px 0 12px;
+        }
+        .designer-matrix th, .designer-matrix td {
+            padding: 2px 6px;
+            text-align: right;
+            color: var(--text-2);
+            border: 1px solid var(--border);
+        }
+        .designer-matrix th { font-weight: 800; }
+        .designer-matrix-void { color: var(--text-3); }
+        .designer-smarts-row { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+        .designer-smarts-row input {
+            width: 100%;
+            padding: 5px 8px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: var(--surface-2);
+            color: var(--text);
+            font-size: 10px;
+            font-family: ui-monospace, monospace;
+        }
+        #designer-smarts-error { color: var(--high); font-size: 9px; min-height: 12px; }
+        .designer-hit {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            grid-template-areas: "name category" "chips chips";
+            gap: 2px 8px;
+            width: 100%;
+            padding: 5px 8px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: var(--surface-2);
+            margin-bottom: 4px;
+            cursor: pointer;
+            text-align: left;
+        }
+        .designer-hit[data-match="false"] { opacity: 0.5; }
+        .designer-hit[data-active="true"] { border-color: var(--accent); }
+        .designer-hit strong { grid-area: name; color: var(--text); font-size: 10px; }
+        .designer-hit small { grid-area: category; color: var(--text-3); font-size: 9px; }
+        .designer-hit-chips { grid-area: chips; display: flex; flex-wrap: wrap; gap: 4px; }
+        .designer-hit-chips em {
+            font-style: normal;
+            font-size: 8px;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            padding: 1px 5px;
+            border-radius: 999px;
+        }
+        .designer-hit-chips em[data-pass="true"] { background: var(--accent-soft); color: var(--accent); }
+        .designer-hit-chips em[data-pass="false"] { background: #34201d; color: var(--high); }
+        .designer-hit-preview { margin-top: 8px; }
+        .designer-hit-preview svg { max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: 7px; background: #fff; }
+        #designer-hit-preview-caption { color: var(--text-3); font-size: 9px; line-height: 1.4; word-break: break-all; }
+        .designer-note { color: var(--text-3); font-size: 9px; line-height: 1.4; margin-top: 8px; }
+
         main { position: relative; background: #050810; }
         #viewport { position: absolute; inset: 0; }
         .badge {
@@ -829,6 +958,8 @@
                 <button type="button" class="master-tab" data-jump="semantic" aria-selected="true">Semantics</button>
                 <button type="button" class="master-tab" data-jump="ligand">Ligand</button>
                 <button type="button" class="master-tab" data-jump="properties">Properties</button>
+                <button type="button" class="master-tab" data-jump="fields">Fields</button>
+                <button type="button" class="master-tab" data-jump="designer">Designer</button>
                 <button type="button" class="master-tab" data-jump="vfx">VFX</button>
                 <button type="button" class="master-tab" data-jump="ledger">Ledger</button>
             </nav>
@@ -925,6 +1056,88 @@
                     <div id="properties-content">
                         <p class="ledger-empty">Switch to a structure with a deposited ligand to compute descriptors.</p>
                     </div>
+                </section>
+
+                <section class="panel" data-section="fields">
+                    <div class="panel-heading">
+                        <h2>Energy field wells</h2>
+                        <span class="panel-index">FIELDS</span>
+                    </div>
+                    <div class="ligand-meta">
+                        <span id="fields-summary">No ligand loaded</span>
+                        <span id="fields-backend"></span>
+                    </div>
+                    <div id="fields-content">
+                        <div class="field-buttons">
+                            <button type="button" class="field-btn" data-field="mep">⚡ Electrostatic well</button>
+                            <button type="button" class="field-btn" data-field="mep_qm">⚡ QM potential</button>
+                            <button type="button" class="field-btn" data-field="homo">⚛ HOMO</button>
+                            <button type="button" class="field-btn" data-field="lumo">⚛ LUMO</button>
+                            <button type="button" class="field-btn" data-field="density">◉ e⁻ density</button>
+                            <button type="button" class="field-btn" id="field-clear">✕ Clear</button>
+                        </div>
+                        <div class="field-controls">
+                            <label class="field-control">Isovalue
+                                <input type="range" id="field-iso" min="-1" max="1" step="0.05" value="0">
+                                <span id="field-iso-readout"></span>
+                            </label>
+                            <label class="field-control">Basis
+                                <select id="field-basis">
+                                    <option value="sto-3g" selected>STO-3G · fast</option>
+                                    <option value="6-31g">6-31G · better</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div id="field-status" class="field-status" data-tone="idle">Load a structure with a ligand first.</div>
+                        <div id="field-meta" class="field-meta"></div>
+                    </div>
+                </section>
+
+                <section class="panel" data-section="designer">
+                    <div class="panel-heading">
+                        <h2>Pharmacophore designer</h2>
+                        <span class="panel-index">DESIGNER</span>
+                    </div>
+                    <div class="ligand-meta">
+                        <span id="designer-summary">No ligand loaded</span>
+                        <span id="designer-summary-stats"></span>
+                    </div>
+                    <div class="designer-toolbar">
+                        <button id="designer-reset" type="button" class="btn-ghost" title="Re-derive all features from the focused ligand, discarding edits">Reset from ligand</button>
+                        <button id="designer-clear" type="button" class="btn-ghost">Clear</button>
+                        <button id="designer-export" type="button" class="btn-ghost">Export JSON</button>
+                        <button id="designer-import" type="button" class="btn-ghost">Import</button>
+                        <input id="designer-import-file" type="file" accept="application/json" hidden>
+                        <label class="designer-show-3d"><input id="designer-show-3d" type="checkbox" checked>Show in 3D</label>
+                    </div>
+                    <div id="designer-feature-list">
+                        <p class="ledger-empty">Switch to a structure with a deposited ligand to seed a pharmacophore model.</p>
+                    </div>
+                    <div class="designer-add-row">
+                        <button id="designer-add-hba" type="button" title="Add H-bond acceptor feature">+ HBA</button>
+                        <button id="designer-add-hbd" type="button" title="Add H-bond donor feature">+ HBD</button>
+                        <button id="designer-add-aromatic" type="button" title="Add aromatic ring feature">+ ARO</button>
+                        <button id="designer-add-hydrophobic" type="button" title="Add hydrophobic feature">+ HYD</button>
+                    </div>
+                    <div class="contact-ledger-heading">
+                        <strong>Inter-feature distances</strong>
+                        <span>Å · enabled features</span>
+                    </div>
+                    <div id="designer-distances">
+                        <p class="ledger-empty">Enable at least two features to measure inter-feature distances.</p>
+                    </div>
+                    <div class="contact-ledger-heading">
+                        <strong>Library screening</strong>
+                        <span id="designer-screen-summary">Empty query</span>
+                    </div>
+                    <div class="designer-smarts-row">
+                        <input id="designer-smarts" type="text" placeholder="Optional SMARTS constraint, e.g. c1ccccc1C(=O)" spellcheck="false" aria-label="Custom SMARTS constraint">
+                        <span id="designer-smarts-error"></span>
+                    </div>
+                    <div id="designer-hits"></div>
+                    <div id="designer-hit-preview" class="designer-hit-preview"></div>
+                    <p id="designer-hit-preview-caption"></p>
+                    <p class="designer-note">Topological SMARTS screening: a molecule matches when it has at least the required count of each enabled feature kind (same RDKit definitions as the ligand perception) plus the optional SMARTS. Feature positions and tolerance radii shape the 3D model and its export — the library ships no conformers, so no 3D alignment is performed. Drag features in the 3D view to move them; the camera holds still while a feature is under the cursor.</p>
                 </section>
 
                 <section class="panel ligand-panel" data-section="ligand">

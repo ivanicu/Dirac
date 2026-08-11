@@ -6,11 +6,13 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/
 
 ## [Unreleased]
 
+### Added
+
+- **Pharmacophore Designer facet** (`facets/pharmacophore-designer/`, new `Designer` master-tab). Drag-editable pharmacophore model seeded from the focused ligand's RDKit perception (same `computePharmacophoreFeatures` as the read-only 3D layer): per-feature enable/disable, tolerance radius (0.5–3 Å), delete, add free-standing features, camera-plane 3D drag with the trackball suppressed while a feature is armed (hover → grab cursor). Live inter-feature distance matrix. Topological SMARTS screening of a shipped 68-molecule library (probes, fragments, drugs, natural products, steroids) against the model's feature-count requirements plus an optional custom SMARTS constraint; hit rows show per-kind have/required chips and click through to a 2D depiction with per-channel atom highlights. Model export/import as versioned JSON. Screening counts reuse the substrate's `computeLigandChemistry` (identical SMARTS both sides); the only facet-local pattern is the hydrophobic-carbon SMARTS, held in parity with the 3D layer's neighbor rule. Validation gate: `node scripts/check-pharmacophore-library.mjs` (node-side RDKit 2025.03.4 — parse validity, canonical-SMILES dedup, SMARTS parity vs the substrate source, exact probe counts for benzene / cyclohexane / pyridine / caffeine). Screening is topological only — the library ships no conformers and the UI says so. Verified end-to-end via CDP: 1CBS/REA seeds 2 HBA · 1 HBD · 19 HYD and the only library match is retinoic acid itself; drag moves a feature 5.4 Å with zero camera motion; 4HHB/HEM seeds 2 aromatic-ring features from SSSR.
+
 ### Pending product workstreams
 
-- **Pharmacophore Designer** — drag-editable HBA / HBD / aromatic / hydrophobic features with live SMARTS screening against a precomputed ligand library. Branch: `feature/pharmacophore-designer`.
-- **Conformer Explorer** — RDKit ETKDG conformer generation, mol\* morph animation, overlay view, energy landscape. Branch: `feature/conformer-explorer`.
-- **Property Optimization Cockpit** — Lipinski / Veber dashboard driven by `mol.get_descriptors()`. Branch: `feature/property-cockpit`.
+- **Conformer Explorer** — RDKit ETKDG conformer generation, mol\* morph animation, overlay view, energy landscape. ⚠ The vendored RDKit-JS 2025.03.4 wasm exposes no 3D embedding (`ETKDG` / `EmbedMolecule` absent from the binary) — this workstream needs a custom RDKit-JS build with 3D coords enabled, precomputed conformer data, or the Python backend escalation path.
 
 ## [0.1.0] — 2026-08-10
 
