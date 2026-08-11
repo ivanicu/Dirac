@@ -2,6 +2,13 @@
 
 > **Dirac is to Schrödinger (the company) what the Dirac equation is to the Schrödinger equation: an open-source, browser-native upgrade.**
 
+![Dirac's Fields facet: the 1CBS retinoid-binding protein's beta-barrel with a classical electrostatic potential well rendered as a translucent isosurface around the retinoic-acid ligand inside the pocket, computed by the local backend and served from the browser cache](docs/screenshots/02_fields_electrostatic_well.png)
+
+**Where things stand:** [`STATUS.md`](STATUS.md) — what is built, and what is a seam
+with nothing writing to it yet. [`ROADMAP.md`](ROADMAP.md) — how these seams reach an
+AI-native scientific OS without a rewrite, and the seven changes that would break
+that path. Not deployed: no auth, no public URL, three hand-started processes.
+
 Schrödinger's Maestro / LiveDesign stack is the commercial state-of-the-art for structure-based molecular design. It is closed, expensive, and desktop-native. **Dirac is the open-source, browser-native answer** — built on the [mol\*](https://github.com/molstar/molstar) 3D engine and the [RDKit-JS](https://github.com/rdkit/rdkit-js) cheminformatics runtime, with every computation happening in the browser via WebAssembly. No license server, no install, no Python backend required for the core workflow.
 
 The name is intentional. In physics, Schrödinger's equation describes matter at non-relativistic energies; Dirac's equation is its upgrade to the relativistic regime, predicting spin, antimatter, and the fine structure of hydrogen. **Dirac the project aims to be that kind of upgrade over Schrödinger the product** — same domain, deeper formulation, open and accessible.
@@ -17,6 +24,15 @@ Dirac is **one integrated app** with multiple facets, all sharing the same mol\*
 | ✅ shipped | **Pharmacophore Designer** (`facets/pharmacophore-designer/`) | Drag-editable pharmacophore model + topological SMARTS screening against a 68-molecule library — `Designer` master-tab |
 | ✅ shipped | **Field Wells** (`facets/field-wells/` + `backend/`) | 3D energy wells rendered in the pocket: classical electrostatic well (Gasteiger/Coulomb), quantum HOMO / LUMO / electron density / QM potential via pyscf HF — `Fields` master-tab. Needs the optional local Python backend (below) |
 | 🚧 blocked | **Conformer Explorer** (`facets/conformer-explorer/`) | RDKit ETKDG conformer generation, mol\* morph animation, energy landscape. Blocked in-browser: the vendored RDKit-JS wasm has no `ETKDG`/`EmbedMolecule`/force fields (verified against the binary). Route reopens through the fields backend (RDKit 2026.03 with MMFF) |
+
+## What it looks like
+
+| Screenshot | What's on screen |
+|---|---|
+| <img src="docs/screenshots/01_lab_1cbs_hbond.png" width="320" alt="Lab facet: 2D RDKit depiction beside the 3D structure"> | **Lab** — the 2D RDKit depiction of REA·A:200 (22 atoms, 1 HBD, 2 HBA) beside the same ligand in the 3D pocket, click-synced in both directions, with the halogen-audit panel stating what a purely geometric profiler would have reported instead. |
+| <img src="docs/screenshots/03_properties_cockpit.png" width="320" alt="Properties facet: Lipinski/Veber descriptor dashboard"> | **Properties** — Lipinski/Veber descriptor dashboard for the same ligand (MW 300.4 Da, LogP 5.60 flagged red for exceeding the ≤5.0 rule, TPSA 37.3 Å², 1 HBD / 2 HBA). |
+| <img src="docs/screenshots/04_designer_pharmacophore.png" width="320" alt="Designer facet: pharmacophore feature list and 3D glyphs"> | **Designer** — Pharmacophore Designer feature list auto-derived from the ligand (2 HBA, 1 HBD, 19 hydrophobic points), each with an editable radius, shown in the 3D pocket. |
+| <img src="docs/screenshots/05_ops_console.png" width="320" alt="Ops console reading the live field backend snapshot"> | **Ops console** — live read of `/admin/snapshot` from the field backend: 0 jobs running, field-cache health (68 rows, 291.6 MB across 5 field kinds), and the stale-sweep reclaim list. |
 
 ### Optional fields backend
 
