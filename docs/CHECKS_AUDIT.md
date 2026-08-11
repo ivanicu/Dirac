@@ -33,7 +33,7 @@ is reported as UNVERIFIED, not padded into the confirmed list.
 | files in the named hunt zone | ~117 (13 backend `.py` + 12 `.sql` + 3 `src/app` + 15 `molstar-rdkit` `.ts` + 56 `rdkit-wasm` `.ts` + 15 `scripts/*` + 3 `design/*`) |
 | files read in full | ~35 (every backend `.py` and every migration `.sql` that defines a `CHECK`/function; all of `design/`; most of `scripts/`) |
 | files grep-swept for the class's textual signatures (`except`, `.match(`, `JSON.parse`, `isfinite`/`isnan`, `>=`/`<=` beside a budget/tolerance name) but not read start-to-end | the remainder, concentrated in `src/chemistry.backend.perception.rdkit-wasm.editable/visual-r4/**` and the `molstar-rdkit` facet subdirectories |
-| **CONFIRMED** (proven, witness test in `backend/tests/test_cannot_fire.py`) | **3** |
+| **CONFIRMED** (proven, witness test in `backend/tests/test_cannot_fire.py`) | **3** — all three FIXED 2026-08-11, see RESOLUTION |
 | UNVERIFIED / near-miss (documented below, no witness — not exploitable or not provably reachable) | 4 |
 
 A hunt with no denominator is not a measurement: the honest statement is "3
@@ -327,6 +327,42 @@ removes the sibling guard has something to check against.
 
 ---
 
+## RESOLUTION — 2026-08-11, all three fixed by the session that owns the files
+
+Reported across sessions rather than patched here, because both files were
+under live edit; the witnesses were written so that no change to this file is
+needed when the fix lands. All three went green on `dac99d6`.
+
+| | fix | how the fix was confirmed |
+|---|---|---|
+| **F1** ECP | `if not gto.basis.load_ecp(basis, s): continue` — the falsy `[]` that made the `except` unreachable | `test_..._ecp_claim_must_mean_core_electrons_were_replaced` asserts the CONSEQUENCE (`nelectron < ΣZ`), not the claim, so it cannot be satisfied by editing `meta['ecp']` |
+| **F2** NaN budget | `clamp_budget()` at BOTH entry points (`compute_surface_mep`, `mep_at_points`); non-finite or negative → default, **zero preserved** | the slow end-to-end witness went **30.40 s → 0.00 s**: the pre-flight refusal now fires instead of the SCF running to completion. That timing IS the measurement |
+| **F3** palette gate | a missing token is now a failure naming the token, not `continue` | renaming `--viz-cb-neg` exits 1; restoring it exits 0 (both directions run) |
+
+The peer session's own reading, worth keeping: *"a guard that never fires and a
+guard that never needs to fire produce identical output, and my own coverage
+sweep reports those paths green."* That is why this hunt had to come from
+outside the file — the instrument that would have caught it is the one the
+defect disables.
+
+### Two of my own witnesses cried wolf, and both are recorded rather than amended
+
+Neither was a false acquittal (the dangerous direction) — both were false
+alarms on correct code. They are written down because they are the same defect
+class as the bugs being hunted, committed by the hunter, twice in one file:
+
+1. **`'isfinite' in inspect.getsource(...)`** — the fix was a CALL to a named
+   `clamp_budget()`, so the property held while the proxy could not see it.
+   A grep for a token encodes the INSTANCE the check was written against.
+   Rewritten to call the normaliser, then to prove via a recorder that every
+   entry point routes its raw input through it. The peer's framing was right:
+   writing `isfinite` into the function to satisfy a grep would have been
+   encoding the instance one level deeper.
+2. **`max_seconds=0.001` in the watchdog witness** — the pre-flight cost gate
+   refused *before* the SCF existed, so no watchdog was installed and none
+   needed to be. A witness must REACH the step it judges; it now passes a
+   generous budget and aborts from inside a recorder.
+
 ## Run log — `backend/tests/test_cannot_fire.py`
 
 ```
@@ -334,6 +370,17 @@ $ backend/env/bin/python3 backend/tests/test_cannot_fire.py
 "check that cannot fire" witnesses — 4 tests, pytest ABSENT (standalone mode)
 every test below is EXPECTED TO FAIL until its named finding is fixed
 ────────────────────────────────────────────────────────────────────────────────────────────────────
+# 2026-08-11 11:2x — after dac99d6. Kept ABOVE the original red run, not
+# instead of it: a green board with no memory of having been red is exactly
+# the artifact this audit exists to distrust.
+PASS    [F1] test_mep_surface_ecp_claim_must_mean_core_electrons_were_replaced      0.26s
+PASS    [--] test_mep_surface_normalises_a_non_finite_budget_at_every_entry_point   2.04s
+PASS    [--] test_mep_surface_in_loop_watchdog_is_installed_on_both_scf_paths       0.02s
+PASS    [F2] test_mep_surface_nan_budget_disables_the_predicted_cost_gate           0.00s  <- was 30.40s
+PASS    [F3] test_check_palette_diverging_pair_gate_silently_skips_a_renamed_token  0.00s
+5 passed (fixed) · 0 failed · 0 skipped
+
+# 2026-08-11 ~09:00 — the original hunt, all four red as designed:
 FAIL    [F1] test_mep_surface_ecp_claim_must_mean_core_electrons_were_replaced   0.43s  (EXPECTED — confirmed unfixed defect)
 FAIL    [F2] test_mep_surface_max_seconds_is_never_finiteness_checked         0.10s  (EXPECTED — confirmed unfixed defect)
 FAIL    [F2] test_mep_surface_nan_budget_disables_the_predicted_cost_gate    30.40s  (EXPECTED — confirmed unfixed defect)

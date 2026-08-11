@@ -94,6 +94,24 @@ if str(_BACKEND) not in sys.path:
 SKIP_SLOW = os.environ.get('DIRAC_TESTS_SKIP_SLOW') == '1'
 
 
+def _water_molblock() -> str:
+    """Water, embedded by RDKit rather than hand-typed.
+
+    Hand-writing a V2000 block is how the counts-line bug shipped three times
+    in this repo (nine zero fields instead of eight pushes ' V2000' off column
+    34; RDKit-JS forgives it, desktop RDKit does not). A fixture is not the
+    place to re-open that.
+    """
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    mol = Chem.AddHs(Chem.MolFromSmiles('O'))
+    AllChem.EmbedMolecule(mol, randomSeed=0xf00d)
+    return Chem.MolToMolBlock(mol)
+
+
+WATER_MOLBLOCK = _water_molblock()
+
+
 # ── dual-mode plumbing (pytest is NOT installed in backend/env) ─────────────
 
 try:
@@ -199,44 +217,116 @@ def test_mep_surface_ecp_claim_must_mean_core_electrons_were_replaced():
 # FINDING 2 — NaN defeats the only wall-clock budget guard in mep_surface.py
 # ════════════════════════════════════════════════════════════════════════════
 
-@confirmed_defect('F2')
-def test_mep_surface_max_seconds_is_never_finiteness_checked():
-    """CONTRACT (already met by field_server.py, in BOTH run_scf() at line 818
-    and Handler.do_POST() at line 1179): a non-finite max_seconds must be
-    normalised before it reaches a `predicted > max_seconds` comparison,
-    because NaN fails every comparison --
-    `nan and (predicted > nan)` is False no matter how large `predicted` is.
+def test_mep_surface_normalises_a_non_finite_budget_at_every_entry_point():
+    """FIXED in dac99d6 (physics session). This witness was REWRITTEN rather
+    than deleted, because its first version was itself the bug class it hunts.
 
-    This is a fast, source-level witness (no pyscf run): it reads the real
-    source of compute_surface_mep() and of the HTTP handler that feeds it, and
-    checks for the isfinite/isnan clamp that field_server.py carries at both
-    of its equivalent layers. See test_mep_surface_nan_budget_disables_the_
-    predicted_cost_gate below for the slow, end-to-end behavioural proof.
+    v1 asserted `'isfinite' in inspect.getsource(compute_surface_mep)`. The fix
+    that landed is a call to a named `clamp_budget()` whose body holds the
+    isfinite test -- so the PROPERTY held and my PROXY could not see it, and the
+    witness cried wolf on correct code. A check that greps for a token has
+    encoded the INSTANCE it was written against, not the property it names; the
+    remedy is the one this file demands everywhere else -- call the thing.
+
+    The property, in two parts, because either half alone is satisfiable by a
+    broken system: the normaliser must be correct, AND every entry point must
+    route the caller's raw value through it.
+    """
+    import math as _math
+    import physics.mep_surface as ms
+
+    D = 120.0
+    for bad in (float('nan'), float('inf'), float('-inf'), -5.0, None, 'garbage'):
+        assert ms.clamp_budget(bad, D) == D, (
+            f'clamp_budget({bad!r}) did not fall back to the default -- a '
+            f'non-finite budget defeats BOTH the pre-flight `predicted > '
+            f'max_seconds` refusal and the in-loop `time.time() > deadline` '
+            f'watchdog, because every comparison against NaN is False.')
+    assert ms.clamp_budget(0.0, D) == 0.0, (
+        'ZERO MUST SURVIVE: it is an explicit "refuse immediately, tell me the '
+        'cost" dry-run. Folding it in with NaN as "not supplied" is a real '
+        'defect I shipped myself in field_server.py and caught within a '
+        'minute -- it turned a 0 s request into a 90 s run.')
+    assert ms.clamp_budget(7.5, D) == 7.5, 'a valid budget must pass through'
+
+    # Part 2 -- the callers. A perfect normaliser nobody calls is the shape of
+    # the original defect. The recorder returns 0.0, so each entry point
+    # refuses immediately and no real SCF runs: this stays a fast test.
+    seen: list = []
+    original = ms.clamp_budget
+    ms.clamp_budget = lambda value, default: (seen.append(value), 0.0)[1]
+    try:
+        entry_points = (
+            ('compute_surface_mep', ms.compute_surface_mep, (WATER_MOLBLOCK,), {}),
+            ('mep_at_points', ms.mep_at_points, (WATER_MOLBLOCK, [[0.0, 0.0, 3.0]]), {}),
+        )
+        for name, fn, args, kw in entry_points:
+            del seen[:]
+            try:
+                fn(*args, max_seconds=float('nan'), **kw)
+            except Exception:
+                pass      # a refusal is the correct outcome; unbounded is not
+            assert seen, (
+                f'backend/physics/mep_surface.py: {name}() does not pass its '
+                f'max_seconds through clamp_budget() -- the caller\'s raw '
+                f'value reaches the comparisons unnormalised. (If it was '
+                f'normalised by some OTHER function, this witness is now '
+                f'blind, not satisfied: fix the witness, do not silence it.)')
+            assert _math.isnan(seen[0]), (
+                f'{name}() normalised something, but not the value it was '
+                f'given ({seen[0]!r}) -- a clamp applied to a substitute is '
+                f'not applied.')
+    finally:
+        ms.clamp_budget = original
+
+
+def test_mep_surface_in_loop_watchdog_is_installed_on_both_scf_paths():
+    """The claim v1 of this file made -- "there is no in-loop SCF watchdog here,
+    unlike field_server.py.run_scf" -- was true when written and is false now
+    (df58d71 ported it). Left as an assertion rather than an edited sentence,
+    because a corrected claim in a docstring decays again the moment the code
+    moves, and this one can be executed.
+
+    Property: neither SCF path may be bounded ONLY by a pre-flight estimate. A
+    cost model that guesses low is not a guard.
     """
     import physics.mep_surface as ms
-    import physics.server as srv
 
-    mep_src = inspect.getsource(ms.compute_surface_mep)
-    assert 'isfinite' in mep_src or 'isnan' in mep_src, (
-        'backend/physics/mep_surface.py: compute_surface_mep() never checks '
-        '`max_seconds` for finiteness before '
-        '`if max_seconds and predicted > max_seconds:` (~line 339) -- a NaN '
-        'budget makes that comparison False unconditionally, silently '
-        'disabling the ONLY wall-clock guard in the function (there is no '
-        'in-loop SCF watchdog callback here, unlike field_server.py.run_scf, '
-        'so once this pre-flight check is bypassed nothing else bounds the '
-        'computation).')
+    installed: list = []
 
-    server_src = inspect.getsource(srv.Handler.do_POST)
-    assert 'isfinite' in server_src or 'isnan' in server_src, (
-        'backend/physics/server.py: Handler.do_POST() passes '
-        "`float(req.get('max_seconds', DEFAULT_MAX_SECONDS))` straight into "
-        'compute_surface_mep with no finiteness clamp (~line 116) -- '
-        "field_server.py's HTTP layer clamps this exact input "
-        '(`if not math.isfinite(req_seconds): req_seconds = DEFAULT_MAX_SECONDS`, '
-        'line 1179-1181); this sibling daemon never got the fix, and nothing '
-        'in this file whitelists the basis either, unlike field_server.py\'s '
-        'ALLOWED_BASIS check.')
+    class _Reached(RuntimeError):
+        pass
+
+    def _recorder(mf, deadline, max_seconds, label):
+        installed.append(label)
+        raise _Reached(label)     # abort here: we only need to know we got here
+
+    original = ms._install_watchdog
+    ms._install_watchdog = _recorder
+    try:
+        for name, fn, args in (
+                ('compute_surface_mep', ms.compute_surface_mep, (WATER_MOLBLOCK,)),
+                ('mep_at_points', ms.mep_at_points, (WATER_MOLBLOCK, [[0.0, 0.0, 3.0]]))):
+            del installed[:]
+            # A GENEROUS budget, deliberately. v1 of this witness passed 0.001 s
+            # and went red on correct code: the pre-flight cost gate refused
+            # before the SCF existed, so no watchdog was installed and none
+            # needed to be. A witness has to REACH the step it is judging --
+            # the second time in one file that a proxy convicted the wrong
+            # layer, which is why both are written down instead of quietly
+            # amended.
+            try:
+                fn(*args, max_seconds=600.0)
+            except _Reached:
+                pass
+            except Exception:
+                pass
+            assert installed, (
+                f'{name}() reached its SCF without installing the per-cycle '
+                f'watchdog -- so a molecule whose predicted cost came in under '
+                f'budget can still run to max_cycle unbounded.')
+    finally:
+        ms._install_watchdog = original
 
 
 @confirmed_defect('F2')
