@@ -1257,6 +1257,8 @@ def field_quantum(mol: Chem.Mol, kind: str, basis: str,
 _charge_table: dict[tuple[str, str], float] | None = None
 _charge_table_lock = threading.Lock()
 CHARGE_FORCEFIELD = 'AMBER'
+# Excluded from a pocket source unless the caller supplies hydrogens.
+WATER_RESNAMES = {'HOH', 'WAT', 'DOD', 'H2O', 'TIP', 'TP3', 'SOL'}
 
 
 def charge_table() -> dict[tuple[str, str], float]:
@@ -1293,6 +1295,20 @@ def resolve_charges(sources: list[dict]) -> tuple[list[float], list[str]]:
     charges: list[float] = []
     missing: list[str] = []
     for a in sources:
+        # WATER IS EXCLUDED, and mapping it would be worse than refusing it.
+        # AMBER's water is WAT:OW -0.834 plus two WAT:HW +0.417 — neutral, as
+        # it must be. A crystallographic water is ONE OXYGEN: the hydrogens
+        # were never resolved. Mapping HOH:O onto OW therefore contributes a
+        # fictitious -0.834 MONOPOLE per water, and an electrostatic field is
+        # dominated by its monopoles — six pocket waters would be five charge
+        # units of invention sitting on top of the answer.
+        #
+        # Placing the hydrogens is not a repair either: a water's entire
+        # electrostatic identity is the direction of its dipole, so inventing
+        # an orientation points it confidently the wrong way.
+        if str(a.get('resname', '')).upper() in WATER_RESNAMES:
+            charges.append(0.0)
+            continue
         if a.get('charge') is not None:
             charges.append(float(a['charge']))
             continue
@@ -1358,6 +1374,11 @@ def field_region(sources, lo, hi, spacing: float, kind: str):
 
     # Charges come from the residue template when the caller sent residue
     # identity instead of a number. Unresolved atoms are named, not zeroed.
+    n_water = sum(1 for a in sources
+                  if str(a.get('resname', '')).upper() in WATER_RESNAMES)
+    if kind == 'mep' and n_water:
+        sources = [a for a in sources
+                   if str(a.get('resname', '')).upper() not in WATER_RESNAMES]
     resolved, missing = (resolve_charges(sources) if kind == 'mep'
                          else ([None] * len(sources), []))
     if missing:
@@ -1433,6 +1454,12 @@ def field_region(sources, lo, hi, spacing: float, kind: str):
         'net_charge': round(float(weights.sum()), 3),
         'charge_model': (f'{CHARGE_FORCEFIELD} residue templates (pdb2pqr)'
                          if kind == 'mep' else 'caller-supplied'),
+        'waters_excluded': n_water,
+        'waters_note': (f'{n_water} crystallographic water(s) left OUT: their '
+                        f'hydrogens were never resolved, and a bare oxygen would '
+                        f'contribute a fictitious monopole while an invented '
+                        f'orientation would point the dipole confidently wrong.'
+                        if n_water else None),
         'dims': dims.tolist(), **grid_spacing_meta(lo, hi, dims, spacing),
         'vmin': float(v.min()), 'vmax': float(v.max()),
         'iso_fixed': iso,

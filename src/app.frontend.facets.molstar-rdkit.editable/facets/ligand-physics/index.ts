@@ -77,6 +77,24 @@ let ligandLabel: string | null = null;
 let inFlight: AbortController | null = null;
 let busy = false;
 /**
+ * Monotonic ligand generation. A multi-second SCF that lands after the user
+ * has moved on must be DISCARDED, not rendered: it would put a confident
+ * number from molecule A into molecule B's scene, which is the worst kind of
+ * stale result because nothing about it looks wrong.
+ *
+ * field-wells has carried this guard since this morning; this facet, written
+ * hours later, did not — the same "fix lands on one path of two" that bit the
+ * iodine ECP and the SCF deadline today. Found by a peer's state audit.
+ *
+ * Exported so the physics-contract gate can mechanise ONE invariant — every
+ * SCF-reaching path is bounded AND its result is checked before it lands —
+ * instead of two, only one of which is currently enforced.
+ */
+let ligandGeneration = 0;
+export function isCurrentLigandGeneration(g: number): boolean {
+    return g === ligandGeneration;
+}
+/**
  * The extrema markers currently in the scene, so a re-run replaces them
  * instead of stacking. Typed loosely on purpose: the concrete
  * ShapeRepresentation type comes from a dynamic import inside markExtrema
@@ -295,14 +313,37 @@ async function markExtrema(extrema: Extremum[]) {
     lastMarkers = repr;
 }
 
+/**
+ * The basis the refusal already prescribes.
+ *
+ * The cost gate declines a large ligand with a specific, correct remedy — "use a smaller
+ * basis (sto-3g is ~31 s here)" — and until this control existed the panel offered no way
+ * to take it. An honest refusal that names an action the interface cannot perform is a
+ * dead end wearing the manners of a good error message; measured on lapatinib, which is
+ * 66 atoms and 698 basis functions against a 90 s budget, that dead end was the only
+ * outcome available.
+ */
+function selectedBasis(): string {
+    const el = document.getElementById('phys-basis') as HTMLSelectElement | null;
+    return el?.value || 'def2-svp';
+}
+
 async function runSurface() {
     if (!molfile || busy) return;
     setBusy(true);
+    const basis = selectedBasis();
     setStatus('phys-surface-status',
-        `Solving surface electrostatics on ${ligandLabel ?? 'ligand'}… `
+        `Solving surface electrostatics on ${ligandLabel ?? 'ligand'} in ${basis}… `
         + `(gives up at ${BUDGET_SECONDS} s · Cancel to stop now)`, 'busy');
+    const generation = ligandGeneration;
     try {
-        const out = await post('/surface/mep', { molfile }, BUDGET_SECONDS);
+        const out = await post('/surface/mep', { molfile, basis }, BUDGET_SECONDS);
+        if (!isCurrentLigandGeneration(generation)) {
+            setStatus('phys-surface-status',
+                'Ligand changed while solving — result discarded rather than '
+                + 'rendered into the wrong molecule.', 'idle');
+            return;
+        }
         if (!out.ok) {
             setStatus('phys-surface-status', out.error, 'error');
             return;
@@ -334,8 +375,15 @@ async function runTorsion() {
     if (!molfile || busy) return;
     setBusy(true);
     setStatus('phys-torsion-status', `Scanning rotatable bonds on ${ligandLabel ?? 'ligand'}…`, 'busy');
+    const generation = ligandGeneration;
     try {
         const out = await post('/torsion/strain', { molfile }, BUDGET_SECONDS);
+        if (!isCurrentLigandGeneration(generation)) {
+            setStatus('phys-torsion-status',
+                'Ligand changed while scanning — result discarded rather than '
+                + 'rendered into the wrong molecule.', 'idle');
+            return;
+        }
         if (!out.ok) {
             setStatus('phys-torsion-status', out.error, 'error');
             return;
@@ -404,6 +452,7 @@ export function updateLigandPhysics(nextMolfile: string | null, label: string | 
     const summary = byId('phys-summary');
     if (summary) summary.textContent = molfile ? (label ?? 'Ligand') : 'No ligand loaded';
     if (changed) {
+        ligandGeneration++;   // invalidates every in-flight result
         inFlight?.abort();
         inFlight = null;
         for (const id of ['phys-surface-body', 'phys-torsion-body']) {

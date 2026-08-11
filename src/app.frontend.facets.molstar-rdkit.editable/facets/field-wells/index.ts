@@ -857,6 +857,12 @@ export function updateFieldWellsLigand(nextMolfile: string | null, label: string
     const changed = nextMolfile !== molfile;
     molfile = nextMolfile;
     ligandLabel = label;
+    // Debug/warm hook: exposes the EXACT molfile the panel would send. The
+    // durable cache is keyed on sha256(molfile), so a warmer that generates its
+    // own molfile writes rows the app can never hit. Reading this one makes the
+    // warm exact, and lets it use a budget no interactive click should have.
+    (window as unknown as { diracFields: unknown }).diracFields =
+        { molfile, label: ligandLabel, backend: BACKEND };
     const summary = byId('fields-summary');
     if (summary) summary.textContent = molfile ? (label ?? 'Ligand') : 'No ligand loaded';
     if (changed) {

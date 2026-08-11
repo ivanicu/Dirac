@@ -64,22 +64,32 @@ cat > "$STAGE/index.html.driver" <<EOF
     if (/no ligand/i.test(summary)) {
       log.push('NO LIGAND — nothing to precompute');
     } else {
-      for (var f = 0; f < FIELDS.length; f++) {
-        var btn = document.querySelector('.field-btn[data-field="' + FIELDS[f] + '"]');
-        if (!btn) { log.push(FIELDS[f] + ':no-button'); continue; }
-        for (var w = 0; w < 30 && btn.disabled; w++) await wait(1000);
-        if (btn.disabled) { log.push(FIELDS[f] + ':still-disabled'); continue; }
-        btn.click();
-        var done = false;
-        for (var k = 0; k < 240; k++) {
-          await wait(1000);
-          var st = txt('#field-status');
-          if (/rendered/i.test(st)) { log.push(FIELDS[f] + ':OK'); done = true; break; }
-          if (/refus|unreach|cannot|exceed|budget|not quotable/i.test(st)) {
-            log.push(FIELDS[f] + ':REFUSED(' + st.slice(0, 60) + ')'); done = true; break;
-          }
+      // POST DIRECTLY, with the app's own molfile and a budget no interactive
+      // click should ever have. Clicking the buttons warms the same rows but
+      // inherits the panel's 60 s client budget — which is why lapatinib came
+      // back "SCF exceeded its 60 s budget after 10 cycles" and cached nothing.
+      // A warm is not an interaction: nobody is waiting, so the only correct
+      // budget is a generous one.
+      var hook = window.diracFields;
+      if (!hook || !hook.molfile) {
+        log.push('NO MOLFILE HOOK');
+      } else {
+        for (var f = 0; f < FIELDS.length; f++) {
+          var kind = FIELDS[f];
+          try {
+            var r = await fetch(hook.backend + '/field', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ molfile: hook.molfile, kind: kind,
+                                     basis: 'sto-3g', store: true,
+                                     max_seconds: 900 }),
+            });
+            var j = await r.json();
+            log.push(kind + (j.ok ? ':OK' : ':REFUSED(' + String(j.error).slice(0, 50) + ')'));
+          } catch (e) { log.push(kind + ':ERR(' + e + ')'); }
         }
-        if (!done) log.push(FIELDS[f] + ':TIMEOUT');
+        // and render one so the screenshot shows a real field
+        var b0 = document.querySelector('.field-btn[data-field="mep"]');
+        if (b0 && !b0.disabled) { b0.click(); await wait(6000); }
       }
       // The physics panel too — same molecule, same session, both daemons warm.
       var pt = document.querySelector('[data-jump="physics"]');
