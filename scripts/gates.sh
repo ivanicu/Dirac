@@ -46,7 +46,7 @@ run_gate() {
 }
 
 # ---- gate selection -------------------------------------------------------
-ALL=(tsc build palette css migrations docs)
+ALL=(tsc build palette css migrations docs contracts)
 if [ "$#" -eq 0 ]; then
     WANT=("${ALL[@]}")
 else
@@ -93,6 +93,25 @@ wanted palette && run_gate 'gate-3-palette'    python3 design/check_palette.py
 wanted css     && run_gate 'gate-4-css-braces' node scripts/check_css_braces.mjs "$LAB_HTML"
 # 6. docs: every host/port and command a doc claims must match the code.
 wanted docs    && run_gate 'gate-6-docs-facts'  node scripts/check_docs_facts.mjs
+
+# Gate 7 · contract drift. THREE-VALUED on purpose, because folding the third
+# value into either of the other two is how a false pardon gets manufactured:
+#   exit 0  everything agrees
+#   exit 1  contracts/ disagree with the code -> FAIL, this gate's own scope
+#   exit 2  contracts/ are clean but src/ has drifted -> reported, not blocking.
+# The frontend interface is owned by another session and is legitimately behind
+# a backend that gained keys this morning; failing the suite on it would train
+# whoever runs this to pass --skip, and a suite people skip enforces nothing.
+# The FIND lines are printed either way, so it cannot rot silently into "clean".
+if wanted contracts; then
+    contract_out="$(node scripts/check_contract_drift.mjs 2>&1)"; contract_code=$?
+    printf '%s\n' "$contract_out"
+    case "$contract_code" in
+        0) PASSED+=('gate-7-contracts') ;;
+        2) PASSED+=('gate-7-contracts (contracts clean; src/ drift REPORTED above)') ;;
+        *) FAILED+=('gate-7-contracts') ;;
+    esac
+fi
 # 5. migrations: an applied migration's file must still BE the applied file.
 #    Skipped rather than failed when PG is unreachable (exit 2), because a
 #    developer without the database must still be able to run the other four —

@@ -4,6 +4,20 @@
 export type FieldKind = 'mep' | 'mep_qm' | 'homo' | 'lumo' | 'density' | 'mlp';
 export type Basis = 'sto-3g' | '6-31g' | '6-31g*' | 'def2-svp';
 export type CacheSource = 'browser' | 'memory' | 'db' | 'computed';
+/** THE error vocabulary — mirrors contracts/iface.pyi's ErrorCode, both
+ *  derived from contracts/errors.json (source of truth), same order (12
+ *  codes as of NOT_FOUND/DB_UNAVAILABLE, added 2026-08-11 for the admin
+ *  router — a vocabulary that could not say "the database is down").
+ *  scripts/check_contract_drift.mjs asserts errors.json, iface.pyi and this
+ *  union all agree. (The generated per-code COPY lives at
+ *  src/app/services/error-codes.ts via scripts/gen_error_codes.mjs; this
+ *  type is only the code-name set, kept here for the same reason iface.pyi
+ *  keeps its own literal instead of importing envelope.py's Enum.) */
+export type ErrorCode =
+    | 'PARSE' | 'UNCONVERGED' | 'UNPARAMETERIZED' | 'BUDGET'
+    | 'OPEN_SHELL_SPIN_REQUIRED' | 'UNSUPPORTED' | 'TOO_LARGE'
+    | 'BAD_HOST' | 'CANCELLED' | 'INTERNAL' | 'NOT_FOUND'
+    | 'DB_UNAVAILABLE';
 
 /** Discriminated union — a molfile alone is lossy (frontend review, blocker 3). */
 export type Ligand =
@@ -50,9 +64,17 @@ export interface BackendClient {
 
 export type Envelope =
     | { ok: true; cube?: string; molfile?: string; meta: Record<string, unknown> }
-    | { ok: false; error: string };
-// v1 wire shape (flat, live today). v2 ({data, meta:{envelope:1, request_id,
+    // `reason` is what the live client actually depends on (FieldRefusal —
+    // facets/field-wells/index.ts — reads `payload.reason ?? 'internal'`) but
+    // is not sent by every failure: the Host/Content-Type/basis-whitelist
+    // refusals send `error` alone. Only these three values are ever on the
+    // wire (backend/field_server.py do_POST); 'network' is a client-only
+    // value for a fetch that never got a response and never appears here.
+    | { ok: false; error: string; reason?: 'budget' | 'unsupported' | 'internal' };
+// v1 wire shape (flat, live today). v2 ({data, meta:{envelope:2, request_id,
 // producer}}) arrives with the app.job seam; both accepted one version.
+// (SPEC.md §4.6 is explicit: v2 marks itself envelope:2 — a v2 envelope
+// declaring version 1 would be a contradiction in terms.)
 
 export interface ThemeService {
     /** data-theme attribute + ONE scene.setBackground(--scene-bg). Polling

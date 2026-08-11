@@ -6,8 +6,16 @@ from typing import Literal, TypedDict
 FieldKind = Literal['mep', 'mep_qm', 'homo', 'lumo', 'density', 'mlp']
 Basis = Literal['sto-3g', '6-31g', '6-31g*', 'def2-svp']          # = ALLOWED_BASIS = DB CHECK minus 'none'
 CacheSource = Literal['browser', 'memory', 'db', 'computed']       # browser never appears server-side
+# THE error vocabulary. Derived from contracts/errors.json (source of truth) —
+# same codes, same order as errors.json's own `codes` object (12 as of
+# NOT_FOUND/DB_UNAVAILABLE, added 2026-08-11 for the admin router). Kept as a
+# literal here (not generated) the same way backend/envelope.py hand-derives
+# its str-Enum from the same file; scripts/check_contract_drift.mjs asserts
+# this Literal, errors.json, and iface.d.ts's ErrorCode union all agree.
 ErrorCode = Literal['PARSE', 'UNCONVERGED', 'UNPARAMETERIZED', 'BUDGET',
-                    'UNSUPPORTED', 'TOO_LARGE', 'BAD_HOST', 'BAD_BASIS']
+                    'OPEN_SHELL_SPIN_REQUIRED', 'UNSUPPORTED', 'TOO_LARGE',
+                    'BAD_HOST', 'CANCELLED', 'INTERNAL', 'NOT_FOUND',
+                    'DB_UNAVAILABLE']
 JobState = Literal['queued', 'running', 'done', 'failed', 'cancelled']  # seam: app.job (PLANNED)
 
 class EmbedMeta(TypedDict):
@@ -17,6 +25,7 @@ class EmbedMeta(TypedDict):
     inchikey: str                   # 27-char, parent
     mmff_optimized: bool
     mmff_energy_kcal: float | None  # [kcal/mol]; None = unparameterized atoms
+    embed: str                      # 'ETKDGv3' — the embedding algorithm actually run
     fragments_stripped: int         # [count] salts/co-solvents removed
     seed: int                       # ETKDG seed; same (smiles,seed) -> same bytes
     seconds: float                  # [s]
@@ -34,10 +43,55 @@ class FieldMeta(TypedDict, total=False):
     natoms: int
     nbasis: int
     scf_seconds: float              # [s]
+    scf_cycles: int | None          # DIIS cycles consumed (quantum only)
+    cube_seconds: float             # [s] cubegen wall time (quantum only)
+    cube_predicted_seconds: float   # [s] cube admission-gate prediction (quantum only)
+    charge: int                     # formal charge the SCF actually ran at (quantum only)
+    spin: int                       # unpaired electrons the SCF actually ran at (quantum only)
+    frontier_caveat: str | None     # quantum only; why homo_ev/lumo_ev must not
+                                     # be quoted at this basis/charge (None = quotable)
     total_seconds: float            # [s]
     cache: CacheSource
     stored: bool                    # True = background persist SCHEDULED (not confirmed)
     computed_at: str                # ISO-8601, cache hits only
+
+    # ── grid fields (field_mep / field_mlp only; grid_spacing_meta()) ───────
+    dims: list[int]                 # [nx, ny, nz] grid dimensions
+    spacing_requested: float        # [Angstrom] the spacing asked for
+    spacing: list[float]            # [Angstrom] actual per-axis spacing; may
+                                     # exceed spacing_requested when grid_capped
+    grid_capped: bool               # True = dims hit GRID_MAX_DIM (128); the
+                                     # grid silently coarsened past the request
+    vmin: float                     # minimum field value on the grid
+    vmax: float                     # maximum field value on the grid
+    iso_fixed: float                # the fixed physical contour the box grew around
+    pad_used_angstrom: float        # [Angstrom] padding actually used (the BOX
+                                     # adapts; the ruler — iso_fixed — never does)
+    wall_max: float                 # largest |field| on the box's six faces
+    contour_closes_in_box: bool     # False = surface runs off the grid edge
+                                     # and is drawn as a flat face
+
+    # ── field_mep only ───────────────────────────────────────────────────────
+    charges: str                    # 'gasteiger'
+    net_charge: int                 # sum of Gasteiger charges, rounded
+    sigma_hole_representable: bool  # False = a halogen/chalcogen present; a
+                                     # point-charge model reports the OPPOSITE
+                                     # SIGN there, not merely a less accurate one
+    model_caveat: str               # what a Gasteiger point-charge map cannot show
+
+    # ── field_mlp only ───────────────────────────────────────────────────────
+    total_logp: float               # Crippen atomic contributions, summed
+    single_signed: bool             # True = no opposite-sign lobe exists
+                                     # (measured per molecule, never assumed)
+
+    # ── field_region only (SOURCE⊥FRAME: an arbitrary caller-supplied atom
+    # set, not tied to a molfile or the focused ligand — 'kind' comes back as
+    # '<mep|mlp>_region') ───────────────────────────────────────────────────
+    n_sources_sent: int             # source atoms the caller sent
+    n_sources_used: int             # source atoms within cutoff_angstrom of the frame
+    cutoff_angstrom: float          # [Angstrom] distance cutoff applied to sources
+    frame_is_callers: bool          # True = the box is the caller's frame, not
+                                     # grown to close the contour (contrast field_mep)
 
 def embed_molecule(smiles: str | None, molblock: str | None, seed: int = 42) -> tuple[str, EmbedMeta]:
     """SMILES|molfile -> heavy-atom 3D molfile (ETKDGv3+MMFF94, largest fragment).
