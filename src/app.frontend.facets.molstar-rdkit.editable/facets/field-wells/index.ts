@@ -149,6 +149,8 @@ interface FieldMeta {
     units?: string;
     natoms?: number;
     nbasis?: number;
+    /** Measured from the cube for MEP/MLP, whose scale is molecule-dependent. */
+    iso_suggest?: number;
 }
 
 let plugin: PluginContext | null = null;
@@ -380,8 +382,23 @@ function isoMultiplier(): number {
     return slider ? Math.pow(10, parseFloat(slider.value)) : 1;
 }
 
+/**
+ * The isovalue the slider's 1.0x position means.
+ *
+ * MEP and MLP are sums of atomic contributions, so their scale belongs to the
+ * molecule and the backend measures it from the cube (`iso_suggest`, the ~97th
+ * percentile of |field|). A constant there produced a surface that enclosed
+ * the whole padded grid and clipped against the box wall — on retinoic acid
+ * the lipophilicity field rendered as a gold crate with the ligand inside it.
+ *
+ * Orbitals and density keep their constants on purpose: a wavefunction is
+ * normalised, which is exactly why the conventional values work for them.
+ */
+let isoBase: number | null = null;
+
 function currentIso(): number {
-    return activeKind ? Kinds[activeKind].iso * isoMultiplier() : 0;
+    if (!activeKind) return 0;
+    return (isoBase ?? Kinds[activeKind].iso) * isoMultiplier();
 }
 
 function updateIsoReadout() {
@@ -463,7 +480,11 @@ async function clearField() {
     setButtonsEnabled();
 }
 
-async function renderCube(cubeText: string, kind: FieldKind) {
+async function renderCube(cubeText: string, kind: FieldKind, meta?: FieldMeta) {
+    // Adopt the backend's measured isovalue when it sent one; fall back to the
+    // kind's constant otherwise. Set BEFORE the representations are built, or
+    // the first frame is drawn at the old scale and corrected a tick later.
+    isoBase = typeof meta?.iso_suggest === 'number' ? meta.iso_suggest : null;
     if (!plugin) return;
     if (plugin.state.data.cells.has(REF_DATA)) {
         await plugin.build().delete(REF_DATA).commit();
@@ -558,7 +579,7 @@ async function requestField(kind: FieldKind, budget = budgetFor(kind)) {
         busy = true;
         setButtonsEnabled();
         try {
-            await renderCube(cached.cube, kind);
+            await renderCube(cached.cube, kind, cached.meta);
             renderMeta(cached.meta);
             setStatus(`${spec.label} rendered (browser cache).`, 'ok');
         } finally {
@@ -580,7 +601,7 @@ async function requestField(kind: FieldKind, budget = budgetFor(kind)) {
             setStatus('Ligand changed while computing — stale field discarded.', 'idle');
             return;
         }
-        await renderCube(entry.cube, kind);
+        await renderCube(entry.cube, kind, entry.meta);
         renderMeta(entry.meta);
         setStatus(`${spec.label} rendered for ${ligandLabel ?? 'ligand'}.`, 'ok');
     } catch (e) {

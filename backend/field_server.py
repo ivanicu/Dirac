@@ -404,6 +404,41 @@ def embed_molecule(smiles: str | None, molblock: str | None, seed: int = 42):
     return Chem.MolToMolBlock(heavy), meta
 
 
+def describe_bad_molblock(molblock: str) -> str:
+    """Say WHAT is wrong with the molblock, not merely that something is.
+
+    'RDKit cannot parse the molfile' is a true sentence that names no cause,
+    and it cost a debugging round: RDKit itself had printed 'CTAB version
+    string invalid at line 4' to the daemon's stderr while the browser was
+    shown the generic line. The caller is usually another part of this app
+    building a molblock from scene geometry, and the counts line is where that
+    goes wrong — so the counts line is what gets reported.
+    """
+    lines = molblock.split('\n')
+    if not molblock.strip():
+        return 'the molfile is empty — no structure was sent'
+    if len(lines) < 5:
+        return (f'the molfile has only {len(lines)} lines; a molblock needs at '
+                f'least four header lines plus an atom block')
+    counts = lines[3]
+    if 'V2000' not in counts and 'V3000' not in counts:
+        return (f'the counts line (line 4) declares no CTAB version: '
+                f'{counts.rstrip()!r}. A V2000 molblock must end that line with '
+                f'" V2000" — this is a molblock BUILDER bug upstream, not a '
+                f'chemistry problem')
+    try:
+        n_atoms = int(counts[:3])
+    except ValueError:
+        return (f'the counts line (line 4) has no readable atom count: '
+                f'{counts.rstrip()!r}')
+    if 'V2000' in counts and n_atoms == 0 and len(lines) > 6:
+        return ('the counts line declares 0 atoms while an atom block follows — '
+                'V2000 cannot express more than 999 atoms, so a large selection '
+                'must be written as V3000')
+    return (f'RDKit cannot parse the molfile (counts line: {counts.rstrip()!r}, '
+            f'{n_atoms} atoms declared, {len(lines)} lines)')
+
+
 # ── molfile → RDKit mol with explicit hydrogens, coordinates preserved ──────
 
 def prepare_mol(molblock: str) -> Chem.Mol:
@@ -411,7 +446,7 @@ def prepare_mol(molblock: str) -> Chem.Mol:
     if mol is None:
         mol = Chem.MolFromMolBlock(molblock, removeHs=False, sanitize=False)
         if mol is None:
-            raise ValueError('RDKit cannot parse the molfile')
+            raise ValueError(describe_bad_molblock(molblock))
         Chem.SanitizeMol(
             mol,
             Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_KEKULIZE,
@@ -454,6 +489,30 @@ def write_cube(origin_a, axes_a, dims, values, syms, coords_a, comment: str) -> 
             for start in range(0, len(row), 6):
                 out.write(''.join(f'{v:13.5e}' for v in row[start:start + 6]) + '\n')
     return out.getvalue()
+
+
+ISO_ENCLOSED_FRACTION = 0.03   # the surface should wrap ~3% of the box
+
+
+def suggest_iso(v: np.ndarray) -> float:
+    """An isovalue taken from the field's OWN distribution.
+
+    MEP and MLP are sums of atomic contributions: their scale is set by the
+    molecule, not by the quantity. A constant default is therefore a guess
+    about a number that moves, and it moved — the app shipped iso=0.05 for MLP,
+    tuned on aspirin, which is 5–8% of the field's maximum on aspirin AND on
+    retinoic acid. At that level the surface encloses nearly the whole padded
+    grid and CLIPS AGAINST THE BOX WALL, so a chemist gets a gold crate with
+    the ligand somewhere inside it. Found by screenshot; no amount of reading
+    the code would have shown it, because the number is not wrong on its face.
+
+    A quantile is scale-free: whatever the units, the surface wraps the top few
+    percent of |field| and therefore looks like a lobe rather than a box.
+    Orbital and density cubes deliberately do NOT get this — a wavefunction is
+    normalised, which is exactly why the conventional 0.02–0.05 constants work
+    there and are worth keeping.
+    """
+    return round(float(np.quantile(np.abs(v), 1.0 - ISO_ENCLOSED_FRACTION)), 6)
 
 
 # ── classical MEP (Gasteiger + Coulomb) ─────────────────────────────────────
@@ -503,6 +562,7 @@ def field_mep(mol: Chem.Mol, spacing=0.4, pad=4.0):
         'net_charge': int(round(charges.sum())),
         'dims': dims.tolist(), 'spacing': spacing,
         'vmin': float(v.min()), 'vmax': float(v.max()),
+        'iso_suggest': suggest_iso(v),
     }
     return cube, meta
 
@@ -546,6 +606,7 @@ def field_mlp(mol: Chem.Mol, spacing=0.4, pad=4.0):
         'total_logp': float(f.sum()),
         'dims': dims.tolist(), 'spacing': spacing,
         'vmin': float(v.min()), 'vmax': float(v.max()),
+        'iso_suggest': suggest_iso(v),
     }
     return cube, meta
 
