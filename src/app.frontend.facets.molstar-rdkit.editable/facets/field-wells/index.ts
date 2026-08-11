@@ -273,6 +273,15 @@ export function initFieldWellsPanel(p: PluginContext) {
 }
 
 /**
+ * Fire the cheap default field automatically — used by molecule import so a
+ * pasted SMILES ends with a rendered well without another click. Skips
+ * silently when a field is already up or a request is in flight.
+ */
+export function autoRenderElectrostaticWell() {
+    if (molfile && !busy && !activeKind) void requestField('mep');
+}
+
+/**
  * Called from the lab's ligand lifecycle with the already-computed molfile.
  * A change of ligand invalidates any displayed field (it belongs to the
  * previous molecule), so the field is cleared, never silently kept.

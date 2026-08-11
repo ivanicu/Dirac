@@ -49,6 +49,7 @@ import {
     applyRdkitChemicalLayers,
     getRdkitChemicalLayerCounts,
     prepareLigandAnalysis,
+    computeLigandChemistry,
     searchLigandSmarts,
     applySmartsSearchOverlay,
     computeLigandIdentifiers,
@@ -63,7 +64,7 @@ import {
 } from '../chemistry.backend.perception.rdkit-wasm.editable/pharmacophore-features';
 import { LigandDepiction, type AtomHighlight, type AtomPosition } from '../chemistry.backend.perception.rdkit-wasm.editable/ligand-depiction';
 import { renderPropertiesPanel } from './facets/property-cockpit';
-import { initFieldWellsPanel, updateFieldWellsLigand } from './facets/field-wells';
+import { initFieldWellsPanel, updateFieldWellsLigand, autoRenderElectrostaticWell } from './facets/field-wells';
 import { initPharmacophoreDesigner, updatePharmacophoreDesigner } from './facets/pharmacophore-designer';
 import { PresetStructureRepresentations } from '../mol-plugin-state/builder/structure/representation-preset';
 import { StateTransforms } from '../mol-plugin-state/transforms';
@@ -310,6 +311,9 @@ class MolecularVfxLab {
     private ligandDepictionAtomPositions: AtomPosition[] = [];
     private smartsSearchMolfile: string | null = null;
     private smartsSearchTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Set when the current scene came from /embed — the authoritative molfile
+     * for the whole facet cascade (no CCD data exists for imports). */
+    private importedMolfile: string | null = null;
     private busy = false;
 
     async init() {
@@ -344,6 +348,16 @@ class MolecularVfxLab {
                 await this.applyRepresentationAndVisuals();
             });
         });
+
+        const importRun = byId<HTMLButtonElement>('import-run');
+        const importSmiles = byId<HTMLInputElement>('import-smiles');
+        const runImport = () => {
+            const smiles = importSmiles?.value.trim();
+            if (!smiles) return;
+            void this.perform(() => this.importMolecule(smiles));
+        };
+        importRun?.addEventListener('click', runImport);
+        importSmiles?.addEventListener('keydown', e => { if (e.key === 'Enter') runImport(); });
 
         const representation = byId<HTMLSelectElement>('representation');
         for (const control of RepresentationControls) representation.add(new Option(control.label, control.id));
@@ -893,7 +907,18 @@ class MolecularVfxLab {
             return;
         }
 
-        const analysis = await prepareLigandAnalysis(loci);
+        // Imported molecules bypass loci→molfile reconstruction: that path
+        // needs the CCD ComponentBond property, which a MOL-format import
+        // does not carry — and the backend-embedded molfile IS the model the
+        // scene was built from, so the atom-index contract holds by identity.
+        let analysis: Awaited<ReturnType<typeof prepareLigandAnalysis>>;
+        if (this.importedMolfile) {
+            const atomCount = parseInt(this.importedMolfile.split('\n')[3]?.slice(0, 3) ?? '0', 10);
+            const chemistry = atomCount > 0 ? await computeLigandChemistry(this.importedMolfile, atomCount) : null;
+            analysis = atomCount > 0 ? { molfile: this.importedMolfile, atomCount, chemistry } : null;
+        } else {
+            analysis = await prepareLigandAnalysis(loci);
+        }
         if (!analysis) {
             target.innerHTML = '<p class="ledger-empty">RDKit cannot parse this ligand (ComponentBond / CCD data unavailable).</p>';
             summary.textContent = 'RDKit parse failed';
@@ -1192,8 +1217,69 @@ class MolecularVfxLab {
         await this.applyRepresentationAndVisuals();
     }
 
+    /**
+     * SMILES → backend ETKDG/MMFF 3D → mol* scene. The imported molecule
+     * becomes the focused ligand, so the entire facet cascade (2D depiction,
+     * properties, field wells, designer seed) runs off the same lifecycle
+     * as a deposited ligand — then the electrostatic well renders itself.
+     */
+    private async importMolecule(smiles: string) {
+        if (!this.workbench) return;
+        const status = byId('import-status');
+        const setImportStatus = (text: string, tone: 'idle' | 'ok' | 'error') => {
+            if (status) { status.textContent = text; status.dataset.tone = tone; }
+        };
+        setImportStatus('Embedding 3D structure (ETKDG + MMFF)…', 'idle');
+        byId('status').textContent = 'Embedding molecule…';
+        let payload: { ok: boolean, molfile?: string, error?: string, meta?: { smiles_canonical: string, inchikey: string, natoms_heavy: number, mmff_optimized: boolean } };
+        try {
+            const resp = await fetch('http://127.0.0.1:8901/embed', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ smiles }),
+            });
+            payload = await resp.json();
+        } catch (e) {
+            setImportStatus(`Backend unreachable — start it with: backend/env/bin/python backend/field_server.py (${e instanceof Error ? e.message : e})`, 'error');
+            byId('status').textContent = 'Import failed';
+            return;
+        }
+        if (!payload.ok || !payload.molfile || !payload.meta) {
+            setImportStatus(`Backend refused: ${payload.error}`, 'error');
+            byId('status').textContent = 'Import failed';
+            return;
+        }
+        const meta = payload.meta;
+        this.framedLigandMolecule = undefined;
+        this.ligandTargets = [];
+        this.selectedLigandTargetId = undefined;
+        this.importedMolfile = payload.molfile;
+        this.currentMolecule = {
+            id: meta.inchikey,
+            label: `Imported · ${meta.smiles_canonical}`,
+            category: 'Imported molecule',
+            stress: `Generated in-backend: ETKDGv3 embed${meta.mmff_optimized ? ' + MMFF94 optimization' : ''}, ${meta.natoms_heavy} heavy atoms.`,
+            url: '',
+        };
+        await this.workbench.loadStructureFromData(payload.molfile, {
+            format: 'mol',
+            label: `${meta.inchikey}.mol`,
+        });
+        await this.applyRepresentationAndVisuals();
+        this.refreshMetrics();
+        // applyRepresentationAndVisuals kicks renderLigandDepiction as
+        // fire-and-forget; the Fields facet only learns the molfile inside it.
+        // Await it explicitly so the auto-rendered well cannot race the
+        // lifecycle that arms it.
+        await this.renderLigandDepiction();
+        setImportStatus(`Imported ${meta.smiles_canonical} (${meta.inchikey}) — facets live, rendering electrostatic well…`, 'ok');
+        byId('status').textContent = 'Ready';
+        autoRenderElectrostaticWell();
+    }
+
     private async loadMolecule(control: MolecularControl) {
         if (!this.workbench) return;
+        this.importedMolfile = null;
         this.framedLigandMolecule = undefined;
         this.ligandTargets = [];
         this.selectedLigandTargetId = undefined;

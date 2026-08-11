@@ -160,6 +160,39 @@
             border-radius: 2px 2px 0 0;
         }
 
+        /* Import molecule */
+        .import-molecule {
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            background: var(--surface-2);
+            margin-bottom: 12px;
+        }
+        .import-molecule > label {
+            display: block;
+            color: var(--text-3);
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+        .import-row { display: flex; gap: 6px; }
+        .import-row input {
+            flex: 1;
+            min-width: 0;
+            font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+            font-size: 11px;
+        }
+        .import-status {
+            margin-top: 6px;
+            color: var(--text-3);
+            font-size: 10px;
+            line-height: 1.4;
+        }
+        .import-status[data-tone="error"] { color: var(--high); }
+        .import-status[data-tone="ok"] { color: var(--accent); }
+
         /* Fields panel — energy wells */
         .field-buttons {
             display: grid;
@@ -1061,6 +1094,14 @@
                     <div class="panel-heading">
                         <h2>Ligand focus</h2>
                         <span class="panel-index">FOCUS</span>
+                    </div>
+                    <div class="import-molecule">
+                        <label for="import-smiles">Import molecule · SMILES → 3D</label>
+                        <div class="import-row">
+                            <input id="import-smiles" type="text" placeholder="e.g. CC(=O)Oc1ccccc1C(=O)O (aspirin)" autocomplete="off" spellcheck="false">
+                            <button type="button" id="import-run" class="btn-ghost">Generate</button>
+                        </div>
+                        <div id="import-status" class="import-status">Backend embeds with ETKDG + MMFF; every facet then runs automatically.</div>
                     </div>
                     <div class="focus-workbench">
                         <div class="focus-workbench-heading">

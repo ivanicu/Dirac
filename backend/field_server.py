@@ -171,6 +171,65 @@ def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict
         print(f'[db] write failed ({e}) — result served but not persisted', flush=True)
 
 
+# ── molecule import: SMILES/molfile → embedded 3D structure ─────────────────
+
+def embed_molecule(smiles: str | None, molblock: str | None, seed: int = 42):
+    """Parse a molecule and give it real 3D coordinates.
+
+    ETKDG + MMFF94 live here because the vendored RDKit-JS wasm has neither
+    (verified against the binary) — this endpoint is what makes 'paste a
+    SMILES, get the full facet cascade' possible at all.
+    """
+    if smiles:
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            raise ValueError(f'RDKit cannot parse SMILES {smiles!r}')
+    elif molblock:
+        mol = Chem.MolFromMolBlock(molblock, removeHs=False)
+        if mol is None:
+            raise ValueError('RDKit cannot parse the molfile')
+    else:
+        raise ValueError('provide smiles or molfile')
+
+    mol = Chem.AddHs(mol)
+    params = AllChem.ETKDGv3()
+    params.randomSeed = seed
+    if AllChem.EmbedMolecule(mol, params) != 0:
+        # ETKDG can fail on macrocycles/exotics; random-coord fallback is the
+        # documented rescue, and MMFF then cleans it up.
+        if AllChem.EmbedMolecule(mol, useRandomCoords=True, randomSeed=seed) != 0:
+            raise ValueError('3D embedding failed (ETKDG and random-coords)')
+    ff_ok = False
+    energy = None
+    try:
+        res = AllChem.MMFFOptimizeMoleculeConfs(mol, maxIters=2000)
+        if res and res[0][0] == 0:
+            ff_ok = True
+        props = AllChem.MMFFGetMoleculeProperties(mol)
+        if props is not None:
+            ff = AllChem.MMFFGetMoleculeForceField(mol, props)
+            if ff is not None:
+                energy = float(ff.CalcEnergy())
+    except Exception:
+        pass  # unparameterized atoms: geometry is still ETKDG-valid
+
+    heavy = Chem.RemoveHs(mol)
+    meta = {
+        'natoms': mol.GetNumAtoms(),
+        'natoms_heavy': heavy.GetNumAtoms(),
+        'smiles_canonical': Chem.MolToSmiles(heavy),
+        'inchikey': Chem.MolToInchiKey(mol),
+        'mmff_optimized': ff_ok,
+        'mmff_energy_kcal': energy,
+        'embed': 'ETKDGv3',
+        'seed': seed,
+    }
+    # Ship WITHOUT explicit hydrogens: the lab's ligand pipeline (perception,
+    # depiction, pharmacophore, fields) expects heavy-atom molfiles exactly
+    # like the ones it extracts from deposited structures.
+    return Chem.MolToMolBlock(heavy), meta
+
+
 # ── molfile → RDKit mol with explicit hydrogens, coordinates preserved ──────
 
 def prepare_mol(molblock: str) -> Chem.Mol:
@@ -411,6 +470,22 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {'ok': False, 'error': 'not found'})
 
     def do_POST(self):
+        if self.path == '/embed':
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                req = json.loads(self.rfile.read(length))
+                t0 = time.time()
+                molfile, meta = embed_molecule(
+                    req.get('smiles'), req.get('molfile'),
+                    seed=int(req.get('seed', 42)))
+                meta['seconds'] = round(time.time() - t0, 2)
+                print(f"[embed] {meta['smiles_canonical']} atoms={meta['natoms_heavy']} "
+                      f"t={meta['seconds']}s", flush=True)
+                self._send(200, {'ok': True, 'molfile': molfile, 'meta': meta})
+            except Exception as e:
+                traceback.print_exc()
+                self._send(200, {'ok': False, 'error': str(e)})
+            return
         if self.path != '/field':
             self._send(404, {'ok': False, 'error': 'not found'})
             return
