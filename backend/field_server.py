@@ -47,6 +47,18 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 # as a 503 that names the exception, while /field keeps working.
 from envelope import normalize_meta
 
+# `meta.stored: true` is set when the persist thread is STARTED, not when it
+# finishes — Ivan's 自动入库自动缓存 means the render must never wait on the
+# database. That is the right trade and it leaves one hole: a write that fails
+# after the response has already claimed `stored`. The response cannot be
+# corrected retroactively, so the honest fix is to make the failure COUNTABLE
+# and visible at /health and /admin, rather than to let it exist only as one
+# line in a log nobody tails. A silent persist failure looks exactly like a
+# cache that is simply cold — and a cold cache that nobody can distinguish from
+# a broken one is how 19 rows sat unservable for a day.
+_persist = {'queued': 0, 'ok': 0, 'failed': 0, 'last_error': None}
+_persist_lock = threading.Lock()
+
 _ADMIN_IMPORT_ERROR: str | None = None
 try:
     from admin_routes import handle_admin as _handle_admin
@@ -437,8 +449,17 @@ def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict
                  meta.get('scf_seconds') if kind != 'mep' else meta.get('total_seconds'),
                  toolkit, _producer_id, compound_id, conf_hash, method_row, label))
         print(f'[db] cached kind={kind} basis={basis} coarse={"yes" if conf_hash else "no"}', flush=True)
+        with _persist_lock:
+            _persist['ok'] += 1
     except Exception as e:
-        print(f'[db] write failed ({e}) — result served but not persisted', flush=True)
+        # LOUD, and counted. The response for this cube already said stored:true;
+        # the only remaining honesty available is that the discrepancy is
+        # visible to whoever asks the service how it is doing.
+        print(f'[db] WRITE FAILED ({e}) — result was served with stored:true and is '
+              f'NOT persisted', flush=True)
+        with _persist_lock:
+            _persist['failed'] += 1
+            _persist['last_error'] = f'{type(e).__name__}: {e}'
 
 
 # ── molecule import: SMILES/molfile → embedded 3D structure ─────────────────
@@ -1423,6 +1444,7 @@ class Handler(BaseHTTPRequestHandler):
                              'db_cache': 'on' if _db_ok else 'off',
                              'scf_cached': len(_scf_cache),
                              'scf_cache_max': SCF_CACHE_MAX,
+                             'persist': dict(_persist),
                              'rss_mb': rss_mb})
         else:
             self._send(404, {'ok': False, 'error': 'not found'})
@@ -1551,6 +1573,12 @@ class Handler(BaseHTTPRequestHandler):
                     target=db_put_cube,
                     args=(molfile_sha, kind, basis_key, cube, meta),
                     kwargs={'mol': mol}, daemon=True).start()
+                with _persist_lock:
+                    _persist['queued'] += 1
+                # ENQUEUED, not completed. contracts/iface.pyi says so too — a
+                # boolean that reads as "it is in the database" would be a
+                # confidently wrong answer, which is the one failure this
+                # service is built to refuse.
                 meta['stored'] = True
             # `computed_at` was declared for every kind and set by NOBODY on
             # this path — only the cache-hit path had it, so "when was this
