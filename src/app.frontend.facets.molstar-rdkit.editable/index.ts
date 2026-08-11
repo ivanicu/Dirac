@@ -321,7 +321,6 @@ class MolecularVfxLab {
         });
         this.workbench.plugin.behaviors.interaction.click.subscribe(({ current }) => this.handleInteractionClick(current.loci));
         initFieldWellsPanel(this.workbench.plugin);
-        initFieldWellsPanel(this.workbench.plugin);
         initPharmacophoreDesigner(this.workbench.plugin);
         await this.workbench.setBackground(Color(0x0d141b));
         this.createControls();
@@ -882,7 +881,6 @@ class MolecularVfxLab {
             stats.textContent = '';
             this.ligandDepictionAtomPositions = [];
             updateFieldWellsLigand(null, null);
-            updateFieldWellsLigand(null, null);
             void updatePharmacophoreDesigner(null, this.currentFocusOptions(), { structureId: this.currentMolecule.id, ligandLabel: null });
             return;
         }
@@ -892,7 +890,6 @@ class MolecularVfxLab {
             target.innerHTML = '<p class="ledger-empty">RDKit cannot parse this ligand (ComponentBond / CCD data unavailable).</p>';
             summary.textContent = 'RDKit parse failed';
             stats.textContent = '';
-            updateFieldWellsLigand(null, null);
             updateFieldWellsLigand(null, null);
             void updatePharmacophoreDesigner(null, this.currentFocusOptions(), { structureId: this.currentMolecule.id, ligandLabel: null });
             return;
@@ -941,9 +938,6 @@ class MolecularVfxLab {
         // Property Optimization Cockpit facet reuses the same molfile
         // (computed once here) rather than re-running ligandLociToMolfile.
         void renderPropertiesPanel(analysis.molfile, ligandTarget?.label ?? null);
-        // Field Wells facet: same molfile carries scene coordinates, so backend
-        // cubes land aligned. A ligand change clears any displayed field.
-        updateFieldWellsLigand(analysis.molfile, ligandTarget?.label ?? null);
         // Field Wells facet: same molfile carries scene coordinates, so backend
         // cubes land aligned. A ligand change clears any displayed field.
         updateFieldWellsLigand(analysis.molfile, ligandTarget?.label ?? null);
