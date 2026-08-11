@@ -5,9 +5,15 @@ computes without thinking. Both run on the CPU in seconds, both return numbers
 a chemist can act on, and both ship with positive controls that fail loudly.
 
 ```bash
-backend/env/bin/python backend/physics/validate.py       # 8 gates — run first
-backend/env/bin/python backend/physics/server.py         # 127.0.0.1:8902
+backend/env/bin/python backend/physics/validate.py       # 10 gates — run first
+backend/env/bin/python backend/physics/server.py         # 0.0.0.0:8902
+backend/env/bin/python backend/physics/coverage.py --set hard    # what it cannot do
 ```
+
+Bound to all interfaces because Ivan drives this from a Mac on the LAN, and a
+loopback-only daemon simply reports "offline" there. Stated rather than
+discovered: it is **unauthenticated** and runs quantum chemistry on whatever is
+posted to it. `DIRAC_PHYSICS_HOST=127.0.0.1` puts it back on loopback.
 
 Separate daemon from `field_server.py` on purpose: that file belongs to the
 Field Wells workstream. The physics itself lives in importable modules
@@ -76,6 +82,22 @@ Three honesty constraints are in the code, not the docs:
 The energy is MMFF94s: fast enough to be interactive, wrong enough that the
 number is triage rather than thermodynamics. `meta.method` says so on every
 response.
+
+## What it cannot do — measured, not estimated
+
+| limit | detail |
+|---|---|
+| cost | HF is O(N⁴), measured on this box as `seconds ≈ 5.9e-9 × nao^4.03` over 47 molecules. Requests are refused **before** running when the prediction exceeds `max_seconds` (default 120 s), with the estimate and a smaller-basis suggestion in the message. Imatinib in def2-SVP is 673 basis functions ≈ 70 minutes: refused. |
+| model scatter | the fit underestimates the middle of the range by up to 2.8×, so a 2.8× safety factor is applied. This is an order-of-magnitude screen; the caller's timeout is the real protection. |
+| heavy elements | def2 needs an ECP from Rb (Z=37) up and pyscf does not attach it automatically. `_ecp_for()` does, per element, only where the basis defines one. **Without it iodine is wrong by 58 kcal/mol with no error** — see Validation. |
+| MMFF | cannot type PF₆⁻, boronic acids, or selenomethionine. Torsional strain raises on those rather than guessing. |
+| no rotatable bonds | 8 of the 68 library molecules (benzene, naphthalene, indole…) report zero strain **vacuously**. Zero because there is nothing to scan is not zero because nothing is strained. |
+| ions | an anion's whole surface is negative, so a σ-hole there is negative too (PF₆⁻: −46 against a −154 belt). Sign cannot classify; use `anisotropy_kcal_per_mol` and `positive_cap`. |
+
+Coverage over the 68-molecule screening library plus a 20-entry hard set is
+reproducible with `coverage.py`. Note the library contains **no bromine and no
+iodine** — it is the wrong population for σ-hole testing, which is why the hard
+set exists and why several of its entries are expected to fail.
 
 ## Validation
 

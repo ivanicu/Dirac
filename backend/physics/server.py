@@ -13,7 +13,7 @@ Protocol (JSON in, JSON out; errors arrive as 200 with ok:false, matching the
 fields backend so the front end has one error path):
 
   GET  /health
-  POST /surface/mep       {molfile, basis?, isovalue?, points_per_atom?}
+  POST /surface/mep       {molfile, basis?, isovalue?, points_per_atom?, max_seconds?}
        → {ok, points_b64, values_b64, n_points, extrema, meta}
   POST /surface/mep_at    {molfile, points | points_b64, basis?}
        → {ok, values_b64, meta}
@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import sys
 import time
 import traceback
@@ -43,10 +44,21 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from physics.mep_surface import compute_surface_mep, mep_at_points   # noqa: E402
+from physics.mep_surface import (DEFAULT_BASIS, DEFAULT_MAX_SECONDS,   # noqa: E402
+                                 compute_surface_mep, mep_at_points)
 from physics.torsion import compute_torsion_strain                   # noqa: E402
 
 PORT = 8902
+# Bound to all interfaces, not loopback: Ivan drives this from a Mac on the LAN
+# and a 127.0.0.1-only daemon reports itself as simply "offline" there, which is
+# how the fields backend was found broken. The consequence is stated rather than
+# discovered: this is an UNAUTHENTICATED endpoint that runs quantum chemistry and
+# RDKit parsing on whatever is posted to it. Fine on a home LAN, not on a hostile
+# one — bind HOST to 127.0.0.1 if that ever changes.
+HOST = os.environ.get('DIRAC_PHYSICS_HOST', '0.0.0.0')
+# A molfile is kilobytes. Anything past this is a mistake or an attempt to wedge
+# the box, and either way it should be refused before it is read into memory.
+MAX_BODY_BYTES = 8 * 1024 * 1024
 
 
 def b64(array: np.ndarray) -> str:
@@ -87,15 +99,21 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             length = int(self.headers.get('Content-Length', '0'))
+            if length > MAX_BODY_BYTES:
+                self._send(200, {'ok': False,
+                                 'error': f'request body {length} bytes exceeds the '
+                                          f'{MAX_BODY_BYTES} byte limit'})
+                return
             req = json.loads(self.rfile.read(length)) if length else {}
             t0 = time.time()
 
             if self.path == '/surface/mep':
                 out = compute_surface_mep(
                     req['molfile'],
-                    basis=req.get('basis', '6-31g*'),
+                    basis=req.get('basis', DEFAULT_BASIS),
                     isovalue=float(req.get('isovalue', 0.001)),
                     points_per_atom=int(req.get('points_per_atom', 120)),
+                    max_seconds=float(req.get('max_seconds', DEFAULT_MAX_SECONDS)),
                 )
                 self._send(200, {
                     'ok': True,
@@ -114,7 +132,7 @@ class Handler(BaseHTTPRequestHandler):
                 points = (unb64(req['points_b64']) if 'points_b64' in req
                           else np.asarray(req['points'], dtype=float))
                 values, meta = mep_at_points(req['molfile'], points,
-                                             basis=req.get('basis', '6-31g*'))
+                                             basis=req.get('basis', DEFAULT_BASIS))
                 meta['total_seconds'] = round(time.time() - t0, 2)
                 self._send(200, {'ok': True, 'values_b64': b64(values), 'meta': meta})
                 print(f"[surface/mep_at] {len(values)} points t={meta['total_seconds']}s", flush=True)
@@ -145,5 +163,8 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     port = int(sys.argv[1]) if len(sys.argv) > 1 else PORT
-    print(f'Dirac physics backend on http://127.0.0.1:{port}', flush=True)
-    ThreadingHTTPServer(('127.0.0.1', port), Handler).serve_forever()
+    host = os.environ.get('DIRAC_PHYSICS_HOST', HOST)
+    print(f'Dirac physics backend on http://{host}:{port}'
+          + ('  (reachable from the LAN — unauthenticated)' if host == '0.0.0.0' else ''),
+          flush=True)
+    ThreadingHTTPServer((host, port), Handler).serve_forever()

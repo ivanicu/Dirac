@@ -195,6 +195,7 @@ def main() -> int:
     parser.add_argument('--worker', metavar='SMILES')
     parser.add_argument('--basis', default='def2-svp')
     parser.add_argument('--budget', type=int, default=180)
+    parser.add_argument('--torsion-budget', type=int, default=60)
     parser.add_argument('--limit', type=int)
     parser.add_argument('--set', choices=('library', 'hard'), default='library')
     parser.add_argument('--workers', type=int, default=8)

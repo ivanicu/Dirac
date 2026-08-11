@@ -41,7 +41,31 @@ DEFAULT_ISOVALUE = 0.001          # a.u., the Politzer/Murray surface
 # def2-SVP, not 6-31G*: the latter has NO IODINE, and iodine is the strongest
 # halogen-bond donor there is — the single case this module most exists for.
 DEFAULT_BASIS = 'def2-svp'
-MAX_QM_ATOMS = 120
+# Atom count is the wrong meter. Cost is set by the BASIS FUNCTIONS, and the
+# same 40 atoms cost 2 s in STO-3G and 200 s in def2-SVP — so a fixed atom cap
+# either blocks work that would have been instant or admits work that hangs.
+# Measured on this box over 47 molecules (8-way parallel, OMP_NUM_THREADS=2):
+#
+#     seconds ≈ 5.9e-9 × nao^4.03
+#
+# which is textbook Hartree-Fock O(N^4), recovered from the data rather than
+# assumed. The gate is therefore a TIME budget applied to a predicted cost,
+# and the refusal says what it predicted and what to do about it.
+# The power law fits the ends (nao 114 → 1.0 s measured, 398 → 181 s measured)
+# but UNDERESTIMATES the middle by up to 2.8× (nao 246 predicted 25 s, measured
+# 69.5 s), so the raw fit errs toward admitting a job that then hangs — the
+# unsafe direction for a gate. The safety factor is that worst measured ratio,
+# stated rather than hidden: this is an order-of-magnitude screen, and the
+# caller's own timeout remains the real protection.
+COST_COEFFICIENT = 5.9e-9
+COST_EXPONENT = 4.03
+COST_SAFETY = 2.8
+DEFAULT_MAX_SECONDS = 120.0
+MAX_QM_ATOMS = 200        # backstop only: the Mole build itself must stay cheap
+
+
+def estimated_scf_seconds(nao: int) -> float:
+    return COST_SAFETY * COST_COEFFICIENT * float(nao) ** COST_EXPONENT
 
 # def2 basis sets replace the core of every element from Rb (Z=37) onward with
 # an effective core potential, and pyscf does NOT attach it just because you
@@ -265,7 +289,8 @@ def _classify_sigma_hole(rdmol, atom_positions: np.ndarray, point: np.ndarray,
 
 def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
                         isovalue: float = DEFAULT_ISOVALUE,
-                        points_per_atom: int = 120):
+                        points_per_atom: int = 120,
+                        max_seconds: float = DEFAULT_MAX_SECONDS):
     """Full σ-hole analysis for one molecule.
 
     Returns a dict with `points` (Å, in the molfile frame), `values`
@@ -278,6 +303,15 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
     mol = gto.M(atom=[(s, c) for s, c in atoms], unit='Angstrom',
                 basis=basis, ecp=_ecp_for(atoms, basis) or None,
                 charge=charge, spin=spin, verbose=0)
+
+    predicted = estimated_scf_seconds(mol.nao)
+    if max_seconds and predicted > max_seconds:
+        raise ValueError(
+            f'{len(atoms)} atoms in {basis} is {mol.nao} basis functions, predicted '
+            f'~{predicted:.0f} s against a {max_seconds:.0f} s budget. Use a smaller '
+            f'basis (sto-3g is ~{estimated_scf_seconds(mol.nao // 3):.0f} s here), '
+            f'raise max_seconds deliberately, or trim the ligand.')
+
     mf = scf.RHF(mol) if spin == 0 else scf.UHF(mol)
     mf.max_cycle = 120
     energy = mf.kernel()
@@ -350,6 +384,7 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
             'spin': spin,
             'n_atoms': len(atoms),
             'n_basis': int(mol.nao),
+            'predicted_scf_seconds': round(predicted, 1),
             'surface': f'{isovalue} a.u. isodensity (Politzer/Murray)',
             'n_surface_points': int(len(points)),
             'v_s_max_kcal_per_mol': round(float(values.max()), 2),
