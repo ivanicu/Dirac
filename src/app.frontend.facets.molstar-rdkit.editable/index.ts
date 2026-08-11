@@ -175,13 +175,30 @@ const FocusLayerControls = FocusSemanticLayers.map(layer => ({
     description: `${layer.description} Source: ${layer.source}.`,
 }));
 
-const CoreStructuralLayerControls = StructuralLayerControls.filter(layer => layer.id === 'secondary-structure-identity');
-const CoreInteractionLayerControls = InteractionLayerControls;
-const SemanticLayerControls = [...CoreStructuralLayerControls, ...FocusLayerControls, ...CoreInteractionLayerControls, ...RdkitLayerControls, ...PharmacophoreLayerControls] as const;
+// Expose ALL semantic layers — no artificial filter. The UpgradeGroups
+// categorization provides the UI grouping; every layer that the chemistry
+// substrate can compute should be reachable from the lab.
+const AllStructuralLayerControls = StructuralLayerControls;
+const AllChemicalLayerControls = ChemicalSemanticLayers.map(layer => ({ ...layer, group: 'Chemistry', recommended: false }));
+const AllContextLayerControls = ContextSemanticLayers.map(layer => ({ ...layer, group: 'Molecular context', recommended: false }));
+const AllEvidenceLayerControls = EvidenceSemanticLayers.map(layer => ({ ...layer, group: 'Input evidence', recommended: false }));
+const SemanticLayerControls = [
+    ...AllStructuralLayerControls,
+    ...FocusLayerControls,
+    ...InteractionLayerControls,
+    ...AllChemicalLayerControls,
+    ...AllContextLayerControls,
+    ...AllEvidenceLayerControls,
+    ...RdkitLayerControls,
+    ...PharmacophoreLayerControls,
+] as const;
 const VfxLayerControls = MolstarVisualUpgrades;
 const VisualLayerControls = [...SemanticLayerControls, ...VfxLayerControls] as const;
 const SemanticUpgradeGroups = UpgradeGroups.filter(group =>
-    group.id === 'Structural identity' || group.id === 'Ligand focus' || group.id === 'Interactions' || group.id === 'RDKit chemistry' || group.id === 'Pharmacophore'
+    group.id !== 'Geometry' && group.id !== 'Sphere only' && group.id !== 'Material' &&
+    group.id !== 'Surface only' && group.id !== 'Lighting' && group.id !== 'Environment' &&
+    group.id !== 'Depth' && group.id !== 'Image' && group.id !== 'Focus' &&
+    group.id !== 'Composition' && group.id !== 'Interaction' && group.id !== 'Experimental'
 );
 const VfxUpgradeGroups = UpgradeGroups.slice(9);
 type UpgradeGroup = typeof UpgradeGroups[number];
