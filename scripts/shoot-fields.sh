@@ -70,8 +70,16 @@ cat > "$STAGE/index.html.driver" <<EOF
     var bar = document.createElement('div');
     bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99999;'
       + 'font:11px ui-monospace,monospace;padding:6px 10px;background:#111;color:#fff';
+    // Which buttons are actually live, on the record in every shot. Ivan
+    // asked why only one field could be opened; that is a question about
+    // button state, and reading it off a screenshot's pixels is guessing.
+    var states = [];
+    document.querySelectorAll('.field-btn[data-field]').forEach(function (b) {
+      states.push(b.dataset.field + (b.disabled ? ':OFF' : ':on'));
+    });
     bar.textContent = FIELD + ' | ' + MOLECULE + ' | ' + txt('#fields-summary')
-      + ' | ' + txt('#field-status');
+      + ' | ' + txt('#field-status')
+      + ' || ' + states.join(' ') + ' || ' + txt('#field-prefetch');
     document.body.appendChild(bar);
     document.title = 'SHOT_READY';
   })();
