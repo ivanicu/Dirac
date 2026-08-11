@@ -21,6 +21,7 @@ import { StructureSelectionQueries } from '../../../mol-plugin-state/helpers/str
 import { auditHalogen, HalogenAudit, PocketAtom, ELECTRONIC } from '../../../chemistry.backend.perception.rdkit-wasm.editable/halogen-audit';
 import { extractLigandAtomData, lociFromFocusOptions } from '../../../chemistry.backend.perception.rdkit-wasm.editable/ligand-pipeline';
 import type { LigandFocusOptions } from '../../../chemistry.backend.perception.rdkit-wasm.editable/semantic-focus';
+import { onSurfaceResult, getLastSurfaceResult } from '../ligand-physics';
 
 const HALOGENS = new Set(['F', 'CL', 'BR', 'I']);
 
@@ -134,14 +135,56 @@ export function renderHalogenPanel(rows: HalogenRow[]) {
     </div>`).join('');
 }
 
+/**
+ * V_S,max comes from the Ligand Physics panel's own SCF rather than a second one.
+ *
+ * That panel answers "is there a σ-hole and how deep"; this one answers "is anything on
+ * the axis". Two halves of one question that have lived in two different products for
+ * years — and issuing our own /surface/mep for numbers already on screen would be both
+ * wasteful and a way for the two panels to disagree about the same molecule.
+ *
+ * Keyed by element, and that is a stopgap the code says out loud: the MEP extrema are
+ * indexed against the isolated ligand RDKit parsed, while the pocket walk is indexed
+ * against the mol* loci, and quietly assuming those agree is how a confident wrong answer
+ * gets made. With one halogen of each element — the common case, and true of lapatinib —
+ * the mapping is unambiguous. With two chlorines it is not, and then the deeper hole is
+ * used for both, which overstates the weaker one.
+ */
+function qmFromSurface(): Map<string, { vsMax: number, anisotropy: number | null, basis?: string, method?: string }> {
+    const out = new Map<string, { vsMax: number, anisotropy: number | null, basis?: string, method?: string }>();
+    const last = getLastSurfaceResult();
+    if (!last) return out;
+    for (const e of last.extrema) {
+        if (e.kind !== 'maximum' || !e.sigma_hole) continue;
+        const el = (e.element || '').toUpperCase();
+        if (!HALOGENS.has(el)) continue;
+        const prev = out.get(el);
+        if (prev && prev.vsMax >= e.value_kcal_per_mol) continue;
+        out.set(el, {
+            vsMax: e.value_kcal_per_mol,
+            anisotropy: e.sigma_hole.anisotropy_kcal_per_mol ?? null,
+            basis: last.meta.basis,
+            method: last.meta.method,
+        });
+    }
+    return out;
+}
+
+let current: { structure: Structure, options: LigandFocusOptions } | null = null;
+let subscribed = false;
+
 /** Called from the same lifecycle point that refreshes the other ligand facets. */
-export function updateHalogenAudit(
-    structure: Structure | null, options: LigandFocusOptions,
-    qmBySymbol?: Map<string, { vsMax: number, anisotropy: number | null, basis?: string, method?: string }>,
-) {
-    if (!structure) { renderHalogenPanel([]); return; }
+export function updateHalogenAudit(structure: Structure | null, options: LigandFocusOptions) {
+    if (!subscribed) {
+        subscribed = true;
+        // Re-render the moment the physics panel finishes, so pressing Compute over there
+        // resolves the UNMEASURED rows here without a second click.
+        onSurfaceResult(() => { if (current) updateHalogenAudit(current.structure, current.options); });
+    }
+    if (!structure) { current = null; renderHalogenPanel([]); return; }
+    current = { structure, options };
     try {
-        renderHalogenPanel(auditLigandHalogens(structure, options, qmBySymbol));
+        renderHalogenPanel(auditLigandHalogens(structure, options, qmFromSurface()));
     } catch (error) {
         console.error('halogen audit failed', error);
         renderHalogenPanel([]);

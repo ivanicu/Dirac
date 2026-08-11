@@ -191,6 +191,20 @@ function extremaTable(extrema: Extremum[], pct: number): string {
         <tbody>${rows}</tbody></table>`;
 }
 
+/** The last completed surface run, for consumers that need the numbers rather than the table. */
+let lastSurface: { extrema: Extremum[], meta: SurfaceMeta } | null = null;
+const surfaceListeners = new Set<(r: { extrema: Extremum[], meta: SurfaceMeta }) => void>();
+
+export function getLastSurfaceResult() { return lastSurface; }
+export function onSurfaceResult(cb: (r: { extrema: Extremum[], meta: SurfaceMeta }) => void) {
+    surfaceListeners.add(cb);
+    return () => surfaceListeners.delete(cb);
+}
+function publishSurfaceResult(extrema: Extremum[], meta: SurfaceMeta) {
+    lastSurface = { extrema, meta };
+    for (const cb of surfaceListeners) { try { cb(lastSurface); } catch (e) { console.error(e); } }
+}
+
 function surfacePanel(extrema: Extremum[], meta: SurfaceMeta): string {
     const pct = meta.absolute_uncertainty_pct ?? 25;
     const holes = meta.sigma_holes_found;
@@ -295,6 +309,11 @@ async function runSurface() {
         }
         const host = byId('phys-surface-body');
         if (host) host.innerHTML = surfacePanel(out.extrema, out.meta);
+        // Publish, so the halogen audit can ask what the σ-hole POINTS AT without issuing a
+        // second SCF for numbers that already exist. This panel answers "is there a hole and
+        // how deep"; that one answers "is anything on the axis" — two halves of one question
+        // that have historically lived in two different products.
+        publishSurfaceResult(out.extrema, out.meta);
         setStatus('phys-surface-status',
             `Surface electrostatics for ${ligandLabel ?? 'ligand'}.`, 'ok');
         try { await markExtrema(out.extrema); } catch { /* table still stands */ }
@@ -376,6 +395,9 @@ export function initLigandPhysicsPanel(p: PluginContext) {
 /** Same contract as the other facets: the lab hands over the focused ligand's
  * molfile, already in scene coordinates. */
 export function updateLigandPhysics(nextMolfile: string | null, label: string | null) {
+    // A result belongs to the molecule it was computed on; carrying it across a ligand
+    // switch is how a number ends up describing something it never saw.
+    lastSurface = null;
     const changed = nextMolfile !== molfile;
     molfile = nextMolfile;
     ligandLabel = label;
