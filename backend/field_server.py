@@ -1678,6 +1678,39 @@ ALLOWED_BASIS = ('sto-3g', '6-31g', '6-31g*', 'def2-svp')  # = DB CHECK minus 'n
 # because the alternative — waiting as long as the winner's budget allows — makes
 # a client's own timeout the only thing that ends the request, and a client
 # socket timeout does not stop anything on this side.
+# ── the concurrency bound ──────────────────────────────────────────────────
+# Dedup removed duplicate work; it did not remove LOAD. Five DISTINCT SCFs all
+# started, each planning around pyscf's 4000 MB default max_memory and each using
+# as many BLAS threads as it likes on a 24-thread box — so the fifth request did
+# not merely queue, it made the first four slower and pushed RSS toward the
+# ceiling that killed this daemon once already.
+#
+# TWO is the bound, and it is derived rather than picked: measured idle RSS is
+# ~160 MB, one pyscf SCF plans around 4000 MB, and the unit file that would
+# supervise this reserves 8 GB — so two concurrent SCFs is the largest number that
+# fits a full pyscf budget each with the baseline and headroom, and it leaves CPU
+# for the classical fields (0.1 s) that must stay interactive.
+#
+# Classical kinds are NOT gated: at ~0.1 s a semaphore costs more than the work.
+MAX_CONCURRENT_QM = 2
+_qm_gate = threading.BoundedSemaphore(MAX_CONCURRENT_QM)
+# `now`/`peak` count requests AT THE GATE (waiting or running); `running_now`/
+# `running_peak` count those actually HOLDING a slot. Both, because they answer
+# different questions and I measured the wrong one first: the job ledger's
+# [started_at, finished_at] interval includes work done AFTER the slot is
+# released, so three ledger intervals can overlap while only two SCFs ever ran.
+# The ledger is a corroborating signal with a known upward bias; the property
+# lives here, at the semaphore, so this is where it is counted.
+_qm_waiting = {'now': 0, 'peak': 0, 'refused': 0, 'running_now': 0,
+               'running_peak': 0}
+_qm_lock = threading.Lock()
+
+# How long a request may wait for a slot. Past this it is REFUSED with the queue
+# depth in the message rather than held: a client that has been waiting three
+# minutes for a slot has already been abandoned by the person who clicked, and
+# holding the thread only makes the queue behind it longer.
+QUEUE_WAIT_CEILING = 90.0
+
 JOIN_WAIT_CEILING = 120.0
 # After the winner reports 'done', its cube is written by a BACKGROUND thread. So
 # 'done' and 'readable' are different moments and this is the gap between them.
@@ -1766,6 +1799,8 @@ class Handler(BaseHTTPRequestHandler):
                              'scf_cache_max': SCF_CACHE_MAX,
                              'persist': dict(_persist),
                              'jobs': jobs.counters(),
+                             'qm_slots': MAX_CONCURRENT_QM,
+                             'qm_waiting': dict(_qm_waiting),
                              'rss_mb': rss_mb})
         else:
             self._send(404, {'ok': False, 'error': 'not found'})
@@ -1904,9 +1939,15 @@ class Handler(BaseHTTPRequestHandler):
             job_params = {'kind': kind, 'basis': basis_key,
                           'spin': spin, 'max_seconds': max_seconds}
             if _jobs is not None and method_row_id is not None:
+                # A quantum job may WAIT for a slot, so its row starts as
+                # 'queued' and is promoted by start() once it holds one. Without
+                # that, started_at is stamped before the wait and v_job_live's
+                # age_seconds reads queue time as compute time — a four-deep queue
+                # would look like four slow jobs.
                 job_id, conflicted = _jobs.open(
                     method_row_id=method_row_id, input_sha256=molfile_sha,
-                    params=job_params, budget_seconds=max_seconds)
+                    params=job_params, budget_seconds=max_seconds,
+                    queued=(kind not in ('mep', 'mlp')))
                 if conflicted:
                     # SOMEONE ELSE IS ALREADY COMPUTING EXACTLY THIS. Until today
                     # both requests computed, and the counter proved that happens
@@ -1954,15 +1995,58 @@ class Handler(BaseHTTPRequestHandler):
                     # the work, never to an error the molecule did not cause.
                     job_id, _ = _jobs.open(
                         method_row_id=method_row_id, input_sha256=molfile_sha,
-                        params=job_params, budget_seconds=max_seconds)
+                        params=job_params, budget_seconds=max_seconds,
+                        queued=(kind not in ('mep', 'mlp')))
             mol = prepare_mol(molblock)
             if kind == 'mep':
                 cube, meta = field_mep(mol)
             elif kind == 'mlp':
                 cube, meta = field_mlp(mol)
             else:
-                cube, meta = field_quantum(mol, kind, basis,
-                                           max_seconds=max_seconds, spin=spin)
+                # ── bounded: at most MAX_CONCURRENT_QM SCFs at once ──────────
+                with _qm_lock:
+                    _qm_waiting['now'] += 1
+                    _qm_waiting['peak'] = max(_qm_waiting['peak'],
+                                              _qm_waiting['now'])
+                    depth = _qm_waiting['now']
+                got = _qm_gate.acquire(timeout=min(max_seconds or QUEUE_WAIT_CEILING,
+                                                   QUEUE_WAIT_CEILING)
+                                       if max_seconds else QUEUE_WAIT_CEILING)
+                try:
+                    if not got:
+                        with _qm_lock:
+                            _qm_waiting['refused'] += 1
+                        # The depth is in the message because "too busy" without a
+                        # number tells the caller nothing about whether to retry in
+                        # ten seconds or ten minutes.
+                        raise FieldBudgetExceeded(
+                            f'{depth - 1} quantum job(s) ahead of this one and '
+                            f'{MAX_CONCURRENT_QM} slot(s) total; waited '
+                            f'{QUEUE_WAIT_CEILING:.0f} s for a slot and gave up. '
+                            f'Retry, or send a classical field (mep/mlp) which is '
+                            f'not gated.')
+                    # queued → running, now that a slot is actually held. This
+                    # is the first thing in this system that writes the 'queued'
+                    # state, which existed unused since migration 007 precisely
+                    # because nothing could wait.
+                    if _jobs is not None:
+                        _jobs.start(job_id)
+                    with _qm_lock:
+                        _qm_waiting['running_now'] += 1
+                        _qm_waiting['running_peak'] = max(
+                            _qm_waiting['running_peak'], _qm_waiting['running_now'])
+                    try:
+                        cube, meta = field_quantum(mol, kind, basis,
+                                                   max_seconds=max_seconds,
+                                                   spin=spin)
+                    finally:
+                        with _qm_lock:
+                            _qm_waiting['running_now'] -= 1
+                finally:
+                    if got:
+                        _qm_gate.release()
+                    with _qm_lock:
+                        _qm_waiting['now'] -= 1
             meta['total_seconds'] = round(time.time() - t0, 2)
             meta['cache'] = 'computed'
             print(f"[field] kind={kind} atoms={mol.GetNumAtoms()} "

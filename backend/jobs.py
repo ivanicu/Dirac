@@ -105,7 +105,8 @@ class JobLedger:
     def open(self, *, method_row_id: str, input_sha256: bytes, params: dict,
              budget_seconds: float | None = None, est_seconds: float | None = None,
              compound_id: str | None = None,
-             conformer_hash: bytes | None = None) -> tuple[str | None, bool]:
+             conformer_hash: bytes | None = None,
+             queued: bool = False) -> tuple[str | None, bool]:
         """Insert a 'running' row. Returns (job_id, conflicted).
 
         THE SECOND VALUE EXISTS BECAUSE None HAD THREE MEANINGS — database
@@ -131,11 +132,18 @@ class JobLedger:
         try:
             import json
             with self._connect() as conn, conn.cursor() as cur:
+                # 'queued' MUST have a NULL started_at and 'running' MUST have one —
+                # job_running_has_start says `(state = 'queued') = (started_at IS
+                # NULL)`, so the two are written as one decision here rather than
+                # as two statements that could disagree.
+                state = 'queued' if queued else 'running'
+                started = None if queued else 'now()'
                 cur.execute(
                     "INSERT INTO app.job (method_row_id, state, input_sha256, params, "
                     "       budget_seconds, est_seconds, compound_id, conformer_hash, "
-                    "       worker, started_at) "
-                    "VALUES (%s, 'running', %s, %s, %s, %s, %s, %s, %s, now()) "
+                    f"       worker, started_at) "
+                    f"VALUES (%s, '{state}', %s, %s, %s, %s, %s, %s, %s, "
+                    f"        {started or 'NULL'}) "
                     'RETURNING id',
                     (method_row_id, input_sha256, json.dumps(params), budget,
                      est_seconds, compound_id, conformer_hash, self.worker))
@@ -154,6 +162,25 @@ class JobLedger:
             else:
                 _bump('write_failed', f'{type(e).__name__}: {e}')
             return None, conflict
+
+    def start(self, job_id: str | None) -> None:
+        """queued → running, stamping started_at.
+
+        The transition exists because a bounded compute pool means a request can
+        WAIT before it computes, and the difference between "waiting" and
+        "running" is the only thing that makes v_job_live's age_seconds mean
+        anything: without it, a queued job's age reads as compute time and a
+        four-deep queue looks like four slow jobs.
+        """
+        if job_id is None:
+            return
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE app.job SET state = 'running', started_at = now() "
+                    "WHERE id = %s AND state = 'queued'", (job_id,))
+        except Exception as e:                                        # noqa: BLE001
+            _bump('write_failed', f'{type(e).__name__}: {e}')
 
     def done(self, job_id: str | None, *, seconds: float,
              field_cube_id: str | None = None, peak_rss_mb: int | None = None) -> None:
