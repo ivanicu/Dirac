@@ -117,6 +117,14 @@ if wanted physics; then
 fi
 
 if wanted contracts; then
+    # Its own red proof first, same rule as gate 8: this gate is green against
+    # the real contracts, so a crafted conviction is its only evidence of
+    # resolution. It runs on a COPY, so it cannot leave a defect behind.
+    if ! redproof_out="$(node scripts/check_contract_drift.mjs --redproof 2>&1)"; then
+        printf '%s\n' "$redproof_out"
+        printf '%s\n' "${RED}FAIL${OFF} gate-7-contracts — its own red proof did not convict"
+        FAILED+=('gate-7-contracts-redproof')
+    fi
     contract_out="$(node scripts/check_contract_drift.mjs 2>&1)"; contract_code=$?
     printf '%s\n' "$contract_out"
     case "$contract_code" in

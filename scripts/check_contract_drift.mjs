@@ -52,7 +52,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
 
-const ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
+// ROOT is overridable so --redproof can run this gate against a COPY of the
+// repo. Mutating the real contracts/ to prove the gate convicts would race two
+// other sessions' writes and a 60-second sync timer that commits the worktree —
+// a red proof must not be able to ship its own deliberate defect.
+const ROOT = process.env.DIRAC_CONTRACT_ROOT
+    || path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 const out = [];
@@ -457,6 +462,92 @@ section('4 · emitted keys vs envelope.py FIELD_META_SCHEMA (runtime authority)'
                 + 'check, see the ledger above');
         }
     }
+}
+
+
+// ═════════════════════════════════════════════════════════════════════════
+// --redproof · this gate's own positive control, on a COPY of the repo.
+// A gate that has never convicted has not been shown to have resolution, and
+// this one is green today. Two independent mutations, each of which MUST be
+// caught by a different check, and each asserted to have actually modified the
+// bytes (see scripts/lib/mutate.mjs for the no-op incident that earned that).
+// ═════════════════════════════════════════════════════════════════════════
+
+if (process.argv.includes('--redproof')) {
+    const { execFileSync } = await import('node:child_process');
+    const os = await import('node:os');
+    const { withMutation, replacingOnce } = await import('./lib/mutate.mjs');
+
+    const COPIED = ['contracts', 'backend/envelope.py', 'backend/field_server.py',
+                    'backend/db/migrations',
+                    'src/app.frontend.facets.molstar-rdkit.editable/facets/field-wells/index.ts'];
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dirac-redproof-'));
+    for (const rel of COPIED) {
+        const dest = path.join(tmp, rel);
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.cpSync(path.join(ROOT, rel), dest, { recursive: true });
+    }
+
+    const runGate = () => {
+        try {
+            execFileSync(process.execPath, [url.fileURLToPath(import.meta.url)],
+                { env: { ...process.env, DIRAC_CONTRACT_ROOT: tmp }, stdio: 'pipe' });
+            return { code: 0, out: '' };
+        } catch (e) {
+            return { code: e.status, out: String(e.stdout || '') };
+        }
+    };
+
+    const cases = [
+        {
+            name: 'a code removed from iface.pyi ErrorCode',
+            file: path.join(tmp, 'contracts/iface.pyi'),
+            // Whitespace-tolerant on purpose: the hand-run version of this
+            // proof assumed `, 'DB_UNAVAILABLE']` on ONE line, the real file
+            // wraps it, the replace matched nothing, and the resulting green
+            // read as "the gate cannot convict". A mutation keyed on exact
+            // layout is a mutation that silently stops mutating.
+            transform: t => t.replace(/,\s*'DB_UNAVAILABLE'\s*\]/, ']'),
+            expect: /ErrorCode is missing \["DB_UNAVAILABLE"\]/,
+        },
+        {
+            name: 'a key removed from envelope.py FIELD_META_SCHEMA',
+            file: path.join(tmp, 'backend/envelope.py'),
+            // 'single_signed' is declared by exactly ONE kind, which matters:
+            // check 4 compares against the UNION of declared names, so renaming
+            // a key that two kinds share (net_charge — mep AND mep_region) is
+            // not a conviction-worthy mutation. That first attempt exited 2 and
+            // the union is why; the check's scope is written into its ledger,
+            // and a red proof has to respect the scope it is proving.
+            transform: replacingOnce("'single_signed'", "'single_signed_RENAMED'"),
+            expect: /FIELD_META_SCHEMA does not declare.*single_signed/s,
+        },
+    ];
+
+    let allOk = true;
+    console.log('── redproof: each mutation must be convicted by its own check ──');
+    console.log(`   (on a copy at ${tmp}; the real tree is never modified)`);
+    for (const c of cases) {
+        let verdict;
+        try {
+            verdict = withMutation(c.file, c.transform, () => runGate());
+        } catch (e) {
+            console.log(`  FAIL  ${c.name} — ${e.constructor.name}: ${e.message}`);
+            allOk = false;
+            continue;
+        }
+        const convicted = verdict.code === 1 && c.expect.test(verdict.out);
+        console.log(`  ${convicted ? 'OK  ' : 'FAIL'}  ${c.name} → exit ${verdict.code}`
+            + (convicted ? '' : ' (expected exit 1 naming the mutated symbol)'));
+        if (!convicted) allOk = false;
+    }
+    fs.rmSync(tmp, { recursive: true, force: true });
+    console.log(allOk
+        ? 'REDPROOF PASS — both mutations convicted, and both were verified to have '
+          + 'changed the bytes before the verdict was read'
+        : 'REDPROOF FAIL — this gate has not been shown to convict; a green run against '
+          + 'the real contracts proves nothing');
+    process.exit(allOk ? 0 : 1);
 }
 
 // ── verdict ──────────────────────────────────────────────────────────────

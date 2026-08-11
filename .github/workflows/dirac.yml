@@ -81,6 +81,7 @@ jobs:
       - name: 'Gate 7 — contract drift (errors.json / iface.* / FIELD_META_SCHEMA)'
         if: ${{ !cancelled() }}
         run: |
+          node scripts/check_contract_drift.mjs --redproof
           node scripts/check_contract_drift.mjs; code=$?
           if [ "$code" = "1" ]; then exit 1; fi
           if [ "$code" = "2" ]; then echo "::warning::frontend FieldMeta trails the backend (see FIND lines)"; fi
