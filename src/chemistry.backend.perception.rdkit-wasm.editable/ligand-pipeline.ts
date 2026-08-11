@@ -106,11 +106,7 @@ export function ligandLociToMolfile(loci: StructureElement.Loci): MolfileBuild |
     }
 
     const lines: string[] = ['', '  mol*', ''];
-    lines.push(
-        atoms.length.toString().padStart(3, ' ')
-        + bonds.length.toString().padStart(3, ' ')
-        + '  0  0  0  0  0  0  0  0  0999 V2000'
-    );
+    lines.push(countsLine(atoms.length, bonds.length));
     for (const a of atoms) {
         lines.push(
             a.x.toFixed(4).padStart(10, ' ')
@@ -132,6 +128,30 @@ export function ligandLociToMolfile(loci: StructureElement.Loci): MolfileBuild |
     lines.push('M  END');
 
     return { molfile: lines.join('\n'), atomCount: atoms.length, bondCount: bonds.length };
+}
+
+/**
+ * THE V2000 counts line. One writer, because this exact line has now been
+ * written wrong three times (fixed 2026-08-10 in two builders, then
+ * reintroduced by the pipeline dedup that merged them). The spec allows eight
+ * zero fields between the bond count and 999; a ninth pushes ' V2000' off its
+ * fixed column. RDKit-JS forgives that, RDKit's C++ MolFromMolBlock does not —
+ * so the browser panels stay green while every field in the Python daemon dies
+ * with "CTAB version string invalid at line 4".
+ *
+ * >999 atoms cannot be expressed in V2000's 3-column count field; a silent
+ * overflow corrupts the same line, so it throws instead.
+ * Contract test: `_spec/ligand-pipeline.spec.ts` (violation witness).
+ */
+export function countsLine(atomCount: number, bondCount: number): string {
+    if (atomCount > 999 || bondCount > 999) {
+        throw new Error(
+            `V2000 cannot express ${atomCount} atoms / ${bondCount} bonds ` +
+            '(3-column fields); the selection is larger than one ligand');
+    }
+    return atomCount.toString().padStart(3, ' ')
+        + bondCount.toString().padStart(3, ' ')
+        + '  0  0  0  0  0  0  0  0999 V2000';
 }
 
 // === filterLociByAtomIndex — the ONE copy ===
