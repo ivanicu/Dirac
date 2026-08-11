@@ -111,6 +111,8 @@ const RdkitChemicalLayerTag = 'rdkit-chemical-semantic-layers';
 interface JSMol {
     get_molblock(): string;
     get_smiles(): string;
+    get_cxsmiles(): string;
+    get_inchi(): string;
     delete(): void;
     compute_gasteiger_charges(): void;
     get_substruct_matches(q: JSMol): string;
@@ -131,6 +133,7 @@ interface JSMol {
 interface RDKitModule {
     get_mol(input: string): JSMol | null;
     get_qmol(input: string): JSMol | null;
+    get_inchikey_for_inchi(inchi: string): string;
     version(): string;
 }
 
@@ -381,6 +384,40 @@ function parseGasteigerCharges(mol: JSMol, atomCount: number): { charges: Float3
         if (v > max) max = v;
     }
     return { charges, min, max };
+}
+
+function tryOrDefault<T>(fn: () => T, def: T = '' as unknown as T): T {
+    try { return fn(); } catch { return def; }
+}
+
+/**
+ * Compute SMILES and InChI canonical identifiers for the ligand. Used by
+ * the Ligand panel's export field for copy-paste into external tools
+ * (chemdraw, external databases, etc.).
+ *
+ * Returns null if RDKit fails to parse the molfile.
+ */
+export async function computeLigandIdentifiers(molfile: string): Promise<{
+    smiles: string;
+    inchi: string;
+    inchiKey: string;
+    cxsmiles: string;
+} | null> {
+    const RDKit = await getRDKit();
+    const mol = RDKit.get_mol(molfile);
+    if (!mol || !mol.is_valid()) return null;
+    try {
+        const inchi = tryOrDefault(() => mol.get_inchi());
+        const inchiKey = inchi ? tryOrDefault(() => RDKit.get_inchikey_for_inchi(inchi)) : '';
+        return {
+            smiles: mol.get_smiles(),
+            cxsmiles: tryOrDefault(() => mol.get_cxsmiles()),
+            inchi,
+            inchiKey,
+        };
+    } finally {
+        mol.delete();
+    }
 }
 
 export async function computeLigandChemistry(molfile: string, atomCount: number): Promise<LigandChemistry | null> {

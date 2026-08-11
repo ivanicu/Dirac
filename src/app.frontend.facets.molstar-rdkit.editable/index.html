@@ -632,6 +632,58 @@
             font-size: 10px;
         }
 
+        /* Ligand canonical-identifier export */
+        .ligand-export {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+        .ligand-export label {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--text-3);
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .ligand-export-row {
+            display: grid;
+            grid-template-columns: 56px minmax(0, 1fr) auto;
+            gap: 6px;
+            align-items: center;
+            padding: 3px 0;
+        }
+        .ligand-export-label {
+            color: var(--text-3);
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+        .ligand-export-value {
+            color: var(--text);
+            font-family: ui-monospace, 'SF Mono', monospace;
+            font-size: 10px;
+            background: var(--surface-2);
+            padding: 4px 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .btn-copy {
+            padding: 4px 8px;
+            border: 1px solid var(--border-strong);
+            border-radius: 5px;
+            background: transparent;
+            color: var(--text-3);
+            font: inherit;
+            font-size: 9px;
+            cursor: pointer;
+        }
+        .btn-copy:hover { color: var(--accent); border-color: var(--accent); }
+        .btn-copy[data-copied="true"] { color: var(--accent); border-color: var(--accent); }
+
         /* Properties panel */
         .desc-grid {
             display: grid;
@@ -908,6 +960,24 @@
                                 <li><code>[CX4]</code> — sp³ carbon</li>
                             </ul>
                         </details>
+                    </div>
+                    <div class="ligand-export">
+                        <label>Canonical identifiers</label>
+                        <div class="ligand-export-row">
+                            <span class="ligand-export-label">SMILES</span>
+                            <code id="ligand-smiles" class="ligand-export-value">—</code>
+                            <button id="copy-smiles" class="btn-copy" type="button" data-copy="ligand-smiles">copy</button>
+                        </div>
+                        <div class="ligand-export-row">
+                            <span class="ligand-export-label">InChI</span>
+                            <code id="ligand-inchi" class="ligand-export-value">—</code>
+                            <button id="copy-inchi" class="btn-copy" type="button" data-copy="ligand-inchi">copy</button>
+                        </div>
+                        <div class="ligand-export-row">
+                            <span class="ligand-export-label">InChIKey</span>
+                            <code id="ligand-inchikey" class="ligand-export-value">—</code>
+                            <button id="copy-inchikey" class="btn-copy" type="button" data-copy="ligand-inchikey">copy</button>
+                        </div>
                     </div>
                 </section>
             </div>

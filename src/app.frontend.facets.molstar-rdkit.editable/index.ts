@@ -51,6 +51,7 @@ import {
     prepareLigandAnalysis,
     searchLigandSmarts,
     applySmartsSearchOverlay,
+    computeLigandIdentifiers,
     RdkitChemicalLayers,
     type RdkitChemicalLayerId,
 } from '../chemistry.backend.perception.rdkit-wasm.editable/semantic-chemistry-rdkit';
@@ -394,6 +395,20 @@ class MolecularVfxLab {
         smartsInput.addEventListener('input', () => {
             if (this.smartsSearchTimer) clearTimeout(this.smartsSearchTimer);
             this.smartsSearchTimer = setTimeout(() => void this.runSmartsSearch(smartsInput.value), 350);
+        });
+
+        // Copy-to-clipboard for canonical identifiers.
+        document.querySelectorAll<HTMLButtonElement>('.btn-copy[data-copy]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const target = document.getElementById(btn.dataset.copy || '');
+                if (!target?.textContent || target.textContent === '—') return;
+                navigator.clipboard?.writeText(target.textContent).then(() => {
+                    btn.dataset.copied = 'true';
+                    const originalText = btn.textContent;
+                    btn.textContent = 'copied';
+                    setTimeout(() => { btn.dataset.copied = 'false'; btn.textContent = originalText; }, 1200);
+                }).catch(() => { /* ignore */ });
+            });
         });
     }
 
@@ -907,6 +922,25 @@ class MolecularVfxLab {
         // Re-run the SMARTS search against the new ligand (if input is non-empty).
         const smartsInput = byId<HTMLInputElement>('smarts-input');
         if (smartsInput?.value) void this.runSmartsSearch(smartsInput.value);
+        // Compute and display canonical identifiers.
+        void this.refreshLigandIdentifiers(analysis.molfile);
+    }
+
+    private async refreshLigandIdentifiers(molfile: string) {
+        const ids = await computeLigandIdentifiers(molfile);
+        const set = (id: string, value: string) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value || '—';
+        };
+        if (!ids) {
+            set('ligand-smiles', '');
+            set('ligand-inchi', '');
+            set('ligand-inchikey', '');
+            return;
+        }
+        set('ligand-smiles', ids.smiles);
+        set('ligand-inchi', ids.inchi);
+        set('ligand-inchikey', ids.inchiKey);
     }
 
     private async runSmartsSearch(smarts: string) {
