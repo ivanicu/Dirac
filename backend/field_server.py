@@ -133,7 +133,30 @@ _method_ids: dict[str, str] = {}
 # this version is re-registered with different source — a forgotten bump is a
 # loud startup error, never a silently stale cache (design: migration 006).
 PRODUCER_SERVICE = 'dirac-fields'
-PRODUCER_VERSION = '2.2'
+# DERIVED, never typed. This constant was hand-bumped eleven times today and
+# the 006 tripwire fired on me three separate times for forgetting it — twice
+# while writing the commit that fixed the tripwire. A discipline that fails that
+# often is not a discipline, it is a trap with a person standing in it.
+#
+# WHY THIS IS ONLY SAFE NOW: auto-deriving the version means every source edit
+# opens a new producer generation. Before migration 009 that would have been
+# catastrophic — the read path filtered on producer currency, so each edit
+# emptied the cache (measured: 1 servable row out of 19). 009 moved the read
+# path onto METHOD currency, which moves only when a compute unit's source
+# moves. So producer identity is now free to be exact, and being exact is what
+# makes a forgotten bump impossible rather than merely loud.
+#
+# The human-readable story lives in PRODUCER_NOTES, which is what a person
+# actually wants to read; the version is for machines.
+def _producer_version() -> str:
+    try:
+        src = open(__file__, 'rb').read()
+    except OSError:
+        return 'unknown'
+    return hashlib.sha256(src).hexdigest()[:12]
+
+
+PRODUCER_VERSION = _producer_version()
 PRODUCER_NOTES = ('wall-clock deadline inside the SCF loop + measured cube-cost '
                   'refusal; open-shell d/f metals refused without an explicit '
                   'spin (group 12 exempt); salt stripping refuses to discard a '
@@ -240,7 +263,8 @@ def db_init() -> bool:
                   'producer_id only', flush=True)
             _method_ids = {}
         _db_ok = True
-        print(f'[db] persistent cube cache ON (producer {PRODUCER_SERVICE}/{PRODUCER_VERSION})', flush=True)
+        print(f'[db] persistent cube cache ON (producer {PRODUCER_SERVICE}/'
+              f'{PRODUCER_VERSION} — derived from source)', flush=True)
     except Exception as e:
         # TWO DIFFERENT FAILURES WERE WEARING ONE HANDLER, and it cost me the
         # decisive test of the whole method-registry line: I edited this file
