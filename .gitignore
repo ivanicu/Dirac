@@ -4,7 +4,13 @@ build/
 deploy/*
 !deploy/systemd/
 !deploy/README.md
-lib/
+# ANCHORED to the repo root, and the missing slash was not cosmetic: `lib/`
+# matches at ANY depth, so it silently swallowed scripts/lib/ — a load-bearing
+# module a gate imports. The commit succeeded, the local tree looked complete,
+# and CI would have failed on a file that was never shippable. Second instance
+# of this exact class in this file (see deploy/ above), so: an unanchored
+# gitignore pattern is a wildcard over DEPTH, not a directory name.
+/lib/
 docs/site/
 
 node_modules/
