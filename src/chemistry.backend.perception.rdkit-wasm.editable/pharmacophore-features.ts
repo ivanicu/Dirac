@@ -248,7 +248,9 @@ function buildMolfile(parsed: ParsedLigand): string {
     lines.push(
         parsed.atomPositions.length.toString().padStart(3, ' ')
         + parsed.bonds.length.toString().padStart(3, ' ')
-        + '  0  0  0  0  0  0  0  0  0999 V2000'
+        // 8 zero fields + '999' — spec-exact V2000 counts line (see the note in
+        // semantic-chemistry-rdkit.ts: a 9th field breaks desktop RDKit parsing).
+        + '  0  0  0  0  0  0  0  0999 V2000'
     );
     for (let i = 0; i < parsed.atomPositions.length; i++) {
         const p = parsed.atomPositions[i];
