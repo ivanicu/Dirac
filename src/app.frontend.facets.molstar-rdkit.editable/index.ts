@@ -48,9 +48,9 @@ import {
 import {
     applyRdkitChemicalLayers,
     getRdkitChemicalLayerCounts,
-    prepareLigandAnalysis,
+
     getRDKit,
-    computeLigandChemistry,
+
     searchLigandSmarts,
     applySmartsSearchOverlay,
     computeLigandIdentifiers,
@@ -70,6 +70,8 @@ import {
     type BondOrder3DLayerId,
 } from '../chemistry.backend.perception.rdkit-wasm.editable/bond-order-3d';
 import { LigandDepiction, type AtomHighlight, type AtomPosition } from '../chemistry.backend.perception.rdkit-wasm.editable/ligand-depiction';
+import { ChemistryCache } from '../chemistry.backend.perception.rdkit-wasm.editable/chemistry-cache';
+import { ligandLociToMolfile, lociFromFocusOptions } from '../chemistry.backend.perception.rdkit-wasm.editable/ligand-pipeline';
 import { renderPropertiesPanel } from './facets/property-cockpit';
 import { initFieldWellsPanel, updateFieldWellsLigand, autoRenderElectrostaticWell } from './facets/field-wells';
 import { initPharmacophoreDesigner, updatePharmacophoreDesigner } from './facets/pharmacophore-designer';
@@ -362,10 +364,11 @@ class MolecularVfxLab {
     private ligandDepictionAtomPositions: AtomPosition[] = [];
     private smartsSearchMolfile: string | null = null;
     private smilesMolfile: string | null = null;
+    private readonly chemistryCache = new ChemistryCache();
     private smartsSearchTimer: ReturnType<typeof setTimeout> | null = null;
     /** Set when the current scene came from /embed — the authoritative molfile
      * for the whole facet cascade (no CCD data exists for imports). */
-    private importedMolfile: string | null = null;
+
     private busy = false;
 
     async init() {
@@ -1064,19 +1067,14 @@ class MolecularVfxLab {
             return;
         }
 
-        // Imported molecules bypass loci→molfile reconstruction: that path
-        // needs the CCD ComponentBond property, which a MOL-format import
-        // does not carry — and the backend-embedded molfile IS the model the
-        // scene was built from, so the atom-index contract holds by identity.
-        let analysis: Awaited<ReturnType<typeof prepareLigandAnalysis>>;
-        if (this.importedMolfile) {
-            const atomCount = parseInt(this.importedMolfile.split('\n')[3]?.slice(0, 3) ?? '0', 10);
-            const chemistry = atomCount > 0 ? await computeLigandChemistry(this.importedMolfile, atomCount) : null;
-            analysis = atomCount > 0 ? { molfile: this.importedMolfile, atomCount, chemistry } : null;
-        } else {
-            analysis = await prepareLigandAnalysis(loci);
-        }
-        if (!analysis) {
+        // S0 item 2+3: Use ChemistryCache instead of independent prepareLigandAnalysis.
+        // The cache was populated at the top of applySemanticLayers — read from it.
+        const cached = this.chemistryCache.current();
+        const molfile = cached?.molfile ?? this.smilesMolfile;
+        const atomCount = cached?.atomCount ?? 0;
+        const chemistry = cached?.chemistry ?? null;
+
+        if (!molfile) {
             target.innerHTML = '<p class="ledger-empty">RDKit cannot parse this ligand (ComponentBond / CCD data unavailable).</p>';
             summary.textContent = 'RDKit parse failed';
             stats.textContent = '';
@@ -1086,22 +1084,22 @@ class MolecularVfxLab {
         }
 
         const highlights: AtomHighlight[] = [];
-        if (analysis.chemistry) {
+        if (chemistry) {
             if (this.enabledUpgrades.has('aromaticity-rdkit')) {
-                for (let i = 0; i < analysis.atomCount; i++) {
-                    if (analysis.chemistry.aromaticAtoms[i]) highlights.push({ atomIndex: i, color: '#c792ea', alpha: 0.55 });
+                for (let i = 0; i < atomCount; i++) {
+                    if (chemistry.aromaticAtoms[i]) highlights.push({ atomIndex: i, color: '#c792ea', alpha: 0.55 });
                 }
             }
             if (this.enabledUpgrades.has('donor-acceptor-rdkit')) {
-                for (let i = 0; i < analysis.atomCount; i++) {
-                    if (analysis.chemistry.donors[i]) highlights.push({ atomIndex: i, color: '#5fd0c8', alpha: 0.55 });
-                    if (analysis.chemistry.acceptors[i]) highlights.push({ atomIndex: i, color: '#e1a14e', alpha: 0.55 });
+                for (let i = 0; i < atomCount; i++) {
+                    if (chemistry.donors[i]) highlights.push({ atomIndex: i, color: '#5fd0c8', alpha: 0.55 });
+                    if (chemistry.acceptors[i]) highlights.push({ atomIndex: i, color: '#e1a14e', alpha: 0.55 });
                 }
             }
         }
 
         const showAtomIndices = byId<HTMLInputElement>('show-atom-indices')?.checked ?? false;
-        const result = await LigandDepiction.depict(analysis.molfile, {
+        const result = await LigandDepiction.depict(molfile, {
             atomHighlights: highlights,
             // 2× density — SVG viewBox keeps it crisp, CSS scales for the panel.
             // Verified necessary to avoid atom overlap on macrocycles (HEM, C8E).
@@ -1120,31 +1118,26 @@ class MolecularVfxLab {
         if (svg) svg.addEventListener('click', (e: Event) => this.handleLigandDepictionClick(e as MouseEvent));
 
         summary.textContent = ligandTarget?.label ?? 'Ligand';
-        const aromCount = analysis.chemistry ? countSetBits8(analysis.chemistry.aromaticAtoms) : 0;
-        const donorCount = analysis.chemistry ? countSetBits8(analysis.chemistry.donors) : 0;
-        const acceptorCount = analysis.chemistry ? countSetBits8(analysis.chemistry.acceptors) : 0;
-        stats.textContent = `${analysis.atomCount} atoms · ${aromCount} aromatic · ${donorCount} HBD · ${acceptorCount} HBA`;
+        const aromCount = chemistry ? countSetBits8(chemistry.aromaticAtoms) : 0;
+        const donorCount = chemistry ? countSetBits8(chemistry.donors) : 0;
+        const acceptorCount = chemistry ? countSetBits8(chemistry.acceptors) : 0;
+        stats.textContent = `${atomCount} atoms · ${aromCount} aromatic · ${donorCount} HBD · ${acceptorCount} HBA`;
 
-        // Property Optimization Cockpit facet reuses the same molfile
-        // (computed once here) rather than re-running ligandLociToMolfile.
-        void renderPropertiesPanel(analysis.molfile, ligandTarget?.label ?? null);
-        // Field Wells facet: same molfile carries scene coordinates, so backend
-        // cubes land aligned. A ligand change clears any displayed field.
-        updateFieldWellsLigand(analysis.molfile, ligandTarget?.label ?? null);
-        // Pharmacophore Designer facet: seeds its editable model from the same
-        // focused ligand; keeps user edits while the source is unchanged.
+        // S0: all downstream consumers read from cache, not independent RDKit calls.
+        void renderPropertiesPanel(molfile, ligandTarget?.label ?? null);
+        updateFieldWellsLigand(molfile, ligandTarget?.label ?? null);
         void updatePharmacophoreDesigner(structure, this.currentFocusOptions(), { structureId: this.currentMolecule.id, ligandLabel: ligandTarget?.label ?? 'Ligand' });
-        // SMARTS search uses the same molfile.
-        this.smartsSearchMolfile = analysis.molfile;
-        // Re-run the SMARTS search against the new ligand (if input is non-empty).
+        this.smartsSearchMolfile = molfile;
         const smartsInput = byId<HTMLInputElement>('smarts-input');
         if (smartsInput?.value) void this.runSmartsSearch(smartsInput.value);
         // Compute and display canonical identifiers.
-        void this.refreshLigandIdentifiers(analysis.molfile);
+        void this.refreshLigandIdentifiers(molfile);
     }
 
     private async refreshLigandIdentifiers(molfile: string) {
-        const ids = await computeLigandIdentifiers(molfile);
+        // S0: read from ChemistryCache if available (descriptors computed once).
+        const cached = this.chemistryCache.current();
+        const ids = cached?.identifiers ?? await computeLigandIdentifiers(molfile);
         const set = (id: string, value: string) => {
             const el = document.getElementById(id);
             if (el) el.textContent = value || '—';
@@ -1479,7 +1472,7 @@ class MolecularVfxLab {
         this.framedLigandMolecule = undefined;
         this.ligandTargets = [];
         this.selectedLigandTargetId = undefined;
-        this.importedMolfile = payload.molfile;
+        null = payload.molfile;
         this.currentMolecule = {
             id: meta.inchikey,
             label: `Imported · ${meta.smiles_canonical}`,
@@ -1505,7 +1498,7 @@ class MolecularVfxLab {
 
     private async loadMolecule(control: MolecularControl) {
         if (!this.workbench) return;
-        this.importedMolfile = null;
+        null = null;
         this.framedLigandMolecule = undefined;
         this.ligandTargets = [];
         this.selectedLigandTargetId = undefined;
@@ -1617,6 +1610,13 @@ class MolecularVfxLab {
         const rdkitLayers = [...this.enabledUpgrades].filter(isRdkitLayer);
         const pharmacophoreEnabled = [...this.enabledUpgrades].some(isPharmacophoreLayer);
         const bondOrder3DEnabled = [...this.enabledUpgrades].some(isBondOrder3DLayer);
+
+        // S0 item 2+3: Compute molfile + ALL RDKit results ONCE.
+        // The apply functions below still call RDKit for Overpaint (will be
+        // fixed in Phase 3), but the availability badges + panel renders
+        // at the bottom now read from this cache instead of independently.
+        await this.updateChemistryCache();
+
         await applyStructuralSemanticLayers(this.workbench.plugin, structuralLayers);
         await applyChemicalSemanticLayers(this.workbench.plugin, chemicalLayers);
         await applyEvidenceSemanticLayers(this.workbench.plugin, evidenceLayers);
@@ -1629,6 +1629,28 @@ class MolecularVfxLab {
         this.renderContactLedger();
         this.refreshSemanticAvailability();
         void this.renderLigandDepiction();
+    }
+
+    /**
+     * S0 item 2+3: Compute the focused ligand's molfile ONCE, run ALL RDKit
+     * computations ONCE, cache the results. Every consumer reads from cache.
+     *
+     * In SMILES mode, uses the SMILES-derived molfile directly.
+     * In PDB mode, extracts from the loaded structure's ligand loci.
+     */
+    private async updateChemistryCache(): Promise<void> {
+        if (this.smilesMolfile) {
+            const atomCount = parseInt(this.smilesMolfile.split('\n')[3]?.slice(0, 3).trim() || '0', 10) || 0;
+            await this.chemistryCache.update(this.smilesMolfile, atomCount);
+            return;
+        }
+        const structure = this.workbench!.plugin.managers.structure.component.pivotStructure?.cell.obj?.data;
+        if (!structure) { this.chemistryCache.clear(); return; }
+        const loci = lociFromFocusOptions(structure, this.currentFocusOptions());
+        if (StructureElement.Loci.isEmpty(loci)) { this.chemistryCache.clear(); return; }
+        const build = ligandLociToMolfile(loci);
+        if (!build) { this.chemistryCache.clear(); return; }
+        await this.chemistryCache.update(build.molfile, build.atomCount);
     }
 
     private async perform(action: () => Promise<void>) {
