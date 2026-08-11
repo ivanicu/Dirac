@@ -91,6 +91,12 @@ CUBE_ORB_MARGINAL = 1.5e-7     # upper envelope, per (grid point × nao)
 # wrong answer converges, balances charge, and passes every honesty gate.
 OPEN_SHELL_METAL_Z = (set(range(21, 30)) | set(range(39, 48))
                       | set(range(57, 80)) | set(range(89, 104)))
+# The whole d and f block, group 12 included. Used only to decide whether salt
+# stripping is about to throw away a coordination centre — for THAT question Zn
+# counts, because discarding the zinc out of a zinc complex is wrong whether or
+# not its ground state is a singlet.
+COORDINATION_METAL_Z = (set(range(21, 31)) | set(range(39, 49))
+                        | set(range(57, 81)) | set(range(89, 104)))
 DB_DSN = 'dbname=dirac user=ivan'
 CUBE_MEDIA_TYPE = 'chemical/x-gaussian-cube'
 # Bound on POST bodies: the daemon binds 0.0.0.0 now, and an unbounded read
@@ -335,6 +341,27 @@ def embed_molecule(smiles: str | None, molblock: str | None, seed: int = 42):
     stripped = 0
     if len(frags) > 1:
         frags = sorted(frags, key=lambda f: f.GetNumHeavyAtoms(), reverse=True)
+        # ...unless what is about to be discarded is a d- or f-block metal, in
+        # which case the rule is exactly backwards: the metal IS the object.
+        # Measured 2026-08-10 — "CC(=O)[O-].CC(=O)[O-].[Fe+2]" came back as a
+        # converged RHF with 23 basis functions, which is one acetate. The
+        # iron had been thrown away as the smallest fragment and the field was
+        # computed, cached and served for a molecule nobody asked about.
+        #
+        # Alkali and alkaline-earth counter-ions are deliberately NOT covered:
+        # a sodium carboxylate really is a salt and stripping it is right. The
+        # line is drawn at the block where the metal is a coordination centre.
+        discarded = [a.GetSymbol() for f in frags[1:] for a in f.GetAtoms()
+                     if a.GetAtomicNum() in COORDINATION_METAL_Z]
+        if discarded:
+            raise ValueError(
+                f'{"/".join(sorted(set(discarded)))} sits in a separate fragment '
+                f'from the rest of the structure. Salt stripping would discard '
+                f'the metal and compute the organic fragment alone — and a '
+                f'coordination sphere written as disconnected ions has no '
+                f'geometry for the embedder to find either. Submit the complex '
+                f'with explicit bonds to the metal.'
+            )
         mol, stripped = frags[0], len(frags) - 1
 
     mol = Chem.AddHs(mol)

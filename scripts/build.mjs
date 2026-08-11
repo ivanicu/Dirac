@@ -16,7 +16,7 @@ const Apps = [
     { kind: 'app', name: 'viewer', themes: ['light', 'dark', 'blue'] },
     { kind: 'app', name: 'docking-viewer' },
     { kind: 'app', name: 'mesoscale-explorer' },
-    { kind: 'app', name: 'dirac', filename: 'dirac.js', entryRoot: './src/app.frontend.facets.molstar-rdkit.editable', staticDirs: ['assets/rdkit'] },
+    { kind: 'app', name: 'dirac', filename: 'dirac.js', entryRoot: './src/app.frontend.facets.molstar-rdkit.editable', staticDirs: ['assets/rdkit'], staticFiles: ['theme-fascia.css','theme-fascia.js'] },
     { kind: 'app', name: 'mvs-stories', globalName: 'mvsStories', filename: 'mvs-stories.js' },
 
     // Examples
@@ -195,6 +195,9 @@ async function createBundle(app) {
     // esbuild never sees as imports — e.g. Dirac's vendored RDKit_minimal.{js,wasm}.
     for (const dir of app.staticDirs ?? []) {
         await fs.promises.cp(path.resolve(entryRoot, dir), path.resolve(prefix, dir), { recursive: true });
+    }
+    for (const file of app.staticFiles ?? []) {
+        await fs.promises.cp(path.resolve(entryRoot, file), path.resolve(prefix, file));
     }
 
     if (!isProduction) await ctx.watch();

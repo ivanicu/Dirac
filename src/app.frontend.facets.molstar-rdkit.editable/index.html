@@ -249,8 +249,70 @@
             word-break: break-word;
         }
         .field-status[data-tone="busy"] { border-color: var(--accent-soft); color: var(--text-2); }
-        .field-status[data-tone="ok"] { border-color: var(--accent-soft); color: var(--accent); }
-        .field-status[data-tone="error"] { border-color: #5a3030; color: var(--high); }
+        /* NOT var(--accent). "Accent" is a ROLE (the interactive colour), and
+           its hue is the theme's to choose — teal in Dirac Night, a single
+           deliberate RED on the instrument fascia. Wiring success to it meant
+           "backend online" printed in alarm red the moment the theme changed:
+           same token, inverted meaning. Success gets the token that MEANS
+           success, and falls back only if a theme omits it. */
+        .field-status[data-tone="ok"] { border-color: var(--border-strong); color: var(--ok, var(--accent)); }
+        /* was border-color: #5a3030 — a dark maroon chosen against a near-black
+           panel, which on a machined light face reads as a smudge. A theme
+           cannot reach a literal, so it becomes a token like everything else. */
+        .field-status[data-tone="error"] { border-color: var(--danger, var(--high)); color: var(--high); }
+
+        /* The quantity's symbol, set as a fixed-width gutter so the six labels
+           align on their text rather than ragging off glyphs of different
+           widths. Dimmed: it identifies the row, it is not the row. */
+        .field-sym {
+            display: inline-block;
+            min-width: 2.2em;
+            font-style: normal;
+            color: var(--text-3);
+            letter-spacing: 0;
+        }
+        .field-btn[data-active="true"] .field-sym { color: inherit; }
+
+        /* Range inputs default to the BROWSER's accent — a stock blue that no
+           theme token can reach, sitting on an achromatic instrument face. */
+        /* Not the accent either: on the fascia the accent is the one red, and
+           the theme spends it only on an exceeded bound. An idle slider is not
+           an alarm. */
+        input[type="range"] { accent-color: var(--text-2); }
+
+        /* Cancel: the only control alive while the panel is busy, so it is
+           styled to look pressable rather than inheriting the disabled row. */
+        .field-cancel {
+            padding: 5px 9px;
+            border: 1px solid var(--high);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--high);
+            font: inherit;
+            font-size: 10px;
+            cursor: pointer;
+        }
+        .field-cancel:hover { background: var(--accent-soft); }
+
+        /* One row per field that could not be produced, carrying the backend's
+           own sentence. The reason is the useful part, so it gets the width. */
+        .field-refusals { display: grid; gap: 4px; margin-bottom: 8px; }
+        .field-refusal {
+            display: grid;
+            grid-template-columns: 88px 1fr;
+            gap: 8px;
+            padding: 6px 8px;
+            border: 1px solid var(--border);
+            border-left: 2px solid var(--warn);
+            border-radius: 6px;
+            background: var(--surface-2);
+            font-size: 10px;
+            line-height: 1.45;
+        }
+        .field-refusal span:first-child { color: var(--text-2); }
+        .field-refusal span:last-child { color: var(--text-3); word-break: break-word; }
+        #field-retry { margin-bottom: 8px; }
+
         .field-meta { display: grid; gap: 3px; }
         .field-meta-row {
             display: flex;
@@ -260,7 +322,7 @@
         }
         .field-meta-row span:last-child { color: var(--text-2); font-variant-numeric: tabular-nums; }
         #fields-backend[data-online="false"] { color: var(--high); }
-        #fields-backend[data-online="true"] { color: var(--accent); }
+        #fields-backend[data-online="true"] { color: var(--ok, var(--accent)); }
 
         .scene-summary {
             display: grid;
@@ -1081,7 +1143,7 @@
             main { grid-column: 1; grid-row: 3; }
         }
     </style>
-    <link rel="stylesheet" href="./theme-chamber.css">
+    <link rel="stylesheet" href="./theme-fascia.css">
 </head>
 <body>
     <div id="app">
@@ -1232,13 +1294,25 @@
                     </div>
                     <div id="fields-content">
                         <div class="field-buttons">
-                            <button type="button" class="field-btn" data-field="mep">⚡ Electrostatic well</button>
-                            <button type="button" class="field-btn" data-field="mep_qm">⚡ QM potential</button>
-                            <button type="button" class="field-btn" data-field="homo">⚛ HOMO</button>
-                            <button type="button" class="field-btn" data-field="lumo">⚛ LUMO</button>
-                            <button type="button" class="field-btn" data-field="density">◉ e⁻ density</button>
-                            <button type="button" class="field-btn" data-field="mlp">💧 Lipophilicity</button>
+                            <!-- The glyph is the QUANTITY'S OWN SYMBOL, not an
+                                 icon of it. ⚡⚛◉💧 were decorative, and 💧 in
+                                 particular rendered as a full-colour emoji —
+                                 the single loudest thing on a panel whose whole
+                                 discipline is being achromatic. V, Ψ, φ, ρ,
+                                 logP are what a physicist would have written on
+                                 the fascia, and they need no icon set to exist. -->
+                            <button type="button" class="field-btn" data-field="mep"><i class="field-sym">V</i> Electrostatic well</button>
+                            <button type="button" class="field-btn" data-field="mep_qm"><i class="field-sym">Ψ</i> QM potential</button>
+                            <button type="button" class="field-btn" data-field="homo"><i class="field-sym">φ</i> HOMO</button>
+                            <button type="button" class="field-btn" data-field="lumo"><i class="field-sym">φ*</i> LUMO</button>
+                            <button type="button" class="field-btn" data-field="density"><i class="field-sym">ρ</i> e⁻ density</button>
+                            <button type="button" class="field-btn" data-field="mlp"><i class="field-sym">logP</i> Lipophilicity</button>
                             <button type="button" class="field-btn" id="field-clear">✕ Clear</button>
+                            <!-- Deliberately NOT .field-btn: that class is
+                                 disabled en masse while a field is solving, and
+                                 Cancel is the one control that has to be alive
+                                 exactly then. -->
+                            <button type="button" class="field-cancel" id="field-cancel" hidden>■ Cancel</button>
                         </div>
                         <div class="field-controls">
                             <label class="field-control">Isovalue
@@ -1255,6 +1329,13 @@
                         </div>
                         <div id="field-status" class="field-status" data-tone="idle">Load a structure with a ligand first.</div>
                         <div id="field-prefetch" class="field-status" data-tone="idle" hidden></div>
+                        <!-- Why each unavailable field is unavailable, in the
+                             backend's own words. This used to be discarded and
+                             replaced by an unrelated clause about heavy-atom
+                             counts, which is how a classical field came to be
+                             refused on screen for a quantum reason. -->
+                        <div id="field-prefetch-reasons" class="field-refusals" hidden></div>
+                        <div id="field-retry" hidden></div>
                         <div id="field-meta" class="field-meta"></div>
                     </div>
                 </section>
@@ -1395,7 +1476,7 @@
 
     <script src="./assets/rdkit/RDKit_minimal.js"></script>
     <script src="./dirac.js"></script>
-    <script src="./theme-chamber.js"></script>
+    <script src="./theme-fascia.js"></script>
     <script>
         // master-tab navigation: show one section at a time
         document.addEventListener('click', e => {

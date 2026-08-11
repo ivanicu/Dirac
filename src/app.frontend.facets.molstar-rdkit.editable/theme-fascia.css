@@ -1,0 +1,345 @@
+@import url('https://fonts.googleapis.com/css2?family=Doto:wght@500;600;700;900&family=IBM+Plex+Mono:wght@300;400;500;600&display=swap');
+
+/**
+ * Dirac — "Instrument Fascia" theme (NX-01).
+ *
+ * The interface is the front panel of one precision instrument: a machined
+ * aluminium-paper face, raised plates and recessed wells, hardware toggles,
+ * engraved micro-labels, and dot-matrix numerals — because on this panel the
+ * numbers are the product and everything else is enclosure.
+ *
+ * Strictly achromatic. Exactly one red, spent only on a bound that was
+ * exceeded and on the hydrogen bonds drawn into the scene.
+ *
+ * Loaded after the inline <style> in index.html, so equal-specificity wins.
+ * Kept as its own file: a theme is a stylesheet, not a rewrite of the app's
+ * markup, and index.html is shared substrate several agents edit.
+ */
+
+/* ─── palette: the app's own tokens, re-pointed ─────────────────────────── */
+:root{
+    color-scheme: light;
+
+    --bg:#e9e7e2;            /* machined face */
+    --surface:#f2f1ec;       /* raised plate */
+    --surface-2:#f7f6f2;     /* display paper (fields) */
+    --surface-3:#e3e1dc;     /* pressed */
+    --border:#c9c8c2;
+    --border-strong:#b7b6b0;
+
+    --text:#1d1d1a;
+    --text-2:#6d6c65;
+    --text-3:#94938a;        /* engraved */
+
+    --accent:#d71921;        /* the one red */
+    --accent-soft:#fbe9ea;
+    /* SUCCESS is not the accent. The accent is a role — the interactive
+       colour — and here that role is spent on a single deliberate red, so
+       anything wired to it announced good news in alarm red the moment the
+       theme changed. Solved, not picked: hue held from the design system's
+       green, chroma 0.087 (under the ceiling), lightness solved to 4.6:1 on
+       the machined face. */
+    --ok:#37734d;
+    --warn:#8a6a2f;
+    --high:#d71921;
+    --unavail:#8f8a86;
+
+    /* theme-local */
+    /* ── the 3D scene is part of the theme ──────────────────────────────────
+       The scene background is declared HERE, as a token, because two other
+       things now read it: the app paints the WebGL clear colour from it, and
+       the field renderer measures its luminance to decide whether it is
+       working on a dark or a light ground. A theme that only restyles the
+       chrome leaves the one surface where colour carries physics untouched. */
+    --scene-bg:#f1f0eb;
+    --scene-badge-bg:rgba(241,240,235,.86);
+
+    /* ── scientific field colours, re-derived for THIS ground ───────────────
+       Not retinted by eye. design/derive_field_colors.py holds each hue
+       exactly (hue is the chemistry: blue is positive potential, red negative,
+       gold greasy, aqua polar), holds chroma at or under the ceiling (the
+       mid-saturation ruling), and solves LIGHTNESS until the mark clears 3:1
+       against this background. Against the old near-black well these same
+       hues sat at 1.61 / 1.67 / 1.73 / 1.85 : 1 here — not "a little washed
+       out", invisible. Diverging pairs re-checked at dE >= 0.15 afterwards,
+       because squeezing two colours toward one lightness is exactly how a
+       +/- pair collapses into a single blob.
+       Regenerate:  python3 design/derive_field_colors.py --bg f1f0eb  */
+    --viz-mep-pos:#6a8cc0;   /* positive electrostatic potential */
+    --viz-mep-neg:#bd777b;   /* negative — electron rich          */
+    --viz-orb-pos:#519878;   /* orbital phase +                   */
+    --viz-orb-neg:#8e82bd;   /* orbital phase −                   */
+    --viz-mlp-pos:#a28748;   /* lipophilic / greasy               */
+    --viz-mlp-neg:#3b96a6;   /* hydrophilic / polar               */
+    --viz-density:#ad814d;   /* electron density (single-signed)  */
+
+    --face:#e7e5e0;
+    --well:#f1f0eb;
+    --etch:#94938a;
+    --mono:'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    --doto:'Doto','IBM Plex Mono', ui-monospace, monospace;
+    --dots: radial-gradient(circle at 1.5px 1.5px, rgba(29,29,26,.075) 1px, transparent 1.45px);
+}
+
+body, #app { font-family: var(--mono); letter-spacing: .01em; }
+
+/* ─── the face: dot-matrix substrate under everything ───────────────────── */
+html, body, #app {
+    background: var(--dots) 0 0/7px 7px, linear-gradient(180deg,#ecebe6,#e4e2dd);
+}
+
+/* radii belong to milled plates only — everything else is square */
+#app, #app *, #app *::before, #app *::after { border-radius: 0; }
+.panel, .upgrade, select, input[type="text"], .ligand-depiction,
+.contact-row, .field-btn, .designer-feature, .btn-ghost, .btn-copy,
+.status-pill, .designer-hit, .smarts-help { border-radius: 5px; }
+.panel { border-radius: 8px; }
+
+/* ─── header rail ───────────────────────────────────────────────────────── */
+.topbar {
+    background: linear-gradient(180deg,#f2f1ec,#e6e4df);
+    border-bottom: 1px solid var(--border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.8), 0 1px 2px rgba(29,29,26,.07);
+}
+.brand .eyebrow { font-size: 7.5px; letter-spacing: .26em; color: var(--etch); font-weight: 400; }
+.brand h1 {
+    font-family: var(--doto); font-weight: 900; font-size: 26px;
+    letter-spacing: .05em; line-height: 1; color: var(--text);
+}
+.topbar-scene label { font-family: var(--mono); font-size: 7.5px; letter-spacing: .2em; color: var(--etch); }
+
+/* recessed, machined selects */
+select, input[type="text"] {
+    appearance: none; -webkit-appearance: none;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    box-shadow: inset 0 2px 4px rgba(29,29,26,.10), 0 1px 0 rgba(255,255,255,.85);
+    font: 600 10.5px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase;
+    color: var(--text); padding: 9px 28px 9px 11px;
+}
+select {
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='7' height='5'><path d='M.8.8 3.5 3.6 6.2.8' fill='none' stroke='%236d6c65' stroke-width='1.4'/></svg>");
+    background-repeat: no-repeat; background-position: right 10px center;
+}
+select:focus, input:focus { outline: 0; border-color: var(--text-2); box-shadow: inset 0 2px 4px rgba(29,29,26,.14); }
+
+.btn-ghost, .btn-copy, .designer-toolbar button, .designer-add-row button,
+.import-row button, .smarts-search button {
+    background: linear-gradient(180deg,#f6f5f1,#e7e5e0);
+    border: 1px solid var(--border); color: var(--text-2);
+    font: 500 9.5px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase;
+    padding: 8px 12px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 1px 1px rgba(29,29,26,.12);
+}
+.btn-ghost:hover, .btn-copy:hover { border-color: var(--text-2); color: var(--text); }
+.btn-ghost:active { box-shadow: inset 0 2px 3px rgba(29,29,26,.2); }
+
+/* power lamp */
+.status-pill {
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--text-2);
+    font: 500 8px/1 var(--mono); letter-spacing: .22em; text-transform: uppercase;
+    padding: 7px 11px 7px 9px;
+    box-shadow: inset 0 1px 3px rgba(29,29,26,.10);
+}
+
+/* ─── sidebar: a column of plates on the face ───────────────────────────── */
+.sidebar { background: transparent; border-right: 1px solid var(--border); }
+.master-nav {
+    background: linear-gradient(180deg,#efeee9,#e6e4df);
+    border-bottom: 1px solid var(--border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
+}
+.master-tab {
+    font-family: var(--mono); font-size: 8.5px; font-weight: 500;
+    letter-spacing: .2em; text-transform: uppercase; color: var(--etch); padding: 11px 8px;
+}
+.master-tab:hover { color: var(--text-2); }
+.master-tab[aria-selected="true"] { color: var(--text); }
+.master-tab[aria-selected="true"]::after { background: var(--accent); height: 2px; }
+
+.scene-summary { background: transparent; border-bottom: 1px dotted var(--border-strong); }
+.scene-summary-row { color: var(--text-2); font-size: 10.5px; }
+.scene-summary-row { font-family: var(--mono); }
+.scene-summary-row #structure-id { font-family: var(--doto); font-weight: 700; font-size: 15px; letter-spacing: .04em; color: var(--text); }
+.scene-summary-row #elements { font-family: var(--doto); font-weight: 700; font-size: 13px; letter-spacing: .03em; color: var(--text); }
+#molecule-note { font-family: var(--mono); color: var(--etch); font-size: 8.5px; letter-spacing: .1em; }
+
+/* plates */
+.panel {
+    background: linear-gradient(180deg,#f4f3ef,#e8e6e1);
+    border: 1px solid var(--border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.85), inset 0 -1px 0 rgba(0,0,0,.05),
+                0 1px 2px rgba(29,29,26,.12), 0 8px 18px rgba(29,29,26,.05);
+    padding: 13px 15px 15px;
+}
+.panel-heading h2 { font-size: 9px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
+.panel-index { font-family: var(--mono); font-size: 7.5px; letter-spacing: .22em; color: var(--etch); font-weight: 400; }
+.layer-summary { border-bottom: 1px dotted var(--border-strong); }
+.layer-summary-copy strong { font-size: 10px; font-weight: 600; letter-spacing: .04em; }
+.layer-summary-copy span { color: var(--etch); font-size: 8.5px; }
+
+/* category chips — engraved, not filled */
+.layer-tab {
+    background: transparent; border: 1px solid transparent; color: var(--etch);
+    font-family: var(--mono); font-size: 8px; font-weight: 500; letter-spacing: .16em;
+    text-transform: uppercase; padding: 4px 7px;
+}
+.layer-tab:hover { color: var(--text-2); border-color: var(--border); }
+.layer-tab[aria-selected="true"] {
+    background: var(--surface-2); color: var(--text); border-color: var(--border);
+    box-shadow: inset 0 1px 3px rgba(29,29,26,.12);
+}
+.layer-tab small { background: transparent; color: var(--etch); }
+.layer-tab[aria-selected="true"] small { background: transparent; color: var(--text-2); }
+.layer-panel > header { border-bottom: 1px dotted var(--border-strong); }
+.layer-panel h3 { font-size: 10px; letter-spacing: .06em; }
+.layer-panel header p { color: var(--etch); font-size: 8.5px; }
+
+/* ─── the layer bank: hardware switches on a ruled deck ─────────────────── */
+.upgrade {
+    background: transparent; border: 0; border-top: 1px solid #e0dfd9;
+    padding: 9px 2px; gap: 11px;
+}
+.upgrade:first-of-type { border-top: 0; }
+.upgrade + .upgrade { margin-top: 0; }
+.upgrade:hover { background: rgba(255,255,255,.35); }
+.upgrade.expanded { background: rgba(255,255,255,.5); border-top-color: var(--border-strong); }
+
+.upgrade-toggle {
+    width: 38px; height: 16px; margin-top: 2px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    box-shadow: inset 0 2px 3px rgba(29,29,26,.16);
+    transition: none;
+}
+.upgrade-toggle::after {
+    content: ''; position: absolute; left: 2px; top: 2px; width: 16px; height: 10px;
+    border-radius: 2px; background: linear-gradient(180deg,#fcfbf7,#dcdbd5);
+    border: 1px solid #b5b4ae; box-shadow: 0 1px 1px rgba(29,29,26,.22);
+    background-image: repeating-linear-gradient(90deg,transparent 0 2px,rgba(29,29,26,.14) 2px 3px);
+    transition: left .13s ease;
+}
+.upgrade-toggle:checked { background: var(--surface-2); border-color: var(--border); }
+.upgrade-toggle:checked::after { left: 18px; background: linear-gradient(180deg,#e8434a,var(--accent)); border-color:#a5141a; }
+.upgrade-toggle:disabled { opacity: .42; }
+
+.upgrade-copy > strong { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.upgrade-copy > span:not([class]) { color: var(--etch); font-size: 8.5px; letter-spacing: .06em; }
+.pareto-mark { border-color: var(--text-2); color: var(--text-2); }
+
+.cost { background: transparent; color: var(--etch); font-family: var(--mono);
+    font-size: 7.5px; letter-spacing: .18em; padding: 2px 0 2px 8px; }
+.cost-high { background: transparent; color: var(--accent); }
+.cost-medium, .cost-unavailable { background: transparent; color: var(--etch); }
+
+.semantic-availability {
+    background: transparent; color: var(--text-2); padding: 0;
+    font-family: var(--mono); font-size: 7.5px; letter-spacing: .16em; text-transform: uppercase;
+}
+.semantic-availability[data-signal="empty"] { background: transparent; color: var(--accent); }
+.semantic-availability[data-signal="active"] { background: transparent; color: var(--text-2); }
+.upgrade.expanded .semantic-channel { border-color: var(--border); color: var(--etch); }
+.upgrade.expanded .semantic-guidance { color: var(--text-2); font-size: 9.5px; }
+.upgrade.expanded .semantic-debug {
+    background: linear-gradient(180deg,#f6f5f1,#e7e5e0); border-color: var(--border);
+    font-family: var(--mono); font-size: 8.5px; letter-spacing: .14em; text-transform: uppercase;
+}
+
+/* ─── wells: focus, ledger, fields, designer ────────────────────────────── */
+.focus-workbench, .ligand-depiction, .designer-hit-preview, .smarts-help, .field-status {
+    background: var(--well);
+    border: 1px solid var(--border);
+    box-shadow: inset 0 2px 6px rgba(29,29,26,.12), 0 1px 0 rgba(255,255,255,.8);
+}
+.cutoff-control input { accent-color: var(--accent); }
+.cutoff-control output { color: var(--text); font-family: var(--doto); font-weight: 700; font-size: 13px; }
+
+.contact-row, .field-btn, .designer-hit {
+    background: linear-gradient(180deg,#f5f4f0,#eae8e3);
+    border: 1px solid var(--border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+}
+.contact-row:hover, .field-btn:hover:not(:disabled), .designer-hit:hover { border-color: var(--text-2); }
+.contact-row[data-active="true"], .field-btn[data-active="true"], .designer-hit[data-active="true"] {
+    border-color: var(--accent); box-shadow: inset 0 2px 4px rgba(29,29,26,.12);
+}
+.contact-index { color: var(--accent); font-family: var(--mono); font-weight: 600; }
+.contact-distance { font-family: var(--doto); font-weight: 700; font-size: 15px; letter-spacing: .02em; }
+.ledger-empty, .designer-note, .import-status, .smarts-status {
+    background: transparent; color: var(--etch); font-size: 9px; letter-spacing: .08em;
+}
+.contact-ledger-heading strong { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; }
+.contact-ledger-heading span { color: var(--etch); font-size: 7.5px; letter-spacing: .16em; }
+
+/* ─── descriptors: dot-matrix readouts ──────────────────────────────────── */
+.desc-cell {
+    background: var(--well); border: 1px solid var(--border);
+    box-shadow: inset 0 2px 5px rgba(29,29,26,.11), 0 1px 0 rgba(255,255,255,.8);
+    padding: 9px 11px;
+}
+.desc-cell-label { font-family: var(--mono); font-size: 7px; letter-spacing: .24em; color: var(--etch); }
+.desc-cell-value {
+    font-family: var(--doto); font-weight: 700; font-size: 30px; line-height: 1;
+    letter-spacing: .02em; color: var(--text); margin-top: 4px;
+}
+.desc-cell-unit { font-family: var(--mono); font-size: 8px; color: var(--etch); margin-left: 4px; letter-spacing: .1em; }
+.desc-cell-threshold { font-family: var(--mono); font-size: 7px; letter-spacing: .16em; color: var(--etch); margin-top: 4px; }
+.desc-cell[data-pass="false"] { border-color: var(--accent); background: var(--well); }
+.desc-cell[data-pass="false"] .desc-cell-value,
+.desc-cell[data-pass="false"] .desc-cell-label,
+.desc-cell[data-pass="false"] .desc-cell-threshold { color: var(--accent); }
+
+.rule-summary {
+    background: linear-gradient(180deg,#f4f3ef,#e8e6e1); border: 1px solid var(--border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+}
+.rule-summary[data-overall="false"] { border-color: var(--accent); }
+.rule-summary-heading strong { font-size: 9px; letter-spacing: .18em; text-transform: uppercase; }
+.rule-summary-verdict { font-family: var(--mono); font-size: 8px; letter-spacing: .16em; padding: 3px 9px; }
+.rule-summary-verdict[data-pass="true"] { background: var(--surface-3); color: var(--text-2); }
+.rule-summary-verdict[data-pass="false"] { background: var(--accent); color: #fff; }
+.rule-line { font-family: var(--mono); font-size: 9.5px; color: var(--text-2); }
+.rule-line-status { font-weight: 600; color: var(--text); }
+.rule-line-status[data-pass="false"] { color: var(--accent); }
+
+/* ─── diagnostics: the counter bank ─────────────────────────────────────── */
+.diag-strip { background: transparent; border-top: 1px solid var(--border); }
+.diag-strip-row { background: var(--border); }
+.diag-cell { background: linear-gradient(180deg,#efeee9,#e6e4df); }
+.diag-cell dt { font-family: var(--mono); font-size: 7px; letter-spacing: .22em; color: var(--etch); }
+.diag-cell dd { font-family: var(--doto); font-weight: 700; font-size: 19px; letter-spacing: .02em; color: var(--text); }
+.diagnostics summary { font-family: var(--mono); font-size: 8px; letter-spacing: .22em; color: var(--etch); }
+.metrics dt { color: var(--etch); font-size: 9px; }
+.metrics dd { font-family: var(--mono); font-size: 9.5px; }
+.note { background: transparent; border-left: 2px solid var(--accent); color: var(--text-2); font-size: 8.5px; }
+
+/* ─── the primary display: a recessed well with a dot floor ─────────────── */
+main {
+    background: var(--well);
+    box-shadow: inset 0 2px 8px rgba(29,29,26,.13);
+}
+#viewport {
+    background: var(--dots) 0 0/7px 7px, var(--well);
+    margin: 12px; box-shadow: inset 0 0 0 1px var(--border);
+}
+.badge {
+    background: rgba(247,246,242,.9); border: 1px solid var(--border);
+    color: var(--text-2); backdrop-filter: none;
+    font-family: var(--mono); font-size: 7.5px; letter-spacing: .2em; text-transform: uppercase;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+}
+
+/* ─── designer / smarts / import, kept in the same grammar ──────────────── */
+.designer-feature, .designer-chip, .designer-matrix td, .designer-matrix th {
+    background: transparent; border-color: var(--border); font-family: var(--mono);
+}
+.designer-hit-chips em[data-pass="true"] { color: var(--text-2); }
+.designer-hit-chips em[data-pass="false"] { color: var(--accent); }
+.designer-smarts-row input, .smarts-search input, .import-molecule input {
+    background: var(--surface-2); border: 1px solid var(--border);
+    box-shadow: inset 0 2px 4px rgba(29,29,26,.10);
+}
+.ligand-depiction { background: #fbfaf6; }
+.ligand-legend-item i { border: 1px solid rgba(0,0,0,.14); }
+.ligand-export-value, .ligand-export-label { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; }
+
+.detail-scroll { scrollbar-color: var(--border-strong) transparent; }

@@ -85,12 +85,23 @@ Molecules = [
     #    caught by the other. Zn is the over-refusal control and it matters --
     #    zinc proteases are a large slice of real drug discovery, and a rule
     #    written one period too wide would quietly lock them all out.
-    ('Fe-acetate',     'CC(=O)[O-].CC(=O)[O-].[Fe+2]',          'edge',
+    # CONNECTED complexes, and the connectivity is the point. The first version
+    # of this pair used "CC(=O)[O-].CC(=O)[O-].[Fe+2]", where salt stripping
+    # discarded the iron and ran one acetate: nao=23, converged, green, and
+    # testing nothing. A disconnected metal never reaches the gate the pair
+    # exists to exercise.
+    ('FeCl3-openshell', 'Cl[Fe](Cl)Cl',                         'edge',
      {'mep': 'either', 'mlp': 'either', 'mep_qm': 'refuse', 'homo': 'refuse',
       'lumo': 'refuse', 'density': 'refuse'}),
-    ('Zn-acetate',     'CC(=O)[O-].CC(=O)[O-].[Zn+2]',          'edge',
+    ('ZnCl2-closedshell', 'Cl[Zn]Cl',                           'edge',
      {'mep': 'either', 'mlp': 'either', 'mep_qm': 'ok', 'homo': 'ok',
       'lumo': 'ok', 'density': 'ok'}),
+    # And the stripping rule itself, both directions: a d-block metal in its
+    # own fragment must be refused rather than silently discarded, while an
+    # ordinary sodium counter-ion must still be stripped without complaint.
+    ('Fe-disconnected', 'CC(=O)[O-].CC(=O)[O-].[Fe+2]',         'edge',
+     {k: 'refuse' for k in KINDS}),
+    ('Na-carboxylate', 'CC(=O)[O-].[Na+]',                      'edge', {}),
     ('Fe-simple',      '[Fe]',                                  'edge',
      {'mep': 'refuse', 'mlp': 'either', 'mep_qm': 'refuse', 'homo': 'refuse',
       'lumo': 'refuse', 'density': 'refuse'}),
@@ -137,9 +148,17 @@ def post(path: str, payload: dict, timeout: float):
         return json.loads(r.read())
 
 
-def embed(smiles: str, timeout: float) -> str | None:
+def embed(smiles: str, timeout: float) -> tuple[str | None, str, int]:
+    """molfile, the refusal reason if any, and how many fragments were dropped.
+
+    `fragments_stripped` is returned and asserted on because ignoring it is how
+    a control gets silently defanged: the Fe/Zn pair spent a whole run testing
+    acetate against acetate, green both times, while the metal each row existed
+    to exercise had been stripped before the calculation started."""
     out = post('/embed', {'smiles': smiles}, timeout)
-    return out.get('molfile') if out.get('ok') else None
+    if not out.get('ok'):
+        return None, (out.get('error') or 'embed refused'), 0
+    return out['molfile'], '', int((out.get('meta') or {}).get('fragments_stripped', 0))
 
 
 def classify(outcome: dict) -> tuple[str, str]:
@@ -234,16 +253,26 @@ def main() -> int:
 
     for name, smiles, _group, expect in population:
         try:
-            molfile = embed(smiles, timeout=60)
+            molfile, embed_error, stripped = embed(smiles, timeout=60)
         except Exception as e:                               # noqa: BLE001
             print(f'{name:20s} HARNESS embed failed: {e}')
             tally['HARNESS'] = tally.get('HARNESS', 0) + 1
             continue
         if not molfile:
-            # Refusing to embed is a legitimate answer for some of these.
-            print(f'{name:20s} REFUSED at embed (no 3D geometry)')
+            # Refusing to embed is a legitimate answer for some of these, and
+            # the reason is printed rather than assumed.
+            print(f'{name:20s} REFUSED at embed — {embed_error[:90]}')
             tally['REFUSED'] = tally.get('REFUSED', 0) + len(kinds)
+            for kind in kinds:
+                want = expect.get(kind, 'ok' if _group == 'core' else 'either')
+                if want == 'ok':
+                    surprises.append(
+                        f'{name}/{kind}: expected ok, refused at embed — {embed_error[:120]}')
             continue
+        if stripped:
+            # Not fatal — it is the documented salt rule — but it changes WHAT
+            # was tested, so it is on the record instead of invisible.
+            print(f'{name:20s} note: {stripped} fragment(s) stripped before embedding')
 
         line = f'{name:20s}'
         for kind in kinds:

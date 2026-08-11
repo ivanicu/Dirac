@@ -16,8 +16,9 @@
 import { PluginContext } from '../../../mol-plugin/context';
 import { StateTransforms } from '../../../mol-plugin-state/transforms';
 import { createVolumeRepresentationParams } from '../../../mol-plugin-state/helpers/volume-representation-params';
-import { Volume } from '../../../mol-model/volume';
+import { Grid, Volume } from '../../../mol-model/volume';
 import { Color } from '../../../mol-util/color';
+import { focusSphereKeepingSlab } from '../../camera-slab';
 
 // Follow the page's host: the daemon runs beside whatever served the app, so
 // a hardcoded 127.0.0.1 would point a Mac's browser at the Mac itself and
@@ -32,13 +33,74 @@ const REF_VOLUME = 'field-wells-volume';
  * as fog; a mesh cage over a glowing core reads as a force field — the lines
  * give the eye structure where alpha stacking only gives it milk.
  */
-const SHELLS = [
+const SHELLS_DARK = [
     { fraction: 1.0, alpha: 0.55, emissive: 0.55, visuals: ['solid'] as string[] },
     // The cage is a WHISPER around the core, not a net over the scene: close
     // to the solid (0.62x) and faint, or the mesh buries both the molecule
     // and the surface it is supposed to be annotating.
     { fraction: 0.62, alpha: 0.14, emissive: 0.22, visuals: ['wireframe'] as string[] },
 ] as const;
+
+/**
+ * The same two shells against a LIGHT scene, which is a different optical
+ * problem rather than the same one with new colours.
+ *
+ * `emissive` ADDS light. On a near-black well that reads as a glowing field;
+ * on a #f1f0eb panel it drives every lobe toward the background, so the
+ * brighter the field the less of it you see. It goes to zero here.
+ *
+ * `xrayShaded` makes facets facing the camera transparent and grazing ones
+ * opaque. Against black that is a rim-lit x-ray; against white the face-on
+ * middle shows the panel through it and the lobe reads as an empty outline —
+ * the shape is exactly what an isosurface exists to communicate. Off, with
+ * plain diffuse shading and enough alpha to still see the molecule inside.
+ *
+ * The cage gains weight instead of losing it: a thin dark line on paper is a
+ * quieter mark than a thin bright line on black.
+ */
+const SHELLS_LIGHT = [
+    { fraction: 1.0, alpha: 0.52, emissive: 0.0, visuals: ['solid'] as string[] },
+    { fraction: 0.62, alpha: 0.26, emissive: 0.0, visuals: ['wireframe'] as string[] },
+] as const;
+
+/** sRGB relative luminance of a `#rrggbb` string; -1 when it cannot be read. */
+function hexLuminance(hex: string): number {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+    if (!m) return -1;
+    const v = parseInt(m[1], 16);
+    const ch = [(v >> 16) & 255, (v >> 8) & 255, v & 255]
+        .map(c => c / 255)
+        .map(c => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)));
+    return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+
+function cssToken(name: string): string {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/**
+ * Which optical regime the scene is in — MEASURED off the theme's own
+ * background token rather than switched on a theme name. A theme nobody has
+ * written yet gets the right treatment for free, and the app never has to keep
+ * a list of which themes are dark.
+ */
+function shells() {
+    const lum = hexLuminance(cssToken('--scene-bg'));
+    return lum > 0.18 ? SHELLS_LIGHT : SHELLS_DARK;
+}
+
+/**
+ * A field colour belongs to the THEME. It lived here as a hex literal, which
+ * meant the one part of the interface where colour carries the physics was the
+ * one part no theme could reach: the panel went to a machined light face and
+ * the lobes stayed tuned for a near-black well, four of the seven sitting
+ * under 2:1 against the new ground (measured, design/derive_field_colors.py).
+ * The literal survives only as a fallback for a theme that forgets a token.
+ */
+function tokenColor(name: string, fallback: number): number {
+    const m = /^#?([0-9a-f]{6})$/i.exec(cssToken(name));
+    return m ? parseInt(m[1], 16) : fallback;
+}
 const shellRef = (sign: 'pos' | 'neg', i: number) => `field-wells-repr-${sign}-${i}`;
 
 export type FieldKind = 'mep' | 'mep_qm' | 'homo' | 'lumo' | 'density' | 'mlp';
@@ -48,6 +110,9 @@ interface KindSpec {
     iso: number;
     diverging: boolean;
     unit: string;
+    /** Theme token names; the numbers beside them are the fallback only. */
+    posToken: string;
+    negToken: string;
     posColor: number;
     negColor: number;
     quantum: boolean;
@@ -60,14 +125,14 @@ interface KindSpec {
 // only chroma was cut. Divergent pairs verified ≥0.10 ΔE apart by
 // design/check_palette.py — run it after touching any value here.
 const Kinds: Record<FieldKind, KindSpec> = {
-    mep: { label: 'Electrostatic well', iso: 8, diverging: true, unit: 'kcal/mol', posColor: 0x6788bc, negColor: 0xbd777b, quantum: false },
-    mep_qm: { label: 'QM potential well', iso: 0.05, diverging: true, unit: 'Ha/e', posColor: 0x6788bc, negColor: 0xbd777b, quantum: true },
-    homo: { label: 'HOMO', iso: 0.04, diverging: true, unit: 'amp', posColor: 0x7fc7a5, negColor: 0xa397d3, quantum: true },
-    lumo: { label: 'LUMO', iso: 0.04, diverging: true, unit: 'amp', posColor: 0x7fc7a5, negColor: 0xa397d3, quantum: true },
-    density: { label: 'e⁻ density', iso: 0.05, diverging: false, unit: 'e/Bohr³', posColor: 0xd8aa75, negColor: 0xd8aa75, quantum: true },
+    mep: { label: 'Electrostatic well', iso: 8, diverging: true, unit: 'kcal/mol', posToken: '--viz-mep-pos', negToken: '--viz-mep-neg', posColor: 0x6788bc, negColor: 0xbd777b, quantum: false },
+    mep_qm: { label: 'QM potential well', iso: 0.05, diverging: true, unit: 'Ha/e', posToken: '--viz-mep-pos', negToken: '--viz-mep-neg', posColor: 0x6788bc, negColor: 0xbd777b, quantum: true },
+    homo: { label: 'HOMO', iso: 0.04, diverging: true, unit: 'amp', posToken: '--viz-orb-pos', negToken: '--viz-orb-neg', posColor: 0x7fc7a5, negColor: 0xa397d3, quantum: true },
+    lumo: { label: 'LUMO', iso: 0.04, diverging: true, unit: 'amp', posToken: '--viz-orb-pos', negToken: '--viz-orb-neg', posColor: 0x7fc7a5, negColor: 0xa397d3, quantum: true },
+    density: { label: 'e⁻ density', iso: 0.05, diverging: false, unit: 'e/Bohr³', posToken: '--viz-density', negToken: '--viz-density', posColor: 0xd8aa75, negColor: 0xd8aa75, quantum: true },
     // Default iso must sit BELOW the hydrophilic side's typical |min| (~0.06
     // on aspirin) or the cyan lobes never exist and the field looks all-grease.
-    mlp: { label: 'Lipophilicity', iso: 0.05, diverging: true, unit: 'MLP', posColor: 0xd5b979, negColor: 0x74ccdd, quantum: false },
+    mlp: { label: 'Lipophilicity', iso: 0.05, diverging: true, unit: 'MLP', posToken: '--viz-mlp-pos', negToken: '--viz-mlp-neg', posColor: 0xd5b979, negColor: 0x74ccdd, quantum: false },
 };
 
 interface FieldMeta {
@@ -115,14 +180,65 @@ function cacheKey(kind: FieldKind): string {
     return `${kind}|${Kinds[kind].quantum ? currentBasis() : 'none'}`;
 }
 
+/**
+ * Heavy atoms — counted, not read off the counts line.
+ *
+ * The old body took columns 0-3 of line 4, which is the TOTAL atom count and
+ * includes hydrogens, so the number driving the "is quantum affordable" gate
+ * was wrong by a factor of about two on anything with explicit H. It also
+ * returned 0 for a V3000 molfile, whose counts line reads "0 0 0 0 0 999
+ * V3000" — and 0 heavy atoms passes every affordability check there is, so the
+ * one format that most needs the gate was the one that disabled it.
+ */
 function molfileHeavyAtoms(mf: string): number {
-    const counts = mf.split('\n')[3] ?? '';
-    return parseInt(counts.slice(0, 3), 10) || 0;
+    const lines = mf.split('\n');
+    const counts = lines[3] ?? '';
+    if (counts.includes('V3000')) {
+        // Element symbol is the 4th whitespace field of each ATOM line.
+        return lines.filter(l => /^M {2}V30 \d+ [A-Z]/.test(l))
+            .filter(l => (l.trim().split(/\s+/)[3] ?? '') !== 'H').length;
+    }
+    const total = parseInt(counts.slice(0, 3), 10);
+    if (!Number.isFinite(total) || total <= 0) return 0;
+    let heavy = 0;
+    for (let i = 4; i < 4 + total && i < lines.length; i++) {
+        // V2000 atom line: x, y, z in 3x10 columns, then the element symbol.
+        const sym = lines[i].slice(31, 34).trim();
+        if (sym && sym !== 'H' && sym !== 'D') heavy++;
+    }
+    return heavy || total;
 }
 
-/** Fetch one field into the browser cache (deduplicated). Throws on backend
- * refusal; returns null if the focused ligand changed while in flight. */
-async function fetchField(kind: FieldKind, store = false): Promise<{ cube: string, meta: FieldMeta } | null> {
+/**
+ * A refusal that carries WHY. The backend distinguishes 'budget' (too slow, and
+ * retryable with more time) from 'unsupported' (chemically impossible, and no
+ * amount of time will help) — a difference the chemist has to see, because the
+ * two demand opposite next moves.
+ */
+class FieldRefusal extends Error {
+    constructor(message: string, readonly reason: 'budget' | 'unsupported' | 'internal' | 'network') {
+        super(message);
+    }
+}
+
+/**
+ * The clock the panel is willing to wait, and the SAME number is sent to the
+ * daemon as its own budget so the two cannot disagree. When they did, the panel
+ * simply waited: one click on a heme held 22 cores for 36 minutes with the UI
+ * showing "Solving…" the whole time and every button disabled.
+ */
+const QM_BUDGET_SECONDS = 60;
+/** The socket must outlive the daemon's own deadline, or a timeout here would
+ * be indistinguishable from the daemon's bound failing to fire. */
+const clientTimeoutMs = (budget: number) => (budget * 2 + 20) * 1000;
+
+/** The request the user can cancel — one at a time, by construction. */
+let inFlight: AbortController | null = null;
+
+/** Fetch one field into the browser cache (deduplicated). Throws FieldRefusal;
+ * returns null if the focused ligand changed while in flight. */
+async function fetchField(kind: FieldKind, store = false,
+    budget = QM_BUDGET_SECONDS): Promise<{ cube: string, meta: FieldMeta } | null> {
     const key = cacheKey(kind);
     if (!store) {
         const hit = cubeCache.get(key);
@@ -132,25 +248,57 @@ async function fetchField(kind: FieldKind, store = false): Promise<{ cube: strin
     }
     const requestMolfile = molfile;
     const basis = currentBasis();
+    const controller = new AbortController();
+    inFlight = controller;
+    const timer = setTimeout(() => controller.abort(), clientTimeoutMs(budget));
     const p = (async () => {
         try {
             const resp = await fetch(`${BACKEND}/field`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ molfile: requestMolfile, kind, basis, store }),
+                body: JSON.stringify({
+                    molfile: requestMolfile, kind, basis, store,
+                    max_seconds: budget,
+                }),
+                signal: controller.signal,
             });
             const payload = await resp.json();
             if (molfile !== requestMolfile) return null;
-            if (!payload.ok) throw new Error(payload.error);
+            if (!payload.ok) throw new FieldRefusal(payload.error, payload.reason ?? 'internal');
             const entry = { cube: payload.cube as string, meta: payload.meta as FieldMeta };
             cubeCache.set(key, entry);
             return entry;
+        } catch (e) {
+            if (e instanceof FieldRefusal) throw e;
+            if (controller.signal.aborted) {
+                throw new FieldRefusal(
+                    `cancelled after ${budget * 2 + 20} s — the daemon should have `
+                    + `stopped itself at ${budget} s, so it is over its own bound`,
+                    'budget');
+            }
+            throw new FieldRefusal(
+                e instanceof Error ? e.message : String(e), 'network');
         } finally {
+            clearTimeout(timer);
+            if (inFlight === controller) inFlight = null;
             pendingFetch.delete(key);
         }
     })();
     pendingFetch.set(key, p);
     return p;
+}
+
+/** Abandon whatever is in flight. Used by the Cancel control and by any change
+ * that makes the answer worthless before it arrives. */
+function abortInFlight() {
+    inFlight?.abort();
+    inFlight = null;
+    // A promise from the OLD molecule left in this map is not merely stale: a
+    // request for the NEW molecule with the same kind|basis key joins it,
+    // reads `molfile !== requestMolfile`, resolves null, and the panel reports
+    // "ligand changed" for a click the user just made. The first field click
+    // after switching molecules silently did nothing.
+    pendingFetch.clear();
 }
 
 function setPrefetchNote(text: string) {
@@ -170,22 +318,49 @@ async function prefetchAll() {
         ? [...PREFETCH_CLASSICAL, ...PREFETCH_QUANTUM]
         : PREFETCH_CLASSICAL;
     let done = 0;
-    const failed: string[] = [];
+    // The REASON, not just the label. `catch {}` discarded the exception and
+    // kept only the field's name; the note then appended an unrelated
+    // heavy-atom clause, so Ivan read "unavailable: Electrostatic well
+    // (quantum on demand — 43 heavy atoms)" for a CLASSICAL field that had
+    // failed for a completely different reason. The backend had said exactly
+    // what was wrong — "Gasteiger cannot parameterize Fe" — and this line
+    // deleted it and substituted a falsehood.
+    const failed: { label: string, why: string }[] = [];
     for (const kind of kinds) {
         if (molfile !== startedFor) return;   // ligand changed mid-prefetch
         setPrefetchNote(`Precomputing fields ${done}/${kinds.length} — ${Kinds[kind].label}…`);
         try {
             await fetchField(kind);
-        } catch {
-            failed.push(Kinds[kind].label);   // honest per-kind refusals (e.g. Gasteiger NaN)
+        } catch (e) {
+            failed.push({
+                label: Kinds[kind].label,
+                why: e instanceof Error ? e.message : String(e),
+            });
         }
         done++;
     }
     if (molfile !== startedFor) return;
-    const skipNote = heavy > PREFETCH_QM_MAX_HEAVY ? ` (quantum on demand — ${heavy} heavy atoms)` : '';
-    setPrefetchNote(failed.length
-        ? `Fields cached in browser + auto-saved to DB; unavailable: ${failed.join(', ')}${skipNote}`
-        : `All ${kinds.length} fields cached in browser + auto-saved to DB${skipNote}.`);
+    const parts: string[] = [];
+    parts.push(`${done - failed.length}/${kinds.length} fields cached in browser`);
+    if (heavy > PREFETCH_QM_MAX_HEAVY) {
+        // Its own clause: this is a statement about what was NOT ATTEMPTED,
+        // and gluing it onto the list of things that were attempted and failed
+        // is what manufactured the wrong explanation.
+        parts.push(`quantum fields left on demand — ${heavy} heavy atoms`);
+    }
+    setPrefetchNote(parts.join(' · '));
+    const reasons = byId('field-prefetch-reasons');
+    if (reasons) {
+        reasons.hidden = failed.length === 0;
+        reasons.innerHTML = failed.map(f =>
+            `<div class="field-refusal"><span>${escapeHtml(f.label)}</span>`
+            + `<span>${escapeHtml(f.why)}</span></div>`).join('');
+    }
+}
+
+function escapeHtml(s: string): string {
+    return s.replace(/[&<>"]/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 }
 
 
@@ -222,6 +397,14 @@ function setButtonsEnabled() {
         btn.disabled = busy || !molfile;
         btn.dataset.active = String(btn.dataset.field === activeKind);
     });
+    // Cancel is the one control that must be LIVE precisely when everything
+    // else is dead — `.field-btn` disables the whole row while busy, so it
+    // deliberately does not carry that class.
+    const cancel = byId<HTMLButtonElement>('field-cancel');
+    if (cancel) {
+        cancel.hidden = !busy;
+        cancel.disabled = false;
+    }
 }
 
 function renderMeta(meta: FieldMeta | null) {
@@ -250,7 +433,7 @@ function renderMeta(meta: FieldMeta | null) {
 
 function reprParams(kind: FieldKind, sign: 1 | -1, shell: number) {
     const spec = Kinds[kind];
-    const s = SHELLS[shell];
+    const s = shells()[shell];
     return createVolumeRepresentationParams(plugin!, activeVolume ?? undefined, {
         type: 'isosurface',
         typeParams: {
@@ -261,7 +444,11 @@ function reprParams(kind: FieldKind, sign: 1 | -1, shell: number) {
             emissive: s.emissive,
         },
         color: 'uniform',
-        colorParams: { value: Color(sign > 0 ? spec.posColor : spec.negColor) },
+        colorParams: {
+            value: Color(sign > 0
+                ? tokenColor(spec.posToken, spec.posColor)
+                : tokenColor(spec.negToken, spec.negColor)),
+        },
     });
 }
 
@@ -299,7 +486,7 @@ async function renderCube(cubeText: string, kind: FieldKind) {
     if (!activeVolume) throw new Error('volume creation failed');
 
     const reprs = plugin.build();
-    for (let i = 0; i < SHELLS.length; i++) {
+    for (let i = 0; i < shells().length; i++) {
         reprs.to(REF_VOLUME).apply(
             StateTransforms.Representation.VolumeRepresentation3D,
             reprParams(kind, 1, i), { ref: shellRef('pos', i) });
@@ -310,13 +497,42 @@ async function renderCube(cubeText: string, kind: FieldKind) {
         }
     }
     await reprs.commit();
+    frameFieldOnce();
     updateIsoReadout();
+}
+
+/** The molecule the camera has already been taken to for a field. */
+let framedForMolfile: string | null = null;
+
+/**
+ * Fly to the field the first time one is rendered for a ligand.
+ *
+ * Without this the picture is honest and useless: the well is a few Ångström
+ * across, the camera is framing a whole protein, and the field renders as a
+ * speck behind an opaque cartoon — visible in a screenshot only if you already
+ * know where to look. Computing a field IS the request to look at it.
+ *
+ * Once per ligand, not once per field: re-framing on every swap would fight a
+ * user who has just positioned the camera to compare two of them.
+ */
+function frameFieldOnce() {
+    if (!plugin || !activeVolume || framedForMolfile === molfile) return;
+    try {
+        const sphere = Grid.getBoundingSphere(activeVolume.grid);
+        if (!sphere || !(sphere.radius > 0)) return;
+        framedForMolfile = molfile;
+        // Keeps the clipping slab wide enough for the rest of the scene, so
+        // flying in does not slice the protein away around the field.
+        focusSphereKeepingSlab(plugin, sphere, { extraRadius: 1.5, durationMs: 320 });
+    } catch {
+        // A camera that will not move is not a reason to withhold the field.
+    }
 }
 
 async function updateIsoSurfaces() {
     if (!plugin || !activeKind || !activeVolume) return;
     const update = plugin.build();
-    for (let i = 0; i < SHELLS.length; i++) {
+    for (let i = 0; i < shells().length; i++) {
         for (const sign of ['pos', 'neg'] as const) {
             const ref = shellRef(sign, i);
             if (!plugin.state.data.cells.has(ref)) continue;
@@ -330,10 +546,11 @@ async function updateIsoSurfaces() {
     updateIsoReadout();
 }
 
-async function requestField(kind: FieldKind) {
+async function requestField(kind: FieldKind, budget = budgetFor(kind)) {
     if (!plugin || !molfile || busy) return;
     const spec = Kinds[kind];
     const requestMolfile = molfile;
+    clearRetry();
 
     // Browser-cache path: solved on import, swapping fields costs no network.
     const cached = cubeCache.get(cacheKey(kind));
@@ -354,10 +571,11 @@ async function requestField(kind: FieldKind) {
     busy = true;
     setButtonsEnabled();
     setStatus(spec.quantum
-        ? `Solving ${spec.label} — pyscf SCF on ${ligandLabel ?? 'ligand'}…`
+        ? `Solving ${spec.label} — pyscf SCF on ${ligandLabel ?? 'ligand'}… `
+          + `(gives up at ${budget} s · Cancel to stop now)`
         : `Computing ${spec.label}…`, 'busy');
     try {
-        const entry = await fetchField(kind);
+        const entry = await fetchField(kind, false, budget);
         if (entry === null || molfile !== requestMolfile) {
             setStatus('Ligand changed while computing — stale field discarded.', 'idle');
             return;
@@ -366,17 +584,55 @@ async function requestField(kind: FieldKind) {
         renderMeta(entry.meta);
         setStatus(`${spec.label} rendered for ${ligandLabel ?? 'ligand'}.`, 'ok');
     } catch (e) {
+        const reason = e instanceof FieldRefusal ? e.reason : 'internal';
         const msg = e instanceof Error ? e.message : String(e);
-        if (msg.includes('fetch')) {
-            setStatus(`Backend unreachable — start it with: backend/env/bin/python backend/field_server.py (${msg})`, 'error');
+        renderMeta(null);
+        if (reason === 'network') {
+            setStatus(`Backend unreachable — start it with: `
+                + `backend/env/bin/python backend/field_server.py (${msg})`, 'error');
+        } else if (reason === 'budget') {
+            // Not a failure of the molecule, and showing it as one tells a
+            // chemist their compound is broken when the calculation was merely
+            // slow. The retry is offered with the budget it would actually need.
+            setStatus(msg, 'busy');
+            offerRetry(kind, budgetFor(kind) * 4);
         } else {
-            setStatus(`Backend refused: ${msg}`, 'error');
-            renderMeta(null);
+            // 'unsupported' — the backend named a cause and the cause is the
+            // most useful thing on the screen. It is shown verbatim.
+            setStatus(msg, 'error');
         }
     } finally {
         busy = false;
         setButtonsEnabled();
     }
+}
+
+/** The budget a kind is launched with. Classical fields are sub-second and
+ * never need one; the quantum path is the only thing that has ever run away. */
+function budgetFor(kind: FieldKind): number {
+    return Kinds[kind].quantum ? QM_BUDGET_SECONDS : 15;
+}
+
+/** Put a real control on the screen instead of telling the user to edit JSON. */
+function offerRetry(kind: FieldKind, budget: number) {
+    const host = byId('field-retry');
+    if (!host) return;
+    host.hidden = false;
+    host.innerHTML = '';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'field-btn';
+    btn.textContent = `Run anyway · ${Math.round(budget)} s budget`;
+    btn.addEventListener('click', () => {
+        host.hidden = true;
+        void requestField(kind, budget);
+    });
+    host.appendChild(btn);
+}
+
+function clearRetry() {
+    const host = byId('field-retry');
+    if (host) { host.hidden = true; host.innerHTML = ''; }
 }
 
 async function checkHealth() {
@@ -408,7 +664,19 @@ export function initFieldWellsPanel(p: PluginContext) {
     byId<HTMLInputElement>('field-iso')?.addEventListener('input', () => void updateIsoSurfaces());
     byId('field-clear')?.addEventListener('click', () => {
         void clearField();
+        clearRetry();
         setStatus('Field cleared.', 'idle');
+    });
+    // A running calculation the user cannot stop is the whole complaint: the
+    // panel said "Solving…" for 36 minutes with every control disabled. The
+    // daemon now stops itself too, but a bound the user cannot reach is not a
+    // control, it is a promise.
+    byId('field-cancel')?.addEventListener('click', () => {
+        abortInFlight();
+        busy = false;
+        setButtonsEnabled();
+        setStatus('Cancelled. The daemon stops at its own deadline; '
+            + 'nothing is left running.', 'idle');
     });
     // Changing basis invalidates the quantum entries only; classical fields
     // have no basis. Cheapest correct move: refetch on demand.
@@ -442,8 +710,17 @@ export function updateFieldWellsLigand(nextMolfile: string | null, label: string
     const summary = byId('fields-summary');
     if (summary) summary.textContent = molfile ? (label ?? 'Ligand') : 'No ligand loaded';
     if (changed) {
+        // Everything in flight belongs to the PREVIOUS molecule and its answer
+        // is worthless now. Without this the pending map kept the old
+        // promises, and the first field click on the new molecule joined one,
+        // resolved null, and reported "ligand changed" for a click that had
+        // just been made.
+        abortInFlight();
         cubeCache.clear();
+        clearRetry();
         setPrefetchNote('');
+        const reasons = byId('field-prefetch-reasons');
+        if (reasons) { reasons.hidden = true; reasons.innerHTML = ''; }
         if (activeKind) {
             void clearField();
             setStatus('Ligand changed — previous field cleared.', 'idle');

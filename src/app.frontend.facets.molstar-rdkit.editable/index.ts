@@ -83,6 +83,18 @@ import { StructureSelectionQueries } from '../mol-plugin-state/helpers/structure
 import { Mat4, Vec3 } from '../mol-math/linear-algebra';
 import { StateSelection } from '../mol-state';
 import { Color } from '../mol-util/color';
+
+/**
+ * The scene's clear colour, read from the theme's `--scene-bg` token.
+ * Falls back to Dirac Night for a theme that does not declare one — a missing
+ * token must not produce a transparent or black canvas.
+ */
+function sceneBackgroundColor(): number {
+    const raw = getComputedStyle(document.documentElement)
+        .getPropertyValue('--scene-bg').trim();
+    const m = /^#?([0-9a-f]{6})$/i.exec(raw);
+    return m ? parseInt(m[1], 16) : 0x0d141b;
+}
 import bDnaUrl from '../../examples/1bna_confal_pyramids.cif';
 import crambinUrl from '../../examples/1crn.cif';
 import retinoidUrl from '../../examples/1cbs_updated.cif';
@@ -369,7 +381,12 @@ class MolecularVfxLab {
         // crash the core lab init and make the UI disappear.
         try { initFieldWellsPanel(this.workbench.plugin); } catch (e) { console.error('[fields] init failed:', e); }
         try { initPharmacophoreDesigner(this.workbench.plugin); } catch (e) { console.error('[designer] init failed:', e); }
-        await this.workbench.setBackground(Color(0x0d141b));
+        // The canvas is part of the theme, so its clear colour comes from the
+        // theme's own token. As a literal it was the one surface a theme could
+        // not reach: the app booted to a near-black scene and the active theme
+        // repainted it light on a 1.2 s poll, so every load flashed dark first
+        // — and the field colours were still chosen for the colour that lost.
+        await this.workbench.setBackground(Color(sceneBackgroundColor()));
         this.createControls();
         await this.loadMolecule(this.currentMolecule);
         this.baseline = captureMolstarVisualState(this.workbench.plugin);

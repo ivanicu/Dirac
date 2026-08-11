@@ -1,0 +1,205 @@
+/**
+ * Dirac — "White Chamber" theme.
+ *
+ * A light, chrome-free skin: the paper is the surface, hairlines are the only
+ * structure, and one signal red carries every meaning that is not neutral
+ * (layer live · bound exceeded · hydrogen bonds drawn in the scene).
+ *
+ * Loaded AFTER the inline <style> in index.html, so equal-specificity rules win.
+ * Kept as its own file on purpose: the theme is a stylesheet, not a rewrite of
+ * the app's markup, and index.html is shared substrate that several agents edit.
+ */
+
+/* ─── palette: the app's own tokens, re-pointed ─────────────────────────── */
+:root {
+    color-scheme: light;
+
+    --bg: #fcfcfb;          /* paper */
+    --surface: #fcfcfb;     /* panels have no fill of their own */
+    --surface-2: #ffffff;   /* fields and wells */
+    --surface-3: #f2f2ef;   /* pressed / inset */
+    --border: #e4e4e0;      /* hairline */
+    --border-strong: #cfcfc8;
+
+    --text: #141412;
+    --text-2: #4c4c48;
+    --text-3: #9a9a92;
+
+    --accent: #e5372b;      /* the single signal */
+    --accent-soft: #fdeeec;
+    --warn: #b3701c;
+    --high: #e5372b;
+    --unavail: #9c8f93;
+
+    /* theme-local */
+    --rule: #141412;        /* the black hairline that divides regions */
+    --ok: #2c7a4b;
+    --ok-soft: #edf6f0;
+    --mono: ui-monospace, "SF Mono", "IBM Plex Mono", Menlo, Consolas, monospace;
+}
+
+/* ─── zero radius: the chamber has no soft corners ──────────────────────── */
+#app, #app *, #app *::before, #app *::after { border-radius: 0 !important; }
+
+/* ─── regions divided by rules, not by fills ────────────────────────────── */
+.topbar { background: var(--bg); border-bottom: 1px solid var(--rule); }
+.sidebar { background: var(--bg); border-right: 1px solid var(--rule); }
+main { background: var(--bg); }
+#viewport { background: var(--bg); }
+
+.brand .eyebrow { color: var(--text-3); font-weight: 700; letter-spacing: .22em; }
+.brand h1 { font-weight: 600; letter-spacing: .14em; text-transform: uppercase; font-size: 15px; }
+
+/* selects: quiet text with a caret, no chrome */
+select, input[type="text"] {
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--border-strong);
+    padding: 6px 2px;
+    font-weight: 500;
+}
+select { appearance: none; -webkit-appearance: none; padding-right: 15px;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='9' height='6'><path d='M1 1l3.5 3.5L8 1' fill='none' stroke='%23141412' stroke-width='1.3'/></svg>");
+    background-repeat: no-repeat; background-position: right center; }
+select:focus, input:focus { outline: 0; box-shadow: none; border-bottom-color: var(--accent); }
+.topbar-scene label { color: var(--text-3); font-family: var(--mono); letter-spacing: .18em; }
+
+.btn-ghost, .btn-copy, .designer-toolbar button, .designer-add-row button,
+.import-row button, .smarts-search button {
+    background: transparent; border: 1px solid var(--border-strong);
+    color: var(--text-2); font-weight: 500;
+}
+.btn-ghost:hover, .btn-copy:hover, .designer-toolbar button:hover,
+.designer-add-row button:hover, .import-row button:hover { border-color: var(--accent); color: var(--accent); }
+
+/* status: ready is quiet green, an error is the signal red */
+.status-pill { background: var(--ok-soft); color: var(--ok); border: 1px solid var(--ok);
+    font-family: var(--mono); font-size: 9px; letter-spacing: .16em; text-transform: uppercase; font-weight: 500; }
+
+/* ─── master nav: uppercase micro-tabs on a hairline ────────────────────── */
+.master-nav { background: transparent; border-bottom: 1px solid var(--border); padding: 0 10px; }
+.master-tab { color: var(--text-3); font-family: var(--mono); font-size: 9px;
+    letter-spacing: .16em; text-transform: uppercase; font-weight: 500; padding: 11px 9px; }
+.master-tab:hover { color: var(--text-2); }
+.master-tab[aria-selected="true"] { color: var(--accent); }
+.master-tab[aria-selected="true"]::after { background: var(--accent); height: 1.5px; left: 9px; right: 9px; }
+
+.scene-summary { background: transparent; border-bottom: 1px solid var(--border); }
+.scene-summary-row { color: var(--text-2); }
+.scene-summary-row .dot { background: var(--text-3); }
+
+/* ─── panels dissolve into sections ─────────────────────────────────────── */
+.panel {
+    background: transparent; border: 0; border-bottom: 1px solid var(--border);
+    padding: 18px 4px 20px; margin-bottom: 0; box-shadow: none;
+}
+.detail-scroll > [data-section] > .panel:last-child,
+.panel:last-of-type { border-bottom: 0; }
+.panel-heading h2 { font-size: 12px; font-weight: 600; letter-spacing: .01em; }
+.panel-index { font-family: var(--mono); font-size: 8px; letter-spacing: .26em; color: var(--text-3); font-weight: 500; }
+.layer-summary { border-bottom: 1px solid var(--border); }
+.layer-summary-copy strong { font-weight: 600; }
+
+/* layer category chips → plain text switches */
+.layer-tab { background: transparent; border: 0; border-bottom: 1px solid transparent;
+    color: var(--text-3); font-family: var(--mono); font-size: 9px; letter-spacing: .12em;
+    text-transform: uppercase; padding: 4px 2px; }
+.layer-tabs { gap: 14px; }
+.layer-tab:hover { color: var(--text-2); border-bottom-color: var(--border-strong); }
+.layer-tab[aria-selected="true"] { background: transparent; color: var(--accent); border-bottom-color: var(--accent); }
+.layer-tab small { background: transparent; color: var(--text-3); padding: 0 0 0 4px; }
+.layer-tab[aria-selected="true"] small { background: transparent; color: var(--accent); }
+.layer-panel > header { border-bottom: 1px solid var(--border); }
+
+/* ─── upgrade rows: no cards, just a rhythm of hairlines ────────────────── */
+.upgrade {
+    background: transparent; border: 0; border-top: 1px solid var(--border);
+    padding: 9px 2px; gap: 12px;
+}
+.upgrade:hover { background: transparent; border-top-color: var(--border-strong); }
+.upgrade.expanded { background: transparent; border-top-color: var(--accent); }
+.upgrade + .upgrade { margin-top: 0; }
+
+/* the toggle is a square that fills with the signal */
+.upgrade-toggle {
+    width: 13px; height: 13px; margin-top: 3px;
+    border: 1px solid var(--text-2); background: transparent; transition: .12s;
+}
+.upgrade-toggle::after { display: none; }
+.upgrade-toggle:checked { border-color: var(--accent); background: var(--accent); }
+.upgrade-toggle:disabled { opacity: .32; }
+
+.upgrade-copy > strong { font-weight: 600; font-size: 12.5px; }
+.upgrade-copy > span:not([class]) { color: var(--text-3); }
+.pareto-mark { border-color: var(--accent); color: var(--accent); }
+
+.cost { background: transparent; color: var(--text-3); font-family: var(--mono);
+    font-size: 8px; letter-spacing: .16em; padding: 2px 0 2px 8px; }
+.cost-high { background: transparent; color: var(--accent); }
+.cost-medium { background: transparent; color: var(--text-2); }
+.cost-unavailable { background: transparent; color: var(--unavail); }
+
+.semantic-availability { background: transparent; color: var(--ok); padding: 0;
+    font-family: var(--mono); font-size: 8.5px; letter-spacing: .1em; text-transform: uppercase; }
+.semantic-availability[data-signal="empty"] { background: transparent; color: var(--accent); }
+.semantic-availability[data-signal="active"] { background: transparent; color: var(--text-2); }
+.upgrade.expanded .semantic-channel { border-color: var(--border-strong); color: var(--text-3); }
+.upgrade.expanded .semantic-debug { background: transparent; border-color: var(--border-strong); }
+
+/* ─── focus / ledger / fields ───────────────────────────────────────────── */
+.focus-workbench { background: transparent; border: 0; border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border); padding: 14px 0; }
+.cutoff-control input { accent-color: var(--accent); }
+.cutoff-control output { color: var(--accent); font-family: var(--mono); }
+
+.contact-row, .designer-hit, .field-btn {
+    background: transparent; border: 0; border-bottom: 1px solid var(--border);
+}
+.contact-row:hover, .designer-hit:hover, .field-btn:hover:not(:disabled) {
+    border-bottom-color: var(--accent); background: transparent;
+}
+.contact-row[data-active="true"], .field-btn[data-active="true"],
+.designer-hit[data-active="true"] { background: transparent; border-bottom-color: var(--accent); color: var(--accent); }
+.contact-index { color: var(--accent); font-family: var(--mono); }
+.ledger-empty, .field-status, .designer-note, .import-status, .smarts-status {
+    background: transparent; color: var(--text-3); padding: 8px 0;
+}
+
+.field-btn { text-align: left; padding: 9px 0; font-weight: 600; }
+.field-control select { border: 0; border-bottom: 1px solid var(--border-strong); background: transparent; }
+.field-control input[type="range"] { accent-color: var(--accent); }
+
+.designer-feature, .designer-chip, .designer-hit-chips em, .designer-matrix td,
+.designer-matrix th, .designer-hit-preview, .smarts-help {
+    background: transparent; border-color: var(--border);
+}
+.designer-hit-chips em[data-pass="true"] { color: var(--ok); }
+.designer-hit-chips em[data-pass="false"] { color: var(--accent); }
+.designer-smarts-row input, .smarts-search input, .import-molecule input {
+    background: transparent; border: 0; border-bottom: 1px solid var(--border-strong);
+}
+
+/* the published 2D depiction keeps its paper */
+.ligand-depiction { background: #ffffff; border: 1px solid var(--border); }
+.ligand-legend-item i { border: 1px solid rgba(0,0,0,.12); }
+.ligand-export-value, .ligand-export-label { font-family: var(--mono); }
+
+/* ─── diagnostics strip: a ruler along the bottom ───────────────────────── */
+.diag-strip { background: transparent; border-top: 1px solid var(--rule); }
+.diag-strip-row { background: var(--border); }
+.diag-cell { background: var(--bg); }
+.diag-cell dt { font-family: var(--mono); font-size: 7.5px; letter-spacing: .22em; color: var(--text-3); }
+.diag-cell dd { font-weight: 600; font-variant-numeric: tabular-nums; }
+.diagnostics summary { font-family: var(--mono); font-size: 9px; letter-spacing: .2em; color: var(--text-3); }
+.metrics dt { color: var(--text-3); }
+.note { background: transparent; border-left: 2px solid var(--accent); color: var(--text-2); }
+
+/* ─── viewport furniture ────────────────────────────────────────────────── */
+.badge {
+    background: rgba(252,252,251,.86); border: 1px solid var(--border);
+    color: var(--text-2); backdrop-filter: none; font-family: var(--mono);
+    font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase;
+}
+
+/* scrollbar: a hairline, not a slab */
+.detail-scroll { scrollbar-color: var(--border-strong) transparent; }
