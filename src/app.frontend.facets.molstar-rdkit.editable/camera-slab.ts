@@ -52,6 +52,23 @@ function unionSphere(loci: Loci | Loci[]): Sphere3D | undefined {
     return boundaryHelper.getSphere();
 }
 
+/**
+ * The scene radius as mol* itself maintains it.
+ *
+ * NOT `canvas3d.boundingSphere.radius`, which is only the same thing while
+ * `sceneRadiusFactor` is at its default of 1. Canvas3D keeps
+ * `camera.state.radiusMax = boundingSphere.radius * sceneRadiusFactor` (canvas3d.ts,
+ * three call sites), and `updateClip` clamps `near` against that same `radiusMax`,
+ * so reading any other quantity here would disagree with the clamp the moment a user
+ * raises the factor. `radiusMax` is 0 before the first scene commit — Canvas3D checks
+ * for exactly that elsewhere — so the bounding sphere is the fallback, not the source.
+ */
+function sceneRadius(canvas3d: NonNullable<PluginContext['canvas3d']>) {
+    return canvas3d.camera.state.radiusMax > 0
+        ? canvas3d.camera.state.radiusMax
+        : canvas3d.boundingSphere.radius;
+}
+
 /** Fly to `sphere` but keep the clipping slab wide enough for the whole scene. */
 export function focusSphereKeepingSlab(plugin: PluginContext, sphere: Sphere3D, options: SlabSafeFocusOptions = {}) {
     const canvas3d = plugin.canvas3d;
@@ -62,7 +79,7 @@ export function focusSphereKeepingSlab(plugin: PluginContext, sphere: Sphere3D, 
 
     const snapshot = canvas3d.camera.getFocus(sphere.center, focusRadius);
     // Position was computed from focusRadius above; only the clip radius is widened.
-    snapshot.radius = Math.max(canvas3d.boundingSphere.radius, focusRadius);
+    snapshot.radius = Math.max(sceneRadius(canvas3d), focusRadius);
 
     canvas3d.requestCameraReset({ snapshot, durationMs });
 }
@@ -82,6 +99,6 @@ export function focusLociKeepingSlab(plugin: PluginContext, loci: Loci | Loci[],
 export function restoreSceneSlab(plugin: PluginContext) {
     const canvas3d = plugin.canvas3d;
     if (!canvas3d) return;
-    const r = canvas3d.boundingSphere.radius;
+    const r = sceneRadius(canvas3d);
     if (r > 0) canvas3d.camera.setState({ radius: r }, 0);
 }
