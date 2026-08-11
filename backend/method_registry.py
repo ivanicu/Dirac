@@ -51,6 +51,12 @@ from typing import Callable, Iterable
 UNITS: dict[str, dict] = {
     'fields.mep': {
         'fns': ['field_mep', 'write_cube', 'prepare_mol'],
+        # The numbers that DECIDE THE GEOMETRY of the cube. They are read by
+        # field_mep and contained in none of the functions above, so before they
+        # were listed here a change to the box-growing rule left the version
+        # untouched and the servable view kept serving old-geometry cubes.
+        'consts': ['PAD_MAX', 'PAD_STEP', 'FIXED_ISO', 'GRID_MAX_DIM',
+                   'ISO_ENCLOSED_FRACTION', 'ISO_SLIDER_FLOOR'],
         'exec_class': 'interactive',
         'in_schema': {'type': 'object', 'required': ['molfile'],
                       'properties': {'molfile': {'type': 'string'},
@@ -70,6 +76,8 @@ UNITS: dict[str, dict] = {
     },
     'fields.mlp': {
         'fns': ['field_mlp', 'write_cube', 'prepare_mol'],
+        'consts': ['PAD_MAX', 'PAD_STEP', 'FIXED_ISO', 'GRID_MAX_DIM',
+                   'ISO_ENCLOSED_FRACTION', 'ISO_SLIDER_FLOOR'],
         'exec_class': 'interactive',
         'in_schema': {'type': 'object', 'required': ['molfile'],
                       'properties': {'molfile': {'type': 'string'}}},
@@ -109,6 +117,12 @@ _QM_CAPS = {
 def _qm_unit(kind: str, quantity: str, units: str) -> dict:
     return {
         'fns': _QM_FNS,
+        # A quantum cube's grid comes from pyscf's cubegen at these fixed
+        # resolutions, and the cost model decides whether it runs at all. Both
+        # are numbers, both change the output or the refusal, and neither lives
+        # inside a listed function.
+        'consts': ['CUBE_GRID_MEP', 'CUBE_GRID_ORB', 'CUBE_MEP_FIXED',
+                   'CUBE_MEP_MARGINAL', 'CUBE_ORB_FIXED', 'CUBE_ORB_MARGINAL'],
         'exec_class': 'interactive',
         'in_schema': {'type': 'object', 'required': ['molfile'],
                       'properties': {'molfile': {'type': 'string'},
@@ -133,12 +147,29 @@ UNITS.update({
 
 # ── version = hash of the compute unit, machine-derived ─────────────────────
 
-def unit_version(module, fns: Iterable[str]) -> tuple[str, bytes]:
-    """(short hex version, full sha256) over the SOURCE of the named functions.
+def unit_version(module, fns: Iterable[str],
+                 consts: Iterable[str] = ()) -> tuple[str, bytes]:
+    """(short hex version, full sha256) over the SOURCE of the named functions
+    AND THE VALUES of the named module-level constants.
 
-    Sorted, so declaration order in UNITS cannot change a version. Source only:
-    a docstring edit does change it, which is the conservative direction — the
-    dangerous direction is a behaviour change that does NOT change it.
+    Sorted, so declaration order in UNITS cannot change a version. Source only
+    for functions: a docstring edit does change the version, which is the
+    conservative direction — the dangerous direction is a behaviour change that
+    does NOT change it.
+
+    ⚠ CONSTANTS WERE THE HOLE, and it cost 22 cached rows that had to be deleted
+    by hand. The geometry of an MEP cube is decided by module-level numbers —
+    PAD_MAX, PAD_STEP, FIXED_ISO, GRID_MAX_DIM — that the listed functions READ
+    but do not CONTAIN. So the box-growing rule changed, every cube's geometry
+    changed with it, and the method version did not move: reads go through
+    app.v_field_cube_servable, which keys on method currency, and it happily
+    served cubes with the OLD geometry under the NEW rule. The failure is silent
+    by construction, because a stale cube is a perfectly valid cube.
+
+    Hashing source-but-not-constants means the version misses exactly the edit
+    most likely to happen. Tuning a number IS the common change; rewriting a
+    function is the rare one. `repr` is used deliberately: 12.0 and 12 are
+    different values here and must produce different versions.
     """
     h = hashlib.sha256()
     for name in sorted(fns):
@@ -149,6 +180,14 @@ def unit_version(module, fns: Iterable[str]) -> tuple[str, bytes]:
                 f'{module.__name__} — the UNITS table has drifted from the code')
         h.update(name.encode())
         h.update(inspect.getsource(fn).encode())
+    for name in sorted(consts):
+        if not hasattr(module, name):
+            raise LookupError(
+                f'compute unit names the constant {name!r}, which does not exist '
+                f'in {module.__name__} — a constant that vanished silently stops '
+                f'being part of the version, which is how this hole was made')
+        h.update(name.encode())
+        h.update(repr(getattr(module, name)).encode())
     digest = h.digest()
     return digest.hex()[:12], digest
 
@@ -157,7 +196,8 @@ def plan(module) -> list[dict]:
     """What register_all would write. Pure; no DB. This is the smoke test."""
     out = []
     for method_id, spec in sorted(UNITS.items()):
-        version, digest = unit_version(module, spec['fns'])
+        version, digest = unit_version(module, spec['fns'],
+                                       spec.get('consts', ()))
         out.append({'method_id': method_id, 'version': version, 'sha256': digest,
                     'exec_class': spec['exec_class'], 'fns': sorted(spec['fns']),
                     'in_schema': spec['in_schema'], 'out_schema': spec['out_schema'],
