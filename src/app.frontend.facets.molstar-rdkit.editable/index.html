@@ -791,6 +791,8 @@
         }
         .ligand-depiction svg { display: block; max-width: 100%; height: auto; cursor: pointer; border-radius: 5px; }
         .bond-atlas-block { margin-top: var(--sp-4, 16px); padding-top: var(--sp-3, 12px); border-top: 1px solid var(--border); }
+        .phys-basis-label { display: inline-flex; align-items: center; gap: var(--sp-1, 4px); color: var(--text-3); font-size: var(--fs-2xs, 9px); letter-spacing: var(--track-wide, .08em); text-transform: uppercase; }
+        .phys-basis-label select { text-transform: none; letter-spacing: normal; }
         .halogen-block { margin-top: var(--sp-3, 12px); padding-top: var(--sp-3, 12px); border-top: 1px dashed var(--border); }
         .halogen-note-inline { color: var(--text-3); font-size: var(--fs-2xs, 9px); letter-spacing: var(--track-wide, .08em); text-transform: uppercase; }
         .halogen-row { border-left: 2px solid var(--border-strong); padding: var(--sp-2, 8px) 0 var(--sp-2, 8px) var(--sp-2, 8px); margin-bottom: var(--sp-2, 8px); }
@@ -1471,6 +1473,13 @@
                         <div class="phys-block-head">
                             <h3>σ-hole · surface electrostatics</h3>
                             <div class="phys-actions">
+                                <label class="phys-basis-label">Basis
+                                    <select id="phys-basis">
+                                        <option value="def2-svp" selected>def2-SVP · has iodine</option>
+                                        <option value="6-31g">6-31G · faster</option>
+                                        <option value="sto-3g">STO-3G · fastest</option>
+                                    </select>
+                                </label>
                                 <button type="button" class="phys-btn" id="phys-run-surface">Compute</button>
                                 <button type="button" class="field-cancel" id="phys-cancel" hidden>■ Cancel</button>
                             </div>
