@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+"""Register the Designer screening library into the Dirac database.
+
+Emits SQL on stdout; pipe it to psql. Nothing is written directly, so the
+same command can be inspected before it runs:
+
+    backend/env/bin/python backend/db/load_library.py > /tmp/load.sql
+    backend/env/bin/python backend/db/load_library.py | psql -U ivan -d dirac -v ON_ERROR_STOP=1
+
+Why a SQL emitter rather than psycopg: the backend env's psycopg is missing a
+transitive dependency and the env belongs to another workstream. Emitting SQL
+keeps this loader dependency-free and auditable.
+
+What "registration" means here, and why each step exists:
+
+  Cleanup          normalizes functional groups, reionizes, disconnects metals
+  FragmentParent   strips salts and solvents — the PARENT is the identity
+  Uncharger        neutralizes, so a hydrochloride and its free base collide
+  Canonicalize     canonical tautomer, so keto and enol are one compound
+
+Skipping any of these produces duplicate registrations that look like distinct
+compounds and silently split a SAR series in half. The protocol is stored in
+chem.standardizer.rules so a future re-registration can tell whether an
+identity changed because the molecule changed or because the rules did.
+"""
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+from rdkit import Chem, RDLogger
+from rdkit.Chem import AllChem, Descriptors, rdMolDescriptors, rdFingerprintGenerator
+from rdkit.Chem.MolStandardize import rdMolStandardize
+import rdkit
+
+RDLogger.DisableLog('rdApp.*')
+
+ROOT = Path(__file__).resolve().parents[2]
+LIBRARY_TS = ROOT / 'src/app.frontend.facets.molstar-rdkit.editable/facets/pharmacophore-designer/library.ts'
+ENTRY_RE = re.compile(
+    r"\{\s*id:\s*'([^']+)',\s*name:\s*'([^']+)',\s*smiles:\s*'([^']+)',\s*category:\s*'([^']+)'\s*\}"
+)
+
+STANDARDIZER_LABEL = 'dirac-parent-v1'
+STANDARDIZER_RULES = [
+    'rdMolStandardize.Cleanup',
+    'rdMolStandardize.FragmentParent',
+    'rdMolStandardize.Uncharger',
+    'rdMolStandardize.TautomerEnumerator.Canonicalize',
+    'Chem.AssignStereochemistry(cleanIt=True, force=True)',
+]
+
+# Descriptor name → callable. Names are the meta.descriptor_name enum; a typo
+# here is a failed INSERT, not a silently mis-filed number.
+DESCRIPTORS = {
+    'mw': Descriptors.ExactMolWt,
+    'logp': Descriptors.MolLogP,
+    'tpsa': Descriptors.TPSA,
+    'hbd': rdMolDescriptors.CalcNumHBD,
+    'hba': rdMolDescriptors.CalcNumHBA,
+    'rotatable_bonds': rdMolDescriptors.CalcNumRotatableBonds,
+    'heavy_atoms': lambda m: m.GetNumHeavyAtoms(),
+    'rings': rdMolDescriptors.CalcNumRings,
+    'aromatic_rings': rdMolDescriptors.CalcNumAromaticRings,
+    'aliphatic_rings': rdMolDescriptors.CalcNumAliphaticRings,
+    'heterocycles': rdMolDescriptors.CalcNumHeterocycles,
+    'aromatic_heterocycles': rdMolDescriptors.CalcNumAromaticHeterocycles,
+    'fraction_csp3': rdMolDescriptors.CalcFractionCSP3,
+    'amide_bonds': rdMolDescriptors.CalcNumAmideBonds,
+    'num_spiro': rdMolDescriptors.CalcNumSpiroAtoms,
+    'num_bridgehead': rdMolDescriptors.CalcNumBridgeheadAtoms,
+    'formal_charge': Chem.GetFormalCharge,
+}
+
+FP_NBITS = 2048
+FP_RADIUS = 2
+
+
+def sql_str(value) -> str:
+    if value is None:
+        return 'NULL'
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def standardize(mol: Chem.Mol) -> Chem.Mol:
+    mol = rdMolStandardize.Cleanup(mol)
+    mol = rdMolStandardize.FragmentParent(mol)
+    mol = rdMolStandardize.Uncharger().uncharge(mol)
+    mol = rdMolStandardize.TautomerEnumerator().Canonicalize(mol)
+    Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
+    return mol
+
+
+def stereo_completeness(mol: Chem.Mol) -> str:
+    """Map RDKit's stereo perception onto chem.stereo_completeness.
+
+    'partially_defined' is the row that matters: it means the registered
+    entity is a MIXTURE, and any activity filed against it is an average over
+    species that were never separated.
+    """
+    centers = Chem.FindMolChiralCenters(mol, includeUnassigned=True, useLegacyImplementation=False)
+    if not centers:
+        return 'no_stereocenters'
+    unassigned = sum(1 for _, tag in centers if tag == '?')
+    if unassigned == 0:
+        return 'fully_defined'
+    if unassigned == len(centers):
+        return 'undefined'
+    return 'partially_defined'
+
+
+def morgan_bits(mol: Chem.Mol) -> tuple[str, int]:
+    gen = rdFingerprintGenerator.GetMorganGenerator(radius=FP_RADIUS, fpSize=FP_NBITS)
+    fp = gen.GetFingerprint(mol)
+    bits = fp.ToBitString()
+    assert len(bits) == FP_NBITS
+    return bits, int(fp.GetNumOnBits())
+
+
+def main() -> int:
+    source = LIBRARY_TS.read_text()
+    entries = ENTRY_RE.findall(source)
+    if len(entries) < 50:
+        print(f'-- ABORT: library extraction found only {len(entries)} entries', file=sys.stderr)
+        return 1
+
+    out = []
+    w = out.append
+    rdkit_version = rdkit.__version__
+
+    w('-- Generated by backend/db/load_library.py — do not edit by hand.')
+    w('BEGIN;')
+    w(f"""
+INSERT INTO meta.toolkit (name, version, build_note)
+VALUES ('rdkit', {sql_str(rdkit_version)}, 'backend/env, server-side registration')
+ON CONFLICT (name, version) DO NOTHING;""")
+    w(f"""
+INSERT INTO chem.standardizer (label, toolkit_id, rules)
+SELECT {sql_str(STANDARDIZER_LABEL)}, t.id, {sql_str(__import__('json').dumps(STANDARDIZER_RULES))}::jsonb
+  FROM meta.toolkit t WHERE t.name = 'rdkit' AND t.version = {sql_str(rdkit_version)}
+ON CONFLICT (label) DO NOTHING;""")
+
+    registered = 0
+    failed = []
+    collisions: dict[str, str] = {}
+
+    for entry_id, name, smiles, category in entries:
+        raw = Chem.MolFromSmiles(smiles)
+        if raw is None:
+            failed.append((entry_id, 'unparseable SMILES'))
+            continue
+        try:
+            parent = standardize(raw)
+        except Exception as exc:                      # noqa: BLE001 — report, never skip silently
+            failed.append((entry_id, f'standardization failed: {exc}'))
+            continue
+
+        inchi = Chem.MolToInchi(parent)
+        inchikey = Chem.MolToInchiKey(parent)
+        if not inchi or not inchikey:
+            failed.append((entry_id, 'InChI generation failed'))
+            continue
+
+        # Registration collision inside one load is a real finding, not noise:
+        # it means two library rows are the same compound after standardization.
+        if inchikey in collisions:
+            failed.append((entry_id, f'same parent as {collisions[inchikey]} ({inchikey})'))
+            continue
+        collisions[inchikey] = entry_id
+
+        canonical = Chem.MolToSmiles(parent)
+        formula = rdMolDescriptors.CalcMolFormula(parent)
+        exact_mw = Descriptors.ExactMolWt(parent)
+        charge = Chem.GetFormalCharge(parent)
+        stereo = stereo_completeness(parent)
+        bits, popcount = morgan_bits(parent)
+
+        w(f"""
+WITH std AS (SELECT id FROM chem.standardizer WHERE label = {sql_str(STANDARDIZER_LABEL)}),
+     tk  AS (SELECT id FROM meta.toolkit WHERE name='rdkit' AND version={sql_str(rdkit_version)}),
+ins AS (
+    INSERT INTO chem.compound (inchikey, inchi, smiles, formula, mw_monoisotopic,
+                               net_charge, stereo, standardizer_id)
+    SELECT {sql_str(inchikey)}, {sql_str(inchi)}, {sql_str(canonical)}, {sql_str(formula)},
+           {exact_mw:.5f}, {charge}, {sql_str(stereo)}::chem.stereo_completeness, std.id
+      FROM std
+    ON CONFLICT (inchikey) DO NOTHING
+    RETURNING id
+),
+cid AS (
+    SELECT id FROM ins
+    UNION ALL
+    SELECT id FROM chem.compound WHERE inchikey = {sql_str(inchikey)} AND NOT EXISTS (SELECT 1 FROM ins)
+),
+alias AS (
+    INSERT INTO chem.compound_alias (compound_id, kind, alias)
+    SELECT cid.id, 'common_name', {sql_str(name)} FROM cid
+    ON CONFLICT DO NOTHING
+    RETURNING 1
+),
+lib AS (
+    INSERT INTO chem.compound_alias (compound_id, kind, alias)
+    SELECT cid.id, 'internal', {sql_str('dirac-lib:' + entry_id + ':' + category)} FROM cid
+    ON CONFLICT DO NOTHING
+    RETURNING 1
+),
+fp AS (
+    INSERT INTO chem.fingerprint (compound_id, kind, radius, nbits, bits, popcount, toolkit_id)
+    SELECT cid.id, 'morgan2', {FP_RADIUS}, {FP_NBITS}, {sql_str(bits)}::bit({FP_NBITS}), {popcount}, tk.id
+      FROM cid, tk
+    ON CONFLICT DO NOTHING
+    RETURNING 1
+)
+INSERT INTO chem.descriptor (compound_id, name, value, toolkit_id)
+SELECT cid.id, d.name::meta.descriptor_name, d.value, tk.id
+  FROM cid, tk, (VALUES""")
+        rows = []
+        for dname, fn in DESCRIPTORS.items():
+            try:
+                value = float(fn(parent))
+            except Exception:                          # noqa: BLE001
+                continue
+            rows.append(f"        ({sql_str(dname)}, {value:.6f}::numeric)")
+        w(',\n'.join(rows))
+        w('       ) AS d(name, value)\nON CONFLICT DO NOTHING;')
+        registered += 1
+
+    w('COMMIT;')
+
+    for entry_id, why in failed:
+        print(f'-- SKIPPED {entry_id}: {why}', file=sys.stderr)
+    print(f'-- registered {registered} / {len(entries)} entries '
+          f'({len(failed)} skipped) with rdkit {rdkit_version}', file=sys.stderr)
+
+    sys.stdout.write('\n'.join(out) + '\n')
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
