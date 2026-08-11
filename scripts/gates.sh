@@ -46,7 +46,7 @@ run_gate() {
 }
 
 # ---- gate selection -------------------------------------------------------
-ALL=(tsc build palette css migrations)
+ALL=(tsc build palette css migrations docs)
 if [ "$#" -eq 0 ]; then
     WANT=("${ALL[@]}")
 else
@@ -91,6 +91,8 @@ wanted build   && run_gate 'gate-2-build'      node ./scripts/build.mjs -a dirac
 wanted palette && run_gate 'gate-3-palette'    python3 design/check_palette.py
 # 4. css: brace balance in the lab's inline <style> (the a93c175 incident).
 wanted css     && run_gate 'gate-4-css-braces' node scripts/check_css_braces.mjs "$LAB_HTML"
+# 6. docs: every host/port and command a doc claims must match the code.
+wanted docs    && run_gate 'gate-6-docs-facts'  node scripts/check_docs_facts.mjs
 # 5. migrations: an applied migration's file must still BE the applied file.
 #    Skipped rather than failed when PG is unreachable (exit 2), because a
 #    developer without the database must still be able to run the other four —

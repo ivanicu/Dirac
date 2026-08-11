@@ -8,7 +8,7 @@ step anywhere.
 ## Run
 
 ```bash
-backend/env/bin/python backend/field_server.py     # 127.0.0.1:8901
+backend/env/bin/python backend/field_server.py     # 0.0.0.0:8901
 ```
 
 `backend/env` is a self-contained conda env (gitignored): RDKit 2026.03 +
@@ -19,6 +19,18 @@ pyscf 2.14 + numpy. Recreate with:
 backend/env/bin/pip install rdkit pyscf numpy
 ```
 
+## Security posture
+
+Bound to **all interfaces** (`0.0.0.0`), not loopback — Ivan drives this from
+a Mac on the LAN, and a loopback-only daemon just reports "offline" there.
+Stated rather than discovered: it is **unauthenticated** and runs quantum
+chemistry on whatever molfile is POSTed to it. A `Host`/`Origin` allowlist
+(this box's own hostnames/addresses) blocks DNS-rebinding and drive-by reads
+from a page opened elsewhere, but anyone who can already reach this machine
+on the LAN can submit compute. There is no DELETE route on this daemon —
+`app.field_cube` / `app.blob` rows are only ever removed by a human running
+`bin/dirac-sweep` by hand.
+
 ## Protocol
 
 | Route | In | Out |
@@ -27,7 +39,8 @@ backend/env/bin/pip install rdkit pyscf numpy
 | `POST /field` | `{molfile, kind, basis?}` | `{ok, cube, meta}` or `{ok: false, error}` |
 
 Kinds: `mep` (Gasteiger/Coulomb, ~0.1 s) · `homo` · `lumo` · `density` ·
-`mep_qm` (pyscf HF + cubegen). `basis`: `sto-3g` (default) or `6-31g`.
+`mep_qm` (pyscf HF + cubegen). `basis`: `sto-3g` (default) · `6-31g` ·
+`6-31g*` · `def2-svp` (needed for Br/I — 6-31g\* has no iodine ECP).
 
 ## Persistent cube cache
 
@@ -64,5 +77,15 @@ direct negative control: SQLSTATE 23514).
 | Fe-heme (75 atoms) | DIIS stalls at 120 cycles → SOSCF rescue, minutes |
 
 Known limits: `MAX_QM_ATOMS = 120` (with hydrogens); transition-metal ligands
-are minutes, not seconds; no request cancellation — the panel's busy state is
-per-page and one compute runs at a time.
+are minutes, not seconds.
+
+## Concurrency
+
+`ThreadingHTTPServer` — every request runs on its own thread, so **concurrent
+compute is unbounded**: nothing here queues or rejects a second SCF while a
+first is running. There is still no request *cancellation* (a client that
+gives up cannot stop the thread already computing for it), but each SCF is
+individually **deadline-bounded**: a watchdog fires inside the SCF loop
+(`max_seconds`, default 90 s, clamp 900 s) and unwinds with an error instead
+of running to `max_cycle` — so a stuck computation cannot hold a thread
+forever, only up to its own budget.

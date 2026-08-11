@@ -23,10 +23,10 @@ Dirac is **one integrated app** with multiple facets, all sharing the same mol\*
 The core workflow stays 100% in-browser. The **Fields** facet is the one exception by design — real SCF does not belong in wasm. It talks to a local daemon that turns the focused ligand's molfile into Gaussian-cube scalar fields (already in scene coordinates):
 
 ```bash
-backend/env/bin/python backend/field_server.py     # 127.0.0.1:8901; the Fields tab shows online/offline honestly
+backend/env/bin/python backend/field_server.py     # 0.0.0.0:8901 (LAN-reachable, unauthenticated); the Fields tab shows online/offline honestly
 ```
 
-Self-contained conda env in `backend/env` (RDKit 2026.03 + pyscf 2.14). MEP is instant; HOMO/LUMO/density/QM-MEP run a real RHF/UHF (STO-3G default, 6-31G optional) and refuse to render if SCF does not converge.
+Self-contained conda env in `backend/env` (RDKit 2026.03 + pyscf 2.14). MEP is instant; HOMO/LUMO/density/QM-MEP run a real RHF/UHF (STO-3G default; 6-31G, 6-31G\*, or def2-SVP on request) and refuse to render if SCF does not converge.
 
 ## Run it
 
