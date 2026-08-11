@@ -19,6 +19,7 @@ import { createVolumeRepresentationParams } from '../../../mol-plugin-state/help
 import { Grid, Volume } from '../../../mol-model/volume';
 import { Color } from '../../../mol-util/color';
 import { focusSphereKeepingSlab } from '../../camera-slab';
+import { buildSurroundingsRequest } from './surroundings';
 
 // Follow the page's host: the daemon runs beside whatever served the app, so
 // a hardcoded 127.0.0.1 would point a Mac's browser at the Mac itself and
@@ -103,7 +104,9 @@ function tokenColor(name: string, fallback: number): number {
 }
 const shellRef = (sign: 'pos' | 'neg', i: number) => `field-wells-repr-${sign}-${i}`;
 
-export type FieldKind = 'mep' | 'mep_qm' | 'homo' | 'lumo' | 'density' | 'mlp';
+export type FieldKind = 'mep' | 'mep_qm' | 'homo' | 'lumo' | 'density' | 'mlp'
+    /** The REVERSE field: the pocket as source, read in the ligand's box. */
+    | 'pocket_mep';
 
 interface KindSpec {
     label: string;
@@ -141,6 +144,10 @@ const Kinds: Record<FieldKind, KindSpec> = {
     density: { label: 'e⁻ density', iso: 0.05, cubeScale: 1, diverging: false, unit: 'e/Bohr³', posToken: '--viz-density', negToken: '--viz-density', posColor: 0xd8aa75, negColor: 0xd8aa75, quantum: true },
     // Default iso must sit BELOW the hydrophilic side's typical |min| (~0.06
     // on aspirin) or the cyan lobes never exist and the field looks all-grease.
+    // Same units, same fixed contour and same colours as `mep` on purpose: the
+    // whole value of the reverse field is comparing it against the ligand's
+    // own, and a different scale would make that comparison a lie.
+    pocket_mep: { label: 'Pocket field (what the ligand sits in)', iso: 10, cubeScale: 1, diverging: true, unit: 'kcal/mol', posToken: '--viz-mep-pos', negToken: '--viz-mep-neg', posColor: 0x6788bc, negColor: 0xbd777b, quantum: false },
     mlp: { label: 'Lipophilicity', iso: 0.25, cubeScale: 1, diverging: true, unit: 'MLP', posToken: '--viz-mlp-pos', negToken: '--viz-mlp-neg', posColor: 0xd5b979, negColor: 0x74ccdd, quantum: false },
 };
 
@@ -649,6 +656,45 @@ async function updateIsoSurfaces() {
     updateIsoReadout();
 }
 
+/**
+ * The reverse field. Goes to /field/region rather than /field, because it is
+ * not a field OF the ligand: the ligand only supplies the box.
+ */
+async function requestPocketField() {
+    if (!plugin || busy) return;
+    clearRetry();
+    const built = buildSurroundingsRequest(plugin, currentFocusOptions?.() ?? {});
+    if ('error' in built) { setStatus(built.error, 'error'); return; }
+    busy = true;
+    setButtonsEnabled();
+    setStatus(`Pocket field — ${built.sources.length} shell atoms as source, `
+        + `sampled in the ligand's box…`, 'busy');
+    try {
+        const resp = await fetch(`${BACKEND}/field/region`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sources: built.sources, frame: built.frame, kind: 'mep' }),
+        });
+        const payload = await resp.json();
+        if (!payload.ok) { setStatus(payload.error, 'error'); return; }
+        await renderCube(payload.cube, 'pocket_mep', payload.meta);
+        renderMeta(payload.meta);
+        setStatus(`Pocket field from ${payload.meta.n_sources_used} residue-shell `
+            + `atoms · ${payload.meta.charge_model}.`, 'ok');
+    } catch (e) {
+        setStatus(`Backend unreachable — ${e instanceof Error ? e.message : String(e)}`, 'error');
+    } finally {
+        busy = false;
+        setButtonsEnabled();
+    }
+}
+
+/** Supplied by the lab so the shell obeys the SAME cutoff slider the semantic
+ * layers use, rather than this facet inventing a second notion of "nearby". */
+let currentFocusOptions: (() => Record<string, unknown>) | null = null;
+export function setFieldFocusOptionsProvider(fn: () => Record<string, unknown>) {
+    currentFocusOptions = fn;
+}
+
 async function requestField(kind: FieldKind, budget = budgetFor(kind)) {
     if (!plugin || !molfile || busy) return;
     const spec = Kinds[kind];
@@ -761,6 +807,7 @@ export function initFieldWellsPanel(p: PluginContext) {
     document.querySelectorAll<HTMLButtonElement>('.field-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const kind = btn.dataset.field as FieldKind;
+            if (kind === 'pocket_mep') { void requestPocketField(); return; }
             if (Kinds[kind]) void requestField(kind);
         });
     });

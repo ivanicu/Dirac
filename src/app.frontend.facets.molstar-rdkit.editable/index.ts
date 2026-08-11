@@ -73,7 +73,7 @@ import { LigandDepiction, type AtomHighlight, type AtomPosition } from '../chemi
 import { ChemistryCache } from '../chemistry.backend.perception.rdkit-wasm.editable/chemistry-cache';
 import { ligandLociToMolfile, lociFromFocusOptions } from '../chemistry.backend.perception.rdkit-wasm.editable/ligand-pipeline';
 import { renderPropertiesPanel } from './facets/property-cockpit';
-import { initFieldWellsPanel, updateFieldWellsLigand, autoRenderElectrostaticWell } from './facets/field-wells';
+import { initFieldWellsPanel, updateFieldWellsLigand, autoRenderElectrostaticWell, setFieldFocusOptionsProvider } from './facets/field-wells';
 import { initLigandPhysicsPanel, updateLigandPhysics } from './facets/ligand-physics';
 import { initPharmacophoreDesigner, updatePharmacophoreDesigner } from './facets/pharmacophore-designer';
 import { initBondAtlas, updateBondAtlas } from './facets/bond-atlas';
@@ -399,7 +399,13 @@ class MolecularVfxLab {
         this.workbench.plugin.behaviors.interaction.click.subscribe(({ current }) => this.handleInteractionClick(current.loci));
         // Other agents' facets — wrap in try/catch so their failures don't
         // crash the core lab init and make the UI disappear.
-        try { initFieldWellsPanel(this.workbench.plugin); } catch (e) { console.error('[fields] init failed:', e); }
+        try {
+            initFieldWellsPanel(this.workbench.plugin);
+            // The pocket field must use the SAME cutoff the semantic layers and
+            // the 3-8 A slider already use, or the shell it charges is not the
+            // shell the user can see on screen.
+            setFieldFocusOptionsProvider(() => this.currentFocusOptions() as unknown as Record<string, unknown>);
+        } catch (e) { console.error('[fields] init failed:', e); }
         try { initLigandPhysicsPanel(this.workbench.plugin); } catch (e) { console.error('[physics] init failed:', e); }
         try { initPharmacophoreDesigner(this.workbench.plugin); } catch (e) { console.error('[designer] init failed:', e); }
         try { initBondAtlas(); } catch (e) { console.error('[bond-atlas] init failed:', e); }

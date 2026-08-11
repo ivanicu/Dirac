@@ -162,7 +162,13 @@ function depositedLigandLoci(structure: Structure) {
     return StructureSelection.toLociWithCurrentUnits(selection);
 }
 
-function resolveFocus(structure: Structure, options: LigandFocusOptions): ResolvedFocus {
+/**
+ * Exported so the field facets can use the SAME neighbourhood the semantic
+ * layers already draw and the 3–8 Å slider already controls. Duplicating this
+ * into a facet would be one fact in two homes, and the two would drift the
+ * first time the cutoff policy changed.
+ */
+export function resolveFocus(structure: Structure, options: LigandFocusOptions): ResolvedFocus {
     const cutoff = Math.min(8, Math.max(3, options.cutoff ?? 5));
     const ligand = options.target && options.target.hash === structure.hashCode
         ? StructureElement.Bundle.toLoci(options.target, structure)
