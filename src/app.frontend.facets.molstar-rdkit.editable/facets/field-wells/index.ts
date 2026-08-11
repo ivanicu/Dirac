@@ -93,7 +93,8 @@ function updateIsoReadout() {
     const el = byId('field-iso-readout');
     if (!el) return;
     if (!activeKind) { el.textContent = ''; return; }
-    el.textContent = `±${currentIso().toPrecision(3)} ${Kinds[activeKind].unit}`;
+    const sign = Kinds[activeKind].diverging ? '±' : '';
+    el.textContent = `${sign}${currentIso().toPrecision(3)} ${Kinds[activeKind].unit}`;
 }
 
 function setButtonsEnabled() {
@@ -199,6 +200,10 @@ async function updateIsoSurfaces() {
 async function requestField(kind: FieldKind) {
     if (!plugin || !molfile || busy) return;
     const spec = Kinds[kind];
+    // Captured at request time: if the focused ligand changes while the
+    // backend is computing, the stale response must be discarded — rendering
+    // it would place the PREVIOUS molecule's field into the new scene.
+    const requestMolfile = molfile;
     busy = true;
     setButtonsEnabled();
     setStatus(spec.quantum
@@ -209,9 +214,13 @@ async function requestField(kind: FieldKind) {
         const resp = await fetch(`${BACKEND}/field`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ molfile, kind, basis }),
+            body: JSON.stringify({ molfile: requestMolfile, kind, basis }),
         });
         const payload = await resp.json();
+        if (molfile !== requestMolfile) {
+            setStatus('Ligand changed while computing — stale field discarded.', 'idle');
+            return;
+        }
         if (!payload.ok) {
             setStatus(`Backend refused: ${payload.error}`, 'error');
             renderMeta(null);

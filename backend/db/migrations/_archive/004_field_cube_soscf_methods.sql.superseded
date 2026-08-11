@@ -1,0 +1,21 @@
+-- 004: admit the SOSCF rescue path into app.field_cube.method
+--
+-- The fields backend retries a stalled DIIS with second-order SCF and reports
+-- method 'RHF+SOSCF' / 'UHF+SOSCF' (measured: Fe-heme converges only via the
+-- rescue, 365 s). The original CHECK ('RHF','UHF','gasteiger') would force the
+-- backend to launder the rescue back to 'RHF' — the provenance column would
+-- then say plain DIIS produced a number plain DIIS cannot produce.
+--
+-- Run: psql -U ivan -d dirac -f backend/db/migrations/004_field_cube_soscf_methods.sql
+-- Then: psql -U ivan -d dirac -f backend/db/check_constraints.sql
+
+BEGIN;
+
+ALTER TABLE app.field_cube DROP CONSTRAINT field_cube_method_check;
+ALTER TABLE app.field_cube ADD CONSTRAINT field_cube_method_check
+    CHECK (method IN ('RHF', 'UHF', 'RHF+SOSCF', 'UHF+SOSCF', 'gasteiger'));
+
+INSERT INTO meta.migration (filename) VALUES ('004_field_cube_soscf_methods.sql')
+    ON CONFLICT DO NOTHING;
+
+COMMIT;

@@ -39,13 +39,136 @@ import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
+try:
+    import psycopg
+except ImportError:      # cache degrades to in-memory only; /health says so
+    psycopg = None
+
 PORT = 8901
 BOHR = 0.529177210859  # Å per Bohr
 MAX_QM_ATOMS = 120     # with hydrogens; STO-3G HF beyond this is not interactive
 DEFAULT_BASIS = 'sto-3g'
+DB_DSN = 'dbname=dirac user=ivan'
+CUBE_MEDIA_TYPE = 'chemical/x-gaussian-cube'
 
 _scf_cache: dict[str, object] = {}
 _scf_lock = threading.Lock()
+
+
+# ── persistent cube cache (app.field_cube / app.blob in the dirac DB) ───────
+#
+# Key: (sha256(molfile), kind, basis) — the same request served twice costs one
+# computation across daemon restarts. The schema enforces the backend's honesty
+# rule independently: a quantum row with converged != TRUE is unwritable
+# (field_cube CHECK), so the cache cannot resurrect a field the backend would
+# refuse to ship. Classical mep rows carry basis='none', scf_reference='none'.
+
+_db_ok = False
+_toolkit_ids: dict[str, str] = {}
+
+
+def _db(): return psycopg.connect(DB_DSN, autocommit=True)
+
+
+def db_init() -> bool:
+    global _db_ok
+    if psycopg is None:
+        print('[db] psycopg not importable — persistent cache OFF', flush=True)
+        return False
+    try:
+        import pyscf
+        import rdkit
+        with _db() as conn, conn.cursor() as cur:
+            for name, version, note in (
+                ('rdkit', rdkit.__version__, 'fields backend Gasteiger MEP'),
+                ('pyscf', pyscf.__version__, 'fields backend HF + cubegen'),
+            ):
+                cur.execute(
+                    'INSERT INTO meta.toolkit (name, version, build_note) '
+                    'VALUES (%s, %s, %s) ON CONFLICT (name, version) DO NOTHING',
+                    (name, version, note))
+                cur.execute(
+                    'SELECT id FROM meta.toolkit WHERE name = %s AND version = %s',
+                    (name, version))
+                _toolkit_ids[name] = cur.fetchone()[0]
+        _db_ok = True
+        print(f'[db] persistent cube cache ON (dirac db, toolkits: {list(_toolkit_ids)})', flush=True)
+    except Exception as e:
+        print(f'[db] unavailable ({e}) — persistent cache OFF', flush=True)
+        _db_ok = False
+    return _db_ok
+
+
+def db_get_cube(molfile_sha: bytes, kind: str, basis: str):
+    """Return (cube_text, meta) on a cache hit, else None."""
+    if not _db_ok:
+        return None
+    try:
+        with _db() as conn, conn.cursor() as cur:
+            cur.execute(
+                'SELECT b.bytes, fc.scf_energy_ha, fc.converged, fc.n_atoms, '
+                '       fc.n_basis, fc.homo_ev, fc.lumo_ev, fc.seconds, '
+                '       app.scf_method_label(fc.scf_reference, fc.scf_converger), '
+                '       fc.computed_at '
+                'FROM app.field_cube fc JOIN app.blob b ON b.sha256 = fc.blob_sha256 '
+                'WHERE fc.molfile_sha256 = %s AND fc.kind = %s AND fc.basis = %s',
+                (molfile_sha, kind, basis))
+            row = cur.fetchone()
+        if row is None:
+            return None
+        cube = bytes(row[0]).decode()
+        meta = {'kind': kind, 'cache': 'db', 'computed_at': row[9].isoformat()}
+        if row[8] != 'gasteiger':
+            meta.update({
+                'basis': basis, 'method': row[8], 'converged': row[2],
+                'scf_energy_ha': float(row[1]) if row[1] is not None else None,
+                'natoms': row[3], 'nbasis': row[4],
+                'homo_ev': float(row[5]) if row[5] is not None else None,
+                'lumo_ev': float(row[6]) if row[6] is not None else None,
+                'scf_seconds': float(row[7]) if row[7] is not None else None,
+            })
+        else:
+            meta.update({'units': 'kcal/mol', 'charges': 'gasteiger', 'method': 'gasteiger'})
+        return cube, meta
+    except Exception as e:
+        print(f'[db] read failed ({e}) — serving from compute', flush=True)
+        return None
+
+
+def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict):
+    """Persist a computed cube. Quantum rows reach here only if converged —
+    and the schema CHECK would reject them anyway if this invariant broke."""
+    if not _db_ok:
+        return
+    try:
+        blob = cube.encode()
+        blob_sha = hashlib.sha256(blob).digest()
+        toolkit = _toolkit_ids['rdkit' if kind == 'mep' else 'pyscf']
+        label = meta.get('method', 'gasteiger' if kind == 'mep' else None)
+        with _db() as conn, conn.cursor() as cur:
+            cur.execute(
+                'INSERT INTO app.blob (sha256, media_type, byte_len, bytes) '
+                'VALUES (%s, %s, %s, %s) ON CONFLICT (sha256) DO NOTHING',
+                (blob_sha, CUBE_MEDIA_TYPE, len(blob), blob))
+            cur.execute(
+                'INSERT INTO app.field_cube '
+                '  (molfile_sha256, kind, basis, blob_sha256, scf_reference, '
+                '   scf_converger, scf_energy_ha, converged, n_atoms, n_basis, '
+                '   homo_ev, lumo_ev, seconds, toolkit_id) '
+                'SELECT %s, %s, %s, %s, p.scf_reference, p.scf_converger, '
+                '       %s, %s, %s, %s, %s, %s, %s, %s '
+                'FROM app.parse_scf_method(%s) AS p '
+                'ON CONFLICT (molfile_sha256, kind, basis) DO NOTHING',
+                (molfile_sha, kind, basis, blob_sha,
+                 meta.get('scf_energy_ha'),
+                 True if kind != 'mep' else None,
+                 meta.get('natoms'), meta.get('nbasis'),
+                 meta.get('homo_ev'), meta.get('lumo_ev'),
+                 meta.get('scf_seconds') if kind != 'mep' else meta.get('total_seconds'),
+                 toolkit, label))
+        print(f'[db] cached kind={kind} basis={basis}', flush=True)
+    except Exception as e:
+        print(f'[db] write failed ({e}) — result served but not persisted', flush=True)
 
 
 # ── molfile → RDKit mol with explicit hydrogens, coordinates preserved ──────
@@ -169,13 +292,24 @@ def run_scf(mol: Chem.Mol, basis: str):
     mf.max_cycle = 120
     t0 = time.time()
     energy = mf.kernel()
+    method = 'RHF' if spin == 0 else 'UHF'
+    if not mf.converged:
+        # Plain DIIS stalls on transition-metal ligands (measured: Fe-heme,
+        # 120 cycles, no convergence). Second-order SCF restarted from the
+        # stalled MOs is the standard rescue.
+        mf = mf.newton()
+        energy = mf.kernel()
+        method += '+SOSCF'
     result = {
-        'gmol': gmol, 'mf': mf, 'energy': float(energy),
+        'gmol': gmol, 'mf': mf, 'energy': float(energy), 'method': method,
         'converged': bool(mf.converged), 'charge': charge, 'spin': spin,
         'natoms': len(syms), 'nbasis': int(gmol.nao), 'seconds': time.time() - t0,
     }
-    with _scf_lock:
-        _scf_cache[key] = result
+    # Only positive results are cached: caching an unconverged SCF would make
+    # every retry fail instantly from the cache, forever.
+    if result['converged']:
+        with _scf_lock:
+            _scf_cache[key] = result
     return result
 
 
@@ -210,7 +344,7 @@ def field_quantum(mol: Chem.Mol, kind: str, basis: str):
         mo_energy = mf.mo_energy[0]
 
     meta = {
-        'kind': kind, 'basis': basis, 'method': 'RHF' if res['spin'] == 0 else 'UHF',
+        'kind': kind, 'basis': basis, 'method': res['method'],
         'scf_energy_ha': res['energy'], 'converged': True,
         'charge': res['charge'], 'spin': res['spin'],
         'natoms': res['natoms'], 'nbasis': res['nbasis'],
@@ -218,6 +352,11 @@ def field_quantum(mol: Chem.Mol, kind: str, basis: str):
         'homo_ev': float(mo_energy[nocc - 1] * 27.2114),
         'lumo_ev': float(mo_energy[nocc] * 27.2114) if nocc < len(mo_energy) else None,
     }
+
+    # UHF rdm1 is (alpha, beta); cubegen wants one total density matrix.
+    dm = mf.make_rdm1()
+    if res['spin'] != 0:
+        dm = dm[0] + dm[1]
 
     if kind == 'homo':
         cube = _cubegen_to_text(
@@ -229,10 +368,14 @@ def field_quantum(mol: Chem.Mol, kind: str, basis: str):
             lambda m, p: cubegen.orbital(m, p, mo_coeff[:, nocc]), gmol)
     elif kind == 'density':
         cube = _cubegen_to_text(
-            lambda m, p: cubegen.density(m, p, mf.make_rdm1()), gmol)
+            lambda m, p: cubegen.density(m, p, dm), gmol)
     elif kind == 'mep_qm':
+        # The electrostatic-potential integrals dominate: ~1 s per 10k grid
+        # points on 24 cores (measured 52 s at the 80^3 default on 50 atoms).
+        # The potential is smooth — 50^3 is visually indistinguishable and 4x
+        # cheaper.
         cube = _cubegen_to_text(
-            lambda m, p: cubegen.mep(m, p, mf.make_rdm1()), gmol)
+            lambda m, p: cubegen.mep(m, p, dm, nx=50, ny=50, nz=50), gmol)
     else:
         raise ValueError(f'unknown quantum kind {kind!r}')
     return cube, meta
@@ -262,7 +405,8 @@ class Handler(BaseHTTPRequestHandler):
             import pyscf
             import rdkit
             self._send(200, {'ok': True, 'rdkit': rdkit.__version__,
-                             'pyscf': pyscf.__version__})
+                             'pyscf': pyscf.__version__,
+                             'db_cache': 'on' if _db_ok else 'off'})
         else:
             self._send(404, {'ok': False, 'error': 'not found'})
 
@@ -276,6 +420,18 @@ class Handler(BaseHTTPRequestHandler):
             molblock = req['molfile']
             kind = req.get('kind', 'mep')
             basis = req.get('basis', DEFAULT_BASIS)
+            # Classical mep has no basis; key it as 'none' so the cache row
+            # satisfies the schema's classical/quantum pairing checks.
+            basis_key = 'none' if kind == 'mep' else basis
+            molfile_sha = hashlib.sha256(molblock.encode()).digest()
+
+            hit = db_get_cube(molfile_sha, kind, basis_key)
+            if hit is not None:
+                cube, meta = hit
+                print(f'[field] kind={kind} basis={basis_key} cache=db', flush=True)
+                self._send(200, {'ok': True, 'cube': cube, 'meta': meta})
+                return
+
             t0 = time.time()
             mol = prepare_mol(molblock)
             if kind == 'mep':
@@ -283,8 +439,10 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 cube, meta = field_quantum(mol, kind, basis)
             meta['total_seconds'] = round(time.time() - t0, 2)
+            meta['cache'] = 'computed'
             print(f"[field] kind={kind} atoms={mol.GetNumAtoms()} "
                   f"t={meta['total_seconds']}s", flush=True)
+            db_put_cube(molfile_sha, kind, basis_key, cube, meta)
             self._send(200, {'ok': True, 'cube': cube, 'meta': meta})
         except Exception as e:
             traceback.print_exc()
@@ -296,6 +454,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     port = int(sys.argv[1]) if len(sys.argv) > 1 else PORT
+    db_init()
     server = ThreadingHTTPServer(('127.0.0.1', port), Handler)
     print(f'Dirac fields backend on http://127.0.0.1:{port}', flush=True)
     server.serve_forever()

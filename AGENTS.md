@@ -31,7 +31,7 @@ Three facets of Dirac are developed in parallel. Each lives in its own directory
 | **Pharmacophore Designer** | `src/examples.reference.mini-demos.vendored-readonly/pharmacophore-designer/**` | Other agents do not commit here. |
 | **Conformer Explorer** | `src/examples.reference.mini-demos.vendored-readonly/conformer-explorer/**` | Other agents do not commit here. |
 | **Property Optimization Cockpit** | `src/examples.reference.mini-demos.vendored-readonly/property-cockpit/**` | Other agents do not commit here. |
-| **Field Wells** | `src/app.frontend.facets.molstar-rdkit.editable/facets/field-wells/**` + `backend/**` | Other agents do not commit here. Backend daemon: `backend/env/bin/python backend/field_server.py` (:8901). |
+| **Field Wells** | `src/app.frontend.facets.molstar-rdkit.editable/facets/field-wells/**` + `backend/field_server.py` + `backend/env/` + `backend/README.md` | Other agents do not commit here. Backend daemon: `backend/env/bin/python backend/field_server.py` (:8901). `backend/db/` belongs to the database workstream, not to Field Wells. |
 
 **Shared substrate** (modifications need explicit coordination via GitHub issue before push):
 
@@ -49,6 +49,7 @@ If you need to change a shared file, open a `[coord]` issue first.
 3. Commit shared-file hunks within minutes of editing. The measured half-life of an uncommitted shared-file hunk on this tree is ~10 minutes.
 4. Surgical staging (hash-object / update-index) must assert both "anchor count == 1" **and** "payload count == 0" — the second check is the one that prevents double-injection.
 5. The V2000 counts line in the molfile builders is spec-exact (8 zero fields + `999`); desktop RDKit rejects the 9-field variant. If it regresses a third time, extract a single shared molfile-writer.
+6. **Never `git reset --hard` / `git clean -fd` on this shared worktree.** A sync is `git pull --rebase` (local commits replay on top), never a reset to `origin/main` (local commits are orphaned — one commit already had to be recovered from a backup branch, and `clean -fd` has deleted two sessions' uncommitted files). Push promptly after committing: on this tree an unpushed commit is as mortal as an uncommitted hunk.
 
 ## Pre-flight checklist (every agent, every session)
 
