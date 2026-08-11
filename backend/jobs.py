@@ -185,22 +185,107 @@ class JobLedger:
             _bump('write_failed', f'{type(e).__name__}: {e}')
 
     # ── startup ──────────────────────────────────────────────────────────
-    def reap(self) -> int:
-        """Fail every row this worker left in flight when it died.
+    def reap(self) -> dict[str, int]:
+        """Fail every 'running' row that no live process is doing.
 
-        Without this, a restart leaves rows 'running' forever and
-        `app.v_job_live`'s age_seconds grows without bound — the ledger would
-        report work that no process is doing, which is worse than no ledger
-        because it reads as a hung system.
+        ⚠ THIS USED TO REAP ONLY `self.worker`, WHICH REAPED NOTHING. The worker
+        name contains the pid, so after a restart the new process's name never
+        matches the dead one's, and the dead one's rows stayed 'running' forever.
+        Measured: a fields.qm.homo row sat at age_seconds = 10809 (three hours)
+        from a worker whose pid had been gone for most of it, while
+        `app.v_job_live` reported it as live work. This module's own docstring
+        predicted the failure — "a reap keyed on [a bare pid] can either miss rows
+        or claim another process's" — and then shipped the version that misses.
+
+        TWO INDEPENDENT CRITERIA, because they fail differently:
+
+        ① THE WORKER'S PROCESS IS GONE. Parsed out of the worker name and checked
+           with signal 0. Precise, and safe when two daemons run at once: a live
+           sibling's rows are never touched. Its blind spot is PID REUSE — a dead
+           worker whose pid has been recycled by an unrelated process looks alive.
+
+        ② THE ROW IS OLDER THAN ANY LEGITIMATE JOB. No job may outlive its own
+           budget by much, so a row past the hard ceiling is finished no matter
+           whose pid is on it. This is what catches ① 's blind spot, and it is
+           also the only thing that catches a row from a worker on ANOTHER HOST
+           once compute moves off this box (ROADMAP P2) — a pid check is
+           meaningless across machines, so the age criterion is the one that
+           survives the architecture it is written for.
+
+        Counted separately in the return value, because "the process died" and
+        "the job overran" are different operational facts and collapsing them
+        would hide whichever is rarer.
         """
+        out = {'dead_worker': 0, 'overran': 0}
         try:
             with self._connect() as conn, conn.cursor() as cur:
-                cur.execute('SELECT app.reap_orphaned_jobs(%s)', (self.worker,))
-                row = cur.fetchone()
-            return int(row[0]) if row else 0
+                cur.execute(
+                    "SELECT DISTINCT worker FROM app.job "
+                    " WHERE state IN ('queued','running') AND worker IS NOT NULL")
+                workers = [r[0] for r in cur.fetchall()]
+                for w in workers:
+                    if w != self.worker and _worker_is_alive(w):
+                        continue          # a live sibling — not ours to reap
+                    if w == self.worker:
+                        # Our own name can only appear if a previous process had
+                        # the same pid AND the same source hash. Reap it: we know
+                        # we did not start those.
+                        pass
+                    cur.execute('SELECT app.reap_orphaned_jobs(%s)', (w,))
+                    row = cur.fetchone()
+                    out['dead_worker'] += int(row[0]) if row else 0
+
+                # ② the age ceiling, independent of any pid
+                cur.execute(
+                    "UPDATE app.job SET state = 'failed', error_code = 'INTERNAL', "
+                    "       error_detail = 'exceeded the hard ceiling while in "
+                    "flight; no job may outlive its own budget', "
+                    '       started_at = coalesce(started_at, created_at), '
+                    '       finished_at = now(), '
+                    '       seconds = extract(epoch FROM now() - '
+                    '                         coalesce(started_at, created_at)) '
+                    " WHERE state IN ('queued','running') "
+                    '   AND now() - coalesce(started_at, created_at) > %s * interval \'1 second\'',
+                    (STALE_AFTER_SECONDS,))
+                out['overran'] += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+            return out
         except Exception as e:                                        # noqa: BLE001
             _bump('write_failed', f'{type(e).__name__}: {e}')
-            return 0
+            return out
+
+
+# The hard ceiling: MAX_MAX_SECONDS in field_server is 900 s, and a job that has
+# been in flight for longer than that plus a generous margin cannot be honest —
+# either the process is gone or the budget was not enforced. Deliberately NOT
+# imported from field_server: this module must stay importable by a worker that
+# has no HTTP layer at all.
+STALE_AFTER_SECONDS = 1800
+
+
+def _worker_is_alive(worker: str) -> bool:
+    """Is the process named in `fields/<pid>/<version>` still running?
+
+    A name this function cannot parse returns False — an unparseable worker is
+    not evidence of a live process, and treating "I do not know" as "alive" is
+    how the three-hour row survived. Unknown must fall to the side that gets
+    CLEANED, because the age ceiling then bounds the damage of a wrong guess,
+    whereas assuming life is unbounded.
+    """
+    import os
+    parts = worker.split('/')
+    if len(parts) < 2 or not parts[1].isdigit():
+        return False
+    try:
+        os.kill(int(parts[1]), 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        # The pid exists and belongs to someone else. It is alive, but it is not
+        # a fields daemon of ours — say alive, and let the age ceiling handle it.
+        return True
+    except Exception:                                                # noqa: BLE001
+        return False
 
 
 def make_worker_name(pid: int, producer_version: str) -> str:

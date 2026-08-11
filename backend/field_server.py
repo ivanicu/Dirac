@@ -309,8 +309,12 @@ def db_init() -> bool:
             # ledger reports work nobody is performing — worse than no ledger,
             # because it reads as a hung system.
             reaped = _jobs.reap()
-            if reaped:
-                print(f'[job] reaped {reaped} orphaned row(s) from a previous run',
+            if any(reaped.values()):
+                # Reported per CRITERION, not as one total: "the process died" and
+                # "the job overran its ceiling" are different operational facts,
+                # and a single number would hide whichever is rarer.
+                print(f"[job] reaped {reaped['dead_worker']} row(s) from dead "
+                      f"workers and {reaped['overran']} past the hard ceiling",
                       flush=True)
         except Exception as e:
             # A method registry that cannot be written must not take the cache
