@@ -24,6 +24,12 @@ PORT=1344
 # panel proves nothing about a field.
 MOLECULE=${MOLECULE:-1CBS}
 FIELDS=${FIELDS:-"mep mlp mep_qm homo lumo density"}
+# SMILES= drives the "Import molecule · SMILES → 3D" path instead of picking a
+# deposited structure. That route builds the ligand from the backend's own
+# embedder rather than reconstructing a molblock from scene loci, so it is the
+# only way to shoot fields while the loci→molblock builder is broken — and it
+# is also the cleaner subject: a bare ligand, no cartoon in front of the field.
+SMILES=${SMILES:-}
 
 mkdir -p "$OUT"
 rm -rf "$STAGE"; cp -r "$ROOT/build/dirac" "$STAGE"
@@ -32,14 +38,22 @@ for FIELD in $FIELDS; do
 cat > "$STAGE/index.html.driver" <<EOF
 <script>
 (function () {
-  var FIELD = '$FIELD', MOLECULE = '$MOLECULE';
+  var FIELD = '$FIELD', MOLECULE = '$MOLECULE', SMILES = '$SMILES';
   var q = function (s) { return document.querySelector(s); };
   var txt = function (s) { var e = q(s); return e ? e.textContent.trim() : ''; };
   function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   (async function () {
     await wait(9000);
+    if (SMILES) {
+      var inp = document.getElementById('import-smiles');
+      var run = document.getElementById('import-run');
+      inp.value = SMILES;
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      run.click();
+      await wait(14000);
+    }
     // pick a structure that has a ligand
-    var sel = document.querySelector('#molecule-select, select');
+    var sel = SMILES ? null : document.querySelector('#molecule-select, select');
     if (sel) {
       for (var i = 0; i < sel.options.length; i++) {
         if (sel.options[i].value.indexOf(MOLECULE) >= 0 ||
