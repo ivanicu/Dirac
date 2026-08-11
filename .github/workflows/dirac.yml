@@ -64,3 +64,33 @@ jobs:
       - name: 'Gate 4 — CSS brace balance (regression: a93c175)'
         if: ${{ !cancelled() }}
         run: node scripts/check_css_braces.mjs src/app.frontend.facets.molstar-rdkit.editable/index.html
+
+      # Gates 6-8 were running locally and NOWHERE ELSE, which makes them
+      # advice rather than gates. All three are pure node, need no database and
+      # no build output, so they run unconditionally like 3 and 4. Gate 5
+      # (migration hashes) still cannot run here: it needs the applied ledger,
+      # and a version that passes without a database would be a check that
+      # cannot fail.
+      - name: 'Gate 6 — doc facts re-derived from source'
+        if: ${{ !cancelled() }}
+        run: node scripts/check_docs_facts.mjs
+
+      # Exit 2 = contracts clean, src/ behind. Reported, not fatal: the frontend
+      # interface is owned elsewhere and legitimately trails. Exit 1 (contracts
+      # disagree with the code) fails the build.
+      - name: 'Gate 7 — contract drift (errors.json / iface.* / FIELD_META_SCHEMA)'
+        if: ${{ !cancelled() }}
+        run: |
+          node scripts/check_contract_drift.mjs; code=$?
+          if [ "$code" = "1" ]; then exit 1; fi
+          if [ "$code" = "2" ]; then echo "::warning::frontend FieldMeta trails the backend (see FIND lines)"; fi
+          exit 0
+
+      # The selftest runs FIRST and its failure is the gate's failure: this one
+      # is green against the real files, so a crafted broken source is the only
+      # evidence it has resolution at all.
+      - name: 'Gate 8 — every physics SCF route carries all four protections'
+        if: ${{ !cancelled() }}
+        run: |
+          node scripts/check_physics_contract.mjs --selftest
+          node scripts/check_physics_contract.mjs

@@ -46,7 +46,7 @@ run_gate() {
 }
 
 # ---- gate selection -------------------------------------------------------
-ALL=(tsc build palette css migrations docs contracts)
+ALL=(tsc build palette css migrations docs contracts physics)
 if [ "$#" -eq 0 ]; then
     WANT=("${ALL[@]}")
 else
@@ -103,6 +103,19 @@ wanted docs    && run_gate 'gate-6-docs-facts'  node scripts/check_docs_facts.mj
 # a backend that gained keys this morning; failing the suite on it would train
 # whoever runs this to pass --skip, and a suite people skip enforces nothing.
 # The FIND lines are printed either way, so it cannot rot silently into "clean".
+# Gate 8 · the physics daemon's four SCF protections, on EVERY route. Runs its
+# own selftest first: a gate that has never convicted has not been shown to
+# have resolution, and this one starts green against the real files, so its
+# only evidence of working is the crafted broken source it must convict.
+if wanted physics; then
+    if node scripts/check_physics_contract.mjs --selftest >/dev/null 2>&1; then
+        run_gate 'gate-8-physics' node scripts/check_physics_contract.mjs
+    else
+        printf '%s\n' "${RED}FAIL${OFF} gate-8-physics — its own selftest did not convict the known-broken source"
+        FAILED+=('gate-8-physics-selftest')
+    fi
+fi
+
 if wanted contracts; then
     contract_out="$(node scripts/check_contract_drift.mjs 2>&1)"; contract_code=$?
     printf '%s\n' "$contract_out"
