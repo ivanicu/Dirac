@@ -143,11 +143,46 @@ _GRID = ('dims', 'spacing_requested', 'spacing', 'grid_capped', 'vmin', 'vmax',
          'iso_fixed', 'pad_used_angstrom', 'wall_max', 'contour_closes_in_box')
 _QUANTUM = ('basis', 'scf_energy_ha', 'converged', 'charge', 'spin', 'natoms',
             'nbasis', 'ecp', 'scf_seconds', 'scf_cycles', 'homo_ev', 'lumo_ev',
-            'cube_seconds', 'cube_predicted_seconds')
+            'cube_seconds', 'cube_predicted_seconds',
+            # A number's SCOPE travels with the number or it does not travel.
+            # STO-3G ranks nitrobenzene as more electron-rich than benzene
+            # (def2-SVP ranks it last) and moves water's LUMO by 12 eV, so
+            # 'homo_ev' at a minimal basis has no referent — this key is how
+            # the panel knows to print "not quotable at this level" instead of
+            # a confident one-decimal figure.
+            'frontier_caveat')
+
+# Classical-model scope, same principle one instrument down: a spherical point
+# charge cannot represent a sigma-hole AT ALL. Measured inside this one app,
+# bromobenzene at the cap: Gasteiger -6.2 kcal/mol vs the QM surface route
+# +9.9 — opposite signs, ~16 kcal/mol apart. The flag exists so the UI routes
+# that question to the instrument that can answer it.
+_CLASSICAL_CAVEAT = ('sigma_hole_representable', 'model_caveat')
+
+# SOURCE and FRAME as separate arguments (/field/region): the sources are an
+# arbitrary atom set with caller-supplied weights, the frame is the caller's
+# box. Both facts are meta, and the second one is a REFUSAL made legible —
+# because the frame is not ours, this route cannot grow the box to close a
+# contour the way the ligand path does, so it reports instead of fixing.
+_REGION = ('n_sources_sent', 'n_sources_used', 'cutoff_angstrom',
+           'frame_is_callers')
 
 FIELD_META_SCHEMA: dict[str, frozenset[str]] = {
-    'mep': frozenset(_COMMON + _GRID + ('charges', 'net_charge')),
+    'mep': frozenset(_COMMON + _GRID + _CLASSICAL_CAVEAT
+                     + ('charges', 'net_charge')),
+    # NOT given _CLASSICAL_CAVEAT: field_mlp() emits neither key (checked, not
+    # assumed), and declaring a key a producer never sets would make the panel
+    # render "model_caveat: not recorded" for a model whose caveat is simply a
+    # different one. A schema that over-declares teaches the UI to expect
+    # silence.
     'mlp': frozenset(_COMMON + _GRID + ('total_logp', 'single_signed')),
+    # The region route's kinds. Declared here even though that route does not
+    # yet normalise its own exit, because FIELD_META_SCHEMA is the ONE home for
+    # what a field's meta may contain — a kind the schema has never heard of
+    # makes normalize_meta raise 'unknown field kind', so an undeclared kind is
+    # a route that can never adopt the shared shape.
+    'mep_region': frozenset(_COMMON + _GRID + _REGION + ('net_charge',)),
+    'mlp_region': frozenset(_COMMON + _GRID + _REGION + ('net_charge',)),
     'mep_qm': frozenset(_COMMON + _QUANTUM),
     'homo': frozenset(_COMMON + _QUANTUM),
     'lumo': frozenset(_COMMON + _QUANTUM),
