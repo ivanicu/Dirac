@@ -29,12 +29,13 @@ psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/migrations/002_vocabulary
 psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/migrations/003_audit_partition_root.sql
 psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/migrations/004_scf_method_split.sql
 psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/migrations/005_numeric_hygiene.sql
+psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/migrations/006_producer_identity.sql
 
 # or, from scratch, in order — the migrations are self-contained (000 installs
 # the extensions) and this is exactly what stress_test.sh verifies every run
 for f in backend/db/migrations/*.sql; do psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f "$f"; done
 
-# gates — run after EVERY migration; 27 attacks + 13 positive controls
+# gates — run after EVERY migration; 31 attacks + 16 positive controls
 psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/check_constraints.sql
 
 # brute force — rebuilds into a throwaway DB, loads N synthetic compounds,
@@ -104,6 +105,15 @@ index; nothing else in the schema has to change.
   numeric columns by looping over `information_schema` rather than by hand.
 - A potency may not be zero or negative (`meta.requires_positive_value`), but a
   percent inhibition may — activation reads negative and noise reads over 100.
+- A cached result is keyed on its PRODUCER, not only on its inputs. Register
+  at startup with `meta.register_producer(service, version, source_sha256)`,
+  stamp the returned id on every cached row, and read through
+  `app.v_field_cube_current` — a superseded producer's rows stay as history and
+  stop being served the moment a new version registers. Reusing a version with
+  a changed source raises: forgetting the bump is a startup error, not a stale
+  cache six weeks later. `app.v_field_cube_stale` is the sweep list, with the
+  compute-seconds each generation represents so you can decide delete vs
+  recompute.
 - The SCF method is two columns, not one string: `scf_reference` (RHF / UHF /
   ROHF / none) and `scf_converger` (diis / soscf / newton / none). Pass the
   backend's own label through `app.parse_scf_method('RHF+SOSCF')` to get the

@@ -206,9 +206,9 @@ SELECT pg_temp.expect_reject('A14 blob whose hash does not match its bytes', '23
 
 SELECT pg_temp.expect_reject('A15 cached quantum field whose SCF never converged', '23514', $$
     INSERT INTO app.field_cube (molfile_sha256, kind, basis, blob_sha256, converged,
-                                scf_reference, scf_converger, toolkit_id)
+                                scf_reference, scf_converger, toolkit_id, producer_id)
     SELECT digest('mol', 'sha256'), 'homo', 'sto-3g', digest('hello', 'sha256'), false,
-           'RHF', 'diis', toolkit FROM fx $$);
+           'RHF', 'diis', toolkit, (SELECT id FROM meta.producer WHERE service='dirac-fields' AND superseded_at IS NULL) FROM fx $$);
 
 -- The exact case the fields workstream had just unblocked when this schema was
 -- written: an Fe-heme HOMO that only converged under second-order SCF. The
@@ -216,21 +216,21 @@ SELECT pg_temp.expect_reject('A15 cached quantum field whose SCF never converged
 SELECT pg_temp.expect_accept('P10 SOSCF-rescued quantum field caches', $$
     INSERT INTO app.field_cube (molfile_sha256, kind, basis, blob_sha256, converged,
                                 scf_reference, scf_converger, scf_energy_ha, n_atoms,
-                                n_basis, seconds, toolkit_id)
+                                n_basis, seconds, toolkit_id, producer_id)
     SELECT digest('heme', 'sha256'), 'homo', 'sto-3g', digest('hello', 'sha256'), true,
-           'RHF', 'soscf', -2244.123456, 75, 430, 365.0, toolkit FROM fx $$);
+           'RHF', 'soscf', -2244.123456, 75, 430, 365.0, toolkit, (SELECT id FROM meta.producer WHERE service='dirac-fields' AND superseded_at IS NULL) FROM fx $$);
 
 SELECT pg_temp.expect_reject('A21 quantum field claiming no SCF reference', '23514', $$
     INSERT INTO app.field_cube (molfile_sha256, kind, basis, blob_sha256, converged,
-                                scf_reference, scf_converger, toolkit_id)
+                                scf_reference, scf_converger, toolkit_id, producer_id)
     SELECT digest('mol2', 'sha256'), 'lumo', 'sto-3g', digest('hello', 'sha256'), true,
-           'none', 'none', toolkit FROM fx $$);
+           'none', 'none', toolkit, (SELECT id FROM meta.producer WHERE service='dirac-fields' AND superseded_at IS NULL) FROM fx $$);
 
 SELECT pg_temp.expect_reject('A22 classical MEP borrowing a quantum reference', '23514', $$
     INSERT INTO app.field_cube (molfile_sha256, kind, basis, blob_sha256,
-                                scf_reference, scf_converger, toolkit_id)
+                                scf_reference, scf_converger, toolkit_id, producer_id)
     SELECT digest('mol3', 'sha256'), 'mep', 'none', digest('hello', 'sha256'),
-           'RHF', 'diis', toolkit FROM fx $$);
+           'RHF', 'diis', toolkit, (SELECT id FROM meta.producer WHERE service='dirac-fields' AND superseded_at IS NULL) FROM fx $$);
 
 -- A new solver must arrive as a migration, never as an unrecognised string.
 SELECT pg_temp.expect_reject('A23 unknown SCF method label', 'P0001', $$
@@ -316,6 +316,61 @@ SELECT pg_temp.expect_accept('P12 negative percent inhibition is real data', $$
     SELECT '22222222-2222-2222-2222-222222222222', compound_a,
            '66666666-6666-6666-6666-666666666666', 'percent_inhibition', -12.5, 'percent',
            'measured', DATE '2026-06-14' FROM fx $$);
+
+-- ── producer identity: a cache keyed only on its inputs goes stale silently ─
+-- From a real incident in the fields workstream: a NaN charge produced a
+-- uniformly-zero field, the producer was fixed, and the poisoned row survived
+-- because none of (molfile, kind, basis) had changed.
+
+SELECT pg_temp.expect_accept('P13 a producer registers and can be reused idempotently', $$
+    SELECT meta.register_producer('gate-service', '1.0', digest('src-a', 'sha256'))
+         = meta.register_producer('gate-service', '1.0', digest('src-a', 'sha256')) $$);
+
+SELECT pg_temp.expect_reject('A29 same version, changed source (the forgotten bump)', 'P0001', $$
+    SELECT meta.register_producer('gate-service', '1.0', digest('src-a-FIXED', 'sha256')) $$);
+
+SELECT pg_temp.expect_accept('P14 a proper bump supersedes the previous generation', $$
+    SELECT meta.register_producer('gate-service', '1.1', digest('src-a-FIXED', 'sha256')) $$);
+
+SELECT pg_temp.expect_reject('A30 two current versions of one service', '23505', $$
+    UPDATE meta.producer SET superseded_at = NULL WHERE service = 'gate-service' $$);
+
+DO $$
+DECLARE current_count integer; total_count integer;
+BEGIN
+    INSERT INTO app.field_cube (molfile_sha256, kind, basis, blob_sha256, converged,
+                                scf_reference, scf_converger, producer_id, toolkit_id)
+    SELECT digest('gate-mol', 'sha256'), 'homo', 'sto-3g', digest('hello', 'sha256'), true,
+           'RHF', 'diis',
+           (SELECT id FROM meta.producer WHERE service='gate-service' AND version='1.0'),
+           (SELECT toolkit FROM fx);
+    SELECT count(*) INTO current_count FROM app.v_field_cube_current
+     WHERE molfile_sha256 = digest('gate-mol', 'sha256');
+    SELECT count(*) INTO total_count FROM app.field_cube
+     WHERE molfile_sha256 = digest('gate-mol', 'sha256');
+    INSERT INTO gate (name, kind, expect, got, ok)
+    VALUES ('P15 a superseded producer''s row is invisible to the safe view', 'compute',
+            'kept 1, served 0', format('kept %s, served %s', total_count, current_count),
+            total_count = 1 AND current_count = 0);
+END $$;
+
+SELECT pg_temp.expect_reject('A31 half a coarse cache key', '23514', $$
+    INSERT INTO app.field_cube (molfile_sha256, kind, basis, blob_sha256, converged,
+                                scf_reference, scf_converger, producer_id, toolkit_id,
+                                compound_id)
+    SELECT digest('gate-mol-2', 'sha256'), 'homo', 'sto-3g', digest('hello', 'sha256'), true,
+           'RHF', 'diis',
+           (SELECT id FROM meta.producer WHERE service='gate-service' AND version='1.1'),
+           toolkit, compound_a FROM fx $$);
+
+SELECT pg_temp.expect_reject('A32 conformer hash of the wrong width', '23514', $$
+    INSERT INTO app.field_cube (molfile_sha256, kind, basis, blob_sha256, converged,
+                                scf_reference, scf_converger, producer_id, toolkit_id,
+                                compound_id, conformer_hash)
+    SELECT digest('gate-mol-3', 'sha256'), 'homo', 'sto-3g', digest('hello', 'sha256'), true,
+           'RHF', 'diis',
+           (SELECT id FROM meta.producer WHERE service='gate-service' AND version='1.1'),
+           toolkit, compound_a, '\x00112233'::bytea FROM fx $$);
 
 -- ── the generated canonical value must actually convert ────────────────────
 
