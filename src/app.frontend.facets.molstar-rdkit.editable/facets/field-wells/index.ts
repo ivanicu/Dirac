@@ -107,7 +107,16 @@ export type FieldKind = 'mep' | 'mep_qm' | 'homo' | 'lumo' | 'density' | 'mlp';
 
 interface KindSpec {
     label: string;
+    /** The FIXED contour, in `unit`. Identical across molecules by design. */
     iso: number;
+    /**
+     * display unit -> cube unit. The QM potential's cube is in Ha/e while the
+     * classical one is in kcal/mol, and both were being contoured with their
+     * own bare number — so toggling between two renderings of the SAME
+     * physical quantity silently moved the contour from 18 to 31.4 kcal/mol.
+     * One unit on screen, converted here.
+     */
+    cubeScale: number;
     diverging: boolean;
     unit: string;
     /** Theme token names; the numbers beside them are the fallback only. */
@@ -125,14 +134,14 @@ interface KindSpec {
 // only chroma was cut. Divergent pairs verified ≥0.10 ΔE apart by
 // design/check_palette.py — run it after touching any value here.
 const Kinds: Record<FieldKind, KindSpec> = {
-    mep: { label: 'Electrostatic well', iso: 8, diverging: true, unit: 'kcal/mol', posToken: '--viz-mep-pos', negToken: '--viz-mep-neg', posColor: 0x6788bc, negColor: 0xbd777b, quantum: false },
-    mep_qm: { label: 'QM potential well', iso: 0.05, diverging: true, unit: 'Ha/e', posToken: '--viz-mep-pos', negToken: '--viz-mep-neg', posColor: 0x6788bc, negColor: 0xbd777b, quantum: true },
-    homo: { label: 'HOMO', iso: 0.04, diverging: true, unit: 'amp', posToken: '--viz-orb-pos', negToken: '--viz-orb-neg', posColor: 0x7fc7a5, negColor: 0xa397d3, quantum: true },
-    lumo: { label: 'LUMO', iso: 0.04, diverging: true, unit: 'amp', posToken: '--viz-orb-pos', negToken: '--viz-orb-neg', posColor: 0x7fc7a5, negColor: 0xa397d3, quantum: true },
-    density: { label: 'e⁻ density', iso: 0.05, diverging: false, unit: 'e/Bohr³', posToken: '--viz-density', negToken: '--viz-density', posColor: 0xd8aa75, negColor: 0xd8aa75, quantum: true },
+    mep: { label: 'Electrostatic well', iso: 10, cubeScale: 1, diverging: true, unit: 'kcal/mol', posToken: '--viz-mep-pos', negToken: '--viz-mep-neg', posColor: 0x6788bc, negColor: 0xbd777b, quantum: false },
+    mep_qm: { label: 'QM potential well', iso: 10, cubeScale: 1 / 627.5094740631, diverging: true, unit: 'kcal/mol', posToken: '--viz-mep-pos', negToken: '--viz-mep-neg', posColor: 0x6788bc, negColor: 0xbd777b, quantum: true },
+    homo: { label: 'HOMO', iso: 0.04, cubeScale: 1, diverging: true, unit: 'amp', posToken: '--viz-orb-pos', negToken: '--viz-orb-neg', posColor: 0x7fc7a5, negColor: 0xa397d3, quantum: true },
+    lumo: { label: 'LUMO', iso: 0.04, cubeScale: 1, diverging: true, unit: 'amp', posToken: '--viz-orb-pos', negToken: '--viz-orb-neg', posColor: 0x7fc7a5, negColor: 0xa397d3, quantum: true },
+    density: { label: 'e⁻ density', iso: 0.05, cubeScale: 1, diverging: false, unit: 'e/Bohr³', posToken: '--viz-density', negToken: '--viz-density', posColor: 0xd8aa75, negColor: 0xd8aa75, quantum: true },
     // Default iso must sit BELOW the hydrophilic side's typical |min| (~0.06
     // on aspirin) or the cyan lobes never exist and the field looks all-grease.
-    mlp: { label: 'Lipophilicity', iso: 0.05, diverging: true, unit: 'MLP', posToken: '--viz-mlp-pos', negToken: '--viz-mlp-neg', posColor: 0xd5b979, negColor: 0x74ccdd, quantum: false },
+    mlp: { label: 'Lipophilicity', iso: 0.25, cubeScale: 1, diverging: true, unit: 'MLP', posToken: '--viz-mlp-pos', negToken: '--viz-mlp-neg', posColor: 0xd5b979, negColor: 0x74ccdd, quantum: false },
 };
 
 interface FieldMeta {
@@ -149,8 +158,14 @@ interface FieldMeta {
     units?: string;
     natoms?: number;
     nbasis?: number;
-    /** Measured from the cube for MEP/MLP, whose scale is molecule-dependent. */
-    iso_suggest?: number;
+    /** The fixed contour the backend grew the box around. */
+    iso_fixed?: number;
+    pad_used_angstrom?: number;
+    wall_max?: number;
+    /** False = the surface runs off the grid and is drawn as a flat face. */
+    contour_closes_in_box?: boolean;
+    /** MLP is one-signed for most drug-like molecules; measured, not assumed. */
+    single_signed?: boolean;
 }
 
 let plugin: PluginContext | null = null;
@@ -158,6 +173,7 @@ let molfile: string | null = null;
 let ligandLabel: string | null = null;
 let activeKind: FieldKind | null = null;
 let activeVolume: Volume | null = null;
+let lastMeta: FieldMeta | null = null;
 let busy = false;
 
 /**
@@ -386,36 +402,34 @@ function isoMultiplier(): number {
  * The isovalue the slider's 1.0x position means.
  *
  * MEP and MLP are sums of atomic contributions, so their scale belongs to the
- * molecule and the backend measures it from the cube (`iso_suggest`, the ~97th
- * percentile of |field|). A constant there produced a surface that enclosed
- * the whole padded grid and clipped against the box wall — on retinoic acid
- * the lipophilicity field rendered as a gold crate with the ligand inside it.
- *
- * Orbitals and density keep their constants on purpose: a wavefunction is
- * normalised, which is exactly why the conventional values work for them.
+ * molecule. Both earlier answers were wrong in opposite directions: a
+ * hand-tuned constant clipped the grid wall on every molecule tried, and the
+ * per-molecule percentile that replaced it was a function of the PADDING —
+ * 7.6x swing on aspirin from pad alone. The contour is fixed now and the
+ * BACKEND grows the box until it closes.
  */
-let isoBase: number | null = null;
-
 /**
- * The isovalue, LOCKED across molecules once it has been fitted.
+ * The contour, in the field's own display units.
  *
- * Fitting per molecule is automatic gain control: two analogues render equally
- * hot even when one carries three times the potential, and the panel is built
- * to invite exactly that comparison. A fixed constant is not the alternative —
- * measured, the old one clipped the grid wall on every molecule tried, which
- * is how the lipophilicity field came to render as a box.
+ * It is a CONSTANT, and that is the point. Two earlier attempts moved it:
+ * a hand-tuned value that clipped the grid wall on every molecule tried, then
+ * a per-molecule percentile that never clipped and was a function of the
+ * PADDING — measured, 7.6x swing on aspirin from pad alone, with the physics
+ * identical. A ruler derived from the box is a measurement of the box.
  *
- * So: MEASURE it once, then HOLD it. The first molecule of a session fits the
- * scale from its own field; every molecule after that is drawn on the same
- * absolute surface and is therefore comparable. Re-fit is a deliberate act
- * with a button, and the readout always says which regime it is in — a scale
- * that changed silently underneath a comparison is the failure being fixed.
+ * The crate was a BOX problem, so the backend grows the box until the contour
+ * closes inside it and reports whether it succeeded. The ruler holds still, so
+ * the same colour means the same kcal/mol on every molecule in a series.
  */
-const isoLock = new Map<FieldKind, { value: number, fittedOn: string }>();
-
 function currentIso(): number {
     if (!activeKind) return 0;
-    return (isoBase ?? Kinds[activeKind].iso) * isoMultiplier();
+    return Kinds[activeKind].iso * isoMultiplier();
+}
+
+/** The same contour expressed in the cube's own units. */
+function currentIsoCube(): number {
+    if (!activeKind) return 0;
+    return currentIso() * Kinds[activeKind].cubeScale;
 }
 
 function updateIsoReadout() {
@@ -423,24 +437,16 @@ function updateIsoReadout() {
     if (!el) return;
     if (!activeKind) { el.textContent = ''; return; }
     const sign = Kinds[activeKind].diverging ? '±' : '';
-    const lock = isoLock.get(activeKind);
-    let provenance = '';
-    if (lock && lock.fittedOn !== (ligandLabel ?? '')) {
-        provenance = ` · locked (fitted on ${lock.fittedOn})`;
-    } else if (lock) {
-        provenance = ' · fitted to this molecule';
+    let note = '';
+    // Whether the surface actually closes is a fact about this picture, and it
+    // is the one the crate bug turned on. Stated, not inferred from the shape.
+    if (lastMeta && lastMeta.contour_closes_in_box === false) {
+        note = ` · open surface (field is ${lastMeta.wall_max ?? '?'} at the box edge)`;
+    } else if (lastMeta && lastMeta.single_signed) {
+        note = ' · field is single-signed — no negative lobe exists';
     }
     el.textContent =
-        `${sign}${currentIso().toPrecision(3)} ${Kinds[activeKind].unit}${provenance}`;
-    const refit = byId<HTMLButtonElement>('field-refit');
-    if (refit) refit.hidden = !lock || lock.fittedOn === (ligandLabel ?? '');
-}
-
-/** Drop the held scale so the next render fits this molecule instead. */
-function refitIso() {
-    if (activeKind) isoLock.delete(activeKind);
-    const kind = activeKind;
-    if (kind) void requestField(kind);
+        `${sign}${currentIso().toPrecision(3)} ${Kinds[activeKind].unit}${note}`;
 }
 
 function setButtonsEnabled() {
@@ -488,7 +494,7 @@ function reprParams(kind: FieldKind, sign: 1 | -1, shell: number) {
     return createVolumeRepresentationParams(plugin!, activeVolume ?? undefined, {
         type: 'isosurface',
         typeParams: {
-            isoValue: Volume.IsoValue.absolute(sign * currentIso() * s.fraction),
+            isoValue: Volume.IsoValue.absolute(sign * currentIsoCube() * s.fraction),
             visuals: s.visuals as ('solid' | 'wireframe')[],
             alpha: s.alpha,
             xrayShaded: s.visuals.includes('solid'),
@@ -518,17 +524,7 @@ async function renderCube(cubeText: string, kind: FieldKind, meta?: FieldMeta) {
     // Adopt the backend's measured isovalue when it sent one; fall back to the
     // kind's constant otherwise. Set BEFORE the representations are built, or
     // the first frame is drawn at the old scale and corrected a tick later.
-    // Fit once, then hold. A held scale is what makes two molecules comparable;
-    // re-fitting each time is the gain control this exists to avoid.
-    const held = isoLock.get(kind);
-    if (held) {
-        isoBase = held.value;
-    } else if (typeof meta?.iso_suggest === 'number') {
-        isoBase = meta.iso_suggest;
-        isoLock.set(kind, { value: meta.iso_suggest, fittedOn: ligandLabel ?? '' });
-    } else {
-        isoBase = null;   // orbital/density: a normalised quantity keeps its constant
-    }
+    lastMeta = meta ?? null;
     if (!plugin) return;
     if (plugin.state.data.cells.has(REF_DATA)) {
         await plugin.build().delete(REF_DATA).commit();
@@ -736,7 +732,6 @@ export function initFieldWellsPanel(p: PluginContext) {
     // panel said "Solving…" for 36 minutes with every control disabled. The
     // daemon now stops itself too, but a bound the user cannot reach is not a
     // control, it is a promise.
-    byId('field-refit')?.addEventListener('click', () => refitIso());
     byId('field-cancel')?.addEventListener('click', () => {
         abortInFlight();
         busy = false;

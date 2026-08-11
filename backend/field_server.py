@@ -127,12 +127,14 @@ _producer_id: str | None = None
 # this version is re-registered with different source — a forgotten bump is a
 # loud startup error, never a silently stale cache (design: migration 006).
 PRODUCER_SERVICE = 'dirac-fields'
-PRODUCER_VERSION = '1.8'
+PRODUCER_VERSION = '1.9'
 PRODUCER_NOTES = ('wall-clock deadline inside the SCF loop + measured cube-cost '
                   'refusal; open-shell d/f metals refused without an explicit '
                   'spin (group 12 exempt); salt stripping refuses to discard a '
                   'coordination metal; iso_suggest = 97th percentile of |field| '
-                  'for mep/mlp; _eri dropped and the SCF cache bounded to 6 LRU; '
+                  'for mep/mlp RETIRED — it was a measurement of the padding (7.6x '
+                  'swing on aspirin); fixed physical contour + adaptive box instead; '
+                  '_eri dropped and the SCF cache bounded to 6 LRU; '
                   'molblock refusals name the defect')
 
 
@@ -595,24 +597,33 @@ def field_mep(mol: Chem.Mol, spacing=0.4, pad=4.0):
         raise ValueError('all Gasteiger charges are zero — classical MEP would '
                          'be an empty picture; use mep_qm')
 
-    lo = coords.min(axis=0) - pad
-    hi = coords.max(axis=0) + pad
-    dims = np.maximum(np.ceil((hi - lo) / spacing).astype(int) + 1, 8)
-    dims = np.minimum(dims, GRID_MAX_DIM)  # hard cap: 128³ ≈ 2M voxels
+    iso = FIXED_ISO['mep']
+
+    def evaluate(pad_a: float):
+        lo = coords.min(axis=0) - pad_a
+        hi = coords.max(axis=0) + pad_a
+        dims = np.maximum(np.ceil((hi - lo) / spacing).astype(int) + 1, 8)
+        dims = np.minimum(dims, GRID_MAX_DIM)
+        xs = np.linspace(lo[0], hi[0], dims[0])
+        ys = np.linspace(lo[1], hi[1], dims[1])
+        zs = np.linspace(lo[2], hi[2], dims[2])
+        gx, gy, gz = np.meshgrid(xs, ys, zs, indexing='ij')
+        pts = np.stack([gx, gy, gz], axis=-1)
+        vv = np.zeros(tuple(dims), dtype=float)
+        for q, c in zip(charges, coords):
+            r = np.linalg.norm(pts - c, axis=-1)
+            vv += q / np.maximum(r, 0.5)
+        return lo, hi, dims, vv * 332.06   # kcal/mol per (e²/Å)
+
+    # Grow the BOX, not the ruler, until the contour closes inside it.
+    pad_used = pad
+    lo, hi, dims, v = evaluate(pad_used)
+    while wall_max(v) >= iso and pad_used < PAD_MAX:
+        pad_used = min(pad_used + PAD_STEP, PAD_MAX)
+        lo, hi, dims, v = evaluate(pad_used)
+    clear = wall_max(v) < iso
+
     axes = np.diag((hi - lo) / (dims - 1))
-
-    xs = np.linspace(lo[0], hi[0], dims[0])
-    ys = np.linspace(lo[1], hi[1], dims[1])
-    zs = np.linspace(lo[2], hi[2], dims[2])
-    gx, gy, gz = np.meshgrid(xs, ys, zs, indexing='ij')
-    pts = np.stack([gx, gy, gz], axis=-1)  # (nx,ny,nz,3)
-
-    v = np.zeros(tuple(dims), dtype=float)
-    for q, c in zip(charges, coords):
-        r = np.linalg.norm(pts - c, axis=-1)
-        v += q / np.maximum(r, 0.5)
-    v *= 332.06  # kcal/mol per (e²/Å)
-
     cube = write_cube(lo, axes, dims, v, syms, coords,
                       'kind=mep units=kcal/mol charges=gasteiger')
     meta = {
@@ -620,7 +631,13 @@ def field_mep(mol: Chem.Mol, spacing=0.4, pad=4.0):
         'net_charge': int(round(charges.sum())),
         'dims': dims.tolist(), **grid_spacing_meta(lo, hi, dims, spacing),
         'vmin': float(v.min()), 'vmax': float(v.max()),
-        'iso_suggest': suggest_iso(v),
+        'iso_fixed': iso,
+        'pad_used_angstrom': round(pad_used, 1),
+        'wall_max': round(wall_max(v), 3),
+        # False means the surface still runs off the edge of the grid and is
+        # being drawn as a flat face. Stated, not hidden: a charged ligand's
+        # monopole does not decay fast enough to close inside any usable box.
+        'contour_closes_in_box': bool(clear),
     }
     return cube, meta
 
@@ -641,22 +658,32 @@ def field_mlp(mol: Chem.Mol, spacing=0.4, pad=4.0):
         raise ValueError('Crippen contributions undefined for this molecule')
     syms, coords = mol_atoms(mol)
 
-    lo = coords.min(axis=0) - pad
-    hi = coords.max(axis=0) + pad
-    dims = np.maximum(np.ceil((hi - lo) / spacing).astype(int) + 1, 8)
-    dims = np.minimum(dims, GRID_MAX_DIM)
+    iso = FIXED_ISO['mlp']
+
+    def evaluate(pad_a: float):
+        lo = coords.min(axis=0) - pad_a
+        hi = coords.max(axis=0) + pad_a
+        dims = np.maximum(np.ceil((hi - lo) / spacing).astype(int) + 1, 8)
+        dims = np.minimum(dims, GRID_MAX_DIM)
+        xs = np.linspace(lo[0], hi[0], dims[0])
+        ys = np.linspace(lo[1], hi[1], dims[1])
+        zs = np.linspace(lo[2], hi[2], dims[2])
+        gx, gy, gz = np.meshgrid(xs, ys, zs, indexing='ij')
+        pts = np.stack([gx, gy, gz], axis=-1)
+        vv = np.zeros(tuple(dims), dtype=float)
+        for fi, c in zip(f, coords):
+            d = np.linalg.norm(pts - c, axis=-1)
+            vv += fi * np.exp(-d / 2.0)
+        return lo, hi, dims, vv
+
+    pad_used = pad
+    lo, hi, dims, v = evaluate(pad_used)
+    while wall_max(v) >= iso and pad_used < PAD_MAX:
+        pad_used = min(pad_used + PAD_STEP, PAD_MAX)
+        lo, hi, dims, v = evaluate(pad_used)
+    clear = wall_max(v) < iso
+
     axes = np.diag((hi - lo) / (dims - 1))
-    xs = np.linspace(lo[0], hi[0], dims[0])
-    ys = np.linspace(lo[1], hi[1], dims[1])
-    zs = np.linspace(lo[2], hi[2], dims[2])
-    gx, gy, gz = np.meshgrid(xs, ys, zs, indexing='ij')
-    pts = np.stack([gx, gy, gz], axis=-1)
-
-    v = np.zeros(tuple(dims), dtype=float)
-    for fi, c in zip(f, coords):
-        d = np.linalg.norm(pts - c, axis=-1)
-        v += fi * np.exp(-d / 2.0)
-
     cube = write_cube(lo, axes, dims, v, syms, coords,
                       'kind=mlp units=logP kernel=fauchere_exp_d_over_2 charges=crippen')
     meta = {
@@ -664,7 +691,16 @@ def field_mlp(mol: Chem.Mol, spacing=0.4, pad=4.0):
         'total_logp': float(f.sum()),
         'dims': dims.tolist(), **grid_spacing_meta(lo, hi, dims, spacing),
         'vmin': float(v.min()), 'vmax': float(v.max()),
-        'iso_suggest': suggest_iso(v),
+        'iso_fixed': iso,
+        'pad_used_angstrom': round(pad_used, 1),
+        'wall_max': round(wall_max(v), 4),
+        'contour_closes_in_box': bool(clear),
+        # The Fauchere kernel decays over ~2 A, so every atom contributes
+        # everywhere and the field is one-signed for most drug-like molecules.
+        # Measured: aspirin is 99.9% positive, ibuprofen 100%. Calling it
+        # "diverging" and drawing a negative lobe that does not exist is a
+        # claim about the molecule; this states the truth instead.
+        'single_signed': bool(v.min() >= 0 or v.max() <= 0),
     }
     return cube, meta
 
