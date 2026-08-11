@@ -1174,6 +1174,27 @@ class MolecularVfxLab {
      * mol* Structure are skipped rather than fed a substitute. Skipped-and-said
      * is a scope statement; fed-a-substitute is a wrong answer.
      */
+    /**
+     * ONE writer for "which molecule is the pasted/imported one".
+     *
+     * `smilesMolfile` decides a BRANCH: renderLigandDepiction() checks it first
+     * and, when set, never looks at the loaded structure. So a stale value does
+     * not merely linger — it wins. Measured symptom (found by an outside audit,
+     * not by me): paste a SMILES, then pick a PDB structure from the dropdown,
+     * and five facets keep showing the pasted molecule while the 3D scene shows
+     * the protein. loadMolecule() reset three other pieces of ligand state and
+     * not this one, which is the same one-path-of-two shape as the import bug
+     * this pairs with — I fixed the writing half this morning and left the
+     * clearing half, and that is exactly why the writers now live in one place.
+     *
+     * `smartsSearchMolfile` travels with it because it answers the same
+     * question; two fields updated at four sites was the drift risk.
+     */
+    private setPastedMolecule(molfile: string | null) {
+        this.smilesMolfile = molfile;
+        this.smartsSearchMolfile = molfile;
+    }
+
     private fanOutLigand(molfile: string, label: string | null, structure?: Structure) {
         void renderPropertiesPanel(molfile, label);
         updateFieldWellsLigand(molfile, label);
@@ -1227,7 +1248,7 @@ class MolecularVfxLab {
         if (!smiles.trim()) {
             input.dataset.error = 'false';
             status.textContent = 'Type a SMILES to analyze any molecule — no PDB structure needed.';
-            this.smilesMolfile = null;
+            this.setPastedMolecule(null);
             void updateBondAtlas(null);
             updateHalogenAudit(null, this.currentFocusOptions());
             return;
@@ -1258,12 +1279,11 @@ class MolecularVfxLab {
             }
 
             // Store as the active molfile for ALL chemistry features.
-            this.smilesMolfile = molfile;
+            this.setPastedMolecule(molfile);
             // "ALL chemistry features" has to include the atlas. Driving the real UI showed the
             // depiction rendering here while the atlas stayed empty, because the atlas was wired
             // only into the deposited-ligand path.
             void updateBondAtlas(molfile);
-            this.smartsSearchMolfile = molfile;
             status.dataset.ok = 'true';
             status.textContent = `Parsed: ${smilesCanonical.slice(0, 60)}${smilesCanonical.length > 60 ? '…' : ''}`;
 
@@ -1557,8 +1577,7 @@ class MolecularVfxLab {
         // it touches ~10 call sites in a file two other sessions are editing
         // today, so it waits — but a reader must not conclude that an /embed
         // import is a SMILES paste.
-        this.smilesMolfile = payload.molfile;
-        this.smartsSearchMolfile = payload.molfile;
+        this.setPastedMolecule(payload.molfile);
         this.currentMolecule = {
             id: meta.inchikey,
             label: `Imported · ${meta.smiles_canonical}`,
@@ -1588,6 +1607,9 @@ class MolecularVfxLab {
         this.framedLigandMolecule = undefined;
         this.ligandTargets = [];
         this.selectedLigandTargetId = undefined;
+        // THE MISSING RESET. Without this a pasted molecule survives loading a
+        // deposited structure and keeps winning the depiction branch.
+        this.setPastedMolecule(null);
         byId('status').textContent = `Loading ${control.id}…`;
         const response = await fetch(new URL(control.url, window.location.href));
         if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
