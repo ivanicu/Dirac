@@ -36,6 +36,7 @@ import threading
 import time
 import traceback
 from collections import OrderedDict
+from pathlib import Path
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -1236,6 +1237,75 @@ def field_quantum(mol: Chem.Mol, kind: str, basis: str,
 
 
 
+
+# ── residue-template charges: the paved road's DATA, not its pipeline ───────
+#
+# The additivity measurement (5.2e-16) says the FIELD is exactly linear in the
+# atom set. It also says, on the other edge, that the CHARGE MODEL must not be:
+# Gasteiger is computed per-molecule, so a truncated pocket gets different
+# charges than the intact protein and the "sum of parts" stops being the whole.
+# A group therefore needs charges defined per atom WITHOUT seeing the rest of
+# the system — which is exactly what a residue template is.
+#
+# pdb2pqr ships those tables (AMBER.DAT, 2257 rows of RESNAME ATOM charge
+# radius type). Taking the table rather than running the whole pdb2pqr pipeline
+# is deliberate: the pipeline wants a PDB file and does its own hydrogen
+# placement and titration, and this route is handed atoms that mol* already
+# has. Rolling my own residue→charge table would have been the L21 trap — the
+# first thing anyone thinks of, and a worse re-derivation of a solved problem.
+
+_charge_table: dict[tuple[str, str], float] | None = None
+_charge_table_lock = threading.Lock()
+CHARGE_FORCEFIELD = 'AMBER'
+
+
+def charge_table() -> dict[tuple[str, str], float]:
+    global _charge_table
+    with _charge_table_lock:
+        if _charge_table is not None:
+            return _charge_table
+        import pdb2pqr
+        path = (Path(pdb2pqr.__file__).parent / 'dat' / f'{CHARGE_FORCEFIELD}.DAT')
+        table: dict[tuple[str, str], float] = {}
+        for line in path.read_text().splitlines():
+            if not line.strip() or line.startswith('#'):
+                continue
+            parts = line.split()
+            if len(parts) < 3:
+                continue
+            try:
+                table[(parts[0].upper(), parts[1].upper())] = float(parts[2])
+            except ValueError:
+                continue
+        _charge_table = table
+        return table
+
+
+def resolve_charges(sources: list[dict]) -> tuple[list[float], list[str]]:
+    """Per-atom charges from the residue template, and what could not be found.
+
+    Unresolvable atoms are REPORTED, never defaulted to zero. A zero charge is
+    not "unknown" — it is a claim that the atom is neutral, and the charged
+    residues are the dominant sources in a pocket field. Silently zeroing them
+    would switch off precisely the atoms the picture is about.
+    """
+    table = charge_table()
+    charges: list[float] = []
+    missing: list[str] = []
+    for a in sources:
+        if a.get('charge') is not None:
+            charges.append(float(a['charge']))
+            continue
+        key = (str(a.get('resname', '')).upper(), str(a.get('atom_name', '')).upper())
+        q = table.get(key)
+        if q is None:
+            missing.append(f'{key[0]}:{key[1]}')
+            charges.append(0.0)
+        else:
+            charges.append(q)
+    return charges, sorted(set(missing))
+
+
 # ── SOURCE ⊥ FRAME: a classical field of an arbitrary atom set ──────────────
 
 MAX_REGION_SOURCES = 20000
@@ -1286,16 +1356,26 @@ def field_region(sources, lo, hi, spacing: float, kind: str):
         raise ValueError(f'{len(sources)} source atoms exceeds the '
                          f'{MAX_REGION_SOURCES} cap for one region field')
 
+    # Charges come from the residue template when the caller sent residue
+    # identity instead of a number. Unresolved atoms are named, not zeroed.
+    resolved, missing = (resolve_charges(sources) if kind == 'mep'
+                         else ([None] * len(sources), []))
+    if missing:
+        raise ValueError(
+            f'no {CHARGE_FORCEFIELD} template charge for {len(missing)} atom '
+            f'type(s): {", ".join(missing[:8])}'
+            + (' …' if len(missing) > 8 else '')
+            + '. Zeroing them would switch off exactly the atoms a pocket '
+              'field is about, so the request is refused instead.')
+
     syms, coords, weights = [], [], []
     for i, a in enumerate(sources):
-        w = a.get('charge') if kind == 'mep' else a.get('logp')
+        w = resolved[i] if kind == 'mep' else a.get('logp')
         if w is None:
             raise ValueError(
-                f'source atom {i} ({a.get("element", "?")}) has no '
-                f'{"charge" if kind == "mep" else "logp"}. This route does not '
-                f'invent one: a per-molecule charge model gives a truncated '
-                f'region different values than the intact system, so the '
-                f'caller must supply a per-atom model (residue templates).')
+                f'source atom {i} ({a.get("element", "?")}) has no logp. This '
+                f'route does not invent one: a per-molecule model gives a '
+                f'truncated region different values than the intact system.')
         if not math.isfinite(float(w)):
             raise ValueError(f'source atom {i} has a non-finite weight')
         syms.append(str(a.get('element', 'C')))
@@ -1351,6 +1431,8 @@ def field_region(sources, lo, hi, spacing: float, kind: str):
         'n_sources_sent': len(sources), 'n_sources_used': used,
         'cutoff_angstrom': cutoff,
         'net_charge': round(float(weights.sum()), 3),
+        'charge_model': (f'{CHARGE_FORCEFIELD} residue templates (pdb2pqr)'
+                         if kind == 'mep' else 'caller-supplied'),
         'dims': dims.tolist(), **grid_spacing_meta(lo, hi, dims, spacing),
         'vmin': float(v.min()), 'vmax': float(v.max()),
         'iso_fixed': iso,
