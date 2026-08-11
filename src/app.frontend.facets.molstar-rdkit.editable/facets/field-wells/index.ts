@@ -830,21 +830,49 @@ async function requestPocketField() {
     setStatus(`Pocket field — ${built.sources.length} shell atoms as source, `
         + `sampled in the ligand's box…`, 'busy');
     try {
-        const resp = await fetch(`${BACKEND}/field/region`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sources: built.sources, frame: built.frame, kind: 'mep' }),
-        });
-        const payload = await resp.json();
-        if (!payload.ok) { setStatus(payload.error, 'error'); return; }
-        await renderCube(payload.cube, 'pocket_mep', payload.meta);
-        renderMeta(payload.meta);
+        // GROW THE FRAME UNTIL THE CONTOUR CLOSES. The ligand path does this
+        // in the backend; here it cannot, because the frame belongs to the
+        // caller by design — that separation is what keeps the grid
+        // ligand-sized while the source is the whole pocket. So the caller
+        // owns the growing too. Measured: a ligand box + 3 Å does not close a
+        // pocket field, and the panel drew a flat cut face down one side.
+        let payload: Record<string, unknown> = {};
+        let framePad = 3;
+        for (const pad of [3, 6, 9, 12]) {
+            framePad = pad;
+            const grown = buildSurroundingsRequest(
+                plugin, currentFocusOptions?.() ?? {}, pad);
+            if ('error' in grown) break;
+            const resp = await fetch(`${BACKEND}/field/region`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sources: grown.sources, frame: grown.frame,
+                                       kind: 'mep' }),
+            });
+            payload = await resp.json();
+            if (!payload.ok) break;
+            const meta = payload.meta as { contour_closes_in_box?: boolean };
+            if (meta?.contour_closes_in_box !== false) break;
+        }
+        if (!payload.ok) { setStatus(String(payload.error), 'error'); return; }
+        const pmeta = payload.meta as FieldMeta & {
+            n_sources_used?: number, charge_model?: string, net_charge?: number,
+            pad_used_angstrom?: number,
+        };
+        await renderCube(payload.cube as string, 'pocket_mep', pmeta);
+        renderMeta(pmeta);
         // present() before interpolation — the same class of bug as the
         // meta-panel rows: a status line built with a bare template literal
         // cannot tell an absent/null charge_model from the literal word.
-        const chargeModelNote = present(payload.meta.charge_model)
-            ? payload.meta.charge_model : 'charge model not recorded';
-        setStatus(`Pocket field from ${payload.meta.n_sources_used} residue-shell `
-            + `atoms · ${chargeModelNote}.`, 'ok');
+        const chargeModelNote = present(pmeta.charge_model)
+            ? pmeta.charge_model : 'charge model not recorded';
+        // The region route owns no padding — the FRAME is the caller's, which
+        // is the whole point of the split — so it has no pad to report and the
+        // status line printed "frame grown to ? Å". A question mark on screen
+        // is the same defect as the `null` rows: a field the renderer had no
+        // business asking for. Report the pad the CALLER used, which it knows.
+        setStatus(`Pocket map from ${pmeta.n_sources_used} residue-shell atoms, `
+            + `net charge ${pmeta.net_charge} · ${chargeModelNote} · frame `
+            + `+${framePad} Å around the ligand.`, 'ok');
     } catch (e) {
         setStatus(`Backend unreachable — ${e instanceof Error ? e.message : String(e)}`, 'error');
     } finally {
