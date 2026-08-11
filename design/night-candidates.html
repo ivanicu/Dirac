@@ -1,0 +1,1159 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Dirac · night candidates</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#07080b;color:#e8edf5;
+  font:13px/1.5 ui-monospace,'SF Mono',Menlo,monospace;padding:28px}
+h1{font-size:19px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 6px}
+.intro{color:#8b93a5;max-width:82ch;margin:0 0 26px;font-size:12.5px}
+.intro b{color:#e8edf5}
+.card{margin:0 0 34px;border:1px solid #1b2130;border-radius:10px;overflow:hidden;
+  background:#0b0e14}
+.chead{display:flex;gap:14px;align-items:baseline;padding:12px 16px;
+  border-bottom:1px solid #1b2130;flex-wrap:wrap}
+.num{font-size:11px;letter-spacing:.06em;color:#6b7689}
+.cname{font-size:15px;letter-spacing:.1em;text-transform:uppercase}
+.ctag{color:#8b93a5;font-size:12px}
+.verdict{margin-left:auto;font-size:11px;letter-spacing:.1em;padding:3px 9px;
+  border-radius:4px;border:1px solid}
+.pass{color:#7dc9aa;border-color:#24503c;background:#0f2018}
+.fail{color:#e1a18e;border-color:#54302a;background:#20100c}
+.story{padding:10px 16px 0;color:#98a1b3;font-size:12px;max-width:96ch}
+.stage{padding:16px}
+.metrics{display:flex;gap:18px;flex-wrap:wrap;padding:0 16px 14px;font-size:11px;
+  color:#7c8698}
+.metrics b{color:#c7cedb;font-weight:400}
+.metrics .bad{color:#e1a18e}
+.tokens{padding:0 16px 16px;display:flex;gap:5px;flex-wrap:wrap}
+.tokens i{width:34px;height:16px;border-radius:3px;border:1px solid #ffffff14;
+  display:block}
+.tokens span{font-size:10px;color:#5f6878;align-self:center}
+
+/* ── the app fragment: real markup at real sizes ───────────────────────── */
+.app{border:1px solid var(--border);border-radius:8px;overflow:hidden;
+  background:var(--bg);color:var(--text);font-size:12px}
+.topbar{display:flex;align-items:center;gap:14px;padding:9px 13px;
+  background:var(--surface);border-bottom:1px solid var(--border)}
+.brand{font-size:15px;letter-spacing:.16em;color:var(--accent)}
+.sel{color:var(--text-2);font-size:11px;letter-spacing:.05em}
+.pill{margin-left:auto;font-size:10px;letter-spacing:.1em;padding:2px 8px;
+  border:1px solid var(--border-strong);border-radius:3px;color:var(--ok)}
+.body{display:grid;grid-template-columns:320px 1fr;min-height:352px}
+.panel{background:var(--surface);border-right:1px solid var(--border);padding:11px}
+.tabs{display:flex;gap:11px;font-size:10px;letter-spacing:.09em;
+  color:var(--text-3);padding-bottom:9px;border-bottom:1px solid var(--border)}
+.tabs .on{color:var(--accent);border-bottom:2px solid var(--accent);padding-bottom:7px}
+.phead{margin:11px 0 3px;font-size:11px;letter-spacing:.11em;color:var(--text)}
+.pmeta{font-size:10px;color:var(--text-3);margin-bottom:10px}
+.pmeta em{color:var(--ok);font-style:normal}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.grid button{font:inherit;font-size:10.5px;text-align:left;padding:6px 7px;
+  background:var(--surface-2);color:var(--text-2);border:1px solid var(--border);
+  border-radius:4px;cursor:pointer}
+.grid button.sel{background:var(--accent-soft);color:var(--accent);
+  border-color:var(--accent)}
+.slider{display:flex;align-items:center;gap:8px;margin:11px 0 3px;font-size:10px;
+  color:var(--text-3)}
+.slider i{flex:1;height:3px;background:var(--surface-3);border-radius:2px;
+  position:relative}
+.slider i::after{content:'';position:absolute;left:52%;top:-4px;width:11px;
+  height:11px;border-radius:50%;background:var(--accent)}
+.slider b{color:var(--text-2);font-weight:400}
+.rows{margin-top:11px;border-top:1px solid var(--border);padding-top:8px}
+.rows div{display:flex;justify-content:space-between;font-size:10.5px;
+  padding:2.5px 0;color:var(--text-3)}
+.rows b{color:var(--text-2);font-weight:400}
+.refusal{margin-top:11px;padding:8px 9px;border-radius:4px;font-size:10px;
+  line-height:1.45;background:var(--warn-soft);color:var(--text-2);
+  border-left:2px solid var(--warn)}
+.refusal b{display:block;color:var(--warn);margin-bottom:3px;font-weight:400}
+.legend{display:grid;grid-template-columns:repeat(4,auto);gap:5px 8px;
+  margin-top:11px;font-size:9.5px;color:var(--text-3);align-items:center;
+  justify-content:start}
+.legend i{width:11px;height:11px;border-radius:2px;background:var(--c);
+  display:inline-block}
+/* ── NEON IS A LIGHT BEHAVIOUR, NOT A HUE ───────────────────────────────
+   The first draft of this gallery was palette-only, and every candidate read
+   as "competent dark UI" rather than cyberpunk — because the colours were
+   PAINTED ON rather than EMITTING. A neon sign is legible because it throws
+   light onto what surrounds it. So the treatment below is token-driven (it
+   uses --accent and --glow, nothing hardcoded) and travels with every
+   candidate: a selected control glows, the active tab has a lit underline,
+   the brand halates, the viewport carries a faint grid the field lights up.
+   The palette is still the variable; this is the world it is shown in. */
+.brand{text-shadow:0 0 12px color-mix(in oklab,var(--accent) 55%,transparent),
+                   0 0 34px color-mix(in oklab,var(--accent) 22%,transparent)}
+.tabs .on{text-shadow:0 0 10px color-mix(in oklab,var(--accent) 45%,transparent);
+  box-shadow:0 2px 9px -3px var(--accent)}
+.grid button.sel{box-shadow:0 0 0 1px var(--accent),
+  0 0 14px -2px color-mix(in oklab,var(--accent) 55%,transparent),
+  inset 0 0 22px -12px var(--accent);
+  text-shadow:0 0 9px color-mix(in oklab,var(--accent) 40%,transparent)}
+.slider i::after{box-shadow:0 0 11px 1px color-mix(in oklab,var(--accent) 65%,transparent)}
+.pill{box-shadow:inset 0 0 12px -8px var(--ok),
+      0 0 10px -6px color-mix(in oklab,var(--ok) 60%,transparent)}
+.refusal{box-shadow:inset 2px 0 12px -8px var(--warn)}
+.refusal b{text-shadow:0 0 8px color-mix(in oklab,var(--warn) 45%,transparent)}
+.legend i{box-shadow:0 0 7px -1px var(--c)}
+.viewport{position:relative;background:var(--scene-bg);overflow:hidden;
+  /* the grid is what makes a dark rectangle read as a SPACE. 2 % of the accent
+     — any more and it competes with the molecule it exists to sit behind. */
+  background-image:
+    linear-gradient(color-mix(in oklab,var(--accent) 5%,transparent) 1px,transparent 1px),
+    linear-gradient(90deg,color-mix(in oklab,var(--accent) 5%,transparent) 1px,transparent 1px);
+  background-size:100% 26px,26px 100%}
+.well{position:absolute;left:50%;top:47%;width:224px;height:224px;
+  transform:translate(-50%,-50%);border-radius:50%;
+  background:radial-gradient(circle at 38% 34%,
+    color-mix(in oklab,var(--viz-mep-pos) 62%,transparent) 0%,
+    color-mix(in oklab,var(--viz-mep-pos) 16%,transparent) 34%,transparent 62%),
+   radial-gradient(circle at 66% 68%,
+    color-mix(in oklab,var(--viz-mep-neg) 58%,transparent) 0%,
+    color-mix(in oklab,var(--viz-mep-neg) 14%,transparent) 36%,transparent 64%);
+  filter:blur(.4px)}
+.well::after{content:'';position:absolute;inset:14%;border-radius:50%;
+  border:1px solid color-mix(in oklab,var(--viz-mep-pos) 34%,transparent);
+  box-shadow:0 0 26px -6px color-mix(in oklab,var(--viz-mep-pos) 45%,transparent),
+             inset 0 0 30px -10px color-mix(in oklab,var(--viz-mep-neg) 40%,transparent)}
+.mol{position:absolute;left:50%;top:47%;width:118px;height:6px;
+  transform:translate(-50%,-50%) rotate(-16deg);border-radius:3px;
+  background:linear-gradient(90deg,var(--text-3),var(--text-2),var(--text-3));
+  box-shadow:0 0 20px 2px color-mix(in oklab,var(--glow) 55%,transparent),
+             0 0 54px 10px color-mix(in oklab,var(--glow) 22%,transparent)}
+.vlabel{position:absolute;left:12px;bottom:10px;font-size:9.5px;
+  color:var(--text-3);letter-spacing:.05em}
+</style>
+<h1>Night candidates · 16 worlds</h1>
+<p class="intro">
+Day is a tech company; night is cyberpunk. Each card below is a different
+<b>hue architecture</b>, not a shift of the same one — where the accent sits,
+what opposes it, whether the ground is cold or warm, and how much chroma it
+spends. Every one is rendered on the <b>real Fields panel markup at real sizes</b>,
+because a colour is not a colour until it is next to 10 px secondary text and a
+2 px border: swatches agree with each other far more than interfaces do.
+<br><br>
+The numbers are the repo's own bars, computed per candidate, not opinions:
+body text needs <b>4.5:1</b>, non-text UI colour <b>3.0:1</b>, and a diverging
+viz pair needs <b>ΔE ≥ 0.10</b> or blue-positive and red-negative read as one
+colour on a screenshot. <b>16 of 16 pass all of them.</b> Peak
+chroma is stated because it is the dial: the incumbent spends 0.088, the loudest
+here spends 0.20, and "how neon" is that one number.
+<br><br>
+<b>One thing deliberately does NOT follow the theme.</b> The field colours keep
+chemistry convention — blue positive, red negative — even where that clashes with
+the accent, which you can see most clearly in <b>Nuclear Lime</b>: a lime
+interface around a blue/red field. Theming those two would make a chemist ask
+which palette they were looking at before they could read a sign, and the whole
+point of a convention is that the answer never depends on that. The UI is the
+theme's; the data is the discipline's.
+</p>
+
+<section class="card">
+  <div class="chead">
+    <span class="num">00</span>
+    <span class="cname">Night</span>
+    <span class="ctag">the incumbent, for comparison</span>
+    <span class="verdict pass">PASS</span>
+  </div>
+  <p class="story">What ships today. Mid-saturation, teal accent, no neon. It is in the gallery because the alternative with zero build cost must be killed last and hardest, not omitted.</p>
+  <div class="metrics"><span>text/bg <b>16.3:1</b></span><span>text-2/panel <b>7.0:1</b></span><span>accent/panel <b>9.6:1</b></span><span>danger/panel <b>9.0:1</b></span><span>ΔE mep <b>0.150</b></span><span>ΔE orb <b>0.168</b></span><span>ΔE mlp <b>0.156</b></span><span>peak chroma <b>0.097</b> (--glow)</span><span>viz chroma <b>0.088</b></span></div>
+  <div class="tokens"><i style="background:#0a0d13" title="--bg #0a0d13"></i><i style="background:#171b21" title="--surface #171b21"></i><i style="background:#1f242c" title="--surface-2 #1f242c"></i><i style="background:#2b3139" title="--surface-3 #2b3139"></i><i style="background:#232932" title="--border #232932"></i><i style="background:#e5ecf5" title="--text #e5ecf5"></i><i style="background:#9ea5af" title="--text-2 #9ea5af"></i><i style="background:#7bd1be" title="--accent #7bd1be"></i><i style="background:#95cda8" title="--ok #95cda8"></i><i style="background:#deb680" title="--warn #deb680"></i><i style="background:#efa9a6" title="--danger #efa9a6"></i><i style="background:#a1bfee" title="--info #a1bfee"></i><i style="background:#83a6dc" title="--viz-mep-pos #83a6dc"></i><i style="background:#d68e92" title="--viz-mep-neg #d68e92"></i><i style="background:#77b58c" title="--viz-orb-pos #77b58c"></i><i style="background:#ad98d4" title="--viz-orb-neg #ad98d4"></i><i style="background:#c59d64" title="--viz-mlp-pos #c59d64"></i><i style="background:#59b5ba" title="--viz-mlp-neg #59b5ba"></i><i style="background:#cc986f" title="--viz-density #cc986f"></i><span>bg → viz</span></div>
+  <div class="stage" style="--bg:#0a0d13;--surface:#171b21;--surface-2:#1f242c;--surface-3:#2b3139;--border:#232932;--border-strong:#363e48;--text:#e5ecf5;--text-2:#9ea5af;--text-3:#6e757f;--accent:#7bd1be;--accent-soft:#0f2f29;--ok:#95cda8;--ok-soft:#1a2e21;--warn:#deb680;--warn-soft:#332614;--danger:#efa9a6;--danger-soft:#392221;--info:#a1bfee;--info-soft:#1e293a;--viz-mep-pos:#83a6dc;--viz-mep-neg:#d68e92;--viz-orb-pos:#77b58c;--viz-orb-neg:#ad98d4;--viz-mlp-pos:#c59d64;--viz-mlp-neg:#59b5ba;--viz-density:#cc986f;--scene-bg:#030508;--glow:#349986">
+<div class="app">
+  <header class="topbar">
+    <span class="brand">Dirac</span>
+    <span class="sel">1CBS · RETINOID-BINDING PROTEIN</span>
+    <span class="pill">READY</span>
+  </header>
+  <div class="body">
+    <aside class="panel">
+      <div class="tabs">
+        <span>FOCUS</span><span>LIGAND</span><span class="on">FIELDS</span><span>PHYSICS</span>
+      </div>
+      <div class="phead">ENERGY FIELD WELLS</div>
+      <div class="pmeta">REA · A:200 &nbsp;·&nbsp; <em>backend online</em></div>
+      <div class="grid">
+        <button class="sel">V Electrostatic well</button>
+        <button>Ψ QM potential</button>
+        <button>φ HOMO</button>
+        <button>φ* LUMO</button>
+        <button>ρ e⁻ density</button>
+        <button>logP Lipophilicity</button>
+      </div>
+      <div class="slider"><span>Isovalue</span><i></i><b>±10.0 kcal/mol</b></div>
+      <div class="rows">
+        <div><span>Method</span><b>gasteiger</b></div>
+        <div><span>Net charge</span><b>−0.02 e</b></div>
+        <div><span>Compute time</span><b>0.21 s</b></div>
+        <div><span>Cache</span><b>db · 12 ms</b></div>
+      </div>
+      <div class="refusal">
+        <b>σ-hole not representable</b>
+        Gasteiger point charges cannot carry σ-hole anisotropy — the Physics tab
+        answers this with a QM surface.
+      </div>
+      <div class="legend">
+        <i style="--c:var(--viz-mep-pos)"></i><span>MEP +</span>
+        <i style="--c:var(--viz-mep-neg)"></i><span>MEP −</span>
+        <i style="--c:var(--viz-orb-pos)"></i><span>φ +</span>
+        <i style="--c:var(--viz-orb-neg)"></i><span>φ −</span>
+        <i style="--c:var(--viz-mlp-pos)"></i><span>logP</span>
+        <i style="--c:var(--viz-mlp-neg)"></i><span>polar</span>
+        <i style="--c:var(--viz-density)"></i><span>ρ</span>
+      </div>
+    </aside>
+    <div class="viewport">
+      <div class="well"></div>
+      <div class="mol"></div>
+      <span class="vlabel">1CBS · β-barrel · field ±10.0 kcal/mol</span>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+<section class="card">
+  <div class="chead">
+    <span class="num">01</span>
+    <span class="cname">Kowloon Rain</span>
+    <span class="ctag">cyan signage in standing water</span>
+    <span class="verdict pass">PASS</span>
+  </div>
+  <p class="story">The canonical one: cold blue-black street, cyan sign, magenta counter-sign. Chroma spent on two hues 135° apart so the accent and the alarm can never be confused at a glance.</p>
+  <div class="metrics"><span>text/bg <b>16.3:1</b></span><span>text-2/panel <b>7.0:1</b></span><span>accent/panel <b>9.7:1</b></span><span>danger/panel <b>8.7:1</b></span><span>ΔE mep <b>0.246</b></span><span>ΔE orb <b>0.277</b></span><span>ΔE mlp <b>0.242</b></span><span>peak chroma <b>0.152</b> (--warn)</span><span>viz chroma <b>0.150</b></span></div>
+  <div class="tokens"><i style="background:#040e1a" title="--bg #040e1a"></i><i style="background:#101c28" title="--surface #101c28"></i><i style="background:#172533" title="--surface-2 #172533"></i><i style="background:#223242" title="--surface-3 #223242"></i><i style="background:#1a2a3b" title="--border #1a2a3b"></i><i style="background:#e2edf8" title="--text #e2edf8"></i><i style="background:#97a7b7" title="--text-2 #97a7b7"></i><i style="background:#00d8d9" title="--accent #00d8d9"></i><i style="background:#4bdba6" title="--ok #4bdba6"></i><i style="background:#fbaa3c" title="--warn #fbaa3c"></i><i style="background:#ff98ca" title="--danger #ff98ca"></i><i style="background:#ef9de7" title="--info #ef9de7"></i><i style="background:#30aff8" title="--viz-mep-pos #30aff8"></i><i style="background:#e97ab2" title="--viz-mep-neg #e97ab2"></i><i style="background:#0bc18d" title="--viz-orb-pos #0bc18d"></i><i style="background:#b48df4" title="--viz-orb-neg #b48df4"></i><i style="background:#df911a" title="--viz-mlp-pos #df911a"></i><i style="background:#00bcbc" title="--viz-mlp-neg #00bcbc"></i><i style="background:#ed8554" title="--viz-density #ed8554"></i><span>bg → viz</span></div>
+  <div class="stage" style="--bg:#040e1a;--surface:#101c28;--surface-2:#172533;--surface-3:#223242;--border:#1a2a3b;--border-strong:#2b3f54;--text:#e2edf8;--text-2:#97a7b7;--text-3:#687686;--accent:#00d8d9;--accent-soft:#003030;--ok:#4bdba6;--ok-soft:#003221;--warn:#fbaa3c;--warn-soft:#3c2200;--danger:#ff98ca;--danger-soft:#3f1a2d;--info:#ef9de7;--info-soft:#3a1c38;--viz-mep-pos:#30aff8;--viz-mep-neg:#e97ab2;--viz-orb-pos:#0bc18d;--viz-orb-neg:#b48df4;--viz-mlp-pos:#df911a;--viz-mlp-neg:#00bcbc;--viz-density:#ed8554;--scene-bg:#01050c;--glow:#009a9a">
+<div class="app">
+  <header class="topbar">
+    <span class="brand">Dirac</span>
+    <span class="sel">1CBS · RETINOID-BINDING PROTEIN</span>
+    <span class="pill">READY</span>
+  </header>
+  <div class="body">
+    <aside class="panel">
+      <div class="tabs">
+        <span>FOCUS</span><span>LIGAND</span><span class="on">FIELDS</span><span>PHYSICS</span>
+      </div>
+      <div class="phead">ENERGY FIELD WELLS</div>
+      <div class="pmeta">REA · A:200 &nbsp;·&nbsp; <em>backend online</em></div>
+      <div class="grid">
+        <button class="sel">V Electrostatic well</button>
+        <button>Ψ QM potential</button>
+        <button>φ HOMO</button>
+        <button>φ* LUMO</button>
+        <button>ρ e⁻ density</button>
+        <button>logP Lipophilicity</button>
+      </div>
+      <div class="slider"><span>Isovalue</span><i></i><b>±10.0 kcal/mol</b></div>
+      <div class="rows">
+        <div><span>Method</span><b>gasteiger</b></div>
+        <div><span>Net charge</span><b>−0.02 e</b></div>
+        <div><span>Compute time</span><b>0.21 s</b></div>
+        <div><span>Cache</span><b>db · 12 ms</b></div>
+      </div>
+      <div class="refusal">
+        <b>σ-hole not representable</b>
+        Gasteiger point charges cannot carry σ-hole anisotropy — the Physics tab
+        answers this with a QM surface.
+      </div>
+      <div class="legend">
+        <i style="--c:var(--viz-mep-pos)"></i><span>MEP +</span>
+        <i style="--c:var(--viz-mep-neg)"></i><span>MEP −</span>
+        <i style="--c:var(--viz-orb-pos)"></i><span>φ +</span>
+        <i style="--c:var(--viz-orb-neg)"></i><span>φ −</span>
+        <i style="--c:var(--viz-mlp-pos)"></i><span>logP</span>
+        <i style="--c:var(--viz-mlp-neg)"></i><span>polar</span>
+        <i style="--c:var(--viz-density)"></i><span>ρ</span>
+      </div>
+    </aside>
+    <div class="viewport">
+      <div class="well"></div>
+      <div class="mol"></div>
+      <span class="vlabel">1CBS · β-barrel · field ±10.0 kcal/mol</span>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+<section class="card">
+  <div class="chead">
+    <span class="num">02</span>
+    <span class="cname">Tokyo Vending</span>
+    <span class="ctag">machine-white light at 3 a.m.</span>
+    <span class="verdict pass">PASS</span>
+  </div>
+  <p class="story">Lit from inside, not from a sign. Cool white-blue primary with a hot pink that only appears on state, so the interface is calm until something happens.</p>
+  <div class="metrics"><span>text/bg <b>16.3:1</b></span><span>text-2/panel <b>7.0:1</b></span><span>accent/panel <b>9.7:1</b></span><span>danger/panel <b>8.7:1</b></span><span>ΔE mep <b>0.249</b></span><span>ΔE orb <b>0.254</b></span><span>ΔE mlp <b>0.228</b></span><span>peak chroma <b>0.140</b> (--viz-mep-pos)</span><span>viz chroma <b>0.140</b></span></div>
+  <div class="tokens"><i style="background:#090d17" title="--bg #090d17"></i><i style="background:#161b25" title="--surface #161b25"></i><i style="background:#1e2430" title="--surface-2 #1e2430"></i><i style="background:#2a303e" title="--surface-3 #2a303e"></i><i style="background:#222937" title="--border #222937"></i><i style="background:#e5ebf9" title="--text #e5ebf9"></i><i style="background:#9da5b6" title="--text-2 #9da5b6"></i><i style="background:#0ed4f6" title="--accent #0ed4f6"></i><i style="background:#6cd7a2" title="--ok #6cd7a2"></i><i style="background:#eab34e" title="--warn #eab34e"></i><i style="background:#fa9ad1" title="--danger #fa9ad1"></i><i style="background:#f59ecf" title="--info #f59ecf"></i><i style="background:#16b3eb" title="--viz-mep-pos #16b3eb"></i><i style="background:#e87da9" title="--viz-mep-neg #e87da9"></i><i style="background:#3fbf86" title="--viz-orb-pos #3fbf86"></i><i style="background:#a494f6" title="--viz-orb-neg #a494f6"></i><i style="background:#cd9c1f" title="--viz-mlp-pos #cd9c1f"></i><i style="background:#00bac9" title="--viz-mlp-neg #00bac9"></i><i style="background:#e48c4c" title="--viz-density #e48c4c"></i><span>bg → viz</span></div>
+  <div class="stage" style="--bg:#090d17;--surface:#161b25;--surface-2:#1e2430;--surface-3:#2a303e;--border:#222937;--border-strong:#353d4f;--text:#e5ebf9;--text-2:#9da5b6;--text-3:#6d7585;--accent:#0ed4f6;--accent-soft:#002f38;--ok:#6cd7a2;--ok-soft:#08311f;--warn:#eab34e;--warn-soft:#372502;--danger:#fa9ad1;--danger-soft:#3c1d2f;--info:#f59ecf;--info-soft:#3c1d2f;--viz-mep-pos:#16b3eb;--viz-mep-neg:#e87da9;--viz-orb-pos:#3fbf86;--viz-orb-neg:#a494f6;--viz-mlp-pos:#cd9c1f;--viz-mlp-neg:#00bac9;--viz-density:#e48c4c;--scene-bg:#03040a;--glow:#0096af">
+<div class="app">
+  <header class="topbar">
+    <span class="brand">Dirac</span>
+    <span class="sel">1CBS · RETINOID-BINDING PROTEIN</span>
+    <span class="pill">READY</span>
+  </header>
+  <div class="body">
+    <aside class="panel">
+      <div class="tabs">
+        <span>FOCUS</span><span>LIGAND</span><span class="on">FIELDS</span><span>PHYSICS</span>
+      </div>
+      <div class="phead">ENERGY FIELD WELLS</div>
+      <div class="pmeta">REA · A:200 &nbsp;·&nbsp; <em>backend online</em></div>
+      <div class="grid">
+        <button class="sel">V Electrostatic well</button>
+        <button>Ψ QM potential</button>
+        <button>φ HOMO</button>
+        <button>φ* LUMO</button>
+        <button>ρ e⁻ density</button>
+        <button>logP Lipophilicity</button>
+      </div>
+      <div class="slider"><span>Isovalue</span><i></i><b>±10.0 kcal/mol</b></div>
+      <div class="rows">
+        <div><span>Method</span><b>gasteiger</b></div>
+        <div><span>Net charge</span><b>−0.02 e</b></div>
+        <div><span>Compute time</span><b>0.21 s</b></div>
+        <div><span>Cache</span><b>db · 12 ms</b></div>
+      </div>
+      <div class="refusal">
+        <b>σ-hole not representable</b>
+        Gasteiger point charges cannot carry σ-hole anisotropy — the Physics tab
+        answers this with a QM surface.
+      </div>
+      <div class="legend">
+        <i style="--c:var(--viz-mep-pos)"></i><span>MEP +</span>
+        <i style="--c:var(--viz-mep-neg)"></i><span>MEP −</span>
+        <i style="--c:var(--viz-orb-pos)"></i><span>φ +</span>
+        <i style="--c:var(--viz-orb-neg)"></i><span>φ −</span>
+        <i style="--c:var(--viz-mlp-pos)"></i><span>logP</span>
+        <i style="--c:var(--viz-mlp-neg)"></i><span>polar</span>
+        <i style="--c:var(--viz-density)"></i><span>ρ</span>
+      </div>
+    </aside>
+    <div class="viewport">
+      <div class="well"></div>
+      <div class="mol"></div>
+      <span class="vlabel">1CBS · β-barrel · field ±10.0 kcal/mol</span>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+<section class="card">
+  <div class="chead">
+    <span class="num">03</span>
+    <span class="cname">Acid Terminal</span>
+    <span class="ctag">phosphor green meets neon</span>
+    <span class="verdict pass">PASS</span>
+  </div>
+  <p class="story">A CRT that grew up. Green-black ground, phosphor accent, amber for warnings — the two colours a terminal has ever had, pushed to neon. The most legible of the loud options.</p>
+  <div class="metrics"><span>text/bg <b>16.4:1</b></span><span>text-2/panel <b>7.0:1</b></span><span>accent/panel <b>9.7:1</b></span><span>danger/panel <b>8.8:1</b></span><span>ΔE mep <b>0.285</b></span><span>ΔE orb <b>0.317</b></span><span>ΔE mlp <b>0.216</b></span><span>peak chroma <b>0.181</b> (--glow)</span><span>viz chroma <b>0.161</b></span></div>
+  <div class="tokens"><i style="background:#080f09" title="--bg #080f09"></i><i style="background:#151d16" title="--surface #151d16"></i><i style="background:#1d271f" title="--surface-2 #1d271f"></i><i style="background:#29342b" title="--surface-3 #29342b"></i><i style="background:#212c23" title="--border #212c23"></i><i style="background:#e3efe5" title="--text #e3efe5"></i><i style="background:#9ca99e" title="--text-2 #9ca99e"></i><i style="background:#88d656" title="--accent #88d656"></i><i style="background:#82d76f" title="--ok #82d76f"></i><i style="background:#eeb400" title="--warn #eeb400"></i><i style="background:#ffa098" title="--danger #ffa098"></i><i style="background:#ebb52c" title="--info #ebb52c"></i><i style="background:#00b9cf" title="--viz-mep-pos #00b9cf"></i><i style="background:#f97770" title="--viz-mep-neg #f97770"></i><i style="background:#76ba4b" title="--viz-orb-pos #76ba4b"></i><i style="background:#b58bf9" title="--viz-orb-neg #b58bf9"></i><i style="background:#cf9c00" title="--viz-mlp-pos #cf9c00"></i><i style="background:#00bdb6" title="--viz-mlp-neg #00bdb6"></i><i style="background:#e88a2d" title="--viz-density #e88a2d"></i><span>bg → viz</span></div>
+  <div class="stage" style="--bg:#080f09;--surface:#151d16;--surface-2:#1d271f;--surface-3:#29342b;--border:#212c23;--border-strong:#334136;--text:#e3efe5;--text-2:#9ca99e;--text-3:#6c786e;--accent:#88d656;--accent-soft:#153101;--ok:#82d76f;--ok-soft:#13310b;--warn:#eeb400;--warn-soft:#362600;--danger:#ffa098;--danger-soft:#461816;--info:#ebb52c;--info-soft:#362600;--viz-mep-pos:#00b9cf;--viz-mep-neg:#f97770;--viz-orb-pos:#76ba4b;--viz-orb-neg:#b58bf9;--viz-mlp-pos:#cf9c00;--viz-mlp-neg:#00bdb6;--viz-density:#e88a2d;--scene-bg:#020503;--glow:#519c00">
+<div class="app">
+  <header class="topbar">
+    <span class="brand">Dirac</span>
+    <span class="sel">1CBS · RETINOID-BINDING PROTEIN</span>
+    <span class="pill">READY</span>
+  </header>
+  <div class="body">
+    <aside class="panel">
+      <div class="tabs">
+        <span>FOCUS</span><span>LIGAND</span><span class="on">FIELDS</span><span>PHYSICS</span>
+      </div>
+      <div class="phead">ENERGY FIELD WELLS</div>
+      <div class="pmeta">REA · A:200 &nbsp;·&nbsp; <em>backend online</em></div>
+      <div class="grid">
+        <button class="sel">V Electrostatic well</button>
+        <button>Ψ QM potential</button>
+        <button>φ HOMO</button>
+        <button>φ* LUMO</button>
+        <button>ρ e⁻ density</button>
+        <button>logP Lipophilicity</button>
+      </div>
+      <div class="slider"><span>Isovalue</span><i></i><b>±10.0 kcal/mol</b></div>
+      <div class="rows">
+        <div><span>Method</span><b>gasteiger</b></div>
+        <div><span>Net charge</span><b>−0.02 e</b></div>
+        <div><span>Compute time</span><b>0.21 s</b></div>
+        <div><span>Cache</span><b>db · 12 ms</b></div>
+      </div>
+      <div class="refusal">
+        <b>σ-hole not representable</b>
+        Gasteiger point charges cannot carry σ-hole anisotropy — the Physics tab
+        answers this with a QM surface.
+      </div>
+      <div class="legend">
+        <i style="--c:var(--viz-mep-pos)"></i><span>MEP +</span>
+        <i style="--c:var(--viz-mep-neg)"></i><span>MEP −</span>
+        <i style="--c:var(--viz-orb-pos)"></i><span>φ +</span>
+        <i style="--c:var(--viz-orb-neg)"></i><span>φ −</span>
+        <i style="--c:var(--viz-mlp-pos)"></i><span>logP</span>
+        <i style="--c:var(--viz-mlp-neg)"></i><span>polar</span>
+        <i style="--c:var(--viz-density)"></i><span>ρ</span>
+      </div>
+    </aside>
+    <div class="viewport">
+      <div class="well"></div>
+      <div class="mol"></div>
+      <span class="vlabel">1CBS · β-barrel · field ±10.0 kcal/mol</span>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+<section class="card">
+  <div class="chead">
+    <span class="num">04</span>
+    <span class="cname">Magenta Reactor</span>
+    <span class="ctag">violet core, cyan coolant</span>
+    <span class="verdict pass">PASS</span>
+  </div>
+  <p class="story">Magenta leads and cyan supports — the inverse of every other cyberpunk theme, which is why it reads as ours. Deep indigo ground keeps the magenta from vibrating.</p>
+  <div class="metrics"><span>text/bg <b>16.3:1</b></span><span>text-2/panel <b>7.0:1</b></span><span>accent/panel <b>8.6:1</b></span><span>danger/panel <b>8.9:1</b></span><span>ΔE mep <b>0.217</b></span><span>ΔE orb <b>0.253</b></span><span>ΔE mlp <b>0.247</b></span><span>peak chroma <b>0.204</b> (--glow)</span><span>viz chroma <b>0.156</b></span></div>
+  <div class="tokens"><i style="background:#0c0b1c" title="--bg #0c0b1c"></i><i style="background:#19182a" title="--surface #19182a"></i><i style="background:#222136" title="--surface-2 #222136"></i><i style="background:#2e2d45" title="--surface-3 #2e2d45"></i><i style="background:#27253e" title="--border #27253e"></i><i style="background:#e9eaf9" title="--text #e9eaf9"></i><i style="background:#a2a2b7" title="--text-2 #a2a2b7"></i><i style="background:#fe8df6" title="--accent #fe8df6"></i><i style="background:#0fdea3" title="--ok #0fdea3"></i><i style="background:#ffa747" title="--warn #ffa747"></i><i style="background:#ff9ea6" title="--danger #ff9ea6"></i><i style="background:#00d8d9" title="--info #00d8d9"></i><i style="background:#51a9ff" title="--viz-mep-pos #51a9ff"></i><i style="background:#e37ac3" title="--viz-mep-neg #e37ac3"></i><i style="background:#00bdb6" title="--viz-orb-pos #00bdb6"></i><i style="background:#cf82e0" title="--viz-orb-neg #cf82e0"></i><i style="background:#e19005" title="--viz-mlp-pos #e19005"></i><i style="background:#00bcbc" title="--viz-mlp-neg #00bcbc"></i><i style="background:#f0815a" title="--viz-density #f0815a"></i><span>bg → viz</span></div>
+  <div class="stage" style="--bg:#0c0b1c;--surface:#19182a;--surface-2:#222136;--surface-3:#2e2d45;--border:#27253e;--border-strong:#3a3958;--text:#e9eaf9;--text-2:#a2a2b7;--text-3:#727286;--accent:#fe8df6;--accent-soft:#3e163c;--ok:#0fdea3;--ok-soft:#003221;--warn:#ffa747;--warn-soft:#3e2100;--danger:#ff9ea6;--danger-soft:#46161d;--info:#00d8d9;--info-soft:#003030;--viz-mep-pos:#51a9ff;--viz-mep-neg:#e37ac3;--viz-orb-pos:#00bdb6;--viz-orb-neg:#cf82e0;--viz-mlp-pos:#e19005;--viz-mlp-neg:#00bcbc;--viz-density:#f0815a;--scene-bg:#04030d;--glow:#c64cbf">
+<div class="app">
+  <header class="topbar">
+    <span class="brand">Dirac</span>
+    <span class="sel">1CBS · RETINOID-BINDING PROTEIN</span>
+    <span class="pill">READY</span>
+  </header>
+  <div class="body">
+    <aside class="panel">
+      <div class="tabs">
+        <span>FOCUS</span><span>LIGAND</span><span class="on">FIELDS</span><span>PHYSICS</span>
+      </div>
+      <div class="phead">ENERGY FIELD WELLS</div>
+      <div class="pmeta">REA · A:200 &nbsp;·&nbsp; <em>backend online</em></div>
+      <div class="grid">
+        <button class="sel">V Electrostatic well</button>
+        <button>Ψ QM potential</button>
+        <button>φ HOMO</button>
+        <button>φ* LUMO</button>
+        <button>ρ e⁻ density</button>
+        <button>logP Lipophilicity</button>
+      </div>
+      <div class="slider"><span>Isovalue</span><i></i><b>±10.0 kcal/mol</b></div>
+      <div class="rows">
+        <div><span>Method</span><b>gasteiger</b></div>
+        <div><span>Net charge</span><b>−0.02 e</b></div>
+        <div><span>Compute time</span><b>0.21 s</b></div>
+        <div><span>Cache</span><b>db · 12 ms</b></div>
+      </div>
+      <div class="refusal">
+        <b>σ-hole not representable</b>
+        Gasteiger point charges cannot carry σ-hole anisotropy — the Physics tab
+        answers this with a QM surface.
+      </div>
+      <div class="legend">
+        <i style="--c:var(--viz-mep-pos)"></i><span>MEP +</span>
+        <i style="--c:var(--viz-mep-neg)"></i><span>MEP −</span>
+        <i style="--c:var(--viz-orb-pos)"></i><span>φ +</span>
+        <i style="--c:var(--viz-orb-neg)"></i><span>φ −</span>
+        <i style="--c:var(--viz-mlp-pos)"></i><span>logP</span>
+        <i style="--c:var(--viz-mlp-neg)"></i><span>polar</span>
+        <i style="--c:var(--viz-density)"></i><span>ρ</span>
+      </div>
+    </aside>
+    <div class="viewport">
+      <div class="well"></div>
+      <div class="mol"></div>
+      <span class="vlabel">1CBS · β-barrel · field ±10.0 kcal/mol</span>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+<section class="card">
+  <div class="chead">
+    <span class="num">05</span>
+    <span class="cname">Ion Blue</span>
+    <span class="ctag">one hue, pushed hard</span>
+    <span class="verdict pass">PASS</span>
+  </div>
+  <p class="story">Near-monochromatic: the accent IS the background hue at high chroma. The closest a cyberpunk night gets to the day theme, so it is the safest pairing if the two must feel like one product.</p>
+  <div class="metrics"><span>text/bg <b>16.3:1</b></span><span>text-2/panel <b>7.0:1</b></span><span>accent/panel <b>9.3:1</b></span><span>danger/panel <b>8.8:1</b></span><span>ΔE mep <b>0.247</b></span><span>ΔE orb <b>0.208</b></span><span>ΔE mlp <b>0.228</b></span><span>peak chroma <b>0.165</b> (--glow)</span><span>viz chroma <b>0.140</b></span></div>
+  <div class="tokens"><i style="background:#070e16" title="--bg #070e16"></i><i style="background:#141b24" title="--surface #141b24"></i><i style="background:#1c252e" title="--surface-2 #1c252e"></i><i style="background:#27313c" title="--surface-3 #27313c"></i><i style="background:#1f2a35" title="--border #1f2a35"></i><i style="background:#e2edf8" title="--text #e2edf8"></i><i style="background:#9aa6b3" title="--text-2 #9aa6b3"></i><i style="background:#89c3ff" title="--accent #89c3ff"></i><i style="background:#4cd9b0" title="--ok #4cd9b0"></i><i style="background:#f3af45" title="--warn #f3af45"></i><i style="background:#ff9f9f" title="--danger #ff9f9f"></i><i style="background:#32d5e5" title="--info #32d5e5"></i><i style="background:#65a7fa" title="--viz-mep-pos #65a7fa"></i><i style="background:#ef7e80" title="--viz-mep-neg #ef7e80"></i><i style="background:#00bbc3" title="--viz-orb-pos #00bbc3"></i><i style="background:#b98cea" title="--viz-orb-neg #b98cea"></i><i style="background:#d29922" title="--viz-mlp-pos #d29922"></i><i style="background:#00bbc3" title="--viz-mlp-neg #00bbc3"></i><i style="background:#e68a53" title="--viz-density #e68a53"></i><span>bg → viz</span></div>
+  <div class="stage" style="--bg:#070e16;--surface:#141b24;--surface-2:#1c252e;--surface-3:#27313c;--border:#1f2a35;--border-strong:#313f4d;--text:#e2edf8;--text-2:#9aa6b3;--text-3:#6a7682;--accent:#89c3ff;--accent-soft:#092a49;--ok:#4cd9b0;--ok-soft:#003125;--warn:#f3af45;--warn-soft:#3a2400;--danger:#ff9f9f;--danger-soft:#421b1c;--info:#32d5e5;--info-soft:#002f34;--viz-mep-pos:#65a7fa;--viz-mep-neg:#ef7e80;--viz-orb-pos:#00bbc3;--viz-orb-neg:#b98cea;--viz-mlp-pos:#d29922;--viz-mlp-neg:#00bbc3;--viz-density:#e68a53;--scene-bg:#020509;--glow:#1c89e4">
+<div class="app">
+  <header class="topbar">
+    <span class="brand">Dirac</span>
+    <span class="sel">1CBS · RETINOID-BINDING PROTEIN</span>
+    <span class="pill">READY</span>
+  </header>
+  <div class="body">
+    <aside class="panel">
+      <div class="tabs">
+        <span>FOCUS</span><span>LIGAND</span><span class="on">FIELDS</span><span>PHYSICS</span>
+      </div>
+      <div class="phead">ENERGY FIELD WELLS</div>
+      <div class="pmeta">REA · A:200 &nbsp;·&nbsp; <em>backend online</em></div>
+      <div class="grid">
+        <button class="sel">V Electrostatic well</button>
+        <button>Ψ QM potential</button>
+        <button>φ HOMO</button>
+        <button>φ* LUMO</button>
+        <button>ρ e⁻ density</button>
+        <button>logP Lipophilicity</button>
+      </div>
+      <div class="slider"><span>Isovalue</span><i></i><b>±10.0 kcal/mol</b></div>
+      <div class="rows">
+        <div><span>Method</span><b>gasteiger</b></div>
+        <div><span>Net charge</span><b>−0.02 e</b></div>
+        <div><span>Compute time</span><b>0.21 s</b></div>
+        <div><span>Cache</span><b>db · 12 ms</b></div>
+      </div>
+      <div class="refusal">
+        <b>σ-hole not representable</b>
+        Gasteiger point charges cannot carry σ-hole anisotropy — the Physics tab
+        answers this with a QM surface.
+      </div>
+      <div class="legend">
+        <i style="--c:var(--viz-mep-pos)"></i><span>MEP +</span>
+        <i style="--c:var(--viz-mep-neg)"></i><span>MEP −</span>
+        <i style="--c:var(--viz-orb-pos)"></i><span>φ +</span>
+        <i style="--c:var(--viz-orb-neg)"></i><span>φ −</span>
+        <i style="--c:var(--viz-mlp-pos)"></i><span>logP</span>
+        <i style="--c:var(--viz-mlp-neg)"></i><span>polar</span>
+        <i style="--c:var(--viz-density)"></i><span>ρ</span>
+      </div>
+    </aside>
+    <div class="viewport">
+      <div class="well"></div>
+      <div class="mol"></div>
+      <span class="vlabel">1CBS · β-barrel · field ±10.0 kcal/mol</span>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+<section class="card">
+  <div class="chead">
+    <span class="num">06</span>
+    <span class="cname">Sodium Vapor</span>
+    <span class="ctag">street lamps, not signage</span>
+    <span class="verdict pass">PASS</span>
+  </div>
+  <p class="story">The least clichéd of the set: sodium-orange light against steel-blue shadow. Warm accent on a cold ground is rare in this genre and reads expensive rather than loud.</p>
+  <div class="metrics"><span>text/bg <b>16.3:1</b></span><span>text-2/panel <b>7.0:1</b></span><span>accent/panel <b>8.9:1</b></span><span>danger/panel <b>8.8:1</b></span><span>ΔE mep <b>0.267</b></span><span>ΔE orb <b>0.258</b></span><span>ΔE mlp <b>0.255</b></span><span>peak chroma <b>0.146</b> (--glow)</span><span>viz chroma <b>0.140</b></span></div>
+  <div class="tokens"><i style="background:#040e18" title="--bg #040e18"></i><i style="background:#0f1c27" title="--surface #0f1c27"></i><i style="background:#172632" title="--surface-2 #172632"></i><i style="background:#223240" title="--surface-3 #223240"></i><i style="background:#192b3a" title="--border #192b3a"></i><i style="background:#e1edf8" title="--text #e1edf8"></i><i style="background:#96a7b7" title="--text-2 #96a7b7"></i><i style="background:#ffa658" title="--accent #ffa658"></i><i style="background:#79d68f" title="--ok #79d68f"></i><i style="background:#ffa47a" title="--warn #ffa47a"></i><i style="background:#ff9f9f" title="--danger #ff9f9f"></i><i style="background:#45d0f6" title="--info #45d0f6"></i><i style="background:#3faff3" title="--viz-mep-pos #3faff3"></i><i style="background:#f07f77" title="--viz-mep-neg #f07f77"></i><i style="background:#3fbf86" title="--viz-orb-pos #3fbf86"></i><i style="background:#ab91f2" title="--viz-orb-neg #ab91f2"></i><i style="background:#e38d3d" title="--viz-mlp-pos #e38d3d"></i><i style="background:#00b9cf" title="--viz-mlp-neg #00b9cf"></i><i style="background:#e48c4c" title="--viz-density #e48c4c"></i><span>bg → viz</span></div>
+  <div class="stage" style="--bg:#040e18;--surface:#0f1c27;--surface-2:#172632;--surface-3:#223240;--border:#192b3a;--border-strong:#2a4052;--text:#e1edf8;--text-2:#96a7b7;--text-3:#667785;--accent:#ffa658;--accent-soft:#401f00;--ok:#79d68f;--ok-soft:#0f3118;--warn:#ffa47a;--warn-soft:#411e0d;--danger:#ff9f9f;--danger-soft:#421b1c;--info:#45d0f6;--info-soft:#002e3a;--viz-mep-pos:#3faff3;--viz-mep-neg:#f07f77;--viz-orb-pos:#3fbf86;--viz-orb-neg:#ab91f2;--viz-mlp-pos:#e38d3d;--viz-mlp-neg:#00b9cf;--viz-density:#e48c4c;--scene-bg:#01050b;--glow:#c46d00">
+<div class="app">
+  <header class="topbar">
+    <span class="brand">Dirac</span>
+    <span class="sel">1CBS · RETINOID-BINDING PROTEIN</span>
+    <span class="pill">READY</span>
+  </header>
+  <div class="body">
+    <aside class="panel">
+      <div class="tabs">
+        <span>FOCUS</span><span>LIGAND</span><span class="on">FIELDS</span><span>PHYSICS</span>
+      </div>
+      <div class="phead">ENERGY FIELD WELLS</div>
+      <div class="pmeta">REA · A:200 &nbsp;·&nbsp; <em>backend online</em></div>
+      <div class="grid">
+        <button class="sel">V Electrostatic well</button>
+        <button>Ψ QM potential</button>
+        <button>φ HOMO</button>
+        <button>φ* LUMO</button>
+        <button>ρ e⁻ density</button>
+        <button>logP Lipophilicity</button>
+      </div>
+      <div class="slider"><span>Isovalue</span><i></i><b>±10.0 kcal/mol</b></div>
+      <div class="rows">
+        <div><span>Method</span><b>gasteiger</b></div>
+        <div><span>Net charge</span><b>−0.02 e</b></div>
+        <div><span>Compute time</span><b>0.21 s</b></div>
+        <div><span>Cache</span><b>db · 12 ms</b></div>
+      </div>
+      <div class="refusal">
+        <b>σ-hole not representable</b>
+        Gasteiger point charges cannot carry σ-hole anisotropy — the Physics tab
+        answers this with a QM surface.
+      </div>
+      <div class="legend">
+        <i style="--c:var(--viz-mep-pos)"></i><span>MEP +</span>
+        <i style="--c:var(--viz-mep-neg)"></i><span>MEP −</span>
+        <i style="--c:var(--viz-orb-pos)"></i><span>φ +</span>
+        <i style="--c:var(--viz-orb-neg)"></i><span>φ −</span>
+        <i style="--c:var(--viz-mlp-pos)"></i><span>logP</span>
+        <i style="--c:var(--viz-mlp-neg)"></i><span>polar</span>
+        <i style="--c:var(--viz-density)"></i><span>ρ</span>
+      </div>
+    </aside>
+    <div class="viewport">
+      <div class="well"></div>
+      <div class="mol"></div>
+      <span class="vlabel">1CBS · β-barrel · field ±10.0 kcal/mol</span>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+<section class="card">
+  <div class="chead">
+    <span class="num">07</span>
+    <span class="cname">Chrome Sakura</span>
+    <span class="ctag">pale pink over gunmetal</span>
+    <span class="verdict pass">PASS</span>
+  </div>
+  <p class="story">Cyberpunk with the volume down. Charcoal-violet ground, pale pink accent, chrome-blue secondary. The one candidate a chemist could stare at for eight hours.</p>
+  <div class="metrics"><span>text/bg <b>16.2:1</b></span><span>text-2/panel <b>7.0:1</b></span><span>accent/panel <b>8.9:1</b></span><span>danger/panel <b>8.9:1</b></span><span>ΔE mep <b>0.194</b></span><span>ΔE orb <b>0.218</b></span><span>ΔE mlp <b>0.204</b></span><span>peak chroma <b>0.126</b> (--glow)</span><span>viz chroma <b>0.116</b></span></div>
+  <div class="tokens"><i style="background:#0e0c12" title="--bg #0e0c12"></i><i style="background:#1b1920" title="--surface #1b1920"></i><i style="background:#25222b" title="--surface-2 #25222b"></i><i style="background:#312f38" title="--surface-3 #312f38"></i><i style="background:#2a2731" title="--border #2a2731"></i><i style="background:#ece9f3" title="--text #ece9f3"></i><i style="background:#a6a2ae" title="--text-2 #a6a2ae"></i><i style="background:#f69fc8" title="--accent #f69fc8"></i><i style="background:#7fd3a7" title="--ok #7fd3a7"></i><i style="background:#ebb16d" title="--warn #ebb16d"></i><i style="background:#fca29a" title="--danger #fca29a"></i><i style="background:#6ccee5" title="--info #6ccee5"></i><i style="background:#5aaee5" title="--viz-mep-pos #5aaee5"></i><i style="background:#dd85a8" title="--viz-mep-neg #dd85a8"></i><i style="background:#53bb93" title="--viz-orb-pos #53bb93"></i><i style="background:#bb90da" title="--viz-orb-neg #bb90da"></i><i style="background:#cf9a4a" title="--viz-mlp-pos #cf9a4a"></i><i style="background:#28bac1" title="--viz-mlp-neg #28bac1"></i><i style="background:#dd8e6a" title="--viz-density #dd8e6a"></i><span>bg → viz</span></div>
+  <div class="stage" style="--bg:#0e0c12;--surface:#1b1920;--surface-2:#25222b;--surface-3:#312f38;--border:#2a2731;--border-strong:#3f3b47;--text:#ece9f3;--text-2:#a6a2ae;--text-3:#76727d;--accent:#f69fc8;--accent-soft:#3c1e2c;--ok:#7fd3a7;--ok-soft:#113021;--warn:#ebb16d;--warn-soft:#37250d;--danger:#fca29a;--danger-soft:#3d1f1d;--info:#6ccee5;--info-soft:#052e37;--viz-mep-pos:#5aaee5;--viz-mep-neg:#dd85a8;--viz-orb-pos:#53bb93;--viz-orb-neg:#bb90da;--viz-mlp-pos:#cf9a4a;--viz-mlp-neg:#28bac1;--viz-density:#dd8e6a;--scene-bg:#050407;--glow:#be6491">
+<div class="app">
+  <header class="topbar">
+    <span class="brand">Dirac</span>
+    <span class="sel">1CBS · RETINOID-BINDING PROTEIN</span>
+    <span class="pill">READY</span>
+  </header>
+  <div class="body">
+    <aside class="panel">
+      <div class="tabs">
+        <span>FOCUS</span><span>LIGAND</span><span class="on">FIELDS</span><span>PHYSICS</span>
+      </div>
+      <div class="phead">ENERGY FIELD WELLS</div>
+      <div class="pmeta">REA · A:200 &nbsp;·&nbsp; <em>backend online</em></div>
+      <div class="grid">
+        <button class="sel">V Electrostatic well</button>
+        <button>Ψ QM potential</button>
+        <button>φ HOMO</button>
+        <button>φ* LUMO</button>
+        <button>ρ e⁻ density</button>
+        <button>logP Lipophilicity</button>
+      </div>
+      <div class="slider"><span>Isovalue</span><i></i><b>±10.0 kcal/mol</b></div>
+      <div class="rows">
+        <div><span>Method</span><b>gasteiger</b></div>
+        <div><span>Net charge</span><b>−0.02 e</b></div>
+        <div><span>Compute time</span><b>0.21 s</b></div>
+        <div><span>Cache</span><b>db · 12 ms</b></div>
+      </div>
+      <div class="refusal">
+        <b>σ-hole not representable</b>
+        Gasteiger point charges cannot carry σ-hole anisotropy — the Physics tab
+        answers this with a QM surface.
+      </div>
+      <div class="legend">
+        <i style="--c:var(--viz-mep-pos)"></i><span>MEP +</span>
+        <i style="--c:var(--viz-mep-neg)"></i><span>MEP −</span>
+        <i style="--c:var(--viz-orb-pos)"></i><span>φ +</span>
+        <i style="--c:var(--viz-orb-neg)"></i><span>φ −</span>
+        <i style="--c:var(--viz-mlp-pos)"></i><span>logP</span>
+        <i style="--c:var(--viz-mlp-neg)"></i><span>polar</span>
+        <i style="--c:var(--viz-density)"></i><span>ρ</span>
+      </div>
+    </aside>
+    <div class="viewport">
+      <div class="well"></div>
+      <div class="mol"></div>
+      <span class="vlabel">1CBS · β-barrel · field ±10.0 kcal/mol</span>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+<section class="card">
+  <div class="chead">
+    <span class="num">08</span>
+    <span class="cname">Nuclear Lime</span>
+    <span class="ctag">hazard green against purple</span>
+    <span class="verdict pass">PASS</span>
+  </div>
+  <p class="story">The loudest world here. Lime at 0.20 chroma with a violet counter — maximum separation, maximum presence. Included to mark the ceiling: if this is too much, the answer is a number below it.</p>
+  <div class="metrics"><span>text/bg <b>16.3:1</b></span><span>text-2/panel <b>7.0:1</b></span><span>accent/panel <b>9.6:1</b></span><span>danger/panel <b>8.8:1</b></span><span>ΔE mep <b>0.292</b></span><span>ΔE orb <b>0.341</b></span><span>ΔE mlp <b>0.214</b></span><span>peak chroma <b>0.190</b> (--accent)</span><span>viz chroma <b>0.171</b></span></div>
+  <div class="tokens"><i style="background:#080c1a" title="--bg #080c1a"></i><i style="background:#151a29" title="--surface #151a29"></i><i style="background:#1e2334" title="--surface-2 #1e2334"></i><i style="background:#293043" title="--surface-3 #293043"></i><i style="background:#21283c" title="--border #21283c"></i><i style="background:#e6ebf9" title="--text #e6ebf9"></i><i style="background:#9da4b8" title="--text-2 #9da4b8"></i><i style="background:#afce00" title="--accent #afce00"></i><i style="background:#96d448" title="--ok #96d448"></i><i style="background:#f5af00" title="--warn #f5af00"></i><i style="background:#ff9ea6" title="--danger #ff9ea6"></i><i style="background:#c9acff" title="--info #c9acff"></i><i style="background:#51a9ff" title="--viz-mep-pos #51a9ff"></i><i style="background:#fd7277" title="--viz-mep-neg #fd7277"></i><i style="background:#98b305" title="--viz-orb-pos #98b305"></i><i style="background:#b688fe" title="--viz-orb-neg #b688fe"></i><i style="background:#c89f00" title="--viz-mlp-pos #c89f00"></i><i style="background:#00bcbc" title="--viz-mlp-neg #00bcbc"></i><i style="background:#f0852c" title="--viz-density #f0852c"></i><span>bg → viz</span></div>
+  <div class="stage" style="--bg:#080c1a;--surface:#151a29;--surface-2:#1e2334;--surface-3:#293043;--border:#21283c;--border-strong:#343c55;--text:#e6ebf9;--text-2:#9da4b8;--text-3:#6d7487;--accent:#afce00;--accent-soft:#252d00;--ok:#96d448;--ok-soft:#1c3000;--warn:#f5af00;--warn-soft:#382500;--danger:#ff9ea6;--danger-soft:#48141c;--info:#c9acff;--info-soft:#2f1d4a;--viz-mep-pos:#51a9ff;--viz-mep-neg:#fd7277;--viz-orb-pos:#98b305;--viz-orb-neg:#b688fe;--viz-mlp-pos:#c89f00;--viz-mlp-neg:#00bcbc;--viz-density:#f0852c;--scene-bg:#02040c;--glow:#7b9200">
+<div class="app">
+  <header class="topbar">
+    <span class="brand">Dirac</span>
+    <span class="sel">1CBS · RETINOID-BINDING PROTEIN</span>
+    <span class="pill">READY</span>
+  </header>
+  <div class="body">
+    <aside class="panel">
+      <div class="tabs">
+        <span>FOCUS</span><span>LIGAND</span><span class="on">FIELDS</span><span>PHYSICS</span>
+      </div>
+      <div class="phead">ENERGY FIELD WELLS</div>
+      <div class="pmeta">REA · A:200 &nbsp;·&nbsp; <em>backend online</em></div>
+      <div class="grid">
+        <button class="sel">V Electrostatic well</button>
+        <button>Ψ QM potential</button>
+        <button>φ HOMO</button>
+        <button>φ* LUMO</button>
+        <button>ρ e⁻ density</button>
+        <button>logP Lipophilicity</button>
+      </div>
+      <div class="slider"><span>Isovalue</span><i></i><b>±10.0 kcal/mol</b></div>
+      <div class="rows">
+        <div><span>Method</span><b>gasteiger</b></div>
+        <div><span>Net charge</span><b>−0.02 e</b></div>
+        <div><span>Compute time</span><b>0.21 s</b></div>
+        <div><span>Cache</span><b>db · 12 ms</b></div>
+      </div>
+      <div class="refusal">
+        <b>σ-hole not representable</b>
+        Gasteiger point charges cannot carry σ-hole anisotropy — the Physics tab
+        answers this with a QM surface.
+      </div>
+      <div class="legend">
+        <i style="--c:var(--viz-mep-pos)"></i><span>MEP +</span>
+        <i style="--c:var(--viz-mep-neg)"></i><span>MEP −</span>
+        <i style="--c:var(--viz-orb-pos)"></i><span>φ +</span>
+        <i style="--c:var(--viz-orb-neg)"></i><span>φ −</span>
+        <i style="--c:var(--viz-mlp-pos)"></i><span>logP</span>
+        <i style="--c:var(--viz-mlp-neg)"></i><span>polar</span>
+        <i style="--c:var(--viz-density)"></i><span>ρ</span>
+      </div>
+    </aside>
+    <div class="viewport">
+      <div class="well"></div>
+      <div class="mol"></div>
+      <span class="vlabel">1CBS · β-barrel · field ±10.0 kcal/mol</span>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+<section class="card">
+  <div class="chead">
+    <span class="num">09</span>
+    <span class="cname">Blade Amber</span>
+    <span class="ctag">dust, orange air, one teal light</span>
+    <span class="verdict pass">PASS</span>
+  </div>
+  <p class="story">Warm black ground — almost nothing else does this — with amber dominant and a single teal for interaction. Reads as heat and distance rather than rain and glass.</p>
+  <div class="metrics"><span>text/bg <b>16.3:1</b></span><span>text-2/panel <b>6.9:1</b></span><span>accent/panel <b>8.9:1</b></span><span>danger/panel <b>8.9:1</b></span><span>ΔE mep <b>0.289</b></span><span>ΔE orb <b>0.249</b></span><span>ΔE mlp <b>0.256</b></span><span>peak chroma <b>0.153</b> (--glow)</span><span>viz chroma <b>0.150</b></span></div>
+  <div class="tokens"><i style="background:#160906" title="--bg #160906"></i><i style="background:#251712" title="--surface #251712"></i><i style="background:#30201a" title="--surface-2 #30201a"></i><i style="background:#3e2b25" title="--surface-3 #3e2b25"></i><i style="background:#37231d" title="--border #37231d"></i><i style="background:#f8e7e1" title="--text #f8e7e1"></i><i style="background:#b69f97" title="--text-2 #b69f97"></i><i style="background:#ffa566" title="--accent #ffa566"></i><i style="background:#73d78b" title="--ok #73d78b"></i><i style="background:#ffa571" title="--warn #ffa571"></i><i style="background:#ff9f9f" title="--danger #ff9f9f"></i><i style="background:#15d9d1" title="--info #15d9d1"></i><i style="background:#12b2f4" title="--viz-mep-pos #12b2f4"></i><i style="background:#f47b74" title="--viz-mep-neg #f47b74"></i><i style="background:#00bdb6" title="--viz-orb-pos #00bdb6"></i><i style="background:#ce83de" title="--viz-orb-neg #ce83de"></i><i style="background:#eb883b" title="--viz-mlp-pos #eb883b"></i><i style="background:#00bcbc" title="--viz-mlp-neg #00bcbc"></i><i style="background:#e48d3a" title="--viz-density #e48d3a"></i><span>bg → viz</span></div>
+  <div class="stage" style="--bg:#160906;--surface:#251712;--surface-2:#30201a;--surface-3:#3e2b25;--border:#37231d;--border-strong:#4f372e;--text:#f8e7e1;--text-2:#b69f97;--text-3:#856f67;--accent:#ffa566;--accent-soft:#421d00;--ok:#73d78b;--ok-soft:#0c3117;--warn:#ffa571;--warn-soft:#411e07;--danger:#ff9f9f;--danger-soft:#431a1b;--info:#15d9d1;--info-soft:#00302e;--viz-mep-pos:#12b2f4;--viz-mep-neg:#f47b74;--viz-orb-pos:#00bdb6;--viz-orb-neg:#ce83de;--viz-mlp-pos:#eb883b;--viz-mlp-neg:#00bcbc;--viz-density:#e48d3a;--scene-bg:#0a0301;--glow:#ca6800">
+<div class="app">
+  <header class="topbar">
+    <span class="brand">Dirac</span>
+    <span class="sel">1CBS · RETINOID-BINDING PROTEIN</span>
+    <span class="pill">READY</span>
+  </header>
+  <div class="body">
+    <aside class="panel">
+      <div class="tabs">
+        <span>FOCUS</span><span>LIGAND</span><span class="on">FIELDS</span><span>PHYSICS</span>
+      </div>
+      <div class="phead">ENERGY FIELD WELLS</div>
+      <div class="pmeta">REA · A:200 &nbsp;·&nbsp; <em>backend online</em></div>
+      <div class="grid">
+        <button class="sel">V Electrostatic well</button>
+        <button>Ψ QM potential</button>
+        <button>φ HOMO</button>
+        <button>φ* LUMO</button>
+        <button>ρ e⁻ density</button>
+        <button>logP Lipophilicity</button>
+      </div>
+      <div class="slider"><span>Isovalue</span><i></i><b>±10.0 kcal/mol</b></div>
+      <div class="rows">
+        <div><span>Method</span><b>gasteiger</b></div>
+        <div><span>Net charge</span><b>−0.02 e</b></div>
+        <div><span>Compute time</span><b>0.21 s</b></div>
+        <div><span>Cache</span><b>db · 12 ms</b></div>
+      </div>
+      <div class="refusal">
+        <b>σ-hole not representable</b>
+        Gasteiger point charges cannot carry σ-hole anisotropy — the Physics tab
+        answers this with a QM surface.
+      </div>
+      <div class="legend">
+        <i style="--c:var(--viz-mep-pos)"></i><span>MEP +</span>
+        <i style="--c:var(--viz-mep-neg)"></i><span>MEP −</span>
+        <i style="--c:var(--viz-orb-pos)"></i><span>φ +</span>
+        <i style="--c:var(--viz-orb-neg)"></i><span>φ −</span>
+        <i style="--c:var(--viz-mlp-pos)"></i><span>logP</span>
+        <i style="--c:var(--viz-mlp-neg)"></i><span>polar</span>
+        <i style="--c:var(--viz-density)"></i><span>ρ</span>
+      </div>
+    </aside>
+    <div class="viewport">
+      <div class="well"></div>
+      <div class="mol"></div>
+      <span class="vlabel">1CBS · β-barrel · field ±10.0 kcal/mol</span>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+<section class="card">
+  <div class="chead">
+    <span class="num">10</span>
+    <span class="cname">Abyssal Bloom</span>
+    <span class="ctag">bioluminescence, not electricity</span>
+    <span class="verdict pass">PASS</span>
+  </div>
+  <p class="story">The only world whose light is alive: abyss navy with green-cyan bloom. Thematically closest to what the app actually draws — a field glowing around a molecule.</p>
+  <div class="metrics"><span>text/bg <b>16.3:1</b></span><span>text-2/panel <b>7.0:1</b></span><span>accent/panel <b>9.9:1</b></span><span>danger/panel <b>8.7:1</b></span><span>ΔE mep <b>0.264</b></span><span>ΔE orb <b>0.273</b></span><span>ΔE mlp <b>0.225</b></span><span>peak chroma <b>0.169</b> (--accent)</span><span>viz chroma <b>0.161</b></span></div>
+  <div class="tokens"><i style="background:#001016" title="--bg #001016"></i><i style="background:#041e26" title="--surface #041e26"></i><i style="background:#0a2831" title="--surface-2 #0a2831"></i><i style="background:#14353f" title="--surface-3 #14353f"></i><i style="background:#072e38" title="--border #072e38"></i><i style="background:#ddeff5" title="--text #ddeff5"></i><i style="background:#91a9b2" title="--text-2 #91a9b2"></i><i style="background:#00dfa2" title="--accent #00dfa2"></i><i style="background:#5eda91" title="--ok #5eda91"></i><i style="background:#f9ac22" title="--warn #f9ac22"></i><i style="background:#ff98ca" title="--danger #ff98ca"></i><i style="background:#b6b4ff" title="--info #b6b4ff"></i><i style="background:#00b4ed" title="--viz-mep-pos #00b4ed"></i><i style="background:#ed76b3" title="--viz-mep-neg #ed76b3"></i><i style="background:#00c28d" title="--viz-orb-pos #00c28d"></i><i style="background:#a491ff" title="--viz-orb-neg #a491ff"></i><i style="background:#d59800" title="--viz-mlp-pos #d59800"></i><i style="background:#00bdb6" title="--viz-mlp-neg #00bdb6"></i><i style="background:#f1824d" title="--viz-density #f1824d"></i><span>bg → viz</span></div>
+  <div class="stage" style="--bg:#001016;--surface:#041e26;--surface-2:#0a2831;--surface-3:#14353f;--border:#072e38;--border-strong:#174350;--text:#ddeff5;--text-2:#91a9b2;--text-3:#617981;--accent:#00dfa2;--accent-soft:#003221;--ok:#5eda91;--ok-soft:#013219;--warn:#f9ac22;--warn-soft:#3a2400;--danger:#ff98ca;--danger-soft:#41192e;--info:#b6b4ff;--info-soft:#262349;--viz-mep-pos:#00b4ed;--viz-mep-neg:#ed76b3;--viz-orb-pos:#00c28d;--viz-orb-neg:#a491ff;--viz-mlp-pos:#d59800;--viz-mlp-neg:#00bdb6;--viz-density:#f1824d;--scene-bg:#000609;--glow:#009e72">
+<div class="app">
+  <header class="topbar">
+    <span class="brand">Dirac</span>
+    <span class="sel">1CBS · RETINOID-BINDING PROTEIN</span>
+    <span class="pill">READY</span>
+  </header>
+  <div class="body">
+    <aside class="panel">
+      <div class="tabs">
+        <span>FOCUS</span><span>LIGAND</span><span class="on">FIELDS</span><span>PHYSICS</span>
+      </div>
+      <div class="phead">ENERGY FIELD WELLS</div>
+      <div class="pmeta">REA · A:200 &nbsp;·&nbsp; <em>backend online</em></div>
+      <div class="grid">
+        <button class="sel">V Electrostatic well</button>
+        <button>Ψ QM potential</button>
+        <button>φ HOMO</button>
+        <button>φ* LUMO</button>
+        <button>ρ e⁻ density</button>
+        <button>logP Lipophilicity</button>
+      </div>
+      <div class="slider"><span>Isovalue</span><i></i><b>±10.0 kcal/mol</b></div>
+      <div class="rows">
+        <div><span>Method</span><b>gasteiger</b></div>
+        <div><span>Net charge</span><b>−0.02 e</b></div>
+        <div><span>Compute time</span><b>0.21 s</b></div>
+        <div><span>Cache</span><b>db · 12 ms</b></div>
+      </div>
+      <div class="refusal">
+        <b>σ-hole not representable</b>
+        Gasteiger point charges cannot carry σ-hole anisotropy — the Physics tab
+        answers this with a QM surface.
+      </div>
+      <div class="legend">
+        <i style="--c:var(--viz-mep-pos)"></i><span>MEP +</span>
+        <i style="--c:var(--viz-mep-neg)"></i><span>MEP −</span>
+        <i style="--c:var(--viz-orb-pos)"></i><span>φ +</span>
+        <i style="--c:var(--viz-orb-neg)"></i><span>φ −</span>
+        <i style="--c:var(--viz-mlp-pos)"></i><span>logP</span>
+        <i style="--c:var(--viz-mlp-neg)"></i><span>polar</span>
+        <i style="--c:var(--viz-density)"></i><span>ρ</span>
+      </div>
+    </aside>
+    <div class="viewport">
+      <div class="well"></div>
+      <div class="mol"></div>
+      <span class="vlabel">1CBS · β-barrel · field ±10.0 kcal/mol</span>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+<section class="card">
+  <div class="chead">
+    <span class="num">11</span>
+    <span class="cname">Void Violet</span>
+    <span class="ctag">violet on true black</span>
+    <span class="verdict pass">PASS</span>
+  </div>
+  <p class="story">Ground pushed to near-black so the accents float. Violet with a rose counter; the highest apparent contrast in the set without the highest chroma.</p>
+  <div class="metrics"><span>text/bg <b>16.2:1</b></span><span>text-2/panel <b>6.9:1</b></span><span>accent/panel <b>8.9:1</b></span><span>danger/panel <b>8.8:1</b></span><span>ΔE mep <b>0.262</b></span><span>ΔE orb <b>0.257</b></span><span>ΔE mlp <b>0.252</b></span><span>peak chroma <b>0.193</b> (--glow)</span><span>viz chroma <b>0.155</b></span></div>
+  <div class="tokens"><i style="background:#0f0b15" title="--bg #0f0b15"></i><i style="background:#1c1923" title="--surface #1c1923"></i><i style="background:#26222d" title="--surface-2 #26222d"></i><i style="background:#322e3b" title="--surface-3 #322e3b"></i><i style="background:#2b2634" title="--border #2b2634"></i><i style="background:#ede8f7" title="--text #ede8f7"></i><i style="background:#a7a1b2" title="--text-2 #a7a1b2"></i><i style="background:#c9acff" title="--accent #c9acff"></i><i style="background:#47dc9a" title="--ok #47dc9a"></i><i style="background:#ffa82a" title="--warn #ffa82a"></i><i style="background:#ff9ea6" title="--danger #ff9ea6"></i><i style="background:#ff9ea6" title="--info #ff9ea6"></i><i style="background:#60a7ff" title="--viz-mep-pos #60a7ff"></i><i style="background:#f57785" title="--viz-mep-neg #f57785"></i><i style="background:#b48cf6" title="--viz-orb-pos #b48cf6"></i><i style="background:#00c0a0" title="--viz-orb-neg #00c0a0"></i><i style="background:#e19005" title="--viz-mlp-pos #e19005"></i><i style="background:#00bbc3" title="--viz-mlp-neg #00bbc3"></i><i style="background:#ec8647" title="--viz-density #ec8647"></i><span>bg → viz</span></div>
+  <div class="stage" style="--bg:#0f0b15;--surface:#1c1923;--surface-2:#26222d;--surface-3:#322e3b;--border:#2b2634;--border-strong:#3f3a4b;--text:#ede8f7;--text-2:#a7a1b2;--text-3:#767281;--accent:#c9acff;--accent-soft:#2f1e49;--ok:#47dc9a;--ok-soft:#00321e;--warn:#ffa82a;--warn-soft:#3c2200;--danger:#ff9ea6;--danger-soft:#45181d;--info:#ff9ea6;--info-soft:#45181d;--viz-mep-pos:#60a7ff;--viz-mep-neg:#f57785;--viz-orb-pos:#b48cf6;--viz-orb-neg:#00c0a0;--viz-mlp-pos:#e19005;--viz-mlp-neg:#00bbc3;--viz-density:#ec8647;--scene-bg:#050408;--glow:#9a63e7">
+<div class="app">
+  <header class="topbar">
+    <span class="brand">Dirac</span>
+    <span class="sel">1CBS · RETINOID-BINDING PROTEIN</span>
+    <span class="pill">READY</span>
+  </header>
+  <div class="body">
+    <aside class="panel">
+      <div class="tabs">
+        <span>FOCUS</span><span>LIGAND</span><span class="on">FIELDS</span><span>PHYSICS</span>
+      </div>
+      <div class="phead">ENERGY FIELD WELLS</div>
+      <div class="pmeta">REA · A:200 &nbsp;·&nbsp; <em>backend online</em></div>
+      <div class="grid">
+        <button class="sel">V Electrostatic well</button>
+        <button>Ψ QM potential</button>
+        <button>φ HOMO</button>
+        <button>φ* LUMO</button>
+        <button>ρ e⁻ density</button>
+        <button>logP Lipophilicity</button>
+      </div>
+      <div class="slider"><span>Isovalue</span><i></i><b>±10.0 kcal/mol</b></div>
+      <div class="rows">
+        <div><span>Method</span><b>gasteiger</b></div>
+        <div><span>Net charge</span><b>−0.02 e</b></div>
+        <div><span>Compute time</span><b>0.21 s</b></div>
+        <div><span>Cache</span><b>db · 12 ms</b></div>
+      </div>
+      <div class="refusal">
+        <b>σ-hole not representable</b>
+        Gasteiger point charges cannot carry σ-hole anisotropy — the Physics tab
+        answers this with a QM surface.
+      </div>
+      <div class="legend">
+        <i style="--c:var(--viz-mep-pos)"></i><span>MEP +</span>
+        <i style="--c:var(--viz-mep-neg)"></i><span>MEP −</span>
+        <i style="--c:var(--viz-orb-pos)"></i><span>φ +</span>
+        <i style="--c:var(--viz-orb-neg)"></i><span>φ −</span>
+        <i style="--c:var(--viz-mlp-pos)"></i><span>logP</span>
+        <i style="--c:var(--viz-mlp-neg)"></i><span>polar</span>
+        <i style="--c:var(--viz-density)"></i><span>ρ</span>
+      </div>
+    </aside>
+    <div class="viewport">
+      <div class="well"></div>
+      <div class="mol"></div>
+      <span class="vlabel">1CBS · β-barrel · field ±10.0 kcal/mol</span>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+<section class="card">
+  <div class="chead">
+    <span class="num">12</span>
+    <span class="cname">Circuit Copper</span>
+    <span class="ctag">the board, not the city</span>
+    <span class="verdict pass">PASS</span>
+  </div>
+  <p class="story">Dark green solder mask, copper traces, cyan vias. Cyberpunk from inside the hardware — a good fit for a tool whose subject is literally computed.</p>
+  <div class="metrics"><span>text/bg <b>16.4:1</b></span><span>text-2/panel <b>7.0:1</b></span><span>accent/panel <b>8.9:1</b></span><span>danger/panel <b>8.8:1</b></span><span>ΔE mep <b>0.266</b></span><span>ΔE orb <b>0.271</b></span><span>ΔE mlp <b>0.250</b></span><span>peak chroma <b>0.159</b> (--glow)</span><span>viz chroma <b>0.141</b></span></div>
+  <div class="tokens"><i style="background:#06100a" title="--bg #06100a"></i><i style="background:#121e17" title="--surface #121e17"></i><i style="background:#1b2720" title="--surface-2 #1b2720"></i><i style="background:#26342c" title="--surface-3 #26342c"></i><i style="background:#1e2d24" title="--border #1e2d24"></i><i style="background:#e0f0e7" title="--text #e0f0e7"></i><i style="background:#98a99f" title="--text-2 #98a99f"></i><i style="background:#ffa47a" title="--accent #ffa47a"></i><i style="background:#86d488" title="--ok #86d488"></i><i style="background:#fea75b" title="--warn #fea75b"></i><i style="background:#ffa098" title="--danger #ffa098"></i><i style="background:#3dd6d6" title="--info #3dd6d6"></i><i style="background:#00b8d6" title="--viz-mep-pos #00b8d6"></i><i style="background:#f07f77" title="--viz-mep-neg #f07f77"></i><i style="background:#5bbd74" title="--viz-orb-pos #5bbd74"></i><i style="background:#b28fef" title="--viz-orb-neg #b28fef"></i><i style="background:#e9884d" title="--viz-mlp-pos #e9884d"></i><i style="background:#00bcbc" title="--viz-mlp-neg #00bcbc"></i><i style="background:#e48c4c" title="--viz-density #e48c4c"></i><span>bg → viz</span></div>
+  <div class="stage" style="--bg:#06100a;--surface:#121e17;--surface-2:#1b2720;--surface-3:#26342c;--border:#1e2d24;--border-strong:#2f4238;--text:#e0f0e7;--text-2:#98a99f;--text-3:#697970;--accent:#ffa47a;--accent-soft:#421d0a;--ok:#86d488;--ok-soft:#143016;--warn:#fea75b;--warn-soft:#3d2106;--danger:#ffa098;--danger-soft:#411c1a;--info:#3dd6d6;--info-soft:#003030;--viz-mep-pos:#00b8d6;--viz-mep-neg:#f07f77;--viz-orb-pos:#5bbd74;--viz-orb-neg:#b28fef;--viz-mlp-pos:#e9884d;--viz-mlp-neg:#00bcbc;--viz-density:#e48c4c;--scene-bg:#020603;--glow:#d16023">
+<div class="app">
+  <header class="topbar">
+    <span class="brand">Dirac</span>
+    <span class="sel">1CBS · RETINOID-BINDING PROTEIN</span>
+    <span class="pill">READY</span>
+  </header>
+  <div class="body">
+    <aside class="panel">
+      <div class="tabs">
+        <span>FOCUS</span><span>LIGAND</span><span class="on">FIELDS</span><span>PHYSICS</span>
+      </div>
+      <div class="phead">ENERGY FIELD WELLS</div>
+      <div class="pmeta">REA · A:200 &nbsp;·&nbsp; <em>backend online</em></div>
+      <div class="grid">
+        <button class="sel">V Electrostatic well</button>
+        <button>Ψ QM potential</button>
+        <button>φ HOMO</button>
+        <button>φ* LUMO</button>
+        <button>ρ e⁻ density</button>
+        <button>logP Lipophilicity</button>
+      </div>
+      <div class="slider"><span>Isovalue</span><i></i><b>±10.0 kcal/mol</b></div>
+      <div class="rows">
+        <div><span>Method</span><b>gasteiger</b></div>
+        <div><span>Net charge</span><b>−0.02 e</b></div>
+        <div><span>Compute time</span><b>0.21 s</b></div>
+        <div><span>Cache</span><b>db · 12 ms</b></div>
+      </div>
+      <div class="refusal">
+        <b>σ-hole not representable</b>
+        Gasteiger point charges cannot carry σ-hole anisotropy — the Physics tab
+        answers this with a QM surface.
+      </div>
+      <div class="legend">
+        <i style="--c:var(--viz-mep-pos)"></i><span>MEP +</span>
+        <i style="--c:var(--viz-mep-neg)"></i><span>MEP −</span>
+        <i style="--c:var(--viz-orb-pos)"></i><span>φ +</span>
+        <i style="--c:var(--viz-orb-neg)"></i><span>φ −</span>
+        <i style="--c:var(--viz-mlp-pos)"></i><span>logP</span>
+        <i style="--c:var(--viz-mlp-neg)"></i><span>polar</span>
+        <i style="--c:var(--viz-density)"></i><span>ρ</span>
+      </div>
+    </aside>
+    <div class="viewport">
+      <div class="well"></div>
+      <div class="mol"></div>
+      <span class="vlabel">1CBS · β-barrel · field ±10.0 kcal/mol</span>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+<section class="card">
+  <div class="chead">
+    <span class="num">13</span>
+    <span class="cname">Hologram Foil</span>
+    <span class="ctag">iridescent on graphite</span>
+    <span class="verdict pass">PASS</span>
+  </div>
+  <p class="story">Two accents of equal weight, 135° apart, on a nearly neutral graphite. The interface shifts hue as you move through it — the only world here that is about the TRANSITION between colours.</p>
+  <div class="metrics"><span>text/bg <b>16.3:1</b></span><span>text-2/panel <b>7.0:1</b></span><span>accent/panel <b>9.8:1</b></span><span>danger/panel <b>8.6:1</b></span><span>ΔE mep <b>0.266</b></span><span>ΔE orb <b>0.300</b></span><span>ΔE mlp <b>0.238</b></span><span>peak chroma <b>0.161</b> (--warn)</span><span>viz chroma <b>0.161</b></span></div>
+  <div class="tokens"><i style="background:#0b0d13" title="--bg #0b0d13"></i><i style="background:#181b20" title="--surface #181b20"></i><i style="background:#21242b" title="--surface-2 #21242b"></i><i style="background:#2d3038" title="--surface-3 #2d3038"></i><i style="background:#252931" title="--border #252931"></i><i style="background:#e7ebf4" title="--text #e7ebf4"></i><i style="background:#a0a5ae" title="--text-2 #a0a5ae"></i><i style="background:#00daca" title="--accent #00daca"></i><i style="background:#3bdca5" title="--ok #3bdca5"></i><i style="background:#f9ac22" title="--warn #f9ac22"></i><i style="background:#ff93dd" title="--danger #ff93dd"></i><i style="background:#e79ef7" title="--info #e79ef7"></i><i style="background:#00beaf" title="--viz-mep-pos #00beaf"></i><i style="background:#d080e2" title="--viz-mep-neg #d080e2"></i><i style="background:#12c281" title="--viz-orb-pos #12c281"></i><i style="background:#b58bf9" title="--viz-orb-neg #b58bf9"></i><i style="background:#db9400" title="--viz-mlp-pos #db9400"></i><i style="background:#00bcbc" title="--viz-mlp-neg #00bcbc"></i><i style="background:#f1824d" title="--viz-density #f1824d"></i><span>bg → viz</span></div>
+  <div class="stage" style="--bg:#0b0d13;--surface:#181b20;--surface-2:#21242b;--surface-3:#2d3038;--border:#252931;--border-strong:#383d47;--text:#e7ebf4;--text-2:#a0a5ae;--text-3:#70757d;--accent:#00daca;--accent-soft:#00312c;--ok:#3bdca5;--ok-soft:#003221;--warn:#f9ac22;--warn-soft:#3a2400;--danger:#ff93dd;--danger-soft:#3e1a33;--info:#e79ef7;--info-soft:#371c3d;--viz-mep-pos:#00beaf;--viz-mep-neg:#d080e2;--viz-orb-pos:#12c281;--viz-orb-neg:#b58bf9;--viz-mlp-pos:#db9400;--viz-mlp-neg:#00bcbc;--viz-density:#f1824d;--scene-bg:#030407;--glow:#009b8f">
+<div class="app">
+  <header class="topbar">
+    <span class="brand">Dirac</span>
+    <span class="sel">1CBS · RETINOID-BINDING PROTEIN</span>
+    <span class="pill">READY</span>
+  </header>
+  <div class="body">
+    <aside class="panel">
+      <div class="tabs">
+        <span>FOCUS</span><span>LIGAND</span><span class="on">FIELDS</span><span>PHYSICS</span>
+      </div>
+      <div class="phead">ENERGY FIELD WELLS</div>
+      <div class="pmeta">REA · A:200 &nbsp;·&nbsp; <em>backend online</em></div>
+      <div class="grid">
+        <button class="sel">V Electrostatic well</button>
+        <button>Ψ QM potential</button>
+        <button>φ HOMO</button>
+        <button>φ* LUMO</button>
+        <button>ρ e⁻ density</button>
+        <button>logP Lipophilicity</button>
+      </div>
+      <div class="slider"><span>Isovalue</span><i></i><b>±10.0 kcal/mol</b></div>
+      <div class="rows">
+        <div><span>Method</span><b>gasteiger</b></div>
+        <div><span>Net charge</span><b>−0.02 e</b></div>
+        <div><span>Compute time</span><b>0.21 s</b></div>
+        <div><span>Cache</span><b>db · 12 ms</b></div>
+      </div>
+      <div class="refusal">
+        <b>σ-hole not representable</b>
+        Gasteiger point charges cannot carry σ-hole anisotropy — the Physics tab
+        answers this with a QM surface.
+      </div>
+      <div class="legend">
+        <i style="--c:var(--viz-mep-pos)"></i><span>MEP +</span>
+        <i style="--c:var(--viz-mep-neg)"></i><span>MEP −</span>
+        <i style="--c:var(--viz-orb-pos)"></i><span>φ +</span>
+        <i style="--c:var(--viz-orb-neg)"></i><span>φ −</span>
+        <i style="--c:var(--viz-mlp-pos)"></i><span>logP</span>
+        <i style="--c:var(--viz-mlp-neg)"></i><span>polar</span>
+        <i style="--c:var(--viz-density)"></i><span>ρ</span>
+      </div>
+    </aside>
+    <div class="viewport">
+      <div class="well"></div>
+      <div class="mol"></div>
+      <span class="vlabel">1CBS · β-barrel · field ±10.0 kcal/mol</span>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+<section class="card">
+  <div class="chead">
+    <span class="num">14</span>
+    <span class="cname">Ghost Protocol</span>
+    <span class="ctag">restraint, with one live wire</span>
+    <span class="verdict pass">PASS</span>
+  </div>
+  <p class="story">Almost no chroma anywhere, and a single electric accent that is the only saturated thing on screen. The most likely to still look right in two years, and the least likely to feel cyberpunk in a screenshot.</p>
+  <div class="metrics"><span>text/bg <b>16.3:1</b></span><span>text-2/panel <b>7.0:1</b></span><span>accent/panel <b>9.5:1</b></span><span>danger/panel <b>8.9:1</b></span><span>ΔE mep <b>0.203</b></span><span>ΔE orb <b>0.203</b></span><span>ΔE mlp <b>0.199</b></span><span>peak chroma <b>0.110</b> (--viz-mep-pos)</span><span>viz chroma <b>0.110</b></span></div>
+  <div class="tokens"><i style="background:#0a0e10" title="--bg #0a0e10"></i><i style="background:#171b1e" title="--surface #171b1e"></i><i style="background:#202528" title="--surface-2 #202528"></i><i style="background:#2c3135" title="--surface-3 #2c3135"></i><i style="background:#242a2e" title="--border #242a2e"></i><i style="background:#e7ecf0" title="--text #e7ecf0"></i><i style="background:#9fa5aa" title="--text-2 #9fa5aa"></i><i style="background:#72cce8" title="--accent #72cce8"></i><i style="background:#8ccfab" title="--ok #8ccfab"></i><i style="background:#e0b67b" title="--warn #e0b67b"></i><i style="background:#f2a6ab" title="--danger #f2a6ab"></i><i style="background:#eda9ad" title="--info #eda9ad"></i><i style="background:#66abe5" title="--viz-mep-pos #66abe5"></i><i style="background:#e18888" title="--viz-mep-neg #e18888"></i><i style="background:#60ba8d" title="--viz-orb-pos #60ba8d"></i><i style="background:#a996e2" title="--viz-orb-neg #a996e2"></i><i style="background:#cd9a50" title="--viz-mlp-pos #cd9a50"></i><i style="background:#36b8c5" title="--viz-mlp-neg #36b8c5"></i><i style="background:#d79363" title="--viz-density #d79363"></i><span>bg → viz</span></div>
+  <div class="stage" style="--bg:#0a0e10;--surface:#171b1e;--surface-2:#202528;--surface-3:#2c3135;--border:#242a2e;--border-strong:#383e43;--text:#e7ecf0;--text-2:#9fa5aa;--text-3:#70757a;--accent:#72cce8;--accent-soft:#0b2e37;--ok:#8ccfab;--ok-soft:#172f22;--warn:#e0b67b;--warn-soft:#342612;--danger:#f2a6ab;--danger-soft:#392123;--info:#eda9ad;--info-soft:#392123;--viz-mep-pos:#66abe5;--viz-mep-neg:#e18888;--viz-orb-pos:#60ba8d;--viz-orb-neg:#a996e2;--viz-mlp-pos:#cd9a50;--viz-mlp-neg:#36b8c5;--viz-density:#d79363;--scene-bg:#030506;--glow:#2294b1">
+<div class="app">
+  <header class="topbar">
+    <span class="brand">Dirac</span>
+    <span class="sel">1CBS · RETINOID-BINDING PROTEIN</span>
+    <span class="pill">READY</span>
+  </header>
+  <div class="body">
+    <aside class="panel">
+      <div class="tabs">
+        <span>FOCUS</span><span>LIGAND</span><span class="on">FIELDS</span><span>PHYSICS</span>
+      </div>
+      <div class="phead">ENERGY FIELD WELLS</div>
+      <div class="pmeta">REA · A:200 &nbsp;·&nbsp; <em>backend online</em></div>
+      <div class="grid">
+        <button class="sel">V Electrostatic well</button>
+        <button>Ψ QM potential</button>
+        <button>φ HOMO</button>
+        <button>φ* LUMO</button>
+        <button>ρ e⁻ density</button>
+        <button>logP Lipophilicity</button>
+      </div>
+      <div class="slider"><span>Isovalue</span><i></i><b>±10.0 kcal/mol</b></div>
+      <div class="rows">
+        <div><span>Method</span><b>gasteiger</b></div>
+        <div><span>Net charge</span><b>−0.02 e</b></div>
+        <div><span>Compute time</span><b>0.21 s</b></div>
+        <div><span>Cache</span><b>db · 12 ms</b></div>
+      </div>
+      <div class="refusal">
+        <b>σ-hole not representable</b>
+        Gasteiger point charges cannot carry σ-hole anisotropy — the Physics tab
+        answers this with a QM surface.
+      </div>
+      <div class="legend">
+        <i style="--c:var(--viz-mep-pos)"></i><span>MEP +</span>
+        <i style="--c:var(--viz-mep-neg)"></i><span>MEP −</span>
+        <i style="--c:var(--viz-orb-pos)"></i><span>φ +</span>
+        <i style="--c:var(--viz-orb-neg)"></i><span>φ −</span>
+        <i style="--c:var(--viz-mlp-pos)"></i><span>logP</span>
+        <i style="--c:var(--viz-mlp-neg)"></i><span>polar</span>
+        <i style="--c:var(--viz-density)"></i><span>ρ</span>
+      </div>
+    </aside>
+    <div class="viewport">
+      <div class="well"></div>
+      <div class="mol"></div>
+      <span class="vlabel">1CBS · β-barrel · field ±10.0 kcal/mol</span>
+    </div>
+  </div>
+</div>
+</div>
+</section>
+<section class="card">
+  <div class="chead">
+    <span class="num">15</span>
+    <span class="cname">Hazard Bay</span>
+    <span class="ctag">industrial, lit for work</span>
+    <span class="verdict pass">PASS</span>
+  </div>
+  <p class="story">Yellow-green hazard light with a warning orange — the palette of a place where something dangerous is running. Fits a tool that refuses requests and says why.</p>
+  <div class="metrics"><span>text/bg <b>16.4:1</b></span><span>text-2/panel <b>7.0:1</b></span><span>accent/panel <b>9.2:1</b></span><span>danger/panel <b>8.8:1</b></span><span>ΔE mep <b>0.291</b></span><span>ΔE orb <b>0.299</b></span><span>ΔE mlp <b>0.229</b></span><span>peak chroma <b>0.164</b> (--accent)</span><span>viz chroma <b>0.155</b></span></div>
+  <div class="tokens"><i style="background:#010f18" title="--bg #010f18"></i><i style="background:#0b1d27" title="--surface #0b1d27"></i><i style="background:#132732" title="--surface-2 #132732"></i><i style="background:#1d3340" title="--surface-3 #1d3340"></i><i style="background:#142c39" title="--border #142c39"></i><i style="background:#dfeef7" title="--text #dfeef7"></i><i style="background:#93a8b5" title="--text-2 #93a8b5"></i><i style="background:#dfbb00" title="--accent #dfbb00"></i><i style="background:#86d574" title="--ok #86d574"></i><i style="background:#ffa92c" title="--warn #ffa92c"></i><i style="background:#ff9f9f" title="--danger #ff9f9f"></i><i style="background:#ffa098" title="--info #ffa098"></i><i style="background:#26affb" title="--viz-mep-pos #26affb"></i><i style="background:#f6787c" title="--viz-mep-neg #f6787c"></i><i style="background:#4fbf6e" title="--viz-orb-pos #4fbf6e"></i><i style="background:#b48cf6" title="--viz-orb-neg #b48cf6"></i><i style="background:#cf9c00" title="--viz-mlp-pos #cf9c00"></i><i style="background:#00bbc3" title="--viz-mlp-neg #00bbc3"></i><i style="background:#e68b34" title="--viz-density #e68b34"></i><span>bg → viz</span></div>
+  <div class="stage" style="--bg:#010f18;--surface:#0b1d27;--surface-2:#132732;--surface-3:#1d3340;--border:#142c39;--border-strong:#244151;--text:#dfeef7;--text-2:#93a8b5;--text-3:#647884;--accent:#dfbb00;--accent-soft:#322800;--ok:#86d574;--ok-soft:#14310e;--warn:#ffa92c;--warn-soft:#3c2200;--danger:#ff9f9f;--danger-soft:#45191a;--info:#ffa098;--info-soft:#451917;--viz-mep-pos:#26affb;--viz-mep-neg:#f6787c;--viz-orb-pos:#4fbf6e;--viz-orb-neg:#b48cf6;--viz-mlp-pos:#cf9c00;--viz-mlp-neg:#00bbc3;--viz-density:#e68b34;--scene-bg:#00050b;--glow:#9e8400">
+<div class="app">
+  <header class="topbar">
+    <span class="brand">Dirac</span>
+    <span class="sel">1CBS · RETINOID-BINDING PROTEIN</span>
+    <span class="pill">READY</span>
+  </header>
+  <div class="body">
+    <aside class="panel">
+      <div class="tabs">
+        <span>FOCUS</span><span>LIGAND</span><span class="on">FIELDS</span><span>PHYSICS</span>
+      </div>
+      <div class="phead">ENERGY FIELD WELLS</div>
+      <div class="pmeta">REA · A:200 &nbsp;·&nbsp; <em>backend online</em></div>
+      <div class="grid">
+        <button class="sel">V Electrostatic well</button>
+        <button>Ψ QM potential</button>
+        <button>φ HOMO</button>
+        <button>φ* LUMO</button>
+        <button>ρ e⁻ density</button>
+        <button>logP Lipophilicity</button>
+      </div>
+      <div class="slider"><span>Isovalue</span><i></i><b>±10.0 kcal/mol</b></div>
+      <div class="rows">
+        <div><span>Method</span><b>gasteiger</b></div>
+        <div><span>Net charge</span><b>−0.02 e</b></div>
+        <div><span>Compute time</span><b>0.21 s</b></div>
+        <div><span>Cache</span><b>db · 12 ms</b></div>
+      </div>
+      <div class="refusal">
+        <b>σ-hole not representable</b>
+        Gasteiger point charges cannot carry σ-hole anisotropy — the Physics tab
+        answers this with a QM surface.
+      </div>
+      <div class="legend">
+        <i style="--c:var(--viz-mep-pos)"></i><span>MEP +</span>
+        <i style="--c:var(--viz-mep-neg)"></i><span>MEP −</span>
+        <i style="--c:var(--viz-orb-pos)"></i><span>φ +</span>
+        <i style="--c:var(--viz-orb-neg)"></i><span>φ −</span>
+        <i style="--c:var(--viz-mlp-pos)"></i><span>logP</span>
+        <i style="--c:var(--viz-mlp-neg)"></i><span>polar</span>
+        <i style="--c:var(--viz-density)"></i><span>ρ</span>
+      </div>
+    </aside>
+    <div class="viewport">
+      <div class="well"></div>
+      <div class="mol"></div>
+      <span class="vlabel">1CBS · β-barrel · field ±10.0 kcal/mol</span>
+    </div>
+  </div>
+</div>
+</div>
+</section>
