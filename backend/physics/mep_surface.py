@@ -93,6 +93,34 @@ def estimated_scf_seconds(nao: int) -> float:
 # was the one it got wrong, and nothing in the output said so.
 ECP_FROM_Z = 37
 
+def nao_for(molblock: str, basis: str) -> int:
+    """Basis-function count, computed without running anything.
+
+    The queue needs to quote a cost BEFORE the job starts, and nao is the only
+    honest predictor — atom count is not. 120 atoms of C/H is ~360 basis
+    functions; 120 atoms containing six iodines is over 500. A cap expressed in
+    atoms bounds the wrong quantity, which is exactly how MAX_QM_ATOMS = 120
+    failed to stop a 43-atom heme from holding 22 cores for 36 minutes.
+    """
+    from pyscf import gto
+    mol = Chem.MolFromMolBlock(molblock, removeHs=False, sanitize=False)
+    if mol is None:
+        raise ValueError('cannot parse molfile')
+    conf = mol.GetConformer()
+    atoms = [(a.GetSymbol(),
+              (conf.GetAtomPosition(a.GetIdx()).x,
+               conf.GetAtomPosition(a.GetIdx()).y,
+               conf.GetAtomPosition(a.GetIdx()).z))
+             for a in mol.GetAtoms()]
+    pt = Chem.GetPeriodicTable()
+    charge = sum(a.GetFormalCharge() for a in mol.GetAtoms())
+    nelec = sum(pt.GetAtomicNumber(s) for s, _ in atoms) - charge
+    gmol = gto.M(atom=list(atoms), unit='Angstrom', basis=basis,
+                 ecp=_ecp_for(atoms, basis) or None, verbose=0,
+                 charge=charge, spin=nelec % 2)
+    return int(gmol.nao)
+
+
 
 
 def clamp_budget(value, default: float) -> float:
