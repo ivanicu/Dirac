@@ -127,9 +127,13 @@ _producer_id: str | None = None
 # this version is re-registered with different source — a forgotten bump is a
 # loud startup error, never a silently stale cache (design: migration 006).
 PRODUCER_SERVICE = 'dirac-fields'
-PRODUCER_VERSION = '1.7'
-PRODUCER_NOTES = ('security hardening: Host/Origin allowlist, basis whitelist, '
-                  'finite max_seconds clamp (5-principal review P0-prime)')
+PRODUCER_VERSION = '1.8'
+PRODUCER_NOTES = ('wall-clock deadline inside the SCF loop + measured cube-cost '
+                  'refusal; open-shell d/f metals refused without an explicit '
+                  'spin (group 12 exempt); salt stripping refuses to discard a '
+                  'coordination metal; iso_suggest = 97th percentile of |field| '
+                  'for mep/mlp; _eri dropped and the SCF cache bounded to 6 LRU; '
+                  'molblock refusals name the defect')
 
 
 
