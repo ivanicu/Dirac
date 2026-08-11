@@ -71,9 +71,15 @@ _producer_id: str | None = None
 # this version is re-registered with different source — a forgotten bump is a
 # loud startup error, never a silently stale cache (design: migration 006).
 PRODUCER_SERVICE = 'dirac-fields'
-PRODUCER_VERSION = '1.3'
-PRODUCER_NOTES = ('canonical-heavy-coords refactor shared by hash and the '
-                  'upcoming Kabsch coarse-read; cube output unchanged')
+PRODUCER_VERSION = '1.4'
+PRODUCER_NOTES = ('ECP attachment for Z>=37 under def2 bases; store-only-'
+                  'expensive cache policy (real-time is the default)')
+
+# Ivan's ruling, and the stale sweep proved it: 36 MB of stored cubes
+# represented 4.0 s of compute. Fields are REAL-TIME by default; the database
+# is for results whose recompute would make a human wait — a 365 s Fe-heme
+# SOSCF survives a restart, a 0.6 s caffeine SCF just runs again.
+CACHE_MIN_SECONDS = 10.0
 
 
 def _db(): return psycopg.connect(DB_DSN, autocommit=True)
@@ -701,7 +707,9 @@ class Handler(BaseHTTPRequestHandler):
             meta['cache'] = 'computed'
             print(f"[field] kind={kind} atoms={mol.GetNumAtoms()} "
                   f"t={meta['total_seconds']}s", flush=True)
-            if cacheable:
+            # Real-time is the default; only results expensive enough that a
+            # human would wait for the recompute earn a row.
+            if cacheable and meta['total_seconds'] >= CACHE_MIN_SECONDS:
                 db_put_cube(molfile_sha, kind, basis_key, cube, meta, mol=mol)
             self._send(200, {'ok': True, 'cube': cube, 'meta': meta})
         except Exception as e:
