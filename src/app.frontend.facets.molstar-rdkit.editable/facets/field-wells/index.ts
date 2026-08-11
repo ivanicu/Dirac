@@ -88,6 +88,118 @@ let activeKind: FieldKind | null = null;
 let activeVolume: Volume | null = null;
 let busy = false;
 
+/**
+ * Browser-side field cache — Ivan's architecture: a molecule's fields are
+ * solved on arrival and live HERE; switching fields is a cache swap, not a
+ * network roundtrip. The database is an EXPORT the user asks for (store=true),
+ * not a write-through. Keyed kind|basis, cleared when the molfile changes.
+ */
+const cubeCache = new Map<string, { cube: string, meta: FieldMeta }>();
+const pendingFetch = new Map<string, Promise<{ cube: string, meta: FieldMeta } | null>>();
+const PREFETCH_CLASSICAL: FieldKind[] = ['mep', 'mlp'];
+const PREFETCH_QUANTUM: FieldKind[] = ['homo', 'lumo', 'density'];
+/** Quantum prefetch only below this heavy-atom count — a background prefetch
+ * must never quietly start a six-minute Fe-heme SCF. */
+const PREFETCH_QM_MAX_HEAVY = 40;
+
+function currentBasis(): string {
+    return byId<HTMLSelectElement>('field-basis')?.value ?? 'sto-3g';
+}
+
+function cacheKey(kind: FieldKind): string {
+    return `${kind}|${Kinds[kind].quantum ? currentBasis() : 'none'}`;
+}
+
+function molfileHeavyAtoms(mf: string): number {
+    const counts = mf.split('\n')[3] ?? '';
+    return parseInt(counts.slice(0, 3), 10) || 0;
+}
+
+/** Fetch one field into the browser cache (deduplicated). Throws on backend
+ * refusal; returns null if the focused ligand changed while in flight. */
+async function fetchField(kind: FieldKind, store = false): Promise<{ cube: string, meta: FieldMeta } | null> {
+    const key = cacheKey(kind);
+    if (!store) {
+        const hit = cubeCache.get(key);
+        if (hit) return hit;
+        const pending = pendingFetch.get(key);
+        if (pending) return pending;
+    }
+    const requestMolfile = molfile;
+    const basis = currentBasis();
+    const p = (async () => {
+        try {
+            const resp = await fetch(`${BACKEND}/field`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ molfile: requestMolfile, kind, basis, store }),
+            });
+            const payload = await resp.json();
+            if (molfile !== requestMolfile) return null;
+            if (!payload.ok) throw new Error(payload.error);
+            const entry = { cube: payload.cube as string, meta: payload.meta as FieldMeta };
+            cubeCache.set(key, entry);
+            return entry;
+        } finally {
+            pendingFetch.delete(key);
+        }
+    })();
+    pendingFetch.set(key, p);
+    return p;
+}
+
+function setPrefetchNote(text: string) {
+    const el = byId('field-prefetch');
+    if (!el) return;
+    el.hidden = !text;
+    el.textContent = text;
+}
+
+/** Solve the molecule's fields into the browser cache, cheap ones first.
+ * Quantum fields are skipped above PREFETCH_QM_MAX_HEAVY heavy atoms. */
+async function prefetchAll() {
+    if (!molfile) return;
+    const startedFor = molfile;
+    const heavy = molfileHeavyAtoms(molfile);
+    const kinds = heavy <= PREFETCH_QM_MAX_HEAVY
+        ? [...PREFETCH_CLASSICAL, ...PREFETCH_QUANTUM]
+        : PREFETCH_CLASSICAL;
+    let done = 0;
+    const failed: string[] = [];
+    for (const kind of kinds) {
+        if (molfile !== startedFor) return;   // ligand changed mid-prefetch
+        setPrefetchNote(`Precomputing fields ${done}/${kinds.length} — ${Kinds[kind].label}…`);
+        try {
+            await fetchField(kind);
+        } catch {
+            failed.push(Kinds[kind].label);   // honest per-kind refusals (e.g. Gasteiger NaN)
+        }
+        done++;
+    }
+    if (molfile !== startedFor) return;
+    const skipNote = heavy > PREFETCH_QM_MAX_HEAVY ? ` (quantum on demand — ${heavy} heavy atoms)` : '';
+    setPrefetchNote(failed.length
+        ? `Fields cached in browser; unavailable: ${failed.join(', ')}${skipNote}`
+        : `All ${kinds.length} fields cached in browser${skipNote}.`);
+}
+
+/** Export the active field to the database — the user's explicit 入库. */
+async function saveActiveField() {
+    if (!activeKind || !molfile || busy) return;
+    const kind = activeKind;
+    setStatus(`Exporting ${Kinds[kind].label} to the database…`, 'busy');
+    try {
+        const entry = await fetchField(kind, true);
+        if (entry?.meta && (entry.meta as { stored?: boolean }).stored) {
+            setStatus(`${Kinds[kind].label} exported to the database.`, 'ok');
+        } else {
+            setStatus(`Export did not confirm storage — see backend log.`, 'error');
+        }
+    } catch (e) {
+        setStatus(`Export failed: ${e instanceof Error ? e.message : e}`, 'error');
+    }
+}
+
 function byId<T extends HTMLElement>(id: string): T | null {
     return document.getElementById(id) as T | null;
 }
@@ -229,37 +341,46 @@ async function updateIsoSurfaces() {
 async function requestField(kind: FieldKind) {
     if (!plugin || !molfile || busy) return;
     const spec = Kinds[kind];
-    // Captured at request time: if the focused ligand changes while the
-    // backend is computing, the stale response must be discarded — rendering
-    // it would place the PREVIOUS molecule's field into the new scene.
     const requestMolfile = molfile;
+
+    // Browser-cache path: solved on import, swapping fields costs no network.
+    const cached = cubeCache.get(cacheKey(kind));
+    if (cached) {
+        busy = true;
+        setButtonsEnabled();
+        try {
+            await renderCube(cached.cube, kind);
+            renderMeta(cached.meta);
+            setStatus(`${spec.label} rendered (browser cache).`, 'ok');
+        } finally {
+            busy = false;
+            setButtonsEnabled();
+        }
+        return;
+    }
+
     busy = true;
     setButtonsEnabled();
     setStatus(spec.quantum
         ? `Solving ${spec.label} — pyscf SCF on ${ligandLabel ?? 'ligand'}…`
         : `Computing ${spec.label}…`, 'busy');
     try {
-        const basis = byId<HTMLSelectElement>('field-basis')?.value ?? 'sto-3g';
-        const resp = await fetch(`${BACKEND}/field`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ molfile: requestMolfile, kind, basis }),
-        });
-        const payload = await resp.json();
-        if (molfile !== requestMolfile) {
+        const entry = await fetchField(kind);
+        if (entry === null || molfile !== requestMolfile) {
             setStatus('Ligand changed while computing — stale field discarded.', 'idle');
             return;
         }
-        if (!payload.ok) {
-            setStatus(`Backend refused: ${payload.error}`, 'error');
-            renderMeta(null);
-            return;
-        }
-        await renderCube(payload.cube, kind);
-        renderMeta(payload.meta);
+        await renderCube(entry.cube, kind);
+        renderMeta(entry.meta);
         setStatus(`${spec.label} rendered for ${ligandLabel ?? 'ligand'}.`, 'ok');
     } catch (e) {
-        setStatus(`Backend unreachable — start it with: backend/env/bin/python backend/field_server.py (${e instanceof Error ? e.message : e})`, 'error');
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes('fetch')) {
+            setStatus(`Backend unreachable — start it with: backend/env/bin/python backend/field_server.py (${msg})`, 'error');
+        } else {
+            setStatus(`Backend refused: ${msg}`, 'error');
+            renderMeta(null);
+        }
     } finally {
         busy = false;
         setButtonsEnabled();
@@ -297,6 +418,14 @@ export function initFieldWellsPanel(p: PluginContext) {
         void clearField();
         setStatus('Field cleared.', 'idle');
     });
+    byId('field-save')?.addEventListener('click', () => void saveActiveField());
+    // Changing basis invalidates the quantum entries only; classical fields
+    // have no basis. Cheapest correct move: refetch on demand.
+    byId<HTMLSelectElement>('field-basis')?.addEventListener('change', () => {
+        for (const key of [...cubeCache.keys()]) {
+            if (!key.endsWith('|none')) cubeCache.delete(key);
+        }
+    });
     setButtonsEnabled();
     void checkHealth();
 }
@@ -321,10 +450,18 @@ export function updateFieldWellsLigand(nextMolfile: string | null, label: string
     ligandLabel = label;
     const summary = byId('fields-summary');
     if (summary) summary.textContent = molfile ? (label ?? 'Ligand') : 'No ligand loaded';
-    if (changed && activeKind) {
-        void clearField();
-        setStatus('Ligand changed — previous field cleared.', 'idle');
-    } else if (!activeKind) {
+    if (changed) {
+        cubeCache.clear();
+        setPrefetchNote('');
+        if (activeKind) {
+            void clearField();
+            setStatus('Ligand changed — previous field cleared.', 'idle');
+        }
+        // Solve the new molecule's fields into the browser cache right away —
+        // by the time a button is clicked, the answer is usually local.
+        if (molfile) void prefetchAll();
+    }
+    if (!activeKind && !changed) {
         setStatus(molfile ? 'Pick a field to render its 3D well.' : 'Load a structure with a ligand first.', 'idle');
     }
     setButtonsEnabled();

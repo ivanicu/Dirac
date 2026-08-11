@@ -50,6 +50,9 @@ MAX_QM_ATOMS = 120     # with hydrogens; STO-3G HF beyond this is not interactiv
 DEFAULT_BASIS = 'sto-3g'
 DB_DSN = 'dbname=dirac user=ivan'
 CUBE_MEDIA_TYPE = 'chemical/x-gaussian-cube'
+# Bound on POST bodies: the daemon binds 0.0.0.0 now, and an unbounded read
+# lets any LAN peer feed it a multi-GB body (peer session's hardening, ported).
+MAX_BODY_BYTES = 8 * 1024 * 1024
 
 _scf_cache: dict[str, object] = {}
 _scf_lock = threading.Lock()
@@ -71,9 +74,9 @@ _producer_id: str | None = None
 # this version is re-registered with different source — a forgotten bump is a
 # loud startup error, never a silently stale cache (design: migration 006).
 PRODUCER_SERVICE = 'dirac-fields'
-PRODUCER_VERSION = '1.4'
-PRODUCER_NOTES = ('ECP attachment for Z>=37 under def2 bases; store-only-'
-                  'expensive cache policy (real-time is the default)')
+PRODUCER_VERSION = '1.5'
+PRODUCER_NOTES = ('explicit store flag: fields live in the browser cache, '
+                  'the DB is an export the user asks for (Ivan architecture)')
 
 # Ivan's ruling, and the stale sweep proved it: 36 MB of stored cubes
 # represented 4.0 s of compute. Fields are REAL-TIME by default; the database
@@ -659,6 +662,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/embed':
             try:
                 length = int(self.headers.get('Content-Length', '0'))
+                if length > MAX_BODY_BYTES:
+                    self._send(413, {'ok': False, 'error': 'request body too large'})
+                    return
                 req = json.loads(self.rfile.read(length))
                 t0 = time.time()
                 molfile, meta = embed_molecule(
@@ -677,6 +683,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get('Content-Length', '0'))
+            if length > MAX_BODY_BYTES:
+                self._send(413, {'ok': False, 'error': 'request body too large'})
+                return
             req = json.loads(self.rfile.read(length))
             molblock = req['molfile']
             kind = req.get('kind', 'mep')
@@ -707,10 +716,13 @@ class Handler(BaseHTTPRequestHandler):
             meta['cache'] = 'computed'
             print(f"[field] kind={kind} atoms={mol.GetNumAtoms()} "
                   f"t={meta['total_seconds']}s", flush=True)
-            # Real-time is the default; only results expensive enough that a
-            # human would wait for the recompute earn a row.
-            if cacheable and meta['total_seconds'] >= CACHE_MIN_SECONDS:
+            # Real-time is the default; a row is earned by being expensive to
+            # recompute, or REQUESTED: the browser holds the working cache and
+            # store=true is the user's explicit "export this to the database".
+            store = bool(req.get('store'))
+            if cacheable and (store or meta['total_seconds'] >= CACHE_MIN_SECONDS):
                 db_put_cube(molfile_sha, kind, basis_key, cube, meta, mol=mol)
+                meta['stored'] = True
             self._send(200, {'ok': True, 'cube': cube, 'meta': meta})
         except Exception as e:
             traceback.print_exc()

@@ -1079,6 +1079,7 @@
             main { grid-column: 1; grid-row: 3; }
         }
     </style>
+    <link rel="stylesheet" href="./theme-chamber.css">
 </head>
 <body>
     <div id="app">
@@ -1235,6 +1236,7 @@
                             <button type="button" class="field-btn" data-field="lumo">⚛ LUMO</button>
                             <button type="button" class="field-btn" data-field="density">◉ e⁻ density</button>
                             <button type="button" class="field-btn" data-field="mlp">💧 Lipophilicity</button>
+                            <button type="button" class="field-btn" id="field-save">💾 Save to DB</button>
                             <button type="button" class="field-btn" id="field-clear">✕ Clear</button>
                         </div>
                         <div class="field-controls">
@@ -1251,6 +1253,7 @@
                             </label>
                         </div>
                         <div id="field-status" class="field-status" data-tone="idle">Load a structure with a ligand first.</div>
+                        <div id="field-prefetch" class="field-status" data-tone="idle" hidden></div>
                         <div id="field-meta" class="field-meta"></div>
                     </div>
                 </section>
@@ -1391,6 +1394,7 @@
 
     <script src="./assets/rdkit/RDKit_minimal.js"></script>
     <script src="./dirac.js"></script>
+    <script src="./theme-chamber.js"></script>
     <script>
         // master-tab navigation: show one section at a time
         document.addEventListener('click', e => {
