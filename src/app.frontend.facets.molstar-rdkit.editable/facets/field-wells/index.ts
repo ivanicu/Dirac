@@ -54,15 +54,20 @@ interface KindSpec {
 }
 
 /** MEP convention: red = negative potential (electron-rich), blue = positive. */
+// Colors are the design system's --viz-* tokens (design/tokens.css, Night),
+// mid-saturation per Ivan's ruling: OKLCH chroma capped at the chroma of his
+// settled #e0af68 gold. Hue = meaning (blue +, red −), lightness = legibility;
+// only chroma was cut. Divergent pairs verified ≥0.10 ΔE apart by
+// design/check_palette.py — run it after touching any value here.
 const Kinds: Record<FieldKind, KindSpec> = {
-    mep: { label: 'Electrostatic well', iso: 8, diverging: true, unit: 'kcal/mol', posColor: 0x3b82f6, negColor: 0xf43f5e, quantum: false },
-    mep_qm: { label: 'QM potential well', iso: 0.05, diverging: true, unit: 'Ha/e', posColor: 0x3b82f6, negColor: 0xf43f5e, quantum: true },
-    homo: { label: 'HOMO', iso: 0.04, diverging: true, unit: 'amp', posColor: 0x34d399, negColor: 0xa78bfa, quantum: true },
-    lumo: { label: 'LUMO', iso: 0.04, diverging: true, unit: 'amp', posColor: 0x34d399, negColor: 0xa78bfa, quantum: true },
-    density: { label: 'e⁻ density', iso: 0.05, diverging: false, unit: 'e/Bohr³', posColor: 0xf59e0b, negColor: 0xf59e0b, quantum: true },
+    mep: { label: 'Electrostatic well', iso: 8, diverging: true, unit: 'kcal/mol', posColor: 0x6788bc, negColor: 0xbd777b, quantum: false },
+    mep_qm: { label: 'QM potential well', iso: 0.05, diverging: true, unit: 'Ha/e', posColor: 0x6788bc, negColor: 0xbd777b, quantum: true },
+    homo: { label: 'HOMO', iso: 0.04, diverging: true, unit: 'amp', posColor: 0x7fc7a5, negColor: 0xa397d3, quantum: true },
+    lumo: { label: 'LUMO', iso: 0.04, diverging: true, unit: 'amp', posColor: 0x7fc7a5, negColor: 0xa397d3, quantum: true },
+    density: { label: 'e⁻ density', iso: 0.05, diverging: false, unit: 'e/Bohr³', posColor: 0xd8aa75, negColor: 0xd8aa75, quantum: true },
     // Default iso must sit BELOW the hydrophilic side's typical |min| (~0.06
     // on aspirin) or the cyan lobes never exist and the field looks all-grease.
-    mlp: { label: 'Lipophilicity', iso: 0.05, diverging: true, unit: 'MLP', posColor: 0xeab308, negColor: 0x22d3ee, quantum: false },
+    mlp: { label: 'Lipophilicity', iso: 0.05, diverging: true, unit: 'MLP', posColor: 0xd5b979, negColor: 0x74ccdd, quantum: false },
 };
 
 interface FieldMeta {
