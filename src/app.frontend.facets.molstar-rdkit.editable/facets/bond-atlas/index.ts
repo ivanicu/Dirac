@@ -185,9 +185,23 @@ function renderReadout(host: HTMLElement) {
     ].map(([v, k]) => `<span class="bond-atlas-stat"><b>${v}</b>${k}</span>`).join('');
 }
 
-const CHANNEL_LABELS: [string, string][] = [
-    ['ring', 'ring context'], ['swing', 'swing mass'], ['rot', 'rotatable'],
-    ['bridge', 'load-bearing'], ['waist', 'waist'], ['sym', 'equivalence'], ['hb', 'donor/acceptor'],
+/**
+ * Each row draws the ink it controls.
+ *
+ * The prototype kept a colour key in a band under the drawing while the toggles lived in a
+ * list beside it, so reading the encoding and operating it were two different places on
+ * screen. DESIGN.md §1 already asks for the opposite — "the decoder ships with the
+ * encoding" — and the fix costs a 46px inline SVG per row: the menu becomes the legend and
+ * the band it needed becomes drawing area.
+ */
+const CHANNEL_LABELS: [string, string, string][] = [
+    ['ring', 'ring context', `<svg width="42" height="12">${[['var(--text-3)', 0], ['var(--viz-cat-6, var(--warn))', 1], ['var(--viz-cat-3, var(--text-2))', 2], ['var(--viz-cat-1, var(--accent))', 3]].map(([c, i]) => `<rect x="${(i as number) * 11}" y="3" width="9" height="6" fill="${c}"/>`).join('')}</svg>`],
+    ['swing', 'swing mass', '<svg width="42" height="12"><line x1="1" y1="6" x2="18" y2="6" stroke="var(--text-2)" stroke-width="1.2"/><line x1="24" y1="6" x2="41" y2="6" stroke="var(--text-2)" stroke-width="4.5"/></svg>'],
+    ['rot', 'rotatable', '<svg width="42" height="12"><line x1="1" y1="6" x2="41" y2="6" stroke="var(--text-2)" stroke-width="2.2" stroke-dasharray="5 3"/></svg>'],
+    ['bridge', 'load-bearing', '<svg width="42" height="12"><line x1="1" y1="6" x2="41" y2="6" stroke="var(--danger, var(--high))" stroke-width="8" stroke-opacity=".22"/><line x1="1" y1="6" x2="41" y2="6" stroke="var(--text-2)" stroke-width="2.2"/></svg>'],
+    ['waist', 'waist', '<svg width="42" height="12"><line x1="1" y1="6" x2="41" y2="6" stroke="var(--text-2)" stroke-width="2"/><circle cx="21" cy="6" r="5" fill="none" stroke="var(--danger, var(--high))" stroke-dasharray="2 2"/></svg>'],
+    ['sym', 'equivalence', `<svg width="42" height="12">${['var(--viz-cat-3, var(--warn))', 'var(--viz-cat-2, var(--accent))', 'var(--viz-cat-4, var(--unavail))'].map((c, i) => `<circle cx="${7 + i * 13}" cy="6" r="4.6" fill="var(--surface)" stroke="${c}" stroke-width="2"/>`).join('')}</svg>`],
+    ['hb', 'donor/acceptor', '<svg width="42" height="12"><circle cx="12" cy="6" r="4.6" fill="none" stroke="var(--info, var(--accent))" stroke-width="1.5"/><circle cx="29" cy="6" r="4.6" fill="none" stroke="var(--danger, var(--high))" stroke-width="1.5"/></svg>'],
 ];
 
 /** Called once, after the Ligand panel exists. */
@@ -195,8 +209,9 @@ export function initBondAtlas() {
     const controls = document.getElementById('bond-atlas-channels');
     if (!controls || controls.dataset.ready) return;
     controls.dataset.ready = 'true';
-    controls.innerHTML = CHANNEL_LABELS.map(([k, label]) =>
-        `<label class="bond-atlas-channel"><input type="checkbox" data-channel="${k}" checked> ${label}</label>`).join('');
+    controls.innerHTML = CHANNEL_LABELS.map(([k, label, sample]) =>
+        `<label class="bond-atlas-channel"><input type="checkbox" data-channel="${k}" checked>` +
+        `<span class="bond-atlas-swatch">${sample}</span><span>${label}</span></label>`).join('');
     controls.querySelectorAll<HTMLInputElement>('input[data-channel]').forEach(input => {
         input.addEventListener('change', () => {
             state.channels[input.dataset.channel!] = input.checked;

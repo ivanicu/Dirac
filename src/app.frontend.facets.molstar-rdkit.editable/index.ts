@@ -1546,6 +1546,33 @@ class MolecularVfxLab {
     private async applyRepresentationAndVisuals(resetCamera = true) {
         if (!this.workbench) return;
         const manager = this.workbench.plugin.managers.structure.component;
+        const canvas3d = this.workbench.plugin.canvas3d;
+        // Hold the last good frame for the whole transaction. Measured before this line
+        // existed: switching representation presented a 409 ms window in which the canvas
+        // was #0d141b — mol*'s own scene background, restored by the theme's 1.5 s poll
+        // rather than by anything that knew the switch had happened — and inside that
+        // window the molecule appeared in mol*'s default colours before the app's overpaint
+        // landed. Both are intermediate states that were never meant to be seen, so the fix
+        // is not to make them shorter but to not present them: pause(true) cancels the
+        // animation frame and blocks draws, and the canvas keeps showing the last complete
+        // frame until resume().
+        canvas3d?.pause(true);
+        try {
+            await this.applyRepresentationAndVisualsInner(manager, resetCamera);
+        } finally {
+            // Repaint the background from the theme in the SAME path that disturbed it,
+            // before the first frame after resume. The poll in theme-chamber.js stays as a
+            // safety net for presets this path does not own, but nothing now waits on it.
+            try { await this.workbench.setBackground(Color(sceneBackgroundColor())); } catch { /* theme is best-effort */ }
+            canvas3d?.resume();
+        }
+    }
+
+    private async applyRepresentationAndVisualsInner(
+        manager: NonNullable<typeof this.workbench>['plugin']['managers']['structure']['component'],
+        resetCamera: boolean,
+    ) {
+        if (!this.workbench) return;
         await this.removeMesoscaleCopies();
         const structure = manager.pivotStructure;
         if (!structure) throw new Error('Loaded structure is unavailable');
