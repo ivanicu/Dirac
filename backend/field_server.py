@@ -48,6 +48,47 @@ PORT = 8901
 BOHR = 0.529177210859  # Å per Bohr
 MAX_QM_ATOMS = 120     # with hydrogens; STO-3G HF beyond this is not interactive
 DEFAULT_BASIS = 'sto-3g'
+
+# ── the wall-clock bound ────────────────────────────────────────────────────
+#
+# MAX_QM_ATOMS caps SIZE, and size was never what ran away. Measured
+# 2026-08-10: one click on HEM (43 heavy atoms — comfortably under the cap)
+# held 22 cores for 36 minutes and was still going when it was killed by hand.
+# HF cost is O(nao^4) per ITERATION and the iteration count is unbounded, so an
+# atom count cannot bound the clock. This does, exactly, from inside the SCF
+# loop — a prediction can be wrong, a deadline cannot.
+DEFAULT_MAX_SECONDS = 90.0
+MAX_MAX_SECONDS = 900.0        # a caller may raise the budget, but not to infinity
+SOSCF_MIN_REMAINING = 15.0     # do not start the second-order rescue without room
+
+# ── cube-step cost, MEASURED on this box 2026-08-10, not assumed ────────────
+#
+# The MEP cube evaluates one-electron potential integrals — cost per grid point
+# scales with nao². Fitted on benzene/aspirin/caffeine (nao 36/73/80):
+#     cube_s ≈ 2.6 + 7.4e-9 × npoints × nao²      (predicts benzene 3.8 vs 3.6 measured)
+#
+# Orbital and density cubes are a DIFFERENT story and the honest answer is that
+# three points did not establish a law: measured 2.76 / 1.05 / 2.43 s, which is
+# not monotonic in nao — aspirin (nao 73) came in faster than benzene (nao 36),
+# so what is being timed is mostly fixed overhead and thread warm-up. Rather
+# than fit a scaling to noise, the orbital branch carries the LARGEST observed
+# coefficient as an upper envelope. It over-predicts by up to ~3x, which is the
+# safe direction for a gate whose job is to refuse before burning the clock,
+# and the refusal message tells the caller exactly how to overrule it.
+CUBE_GRID_MEP = 50             # explicit: the potential is smooth, 80³ costs 4x
+CUBE_GRID_ORB = 80             # pyscf's cubegen default for orbital/density
+CUBE_MEP_FIXED = 2.6
+CUBE_MEP_MARGINAL = 7.4e-9     # seconds per (grid point × nao²)
+CUBE_ORB_FIXED = 1.0
+CUBE_ORB_MARGINAL = 1.5e-7     # upper envelope, per (grid point × nao)
+
+# Transition metals whose ground state is NOT the closed-shell singlet that
+# `nelec % 2` silently assumes. Group 12 (Zn/Cd/Hg) is deliberately absent: d10
+# really is a singlet, and Zn sits in a great many drug targets — refusing it
+# would be over-refusal. This is the iodine-ECP lesson one element over: the
+# wrong answer converges, balances charge, and passes every honesty gate.
+OPEN_SHELL_METAL_Z = (set(range(21, 30)) | set(range(39, 48))
+                      | set(range(57, 80)) | set(range(89, 104)))
 DB_DSN = 'dbname=dirac user=ivan'
 CUBE_MEDIA_TYPE = 'chemical/x-gaussian-cube'
 # Bound on POST bodies: the daemon binds 0.0.0.0 now, and an unbounded read
@@ -502,7 +543,43 @@ def ecp_for(syms: list[str], basis: str) -> dict:
     return ecp
 
 
-def run_scf(mol: Chem.Mol, basis: str):
+class FieldBudgetExceeded(Exception):
+    """Raised from inside the SCF loop when the wall-clock budget runs out.
+
+    Its own class, not ValueError: the HTTP layer reports it with the elapsed
+    time and the budget, and a caller can tell 'too expensive' apart from
+    'chemically impossible' — the two need different next moves from a chemist.
+    """
+
+
+def required_spin(syms: list[str], charge: int) -> tuple[int, str | None]:
+    """The spin to run, and — if the molecule contains an open-shell metal —
+    the reason a caller must state one explicitly.
+
+    `nelec % 2` answers 'is the electron count odd', which is not the same
+    question as 'what is the ground state'. Fe(II) porphyrin has an even count
+    and a QUINTET ground state; computing it as a singlet does not fail, it
+    converges to a state the molecule is not in. Refusing costs a second;
+    the alternative cost 36 minutes and produced a number with no referent.
+    """
+    pt = Chem.GetPeriodicTable()
+    nelec = sum(pt.GetAtomicNumber(s) for s in syms) - charge
+    default = nelec % 2
+    open_shell = sorted({s for s in syms
+                         if pt.GetAtomicNumber(s) in OPEN_SHELL_METAL_Z})
+    if not open_shell:
+        return default, None
+    return default, (
+        f'{"/".join(open_shell)} is an open-shell metal: the ground state is '
+        f'almost certainly not the spin={default} state this would compute, and '
+        f'the SCF would either grind or converge to a state the molecule is not '
+        f'in. Pass an explicit "spin" (number of unpaired electrons, e.g. 4 for '
+        f'high-spin Fe(II)) to run it anyway.'
+    )
+
+
+def run_scf(mol: Chem.Mol, basis: str, max_seconds: float = DEFAULT_MAX_SECONDS,
+            spin: int | None = None):
     from pyscf import gto, scf
 
     syms, coords = mol_atoms(mol)
@@ -511,13 +588,22 @@ def run_scf(mol: Chem.Mol, basis: str):
             f'{len(syms)} atoms (with H) exceeds the interactive QM cap of {MAX_QM_ATOMS}'
         )
     charge = sum(a.GetFormalCharge() for a in mol.GetAtoms())
-    nelec = sum(a.GetAtomicNum() for a in mol.GetAtoms()) - charge
-    spin = nelec % 2  # singlet or doublet; anything fancier needs explicit input
+    default_spin, open_shell_reason = required_spin(syms, charge)
+    if spin is None:
+        if open_shell_reason:
+            raise ValueError(open_shell_reason)
+        spin = default_spin
+    elif (spin % 2) != (default_spin % 2):
+        raise ValueError(
+            f'spin={spin} is impossible for {sum(1 for _ in syms)} atoms at '
+            f'charge {charge}: the electron count fixes the parity, so the '
+            f'number of unpaired electrons must be {default_spin}, {default_spin + 2}, …'
+        )
     ecp = ecp_for(syms, basis)
 
     key = hashlib.sha256(
         (basis + repr(sorted(ecp.items())) + repr(syms)
-         + repr(coords.round(4).tolist()) + str(charge)).encode()
+         + repr(coords.round(4).tolist()) + str(charge) + f'|s{spin}').encode()
     ).hexdigest()
     with _scf_lock:
         if key in _scf_cache:
@@ -532,20 +618,43 @@ def run_scf(mol: Chem.Mol, basis: str):
     mf = scf.RHF(gmol) if spin == 0 else scf.UHF(gmol)
     mf.max_cycle = 120
     t0 = time.time()
+    deadline = t0 + max_seconds
+
+    # The bound that actually holds. pyscf calls this once per SCF cycle, so an
+    # unbounded iteration count becomes a bounded wall clock; raising here
+    # unwinds out of kernel() instead of running to max_cycle.
+    cycles = [0]
+
+    def _watchdog(envs):
+        cycles[0] += 1
+        if time.time() > deadline:
+            raise FieldBudgetExceeded(
+                f'SCF exceeded its {max_seconds:.0f} s budget after {cycles[0]} '
+                f'cycles ({int(gmol.nao)} basis functions, spin={spin}). Raise '
+                f'"max_seconds", pick a smaller basis, or choose a classical '
+                f'field — the quantum path is not interactive for this molecule.'
+            )
+    mf.callback = _watchdog
+
     energy = mf.kernel()
     method = 'RHF' if spin == 0 else 'UHF'
     if not mf.converged:
         # Plain DIIS stalls on transition-metal ligands (measured: Fe-heme,
         # 120 cycles, no convergence). Second-order SCF restarted from the
-        # stalled MOs is the standard rescue.
-        mf = mf.newton()
-        energy = mf.kernel()
-        method += '+SOSCF'
+        # stalled MOs is the standard rescue — but it is not free, and starting
+        # it with two seconds left just spends the rest of the budget to fail
+        # in a second place. Convergence is reported either way.
+        remaining = deadline - time.time()
+        if remaining >= SOSCF_MIN_REMAINING:
+            mf = mf.newton()
+            mf.callback = _watchdog
+            energy = mf.kernel()
+            method += '+SOSCF'
     result = {
         'gmol': gmol, 'mf': mf, 'energy': float(energy), 'method': method,
         'converged': bool(mf.converged), 'charge': charge, 'spin': spin,
         'natoms': len(syms), 'nbasis': int(gmol.nao), 'seconds': time.time() - t0,
-        'ecp': sorted(ecp) if ecp else [],
+        'ecp': sorted(ecp) if ecp else [], 'scf_cycles': cycles[0],
     }
     # Only positive results are cached: caching an unconverged SCF would make
     # every retry fail instantly from the cache, forever.
@@ -566,10 +675,11 @@ def _cubegen_to_text(fn, *args, **kwargs) -> str:
         os.unlink(path)
 
 
-def field_quantum(mol: Chem.Mol, kind: str, basis: str):
+def field_quantum(mol: Chem.Mol, kind: str, basis: str,
+                  max_seconds: float = DEFAULT_MAX_SECONDS, spin: int | None = None):
     from pyscf.tools import cubegen
 
-    res = run_scf(mol, basis)
+    res = run_scf(mol, basis, max_seconds=max_seconds, spin=spin)
     if not res['converged']:
         raise ValueError(
             f"SCF did not converge (E={res['energy']:.6f} Ha, basis={basis}, "
@@ -592,6 +702,7 @@ def field_quantum(mol: Chem.Mol, kind: str, basis: str):
         'natoms': res['natoms'], 'nbasis': res['nbasis'],
         'ecp': res['ecp'],
         'scf_seconds': round(res['seconds'], 2),
+        'scf_cycles': res.get('scf_cycles'),
         'homo_ev': float(mo_energy[nocc - 1] * 27.2114),
         'lumo_ev': float(mo_energy[nocc] * 27.2114) if nocc < len(mo_energy) else None,
     }
@@ -600,6 +711,31 @@ def field_quantum(mol: Chem.Mol, kind: str, basis: str):
     dm = mf.make_rdm1()
     if res['spin'] != 0:
         dm = dm[0] + dm[1]
+
+    # ── the cube step needs a DIFFERENT bound than the SCF, and the difference
+    # is not a compromise. An SCF has an unbounded loop, so only a deadline
+    # inside it can hold; cubegen does a KNOWN amount of work — grid points
+    # times basis functions, both fixed before it starts — so a prediction is
+    # sound there in a way it never is for the SCF. Measured on this box.
+    # (Found by the coverage sweep: a 30 s budget returned in 38.9 s, because
+    # the watchdog stopped at the SCF and the cube ran free behind it.)
+    if kind == 'mep_qm':
+        npoints = CUBE_GRID_MEP ** 3
+        predicted = CUBE_MEP_FIXED + CUBE_MEP_MARGINAL * npoints * res['nbasis'] ** 2
+    else:
+        npoints = CUBE_GRID_ORB ** 3
+        predicted = CUBE_ORB_FIXED + CUBE_ORB_MARGINAL * npoints * res['nbasis']
+    remaining = max_seconds - res['seconds']
+    if predicted > remaining:
+        raise FieldBudgetExceeded(
+            f'the SCF converged in {res["seconds"]:.0f} s but the {kind} cube '
+            f'needs about {predicted:.0f} s more ({npoints:,} grid points × '
+            f'{res["nbasis"]} basis functions) and only {max(remaining, 0):.0f} s '
+            f'of the {max_seconds:.0f} s budget is left. Raise "max_seconds" — '
+            f'the wavefunction is already cached, so the retry pays for the '
+            f'cube alone.'
+        )
+    t_cube = time.time()
 
     if kind == 'homo':
         cube = _cubegen_to_text(
@@ -618,9 +754,12 @@ def field_quantum(mol: Chem.Mol, kind: str, basis: str):
         # The potential is smooth — 50^3 is visually indistinguishable and 4x
         # cheaper.
         cube = _cubegen_to_text(
-            lambda m, p: cubegen.mep(m, p, dm, nx=50, ny=50, nz=50), gmol)
+            lambda m, p: cubegen.mep(m, p, dm, nx=CUBE_GRID_MEP,
+                                     ny=CUBE_GRID_MEP, nz=CUBE_GRID_MEP), gmol)
     else:
         raise ValueError(f'unknown quantum kind {kind!r}')
+    meta['cube_seconds'] = round(time.time() - t_cube, 2)
+    meta['cube_predicted_seconds'] = round(predicted, 1)
     return cube, meta
 
 
@@ -689,8 +828,19 @@ class Handler(BaseHTTPRequestHandler):
             # satisfies the schema's classical/quantum pairing checks. mlp is
             # not in the app.field_kind enum and costs ~0.03 s — never cached.
             basis_key = 'none' if kind == 'mep' else basis
+            max_seconds = min(float(req.get('max_seconds', DEFAULT_MAX_SECONDS)),
+                              MAX_MAX_SECONDS)
+            spin = req.get('spin')
+            spin = int(spin) if spin is not None else None
             molfile_sha = hashlib.sha256(molblock.encode()).digest()
-            cacheable = kind in ('mep', 'mep_qm', 'homo', 'lumo', 'density')
+            # An explicit spin makes the SAME molfile give a DIFFERENT field,
+            # and the persistent cache is keyed (molfile, kind, basis) with no
+            # room for it. Rather than let a high-spin heme be served to a
+            # request that asked for the singlet, spin-overridden runs bypass
+            # the durable cache in both directions. The in-process _scf_cache
+            # does carry spin in its key and still applies.
+            cacheable = (kind in ('mep', 'mep_qm', 'homo', 'lumo', 'density')
+                         and spin is None)
 
             hit = db_get_cube(molfile_sha, kind, basis_key) if cacheable else None
             if hit is not None:
@@ -706,7 +856,8 @@ class Handler(BaseHTTPRequestHandler):
             elif kind == 'mlp':
                 cube, meta = field_mlp(mol)
             else:
-                cube, meta = field_quantum(mol, kind, basis)
+                cube, meta = field_quantum(mol, kind, basis,
+                                           max_seconds=max_seconds, spin=spin)
             meta['total_seconds'] = round(time.time() - t0, 2)
             meta['cache'] = 'computed'
             print(f"[field] kind={kind} atoms={mol.GetNumAtoms()} "
@@ -721,9 +872,17 @@ class Handler(BaseHTTPRequestHandler):
                     kwargs={'mol': mol}, daemon=True).start()
                 meta['stored'] = True
             self._send(200, {'ok': True, 'cube': cube, 'meta': meta})
+        except FieldBudgetExceeded as e:
+            # Not an error in the molecule — an error in what was asked of it.
+            # Typed separately so the panel can offer "run it anyway with a
+            # bigger budget" instead of showing a chemist a red failure for a
+            # calculation that was merely slow.
+            print(f'[field] budget exceeded: {e}', flush=True)
+            self._send(200, {'ok': False, 'error': str(e), 'reason': 'budget'})
         except Exception as e:
             traceback.print_exc()
-            self._send(200, {'ok': False, 'error': str(e)})
+            reason = 'unsupported' if isinstance(e, ValueError) else 'internal'
+            self._send(200, {'ok': False, 'error': str(e), 'reason': reason})
 
     def log_message(self, *args):
         pass
