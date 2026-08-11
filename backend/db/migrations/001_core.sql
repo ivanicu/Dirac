@@ -815,8 +815,10 @@ GRANT USAGE ON ALL SEQUENCES IN SCHEMA chem, audit TO dirac_app;
 -- absence. Purging is a migration-role operation with a human behind it.
 REVOKE DELETE ON ALL TABLES IN SCHEMA chem, bio, design, meta FROM dirac_app;
 
-INSERT INTO meta.migration (filename, sha256)
-VALUES ('001_core.sql', digest('001_core.sql', 'sha256'))
+-- 000 runs before meta.migration exists, so it is recorded here on its behalf.
+INSERT INTO meta.migration (filename, sha256) VALUES
+    ('000_extensions.sql', digest('000_extensions.sql', 'sha256')),
+    ('001_core.sql',       digest('001_core.sql', 'sha256'))
 ON CONFLICT (filename) DO NOTHING;
 
 COMMIT;

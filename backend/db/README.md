@@ -28,9 +28,18 @@ psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/migrations/001_core.sql
 psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/migrations/002_vocabulary.sql
 psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/migrations/003_audit_partition_root.sql
 psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/migrations/004_scf_method_split.sql
+psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/migrations/005_numeric_hygiene.sql
 
-# gates — run after EVERY migration; 22 attacks + 12 positive controls
+# or, from scratch, in order — the migrations are self-contained (000 installs
+# the extensions) and this is exactly what stress_test.sh verifies every run
+for f in backend/db/migrations/*.sql; do psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f "$f"; done
+
+# gates — run after EVERY migration; 27 attacks + 13 positive controls
 psql -U ivan -d dirac -v ON_ERROR_STOP=1 -f backend/db/check_constraints.sql
+
+# brute force — rebuilds into a throwaway DB, loads N synthetic compounds,
+# measures registration throughput, HNSW build, and similarity RECALL
+bash backend/db/stress_test.sh 20000 100
 
 # register the Designer screening library (68 molecules, RDKit-standardized parents)
 backend/env/bin/python backend/db/load_library.py | psql -U ivan -d dirac -v ON_ERROR_STOP=1
@@ -88,8 +97,46 @@ index; nothing else in the schema has to change.
   store cannot hold a mislabelled object.
 - A cached quantum field must carry `converged = true`. The backend refuses to
   ship a decorative field and the cache may not resurrect one.
+- No NaN and no Infinity in any numeric column. `CHECK (x >= 0)` does **not**
+  give you this: NaN compares greater than every number in PostgreSQL and
+  passes every one-sided test. A two-sided range is NaN-safe; everything else
+  needs `meta.is_finite()`, which migration 005 applies to all 33 exposed
+  numeric columns by looping over `information_schema` rather than by hand.
+- A potency may not be zero or negative (`meta.requires_positive_value`), but a
+  percent inhibition may — activation reads negative and noise reads over 100.
 - The SCF method is two columns, not one string: `scf_reference` (RHF / UHF /
   ROHF / none) and `scf_converger` (diis / soscf / newton / none). Pass the
   backend's own label through `app.parse_scf_method('RHF+SOSCF')` to get the
   pair, and `app.scf_method_label(...)` to get it back for display. An
   unrecognised label raises: a new solver is a migration, not a free-text row.
+
+## What brute force found that hand-written gates did not
+
+`stress_test.sh` and an exhaustive adversarial sweep produced four defects the
+40 curated gates had missed, because a curated gate can only test the failure
+its author already imagined:
+
+1. **The migrations were not self-contained.** `001` assumed extensions that had
+   been installed by hand in an ad-hoc session, so the schema applied on this
+   machine and failed on an empty database. The only real copy was the running
+   server. Fixed by `000_extensions.sql`; the rebuild is now re-verified on
+   every stress run.
+2. **NaN passed every one-sided numeric check** and then passed the activity
+   view's `value_canonical > 0` filter, so one row turned a compound's geometric
+   mean into NaN with no error. Fixed in `005`.
+3. **Negative and zero potencies were accepted.** An IC50 of −45 nM registered
+   without complaint.
+4. **The exhaustive `result_type × unit` cross-product is clean**: all 832
+   combinations tried, exactly the 63 declared-legal pairs accepted, every
+   rejection the intended foreign-key violation. Sampling would not have shown
+   that the accepted set is *exactly* the declared set.
+
+The recall measurement carries its own warning. The first run reported
+**id-recall 0.57, flat across a 10× ef_search sweep** — which reads as a broken
+index. It was not: an average of **70 rows tie at the k-th distance** in
+clustered fingerprint data, so top-k membership is arbitrary and id-overlap
+measures tie-breaking, not misses. Distance-recall is 0.935 → 0.982 and rises
+with `ef_search`, which is the behaviour an approximate index should have.
+Both numbers are reported for that reason: the flattering one alone would hide
+a real defect, and the alarming one alone would have condemned the index for
+the test data's own ties.

@@ -270,6 +270,53 @@ SELECT pg_temp.expect_reject('A19 excluded dose point with no justification', '2
     INSERT INTO bio.dose_point (curve_id, ordinal, conc_nm, response, is_excluded)
     SELECT id, 1, 100, 45, true FROM c $$);
 
+-- ── numeric hygiene (found by brute force, held here) ──────────────────────
+-- NaN compares GREATER than every number in PostgreSQL, so it passes any
+-- one-sided `>= 0` check and then passes the activity view's `> 0` filter and
+-- poisons the geometric mean for the whole compound. These five gates are the
+-- adversarial sweep that found it, frozen.
+
+SELECT pg_temp.expect_reject('A24 NaN as a measured value', '23514', $$
+    INSERT INTO bio.result (assay_id, compound_id, batch_id, result_type, value_num, unit,
+                            evidence_level, measured_on)
+    SELECT '22222222-2222-2222-2222-222222222222', compound_a,
+           '66666666-6666-6666-6666-666666666666', 'IC50', 'NaN'::numeric, 'nM',
+           'measured', DATE '2026-06-10' FROM fx $$);
+
+SELECT pg_temp.expect_reject('A25 Infinity as a measured value', '23514', $$
+    INSERT INTO bio.result (assay_id, compound_id, batch_id, result_type, value_num, unit,
+                            evidence_level, measured_on)
+    SELECT '22222222-2222-2222-2222-222222222222', compound_a,
+           '66666666-6666-6666-6666-666666666666', 'IC50', 'Infinity'::numeric, 'nM',
+           'measured', DATE '2026-06-11' FROM fx $$);
+
+SELECT pg_temp.expect_reject('A26 negative potency', '23514', $$
+    INSERT INTO bio.result (assay_id, compound_id, batch_id, result_type, value_num, unit,
+                            evidence_level, measured_on)
+    SELECT '22222222-2222-2222-2222-222222222222', compound_a,
+           '66666666-6666-6666-6666-666666666666', 'IC50', -45, 'nM',
+           'measured', DATE '2026-06-12' FROM fx $$);
+
+SELECT pg_temp.expect_reject('A27 zero potency', '23514', $$
+    INSERT INTO bio.result (assay_id, compound_id, batch_id, result_type, value_num, unit,
+                            evidence_level, measured_on)
+    SELECT '22222222-2222-2222-2222-222222222222', compound_a,
+           '66666666-6666-6666-6666-666666666666', 'IC50', 0, 'nM',
+           'measured', DATE '2026-06-13' FROM fx $$);
+
+SELECT pg_temp.expect_reject('A28 NaN descriptor', '23514', $$
+    INSERT INTO chem.descriptor (compound_id, name, value, toolkit_id)
+    SELECT compound_a, 'qed', 'NaN'::numeric, toolkit FROM fx $$);
+
+-- A percent inhibition legitimately reads negative (activation) or above 100
+-- (noise). Over-constraining is its own way of losing real data.
+SELECT pg_temp.expect_accept('P12 negative percent inhibition is real data', $$
+    INSERT INTO bio.result (assay_id, compound_id, batch_id, result_type, value_num, unit,
+                            evidence_level, measured_on)
+    SELECT '22222222-2222-2222-2222-222222222222', compound_a,
+           '66666666-6666-6666-6666-666666666666', 'percent_inhibition', -12.5, 'percent',
+           'measured', DATE '2026-06-14' FROM fx $$);
+
 -- ── the generated canonical value must actually convert ────────────────────
 
 DO $$
