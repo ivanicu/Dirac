@@ -129,12 +129,14 @@
 
         .master-nav {
             display: flex;
-            flex-wrap: wrap; /* a 7th tab wraps to a second row instead of vanishing */
+            flex-wrap: wrap;
             gap: 2px;
             padding: 0 8px;
             border-bottom: 1px solid var(--border);
             background: var(--surface);
             min-width: 0;
+            max-width: 100%;
+            overflow: hidden;
         }
         .master-tab {
             position: relative;
