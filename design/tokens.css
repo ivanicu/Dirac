@@ -1,0 +1,155 @@
+/**
+ * Dirac — design tokens. THE single source of visual truth.
+ *
+ * Law (DESIGN.md §2): a theme is a TOKEN SWAP and nothing else. No theme may
+ * introduce selectors, poll the runtime, or fight the cascade; it redefines
+ * the custom properties below under a [data-theme] scope and stops.
+ *
+ * The app's inline :root block and theme-fascia.css/theme-chamber.css predate
+ * this file; migration onto it is architecture phase P2. Until then this file
+ * is canonical for NEW surfaces (design showcase, admin, auth) and the target
+ * for the migration — not a second home: the old blocks are scheduled to die.
+ */
+
+:root {
+    /* ── color · surfaces (Dirac Night — canonical dark) ─────────────── */
+    --bg: #0a0e14;
+    --surface: #131a23;
+    --surface-2: #1a2230;
+    --surface-3: #232d3d;
+    --border: #232c3a;
+    --border-strong: #2e3a4d;
+
+    /* ── color · content ─────────────────────────────────────────────── */
+    --text: #e8edf5;
+    --text-2: #9aa5b8;
+    --text-3: #6b7689;
+
+    /* ── color · semantic ────────────────────────────────────────────── */
+    --accent: #7dd3c0;          /* interactive / selected / ok-ish        */
+    --accent-soft: #1c3a35;
+    --ok: #59d0a5;
+    --ok-soft: #12291f;
+    --warn: #d4a574;
+    --warn-soft: #2b2115;
+    --danger: #e1a18e;          /* errors, refusals, destructive          */
+    --danger-soft: #2b1a15;
+    --info: #7aa2f7;
+    --info-soft: #16202f;
+
+    /* ── color · data-viz (scientific fields — brand-level assets) ───── */
+    /* MEP / QM potential: chemistry convention, blue = +, red = −        */
+    --viz-mep-pos: #3b82f6;
+    --viz-mep-neg: #f43f5e;
+    /* orbital phase (HOMO/LUMO)                                          */
+    --viz-orb-pos: #34d399;
+    --viz-orb-neg: #a78bfa;
+    /* lipophilicity: gold = greasy, aqua = polar                         */
+    --viz-mlp-pos: #eab308;
+    --viz-mlp-neg: #22d3ee;
+    /* electron density (single-signed)                                   */
+    --viz-density: #f59e0b;
+    /* colorblind-safe alternates (Okabe–Ito blue/orange) — user setting  */
+    --viz-cb-pos: #0072b2;
+    --viz-cb-neg: #e69f00;
+    /* categorical ramp for charts (6 steps, dark-tuned)                  */
+    --viz-cat-1: #7dd3c0;
+    --viz-cat-2: #7aa2f7;
+    --viz-cat-3: #e0af68;
+    --viz-cat-4: #c792ea;
+    --viz-cat-5: #f4749b;
+    --viz-cat-6: #89b482;
+
+    /* ── 3D scene (canvas is part of the theme) ──────────────────────── */
+    --scene-bg: #0d141b;
+    --scene-badge-bg: rgba(19, 26, 35, 0.86);
+
+    /* ── typography ──────────────────────────────────────────────────── */
+    --font-ui: Inter, ui-sans-serif, system-ui, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "IBM Plex Mono", Menlo, Consolas, monospace;
+    --fs-2xs: 9px;     /* eyebrows, uppercase labels                     */
+    --fs-xs: 10px;     /* meta rows, captions                            */
+    --fs-sm: 11px;     /* controls, buttons, tabs                        */
+    --fs-md: 12px;     /* body, inputs                                   */
+    --fs-lg: 14px;     /* panel values                                   */
+    --fs-xl: 17px;     /* page/brand titles                              */
+    --fs-2xl: 22px;    /* display numbers (dashboards)                   */
+    --lh-tight: 1.2;
+    --lh-body: 1.5;
+    --track-wide: 0.08em;   /* uppercase micro-labels                    */
+
+    /* ── space (4px base) ────────────────────────────────────────────── */
+    --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+    --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+
+    /* ── radius ──────────────────────────────────────────────────────── */
+    --r-sm: 6px; --r-md: 7px; --r-lg: 9px; --r-pill: 999px;
+
+    /* ── elevation (dark UIs elevate by lightening, shadows subtle) ──── */
+    --elev-1: 0 1px 2px rgba(0,0,0,.4);
+    --elev-2: 0 4px 12px rgba(0,0,0,.45);
+    --elev-3: 0 12px 32px rgba(0,0,0,.5);
+
+    /* ── z-index registry (the ONLY place z-indexes are minted) ──────── */
+    --z-scene-badge: 5;
+    --z-sticky: 10;
+    --z-dropdown: 40;
+    --z-drawer: 50;
+    --z-modal: 60;
+    --z-toast: 70;
+    --z-tooltip: 80;
+
+    /* ── motion ──────────────────────────────────────────────────────── */
+    --t-fast: 100ms;
+    --t-base: 200ms;
+    --t-slow: 300ms;
+    --ease: cubic-bezier(.2, .0, .2, 1);
+    /* long-task breathing pulse (SCF in flight) */
+    --t-breathe: 1600ms;
+
+    color-scheme: dark;
+}
+
+/* ─────────────────────────────────────────────────────────────────────── */
+/* White Chamber — the sanctioned light theme. A token swap, nothing else. */
+/* ─────────────────────────────────────────────────────────────────────── */
+[data-theme="chamber"] {
+    --bg: #fcfcfb;
+    --surface: #fcfcfb;
+    --surface-2: #ffffff;
+    --surface-3: #f2f2ef;
+    --border: #e4e4e0;
+    --border-strong: #cfcfc8;
+
+    --text: #141412;
+    --text-2: #4c4c48;
+    --text-3: #9a9a92;
+
+    --accent: #e5372b;
+    --accent-soft: #fdeeec;
+    --ok: #2c7a4b;
+    --ok-soft: #edf6f0;
+    --warn: #b3701c;
+    --warn-soft: #faf3e8;
+    --danger: #e5372b;
+    --danger-soft: #fdeeec;
+    --info: #2456c4;
+    --info-soft: #eef2fc;
+
+    --viz-mep-pos: #2456c4;
+    --viz-mep-neg: #d21f3c;
+    --viz-orb-pos: #1f7a53;
+    --viz-orb-neg: #7048c9;
+    --viz-mlp-pos: #a87900;
+    --viz-mlp-neg: #0e7f95;
+    --viz-density: #b0690a;
+
+    --scene-bg: #f1f0eb;
+    --scene-badge-bg: rgba(252, 252, 251, 0.86);
+
+    --elev-1: 0 1px 2px rgba(20,20,18,.08);
+    --elev-2: 0 4px 12px rgba(20,20,18,.10);
+    --elev-3: 0 12px 32px rgba(20,20,18,.14);
+
+    color-scheme: light;
+}
