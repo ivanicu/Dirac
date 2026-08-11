@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Dirac physics backend — surface electrostatics and torsional strain.
 
-    backend/env/bin/python backend/physics/server.py     # 127.0.0.1:8902
+    backend/env/bin/python backend/physics/server.py     # 0.0.0.0:8902 (LAN-reachable, unauthenticated)
 
 Deliberately a SECOND daemon rather than new routes on field_server.py: that
 file belongs to the Field Wells workstream and is under active edit, and one

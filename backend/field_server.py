@@ -17,7 +17,8 @@ Protocol (all JSON):
   GET  /health          → {ok, rdkit, pyscf}
   POST /field           → {molfile, kind, basis?} → {ok, cube, meta} | {ok: false, error}
 
-Run:  backend/env/bin/python backend/field_server.py   (listens on 127.0.0.1:8901)
+Run:  backend/env/bin/python backend/field_server.py   (binds 0.0.0.0:8901 —
+      LAN-reachable and unauthenticated; Host/Origin allowlist only)
 
 The quantum path is honest: convergence status, energies, basis and timing are
 reported in meta; a failed SCF returns an error instead of a decorative field.
@@ -132,7 +133,7 @@ _method_ids: dict[str, str] = {}
 # this version is re-registered with different source — a forgotten bump is a
 # loud startup error, never a silently stale cache (design: migration 006).
 PRODUCER_SERVICE = 'dirac-fields'
-PRODUCER_VERSION = '2.0'
+PRODUCER_VERSION = '2.2'
 PRODUCER_NOTES = ('wall-clock deadline inside the SCF loop + measured cube-cost '
                   'refusal; open-shell d/f metals refused without an explicit '
                   'spin (group 12 exempt); salt stripping refuses to discard a '
@@ -241,8 +242,32 @@ def db_init() -> bool:
         _db_ok = True
         print(f'[db] persistent cube cache ON (producer {PRODUCER_SERVICE}/{PRODUCER_VERSION})', flush=True)
     except Exception as e:
-        print(f'[db] unavailable ({e}) — persistent cache OFF', flush=True)
-        _db_ok = False
+        # TWO DIFFERENT FAILURES WERE WEARING ONE HANDLER, and it cost me the
+        # decisive test of the whole method-registry line: I edited this file
+        # without bumping PRODUCER_VERSION, register_producer RAISED exactly as
+        # migration 006 designed it to, and this handler turned that into
+        # "db_cache: off" — so the cache was globally disabled and the test I
+        # was running reported a recompute for the wrong reason.
+        #
+        #   PG unreachable            -> DEGRADE. A recomputable cache being
+        #                                unavailable must never take the compute
+        #                                path down with it (fail-closed here
+        #                                means a suspended laptop bricks fields).
+        #   identity conflict (006)   -> EXIT. The whole point is that a
+        #                                forgotten bump is LOUD. Serving with a
+        #                                stale producer identity is the one thing
+        #                                the tripwire exists to prevent, and a
+        #                                print() does not prevent it.
+        if psycopg is not None and isinstance(e, psycopg.OperationalError):
+            print(f'[db] unreachable ({e}) — persistent cache OFF, compute continues',
+                  flush=True)
+            _db_ok = False
+            return _db_ok
+        print(f'[db] FATAL: {e}', flush=True)
+        print('[db] refusing to start: bump PRODUCER_VERSION for the source change, '
+              'or revert it. A stale producer identity would keep serving rows '
+              'the new code would not produce.', flush=True)
+        raise SystemExit(1)
     return _db_ok
 
 
@@ -259,7 +284,10 @@ def db_get_cube(molfile_sha: bytes, kind: str, basis: str):
                 '       fc.n_basis, fc.homo_ev, fc.lumo_ev, fc.seconds, '
                 '       app.scf_method_label(fc.scf_reference, fc.scf_converger), '
                 '       fc.computed_at '
-                'FROM app.v_field_cube_current fc '
+                # Servable-on-METHOD, not on producer: an edit to a log line
+                # used to darken every cached SCF (measured: 1 of 19 rows
+                # readable, i.e. every request a forced recompute). 009.
+                'FROM app.v_field_cube_servable fc '
                 'JOIN app.blob b ON b.sha256 = fc.blob_sha256 '
                 'WHERE fc.molfile_sha256 = %s AND fc.kind = %s AND fc.basis = %s '
                 'ORDER BY fc.computed_at DESC LIMIT 1',
