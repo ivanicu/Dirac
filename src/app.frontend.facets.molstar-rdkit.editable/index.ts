@@ -176,7 +176,7 @@ const FocusLayerControls = FocusSemanticLayers.map(layer => ({
 }));
 
 const CoreStructuralLayerControls = StructuralLayerControls.filter(layer => layer.id === 'secondary-structure-identity');
-const CoreInteractionLayerControls = InteractionLayerControls.filter(layer => layer.id === 'hydrogen-bonds');
+const CoreInteractionLayerControls = InteractionLayerControls;
 const SemanticLayerControls = [...CoreStructuralLayerControls, ...FocusLayerControls, ...CoreInteractionLayerControls, ...RdkitLayerControls, ...PharmacophoreLayerControls] as const;
 const VfxLayerControls = MolstarVisualUpgrades;
 const VisualLayerControls = [...SemanticLayerControls, ...VfxLayerControls] as const;
@@ -308,7 +308,7 @@ class MolecularVfxLab {
     private ligandTargets: readonly LigandFocusTarget[] = [];
     private selectedLigandTargetId?: string;
     private ligandCutoff = 5;
-    private interactionRecords: readonly SemanticInteractionRecord[] = [];
+    // interactionRecords removed — renderContactLedger now fetches on-demand from all interaction types
     private ligandDepictionAtomPositions: AtomPosition[] = [];
     private smartsSearchMolfile: string | null = null;
     private smartsSearchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -852,29 +852,47 @@ class MolecularVfxLab {
     private renderContactLedger() {
         const ledger = byId('contact-ledger');
         ledger.replaceChildren();
-        const enabled = this.enabledUpgrades.has('hydrogen-bonds');
-        byId('contact-ledger-summary').textContent = enabled
-            ? `${this.interactionRecords.length} ligand-local hydrogen bonds`
-            : 'Enable Hydrogen bonds to compute the ledger';
 
-        if (!enabled || this.interactionRecords.length === 0) {
+        // Collect records from ALL enabled interaction types, not just H-bonds.
+        const INTERACTION_LAYERS: Array<{ id: string; prefix: string; color: string }> = [
+            { id: 'hydrogen-bonds', prefix: 'H', color: '#5fd0c8' },
+            { id: 'ionic-contacts', prefix: 'I', color: '#4dabf7' },
+            { id: 'pi-interactions', prefix: 'π', color: '#c792ea' },
+            { id: 'metal-coordination-contacts', prefix: 'M', color: '#e8c45c' },
+        ];
+        const allRecords: Array<{ record: SemanticInteractionRecord; prefix: string; color: string }> = [];
+        let anyEnabled = false;
+        for (const { id, prefix, color } of INTERACTION_LAYERS) {
+            if (!this.enabledUpgrades.has(id as MolecularLayerId)) continue;
+            anyEnabled = true;
+            const recs = getInteractionSemanticLayerRecords(this.workbench!.plugin, id as SemanticInteractionLayerId);
+            for (const r of recs) allRecords.push({ record: r, prefix, color });
+        }
+
+        byId('contact-ledger-summary').textContent = anyEnabled
+            ? `${allRecords.length} ligand-local interactions (${[...new Set(allRecords.map(r => r.prefix))].join('/')})`
+            : 'Enable an interaction layer to compute the ledger';
+
+        if (!anyEnabled || allRecords.length === 0) {
             const empty = document.createElement('p');
             empty.className = 'ledger-empty';
-            empty.textContent = enabled
-                ? 'No geometry-qualified ligand hydrogen bonds were found for this target.'
+            empty.textContent = anyEnabled
+                ? 'No geometry-qualified ligand interactions were found for this target.'
                 : 'The ledger and 3D contact geometry share the same computed records.';
             ledger.appendChild(empty);
             return;
         }
 
-        for (const record of this.interactionRecords) {
+        for (const { record, prefix, color } of allRecords) {
             const row = document.createElement('button');
             row.type = 'button';
             row.className = 'contact-row';
             row.dataset.contactId = String(record.id);
+            row.style.borderLeft = `3px solid ${color}`;
             const index = document.createElement('span');
             index.className = 'contact-index';
-            index.textContent = `H${String(record.id + 1).padStart(2, '0')}`;
+            index.textContent = `${prefix}${String(record.id + 1).padStart(2, '0')}`;
+            index.style.color = color;
             const labels = document.createElement('strong');
             labels.textContent = `${record.aLabel} — ${record.bLabel}`;
             const distance = document.createElement('span');
@@ -1424,7 +1442,6 @@ class MolecularVfxLab {
         await applyFocusSemanticLayers(this.workbench.plugin, focusLayers, this.currentFocusOptions());
         await applyRdkitChemicalLayers(this.workbench.plugin, rdkitLayers, this.currentFocusOptions());
         await applyPharmacophoreFeatures(this.workbench.plugin, pharmacophoreEnabled, this.currentFocusOptions());
-        this.interactionRecords = getInteractionSemanticLayerRecords(this.workbench.plugin, 'hydrogen-bonds');
         this.renderContactLedger();
         this.refreshSemanticAvailability();
         void this.renderLigandDepiction();
