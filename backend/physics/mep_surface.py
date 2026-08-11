@@ -38,7 +38,9 @@ from pyscf import dft, gto, scf
 BOHR = 0.529177210859
 HARTREE_KCAL = 627.5094740631
 DEFAULT_ISOVALUE = 0.001          # a.u., the Politzer/Murray surface
-DEFAULT_BASIS = '6-31g*'
+# def2-SVP, not 6-31G*: the latter has NO IODINE, and iodine is the strongest
+# halogen-bond donor there is — the single case this module most exists for.
+DEFAULT_BASIS = 'def2-svp'
 MAX_QM_ATOMS = 120
 
 # Atoms that can carry a σ-hole (group 15-17 heavy elements). Fluorine is
@@ -168,8 +170,17 @@ def _outer_isosurface_points(field: _Field, centers: np.ndarray,
 
 
 def _extrema(points: np.ndarray, values: np.ndarray, radius: float = 1.2,
-             top: int = 8):
-    """Local maxima and minima of V on the surface point cloud."""
+             top: int = 8, always_keep: np.ndarray | None = None):
+    """Local maxima and minima of V on the surface point cloud.
+
+    `always_keep` marks points sitting on σ-hole-capable atoms, and they are
+    exempt from the top-N cut. Ranking every maximum together and keeping the
+    eight largest silently deleted EVERY iodine σ-hole in the coverage sweep:
+    on 5-iodouracil the N–H maxima reach +79 kcal/mol while iodine's cap is a
+    modest +15 to +25, so the chemically decisive feature ranked ninth and
+    disappeared. The truncation was a display limit that had quietly become a
+    scientific filter.
+    """
     from scipy.spatial import cKDTree
 
     tree = cKDTree(points)
@@ -187,17 +198,18 @@ def _extrema(points: np.ndarray, values: np.ndarray, radius: float = 1.2,
         elif v <= min(others):
             minima.append(i)
 
-    def _cluster(idx, sign):
+    def _cluster(idx, sign, exempt=None):
         """Keep one representative per spatial cluster, best value first."""
         chosen = []
         for i in sorted(idx, key=lambda k: -sign * values[k]):
+            protected = exempt is not None and exempt[i]
+            if len(chosen) >= top and not protected:
+                continue
             if all(np.linalg.norm(points[i] - points[j]) > 2.0 for j in chosen):
                 chosen.append(i)
-            if len(chosen) >= top:
-                break
         return chosen
 
-    return _cluster(maxima, +1), _cluster(minima, -1)
+    return _cluster(maxima, +1, always_keep), _cluster(minima, -1)
 
 
 def _classify_sigma_hole(rdmol, atom_positions: np.ndarray, point: np.ndarray,
@@ -260,7 +272,9 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
     atom_tree = cKDTree(centers)
     _, nearest = atom_tree.query(points)
 
-    max_idx, min_idx = _extrema(points, values)
+    # Points on an atom that can carry a σ-hole survive the top-N cut.
+    hole_capable = np.array([atoms[int(a)][0] in SIGMA_HOLE_ELEMENTS for a in nearest])
+    max_idx, min_idx = _extrema(points, values, always_keep=hole_capable)
     extrema = []
     for kind, idx_list in (('maximum', max_idx), ('minimum', min_idx)):
         for i in idx_list:
@@ -276,6 +290,19 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
             if kind == 'maximum':
                 sigma = _classify_sigma_hole(rdmol, centers, points[i], a)
                 if sigma:
+                    # An anion's entire surface is negative, so the absolute
+                    # value cannot decide whether there is a σ-hole: PF6- has a
+                    # real one at -46 kcal/mol, against a belt at -154. The
+                    # anisotropy against the SAME atom's belt is the quantity
+                    # that means the same thing for ions and neutrals.
+                    on_atom = nearest == a
+                    belt = values[on_atom & (np.abs(values - values[i]) > 0)]
+                    sigma['belt_value_kcal_per_mol'] = (
+                        round(float(belt.min()), 2) if belt.size else None)
+                    if sigma['belt_value_kcal_per_mol'] is not None:
+                        sigma['anisotropy_kcal_per_mol'] = round(
+                            float(values[i]) - sigma['belt_value_kcal_per_mol'], 2)
+                    sigma['positive_cap'] = bool(values[i] > 0)
                     entry['sigma_hole'] = sigma
             extrema.append(entry)
 

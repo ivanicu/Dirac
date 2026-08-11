@@ -71,11 +71,26 @@ _producer_id: str | None = None
 # this version is re-registered with different source — a forgotten bump is a
 # loud startup error, never a silently stale cache (design: migration 006).
 PRODUCER_SERVICE = 'dirac-fields'
-PRODUCER_VERSION = '1.2'
-PRODUCER_NOTES = 'PF6- NaN refusal, SOSCF rescue, salt stripping, MLP field'
+PRODUCER_VERSION = '1.3'
+PRODUCER_NOTES = ('canonical-heavy-coords refactor shared by hash and the '
+                  'upcoming Kabsch coarse-read; cube output unchanged')
 
 
 def _db(): return psycopg.connect(DB_DSN, autocommit=True)
+
+
+def canonical_heavy_coords(mol_with_h: Chem.Mol) -> tuple[list[str], np.ndarray]:
+    """Heavy atoms in RDKit canonical rank order — the shared ordering that
+    conformer_hash_for and the coarse-hit Kabsch correspondence both use."""
+    heavy = Chem.RemoveHs(mol_with_h)
+    n = heavy.GetNumAtoms()
+    ranks = list(Chem.CanonicalRankAtoms(heavy, breakTies=True))
+    order = sorted(range(n), key=lambda i: ranks[i])
+    conf = heavy.GetConformer()
+    coords = np.array([[conf.GetAtomPosition(i).x, conf.GetAtomPosition(i).y,
+                        conf.GetAtomPosition(i).z] for i in order])
+    syms = [heavy.GetAtomWithIdx(i).GetSymbol() for i in order]
+    return syms, coords
 
 
 def conformer_hash_for(mol_with_h: Chem.Mol) -> tuple[bytes, str]:
@@ -89,14 +104,7 @@ def conformer_hash_for(mol_with_h: Chem.Mol) -> tuple[bytes, str]:
     partner's field. Coordinates quantised to 0.01 Å, hashed with the parent
     InChIKey.
     """
-    heavy = Chem.RemoveHs(mol_with_h)
-    n = heavy.GetNumAtoms()
-    ranks = list(Chem.CanonicalRankAtoms(heavy, breakTies=True))
-    order = sorted(range(n), key=lambda i: ranks[i])
-    conf = heavy.GetConformer()
-    coords = np.array([[conf.GetAtomPosition(i).x, conf.GetAtomPosition(i).y,
-                        conf.GetAtomPosition(i).z] for i in order])
-    syms = [heavy.GetAtomWithIdx(i).GetSymbol() for i in order]
+    syms, coords = canonical_heavy_coords(mol_with_h)
 
     x = coords - coords.mean(axis=0)
     _, vecs = np.linalg.eigh(x.T @ x)
@@ -111,7 +119,7 @@ def conformer_hash_for(mol_with_h: Chem.Mol) -> tuple[bytes, str]:
     y = np.round(x @ axes, 2)
     y[y == 0.0] = 0.0                         # normalise -0.00 → 0.00
 
-    inchikey = Chem.MolToInchiKey(heavy)
+    inchikey = Chem.MolToInchiKey(Chem.RemoveHs(mol_with_h))
     payload = inchikey.encode() + b'|' + b';'.join(
         f'{s},{px:.2f},{py:.2f},{pz:.2f}'.encode()
         for s, (px, py, pz) in zip(syms, y))

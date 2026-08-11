@@ -24,14 +24,17 @@ const REF_DATA = 'field-wells-data';
 const REF_VOLUME = 'field-wells-volume';
 
 /**
- * Nested translucent shells per sign: the well reads as a potential GRADIENT
- * instead of a single hard skin. Innermost shell = full isovalue, bright and
- * opaque; outer shells at decreasing fractions fade out — contour lines in 3D.
+ * Two shells per sign: a vivid x-ray-shaded SOLID core at the full isovalue,
+ * and a WIREFRAME cage at a lower one. Three stacked translucent skins read
+ * as fog; a mesh cage over a glowing core reads as a force field — the lines
+ * give the eye structure where alpha stacking only gives it milk.
  */
 const SHELLS = [
-    { fraction: 1.0, alpha: 0.5, emissive: 0.4 },
-    { fraction: 0.55, alpha: 0.26, emissive: 0.28 },
-    { fraction: 0.3, alpha: 0.12, emissive: 0.18 },
+    { fraction: 1.0, alpha: 0.55, emissive: 0.55, visuals: ['solid'] as string[] },
+    // The cage is a WHISPER around the core, not a net over the scene: close
+    // to the solid (0.62x) and faint, or the mesh buries both the molecule
+    // and the surface it is supposed to be annotating.
+    { fraction: 0.62, alpha: 0.14, emissive: 0.22, visuals: ['wireframe'] as string[] },
 ] as const;
 const shellRef = (sign: 'pos' | 'neg', i: number) => `field-wells-repr-${sign}-${i}`;
 
@@ -49,14 +52,14 @@ interface KindSpec {
 
 /** MEP convention: red = negative potential (electron-rich), blue = positive. */
 const Kinds: Record<FieldKind, KindSpec> = {
-    mep: { label: 'Electrostatic well', iso: 8, diverging: true, unit: 'kcal/mol', posColor: 0x4f9dff, negColor: 0xff5f56, quantum: false },
-    mep_qm: { label: 'QM potential well', iso: 0.05, diverging: true, unit: 'Ha/e', posColor: 0x4f9dff, negColor: 0xff5f56, quantum: true },
-    homo: { label: 'HOMO', iso: 0.04, diverging: true, unit: 'amp', posColor: 0x59d0a5, negColor: 0xc792ea, quantum: true },
-    lumo: { label: 'LUMO', iso: 0.04, diverging: true, unit: 'amp', posColor: 0x59d0a5, negColor: 0xc792ea, quantum: true },
-    density: { label: 'e⁻ density', iso: 0.05, diverging: false, unit: 'e/Bohr³', posColor: 0xe8b45a, negColor: 0xe8b45a, quantum: true },
+    mep: { label: 'Electrostatic well', iso: 8, diverging: true, unit: 'kcal/mol', posColor: 0x3b82f6, negColor: 0xf43f5e, quantum: false },
+    mep_qm: { label: 'QM potential well', iso: 0.05, diverging: true, unit: 'Ha/e', posColor: 0x3b82f6, negColor: 0xf43f5e, quantum: true },
+    homo: { label: 'HOMO', iso: 0.04, diverging: true, unit: 'amp', posColor: 0x34d399, negColor: 0xa78bfa, quantum: true },
+    lumo: { label: 'LUMO', iso: 0.04, diverging: true, unit: 'amp', posColor: 0x34d399, negColor: 0xa78bfa, quantum: true },
+    density: { label: 'e⁻ density', iso: 0.05, diverging: false, unit: 'e/Bohr³', posColor: 0xf59e0b, negColor: 0xf59e0b, quantum: true },
     // Default iso must sit BELOW the hydrophilic side's typical |min| (~0.06
     // on aspirin) or the cyan lobes never exist and the field looks all-grease.
-    mlp: { label: 'Lipophilicity', iso: 0.05, diverging: true, unit: 'MLP', posColor: 0xd8b04a, negColor: 0x3fb9c9, quantum: false },
+    mlp: { label: 'Lipophilicity', iso: 0.05, diverging: true, unit: 'MLP', posColor: 0xeab308, negColor: 0x22d3ee, quantum: false },
 };
 
 interface FieldMeta {
@@ -145,8 +148,9 @@ function reprParams(kind: FieldKind, sign: 1 | -1, shell: number) {
         type: 'isosurface',
         typeParams: {
             isoValue: Volume.IsoValue.absolute(sign * currentIso() * s.fraction),
+            visuals: s.visuals as ('solid' | 'wireframe')[],
             alpha: s.alpha,
-            xrayShaded: true,
+            xrayShaded: s.visuals.includes('solid'),
             emissive: s.emissive,
         },
         color: 'uniform',
