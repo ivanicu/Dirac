@@ -313,6 +313,69 @@
         .field-refusal span:last-child { color: var(--text-3); word-break: break-word; }
         #field-retry { margin-bottom: 8px; }
 
+        /* ── Ligand physics ─────────────────────────────────────────── */
+        .phys-block { margin-bottom: 14px; }
+        .phys-block-head {
+            display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+            margin-bottom: 4px;
+        }
+        .phys-block-head h3 {
+            margin: 0; font-size: 11px; font-weight: 700; color: var(--text);
+            letter-spacing: 0.02em;
+        }
+        .phys-actions { display: flex; gap: 6px; }
+        .phys-btn {
+            padding: 5px 11px; border: 1px solid var(--border-strong); border-radius: 6px;
+            background: var(--surface-2); color: var(--text-2); font: inherit; font-size: 10px;
+            font-weight: 700; cursor: pointer;
+        }
+        .phys-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+        .phys-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        /* Why the number matters, before the number. A chemist who does not
+           already know what a sigma-hole decides cannot act on 20.6 kcal/mol. */
+        .phys-why {
+            margin: 0 0 6px; font-size: 10px; line-height: 1.5; color: var(--text-3);
+        }
+        .phys-headline { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+        .phys-big { font-size: 22px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+        .phys-unit { font-size: 10px; color: var(--text-3); }
+        .phys-verdict, .torsion-verdict {
+            padding: 2px 7px; border-radius: 999px; font-size: 9px; font-weight: 700;
+            border: 1px solid var(--border-strong); color: var(--text-2);
+        }
+        .phys-verdict[data-verdict="severe"], .torsion-verdict[data-verdict="severe"],
+        .phys-verdict[data-verdict="notable"], .torsion-verdict[data-verdict="notable"] {
+            border-color: var(--high); color: var(--high);
+        }
+        .phys-caveat { font-size: 9px; line-height: 1.5; color: var(--text-3); margin-bottom: 8px; }
+        .phys-method { font-size: 9px; line-height: 1.5; color: var(--text-3); margin-top: 8px; }
+        .phys-empty { font-size: 10px; line-height: 1.5; color: var(--text-3); }
+
+        .phys-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+        .phys-table th {
+            text-align: left; font-size: 8.5px; letter-spacing: 0.06em; text-transform: uppercase;
+            color: var(--text-3); font-weight: 700; padding: 3px 4px;
+            border-bottom: 1px solid var(--border);
+        }
+        .phys-table td { padding: 3px 4px; border-bottom: 1px solid var(--border); color: var(--text-2); }
+        .phys-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+        /* The row the panel was opened to read. */
+        .phys-table tr[data-sigma="true"] td { color: var(--text); font-weight: 700; }
+
+        .torsion-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+        .torsion-card {
+            border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px;
+            background: var(--surface-2);
+        }
+        .torsion-card[data-strained="true"] { border-color: var(--high); }
+        .torsion-head { display: flex; justify-content: space-between; align-items: baseline; gap: 4px; }
+        .torsion-atoms { font-size: 10px; font-weight: 700; color: var(--text); }
+        .torsion-spark { width: 100%; height: auto; display: block; margin: 2px 0; }
+        .torsion-nums {
+            display: flex; flex-wrap: wrap; gap: 6px; font-size: 8.5px; color: var(--text-3);
+            font-variant-numeric: tabular-nums;
+        }
+
         .field-meta { display: grid; gap: 3px; }
         .field-meta-row {
             display: flex;
@@ -1187,6 +1250,7 @@
                 <button type="button" class="master-tab" data-jump="ligand">Ligand</button>
                 <button type="button" class="master-tab" data-jump="properties">Properties</button>
                 <button type="button" class="master-tab" data-jump="fields">Fields</button>
+                <button type="button" class="master-tab" data-jump="physics">Physics</button>
                 <button type="button" class="master-tab" data-jump="designer">Designer</button>
                 <button type="button" class="master-tab" data-jump="vfx">VFX</button>
                 <button type="button" class="master-tab" data-jump="ledger">Ledger</button>
@@ -1352,6 +1416,50 @@
                         <div id="field-prefetch-reasons" class="field-refusals" hidden></div>
                         <div id="field-retry" hidden></div>
                         <div id="field-meta" class="field-meta"></div>
+                    </div>
+                </section>
+
+                <!-- The two numbers backend/physics has been computing all
+                     along with nobody able to see them. A medicinal chemist
+                     ranked both 9/10 against 2-7/10 for the six fields that
+                     did have a UI. -->
+                <section class="panel" data-section="physics">
+                    <div class="panel-heading">
+                        <h2>Ligand physics</h2>
+                        <span class="panel-index">PHYSICS</span>
+                    </div>
+                    <div class="ligand-meta">
+                        <span id="phys-summary">No ligand loaded</span>
+                        <span id="phys-backend"></span>
+                    </div>
+
+                    <div class="phys-block">
+                        <div class="phys-block-head">
+                            <h3>σ-hole · surface electrostatics</h3>
+                            <div class="phys-actions">
+                                <button type="button" class="phys-btn" id="phys-run-surface">Compute</button>
+                                <button type="button" class="field-cancel" id="phys-cancel" hidden>■ Cancel</button>
+                            </div>
+                        </div>
+                        <p class="phys-why">A halogen with no σ-hole cannot make a halogen
+                           bond however good the geometry looks. The angle is the evidence:
+                           below 150° from the C–X axis a positive cap is not a σ-hole.</p>
+                        <div id="phys-surface-status" class="field-status" data-tone="idle">Load a ligand first.</div>
+                        <div id="phys-surface-body"></div>
+                    </div>
+
+                    <div class="phys-block">
+                        <div class="phys-block-head">
+                            <h3>Torsional strain</h3>
+                            <div class="phys-actions">
+                                <button type="button" class="phys-btn" id="phys-run-torsion">Compute</button>
+                            </div>
+                        </div>
+                        <p class="phys-why">A deposited or docked pose is fitted, not minimised,
+                           and routinely sits several kcal/mol above its own relaxed geometry —
+                           energy that comes straight out of the binding free energy.</p>
+                        <div id="phys-torsion-status" class="field-status" data-tone="idle">Load a ligand first.</div>
+                        <div id="phys-torsion-body"></div>
                     </div>
                 </section>
 

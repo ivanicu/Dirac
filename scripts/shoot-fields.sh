@@ -65,6 +65,38 @@ cat > "$STAGE/index.html.driver" <<EOF
       }
     }
     await wait(11000);
+    // PHYSICS mode: the two backend/physics quantities, which live on their
+    // own tab and their own daemon.
+    if (FIELD === 'physics') {
+      var pt = document.querySelector('[data-jump="physics"]');
+      if (pt) { pt.click(); await wait(800); }
+      for (var w = 0; w < 25; w++) {
+        var b = document.getElementById('phys-run-torsion');
+        if (b && !b.disabled) break;
+        await wait(1000);
+      }
+      var tors = document.getElementById('phys-run-torsion');
+      if (tors && !tors.disabled) {
+        tors.click();
+        for (var k1 = 0; k1 < 40; k1++) { await wait(1000);
+          if (/rotors scanned|unreach|refus|cannot/i.test(txt('#phys-torsion-status'))) break; }
+      }
+      var surf = document.getElementById('phys-run-surface');
+      if (surf && !surf.disabled) {
+        surf.click();
+        for (var k2 = 0; k2 < 90; k2++) { await wait(1000);
+          if (/electrostatics for|unreach|refus|cannot|exceed/i.test(txt('#phys-surface-status'))) break; }
+      }
+      await wait(2500);
+      var bar0 = document.createElement('div');
+      bar0.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99999;'
+        + 'font:11px ui-monospace,monospace;padding:6px 10px;background:#111;color:#fff';
+      bar0.textContent = 'physics | ' + txt('#phys-summary') + ' | torsion: '
+        + txt('#phys-torsion-status') + ' | surface: ' + txt('#phys-surface-status');
+      document.body.appendChild(bar0);
+      document.title = 'SHOT_READY';
+      return;
+    }
     var tab = document.querySelector('[data-jump="fields"], [data-tab="fields"]');
     if (tab) { tab.click(); await wait(600); }
     var btn = document.querySelector('.field-btn[data-field="' + FIELD + '"]');
