@@ -61,7 +61,10 @@ it was rendering. A new facet is wired once, there.
 | content-addressed blobs | SHIPPED | `CHECK (digest(bytes,'sha256') = sha256)` — the store cannot hold a mislabelled blob |
 | method registry (`meta.method`) | SHIPPED | per-compute-unit versioning; what makes cache invalidation a query instead of a purge |
 | migration ledger integrity | SHIPPED | `backend/db/check_migration_hashes.sh --selftest` convicts a tampered applied migration |
-| **job ledger (`app.job`)** | **SEAM ONLY** | table + CHECK-enforced state machine + `v_job_live` + `reap_orphaned_jobs()` exist; **`SELECT count(*) FROM app.job` → 0, and nothing outside `check_constraints.sql` inserts.** Compute is still synchronous per HTTP request. This is the seam a queue lands on |
+| **job ledger (`app.job`)** | **WIRED** (was SEAM ONLY this morning) | every compute opens a row and closes it: 267 done · 73 failed · 7 cancelled, `SELECT count(*) FROM app.v_job_live` → 0 phantom rows. Failures carry the right code (`UNSUPPORTED` for a PF6⁻ Gasteiger refusal, `BUDGET` for a deadline) — a ledger that only records successes is the easiest one to lie with |
+| **job dedup / coordination** | SHIPPED | two identical concurrent requests now produce **ONE** computation: the second waits on `job_one_inflight` and reads the winner's row. Measured on a never-seen HOMO, 0.4 s apart — A 2.85 s `computed`, B 2.62 s `db` (waited 2.563 s), `opened 1 · joined 1`. It waits in the DATABASE, not on an in-process Event, because the requests that hurt come from different clients and will come from different hosts (P2) |
+| **orphan reaping** | SHIPPED | two independent criteria: the worker's pid is gone, OR the row is past a hard 1800 s ceiling. The pid check is precise and blind to pid reuse; the ceiling covers that AND is the only one that still works when a worker runs off-box. Reported separately, because "the process died" and "the job overran" are different facts |
+| **concurrency bound** | ABSENT, by decision | `ThreadingHTTPServer` still runs every DISTINCT request immediately — dedup removes duplicate work, not load. Nothing queues, nothing rejects a fifth simultaneous SCF. This is the next thing `app.job`'s `queued` state is for |
 | conformer coarse key | PARTIAL | `conformer_hash` with a det=+1 canonical frame (enantiomer-safe) is written; the Kabsch/RMSD coarse-hit *read* path is contract, not code |
 
 ## Contracts, gates, tests
@@ -74,7 +77,7 @@ it was rendering. A new facet is wired once, there.
 | gates 7 and 8 self-conviction | SHIPPED | each runs its own red proof FIRST and its failure is the gate's failure; the harness asserts its mutation changed the bytes before reading a verdict |
 | backend tests | SHIPPED | 6 files (`ls backend/tests/test_*.py`), including a `test_cannot_fire.py` whose job is to hunt checks that cannot convict |
 | frontend specs | THIN | 4 spec files. The store has 15 tests; the facets have none |
-| **frontend ↔ backend meta drift** | **KNOWN OPEN** | the facet's `FieldMeta` interface is 21 keys behind the backend. `node scripts/check_contract_drift.mjs` reports it as `FIND` (exit 2) rather than failing, because that file is owned by a parallel line of work — reported, dated, not hidden |
+| **frontend ↔ backend meta drift** | **CLOSED** (was 21 keys, then 25) | the gap reached ZERO on 2026-08-11 and gate 7's exit 2 is now a FAILURE, in `gates.sh` and in CI. The tolerance was right while the gap was 25 keys — failing then trains everyone to `--skip`, and a suite people skip enforces nothing — and the whole value of reaching zero is that the next divergence is caught at one key. Three times today an undeclared key was live in production; each fix took two minutes |
 
 ## Frontend state layer — measured, and the measurement is unflattering
 
@@ -90,7 +93,8 @@ What the audit found that a status table alone would have hidden:
 |---|---|---|
 | the store shipped a heavy-atom count that a sibling facet had already fixed 11 h earlier — counting explicit H as heavy, returning 0 for V3000 (and 0 heavy atoms passes every affordability gate) | 2 red tests, then green | **FIXED today**, and the corrected logic now lives in the services layer so `facets/field-wells` can import it and delete its private copy |
 | its spec had a failing test nobody had run | 1 red of 9 | **FIXED** — the TEST was wrong, not the store: `subscribe()` replays the current value even when it is null, deliberately, so a late-mounting facet can clear itself. Now 12/12, with that intent asserted rather than assumed |
-| 10 async paths produce a ligand-shaped result; **7 commit it with no currency check**, two of them multi-second pyscf calls | 10 paths audited | **OPEN.** The user-visible symptom: click ligand A, click B while A's SCF runs, and A's result renders into B's scene |
+| 10 async paths produce a ligand-shaped result; 7 committed with no currency check | 10 paths audited | **2 of 7 GUARDED** — property-cockpit and pharmacophore-designer, via `RequestGeneration`. NOT the store's own `generation()`: nothing writes through the store yet, so it never advances, and a guard on a value that cannot change is a check that cannot fail. The two pyscf paths in ligand-physics were guarded by the session that owns them (`isCurrentLigandGeneration`, discard-and-say). **3 remain** |
+| the guard's tests cover the MECHANISM, not the two facets' DOM | no jsdom in this repo | **UNVERIFIED, not clean.** "The panel does not keep A's values under B's identity" was checked by reading the call sites, not by execution. Adding jsdom is a dependency decision, deliberately not made inside a bug fix |
 | 3 facts have more than one home (heavy-atom count, atom-index walker, staleness token) | 3 | 1 of 3 closed today |
 
 **The decision, stated so it is not re-litigated silently:** the store is NOT
@@ -117,13 +121,19 @@ load figure was wrong by ~3×.
 
 ## Nearest edges of the work
 
-1. **Wire the job ledger** — the only way today's synchronous request model becomes
-   a queue without a schema change. The seam is built and empty.
-2. **Close the frontend meta drift** — 21 keys; then flip gate 7's exit 2 to a hard
-   failure so it can never silently reopen.
-3. **Frontend state layer adoption** — `ligand-store.ts` exists with 15 tests; how
-   much of the app reads it rather than passing molfiles around is being audited.
-4. **Unblock the conformer facet** through the backend's real RDKit.
+1. ~~Wire the job ledger~~ — **DONE.** Rows open and close, orphans are reaped on
+   two criteria, and identical concurrent requests share one computation.
+2. ~~Close the frontend meta drift~~ — **DONE**, gap zero, and gate 7 is strict.
+3. **Bound concurrency.** Dedup removed duplicate work; it did not remove LOAD.
+   Five simultaneous distinct SCFs still all start. `app.job`'s `queued` state and
+   `v_job_live` are already there for it — this is the last piece of P1.
+4. **Adopt the store on the write side** — the remaining 3 unguarded async paths,
+   and then `index.ts` writing through `ligandStore` so the store's own generation
+   advances and `RequestGeneration` can be retired rather than multiplied.
+5. **Unblock the conformer facet** through the backend's real RDKit (ETKDG + MMFF).
+6. **A DOM test harness.** Three of today's defects were only visible on screen —
+   a vanished meta row, a "null" rendered as text, a stale panel. Everything above
+   is verified by execution except the parts that paint.
 
 Trajectory beyond these: `ROADMAP.md`. Layer structure: `ARCHITECTURE.md`.
 Interfaces and data flows: `SPEC.md`.

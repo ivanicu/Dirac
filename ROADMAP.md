@@ -51,13 +51,27 @@ Decision closed: *is browser-native structure work plus a local quantum backend
 actually enough to do medicinal chemistry?* Answered yes for 6 field kinds,
 σ-hole analysis, torsion strain, pharmacophores and descriptors.
 
-### P1 · asynchronous compute — wire the job ledger
-Every long compute becomes a row: `queued → running → done|failed|cancelled`,
-with `job_one_inflight` preventing duplicates and orphan reaping on restart.
-- **Additive because**: the table, the states, the constraints and the views exist.
-  The HTTP routes keep working — a synchronous call becomes "insert, run, update".
-- Decision closed: *can two people, or one person and an agent, use this at once
-  without stepping on each other's compute?*
+### P1 · asynchronous compute — wire the job ledger &nbsp;·&nbsp; **MOSTLY DONE 2026-08-11**
+Every long compute is a row: `running → done|failed|cancelled`, with
+`job_one_inflight` preventing duplicates and orphans reaped on two criteria.
+- **Additive, as predicted**: no schema change was needed. The table, states,
+  constraints and views already existed; the HTTP routes kept working, and a
+  synchronous call became "insert, run, update".
+- Decision closed — *can two people, or a person and an agent, use this at once
+  without stepping on each other's compute?* **Yes for IDENTICAL work**: the
+  second request waits and reads the winner's result, measured at one SCF instead
+  of two. **Not yet for DIFFERENT work**: nothing bounds concurrency, so five
+  distinct SCFs still all start. `queued` exists and is still unused — that is the
+  remainder of this phase, and it is a writer, not a migration.
+- The `queued` state stayed valid and unwritten on purpose: in a synchronous
+  service a row would be `queued` for microseconds, and a state the system cannot
+  be OBSERVED in is noise in the ledger.
+- What the wiring cost, kept because both were design errors and not typos: the
+  reap was keyed on the worker's own name, and since the name contains the pid it
+  reaped NOTHING across a restart (a row sat `running` for three hours while
+  `v_job_live` reported it as live work). And the unit version hashed function
+  source but not the CONSTANTS those functions read, so a geometry change served
+  22 stale-geometry cubes under a method label that had not moved.
 - Rewrite tripwire: adding a `status` **text** column beside the enum, or letting a
   worker mutate `app.field_cube` without a job row.
 
@@ -111,6 +125,14 @@ listed because each is individually tempting and locally reasonable.
    nothing bypasses it.
 7. **A gate that has never convicted.** Gates 7 and 8 ship red proofs; a new gate
    without one is advice wearing a gate's clothes.
+8. **A version that hashes code but not the numbers the code reads.** Measured:
+   changing `PAD_MAX` changed every cube's geometry and moved no method version, so
+   the cache served boxes the current code would not draw. Constants are part of a
+   compute unit; scope them per unit, or a classical tuning pass throws away
+   converged SCF work.
+9. **A reap keyed on the reaper's own identity.** It reaps nothing across a
+   restart. Reap what is not ALIVE, plus an age ceiling — the ceiling is the only
+   criterion that survives a worker on another host.
 
 ## Deliberately not on the path
 
