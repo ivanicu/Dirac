@@ -119,6 +119,18 @@ def main() -> int:
 
         for a, b, label in DIVERGING_PAIRS:
             if a not in tokens or b not in tokens:
+                # A GATE THAT COULD NOT FAIL. `continue` here read a renamed or
+                # deleted token as "nothing to check", so the colourblind-safe
+                # pair could be removed from tokens.css and this file would
+                # still print "palette OK" and exit 0 — forever, silently, in
+                # CI. The absence of the thing being checked is the loudest
+                # possible failure, not a reason to skip.
+                missing = [t for t in (a, b) if t not in tokens]
+                failures.append(f'{theme_name} {label}: token(s) '
+                                f'{", ".join("--" + m for m in missing)} '
+                                f'MISSING from tokens.css — the pair cannot be '
+                                f'checked, so it is not passing')
+                print(f'    {label:32s} MISSING {missing}')
                 continue
             separation = delta_e(tokens[a], tokens[b])
             mark = 'ok' if separation >= MIN_PAIR_DE else 'TOO CLOSE'

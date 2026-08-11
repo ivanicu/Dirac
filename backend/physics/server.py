@@ -129,7 +129,7 @@ class Handler(BaseHTTPRequestHandler):
                     basis=validated_basis(req.get('basis', DEFAULT_BASIS)),
                     isovalue=float(req.get('isovalue', 0.001)),
                     points_per_atom=int(req.get('points_per_atom', 120)),
-                    max_seconds=float(req.get('max_seconds', DEFAULT_MAX_SECONDS)),
+                    max_seconds=req.get('max_seconds', DEFAULT_MAX_SECONDS),
                     xc=req.get('xc'),
                 )
                 self._send(200, {

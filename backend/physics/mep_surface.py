@@ -29,6 +29,7 @@ Units: potentials in kcal/mol per unit charge, coordinates in Ångström
 """
 from __future__ import annotations
 
+import math
 import time
 
 import numpy as np
@@ -93,6 +94,29 @@ def estimated_scf_seconds(nao: int) -> float:
 ECP_FROM_Z = 37
 
 
+
+def clamp_budget(value, default: float) -> float:
+    """A finite, non-negative wall-clock budget.
+
+    NaN defeats EVERY comparison that guards this module: `predicted > nan` is
+    False, so the up-front refusal never fires, and `time.time() > t0 + nan` is
+    False, so the in-loop watchdog never fires either. One non-finite value
+    walks through both gates and the job runs unbounded — which is the exact
+    failure both gates were written for.
+
+    ZERO IS PRESERVED, deliberately. Zero is a legitimate request meaning
+    "refuse immediately, tell me the cost"; folding it in with NaN as
+    "not supplied" would turn an explicit dry-run into a full-length run.
+    """
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(v) or v < 0:
+        return default
+    return v
+
+
 def _ecp_for(atoms, basis: str) -> dict:
     """Attach the matching ECP to every heavy element the basis defines one for."""
     from rdkit.Chem import GetPeriodicTable
@@ -101,10 +125,23 @@ def _ecp_for(atoms, basis: str) -> dict:
     for symbol in {s for s, _ in atoms}:
         if table.GetAtomicNumber(symbol) < ECP_FROM_Z:
             continue
+        # A CHECK THAT COULD NOT FIRE. load_ecp RETURNS [] for an element the
+        # basis has no ECP for — it does not raise — so `except Exception` never
+        # triggered and every Z>=37 element got an entry unconditionally. With
+        # sto-3g, which has no iodine ECP at all, pyscf printed "ECP sto-3g not
+        # found for I" at verbose=0, built the ALL-ELECTRON molecule, and this
+        # function reported {'I': 'sto-3g'} to the caller and to meta['ecp'].
+        # The guard announced PROTECTED while shipping exactly the 58 kcal/mol
+        # wrong-sign error it exists to prevent.
+        #
+        # field_server.ecp_for was repaired this morning and this copy was not:
+        # one fact, two homes, and the unrepaired home kept a green light on
+        # false physics. Verified: load_ecp('sto-3g','I') -> [], falsy.
         try:
-            gto.basis.load_ecp(basis, symbol)
-        except Exception:                       # noqa: BLE001 — basis defines none
-            continue
+            if not gto.basis.load_ecp(basis, symbol):
+                continue          # basis defines no ECP for this element
+        except Exception:
+            continue              # or refuses to describe one
         ecp[symbol] = basis
     return ecp
 
@@ -346,6 +383,7 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
     (kcal/mol), `extrema`, and `meta`. Callers that only need the numbers can
     ignore the cloud; callers that only need the picture can ignore the table.
     """
+    max_seconds = clamp_budget(max_seconds, DEFAULT_MAX_SECONDS)
     t0 = time.time()
     rdmol, atoms, charge, spin = _prepare(molblock)
 
@@ -500,6 +538,7 @@ def mep_at_points(molblock: str, points_ang, basis: str = DEFAULT_BASIS,
     already builds a better surface mesh than this module should try to
     duplicate, and the physics belongs where the wavefunction is.
     """
+    max_seconds = clamp_budget(max_seconds, DEFAULT_MAX_SECONDS)
     _, atoms, charge, spin = _prepare(molblock)
     mol = gto.M(atom=[(s, c) for s, c in atoms], unit='Angstrom',
                 basis=basis, ecp=_ecp_for(atoms, basis) or None,
