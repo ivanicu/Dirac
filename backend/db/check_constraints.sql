@@ -418,6 +418,81 @@ SELECT lpad(id::text, 2) AS n, name,
        expect, got
   FROM gate ORDER BY id;
 
+-- ── 007 · method registry + job ledger ─────────────────────────────────────
+--
+-- The job ledger's whole purpose is that the executor can be replaced without
+-- touching a caller, and that only holds if the STATE MACHINE is enforced by
+-- the schema rather than by whichever executor is current. So every illegal
+-- transition gets an attack, and the reaper gets a positive control — because
+-- authoring these gates is what caught the reaper being unable to reap a
+-- QUEUED orphan, which would have made the retry of any job killed by a
+-- restart permanently refused by the in-flight dedup index.
+
+SELECT meta.register_method('gate.fields.mep', 'gate-v1',
+    digest('gate-source', 'sha256'), '{}'::jsonb, '{}'::jsonb, 'interactive',
+    '{"refuses":["gasteiger_nonfinite"]}'::jsonb);
+
+SELECT pg_temp.expect_accept('P17 register_method returns a socket id', $$
+    SELECT 1 WHERE (SELECT count(*) FROM meta.method WHERE method_id='gate.fields.mep') = 1
+$$);
+
+SELECT pg_temp.expect_reject('A32 job failed with no error code', '23514', $$
+    INSERT INTO app.job (method_row_id, state, input_sha256, started_at, finished_at, seconds)
+    SELECT id,'failed',digest('a32','sha256'),now(),now(),1
+      FROM meta.method WHERE method_id='gate.fields.mep'
+$$);
+
+SELECT pg_temp.expect_reject('A33 terminal state with no finished_at', '23514', $$
+    INSERT INTO app.job (method_row_id, state, input_sha256, started_at, seconds)
+    SELECT id,'done',digest('a33','sha256'),now(),1
+      FROM meta.method WHERE method_id='gate.fields.mep'
+$$);
+
+SELECT pg_temp.expect_reject('A34 running job with no started_at', '23514', $$
+    INSERT INTO app.job (method_row_id, state, input_sha256)
+    SELECT id,'running',digest('a34','sha256')
+      FROM meta.method WHERE method_id='gate.fields.mep'
+$$);
+
+SELECT pg_temp.expect_reject('A35 half a chemical identity on a job', '23514', $$
+    INSERT INTO app.job (method_row_id, state, input_sha256, compound_id)
+    SELECT m.id,'queued',digest('a35','sha256'),c.id
+      FROM meta.method m, chem.compound c
+     WHERE m.method_id='gate.fields.mep' LIMIT 1
+$$);
+
+SELECT pg_temp.expect_reject('A36 finished before it started', '23514', $$
+    INSERT INTO app.job (method_row_id, state, input_sha256, started_at, finished_at, seconds, error_code)
+    SELECT id,'cancelled',digest('a36','sha256'),now(),now() - interval '1 hour',1,'CANCELLED'
+      FROM meta.method WHERE method_id='gate.fields.mep'
+$$);
+
+SELECT pg_temp.expect_accept('P18 a legal queued job inserts', $$
+    INSERT INTO app.job (method_row_id, state, input_sha256, budget_seconds)
+    SELECT id,'queued',digest('dedup','sha256'),90
+      FROM meta.method WHERE method_id='gate.fields.mep'
+$$);
+
+SELECT pg_temp.expect_reject('A37 second in-flight job for identical work', '23505', $$
+    INSERT INTO app.job (method_row_id, state, input_sha256, budget_seconds)
+    SELECT id,'queued',digest('dedup','sha256'),90
+      FROM meta.method WHERE method_id='gate.fields.mep'
+$$);
+
+SELECT pg_temp.expect_accept('P19 the live queue view shows it with an age', $$
+    SELECT 1 WHERE (SELECT count(*) FROM app.v_job_live) >= 1
+$$);
+
+SELECT pg_temp.expect_accept('P20 reaper clears a QUEUED orphan on restart', $$
+    SELECT 1 WHERE app.reap_orphaned_jobs(NULL) >= 1
+$$);
+
+SELECT pg_temp.expect_accept('P21 the retry of a reaped job is accepted', $$
+    INSERT INTO app.job (method_row_id, state, input_sha256, budget_seconds)
+    SELECT id,'queued',digest('dedup','sha256'),90
+      FROM meta.method WHERE method_id='gate.fields.mep'
+$$);
+
 DO $$
 DECLARE failed integer; total integer;
 BEGIN
