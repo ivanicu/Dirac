@@ -739,6 +739,18 @@ def field_mep(mol: Chem.Mol, spacing=0.4, pad=4.0):
         'net_charge': int(round(charges.sum())),
         'dims': dims.tolist(), **grid_spacing_meta(lo, hi, dims, spacing),
         'vmin': float(v.min()), 'vmax': float(v.max()),
+        # A point charge is spherical, so this model has NO higher multipoles
+        # and a sigma-hole is structurally impossible in it — not merely
+        # inaccurate. Measured: Gasteiger gives bromobenzene -6.2 kcal/mol at
+        # the cap while the QM surface route gives +9.9, a ~16 kcal/mol
+        # contradiction with the OPPOSITE SIGN, inside one application. Named
+        # here so the UI can route the question to the instrument that can
+        # answer it instead of quietly answering it wrongly.
+        'sigma_hole_representable': not any(
+            sym in {'Cl', 'Br', 'I', 'S', 'Se', 'Te'} for sym in syms),
+        'model_caveat': ('Gasteiger point charges: no lone-pair or sigma-hole '
+                         'anisotropy, and ~0.4x the QM molecular dipole. A '
+                         'qualitative map, not an interaction energy.'),
         'iso_fixed': iso,
         'pad_used_angstrom': round(pad_used, 1),
         'wall_max': round(wall_max(v), 3),
@@ -1047,6 +1059,47 @@ def _cubegen_to_text(fn, *args, **kwargs) -> str:
         os.unlink(path)
 
 
+# ── what a level of theory may be QUOTED for ────────────────────────────────
+#
+# Measured by an independent computational-chemistry review, in this env:
+#
+#   HOMO ordering, substituted benzenes, STO-3G vs def2-SVP: STO-3G ranks
+#   NITROBENZENE 4th of 7 — more electron-rich than benzene, chlorobenzene and
+#   benzonitrile. def2-SVP ranks it last. The strongest pi-acceptor in the set
+#   comes out as a donor, and the error is chemotype-dependent (1.37-2.68 eV
+#   within one series) so orderings are NOT protected by cancellation.
+#
+#   LUMO: water +16.19 eV at STO-3G vs +4.74 at def2-SVP. A 12 eV basis
+#   dependence on a quantity the panel printed to one decimal. An HF virtual
+#   orbital is not a bound state; a minimal basis has no diffuse functions, so
+#   it artificially confines a continuum function and returns a spuriously
+#   well-behaved-looking number.
+#
+#   Anions are qualitatively broken: acetate HOMO = +2.30 eV at STO-3G, i.e.
+#   the electron is unbound. The coverage sweep marks that row OK, because
+#   "a cube came back" was the only question it asked.
+#
+# So the number is not withheld — it is LABELLED, and the label travels with it
+# in meta rather than living in a doc nobody reads at the moment of reading the
+# number.
+MINIMAL_BASES = {'sto-3g', 'sto3g'}
+
+
+def frontier_energy_caveat(basis: str, charge: int) -> str | None:
+    """Why these orbital energies must not be quoted, or None if they may be."""
+    if str(basis).lower() in MINIMAL_BASES:
+        return ('minimal basis: no polarisation or diffuse functions. HOMO is '
+                '1.4-2.7 eV off experimental IP and its ORDERING inverts within '
+                'a substituted-benzene series; the LUMO is not a bound state and '
+                'moves ~12 eV to def2-SVP. Not quotable — switch to def2-SVP for '
+                'a number, or read these as shapes only.')
+    if charge < 0:
+        return ('anion: without diffuse functions the highest occupied orbital '
+                'can come out unbound (acetate reads +2.3 eV at STO-3G). Use a '
+                'basis with diffuse functions before quoting this.')
+    return None
+
+
 def field_quantum(mol: Chem.Mol, kind: str, basis: str,
                   max_seconds: float = DEFAULT_MAX_SECONDS, spin: int | None = None):
     from pyscf.tools import cubegen
@@ -1075,6 +1128,7 @@ def field_quantum(mol: Chem.Mol, kind: str, basis: str,
         'ecp': res['ecp'],
         'scf_seconds': round(res['seconds'], 2),
         'scf_cycles': res.get('scf_cycles'),
+        'frontier_caveat': frontier_energy_caveat(basis, res['charge']),
         'homo_ev': float(mo_energy[nocc - 1] * 27.2114),
         'lumo_ev': float(mo_energy[nocc] * 27.2114) if nocc < len(mo_energy) else None,
     }
