@@ -158,6 +158,75 @@
             border-radius: 2px 2px 0 0;
         }
 
+        /* Fields panel — energy wells */
+        .field-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+        .field-btn {
+            padding: 9px 10px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: var(--surface-2);
+            color: var(--text-2);
+            font-size: 11px;
+            font-weight: 700;
+            text-align: left;
+        }
+        .field-btn:hover:not(:disabled) { border-color: var(--accent-soft); color: var(--text); }
+        .field-btn:disabled { opacity: 0.45; }
+        .field-btn[data-active="true"] { border-color: var(--accent); color: var(--accent); }
+        .field-controls {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .field-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-3);
+            font-size: 10px;
+            font-weight: 700;
+        }
+        .field-control input[type="range"] { flex: 1; min-width: 0; }
+        .field-control select {
+            flex: 1;
+            background: var(--surface-2);
+            color: var(--text-2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 6px;
+            font-size: 10px;
+        }
+        #field-iso-readout { color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .field-status {
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: var(--surface-2);
+            color: var(--text-3);
+            font-size: 10px;
+            line-height: 1.5;
+            margin-bottom: 8px;
+            word-break: break-word;
+        }
+        .field-status[data-tone="busy"] { border-color: var(--accent-soft); color: var(--text-2); }
+        .field-status[data-tone="ok"] { border-color: var(--accent-soft); color: var(--accent); }
+        .field-status[data-tone="error"] { border-color: #5a3030; color: var(--high); }
+        .field-meta { display: grid; gap: 3px; }
+        .field-meta-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: var(--text-3);
+        }
+        .field-meta-row span:last-child { color: var(--text-2); font-variant-numeric: tabular-nums; }
+        #fields-backend[data-online="false"] { color: var(--high); }
+        #fields-backend[data-online="true"] { color: var(--accent); }
+
         .scene-summary {
             display: grid;
             gap: 4px;
@@ -959,6 +1028,7 @@
                 <button type="button" class="master-tab" data-jump="ligand">Ligand</button>
                 <button type="button" class="master-tab" data-jump="properties">Properties</button>
                 <button type="button" class="master-tab" data-jump="fields">Fields</button>
+                <button type="button" class="master-tab" data-jump="fields">Fields</button>
                 <button type="button" class="master-tab" data-jump="designer">Designer</button>
                 <button type="button" class="master-tab" data-jump="vfx">VFX</button>
                 <button type="button" class="master-tab" data-jump="ledger">Ledger</button>
@@ -1055,6 +1125,41 @@
                     </div>
                     <div id="properties-content">
                         <p class="ledger-empty">Switch to a structure with a deposited ligand to compute descriptors.</p>
+                    </div>
+                </section>
+
+                <section class="panel" data-section="fields">
+                    <div class="panel-heading">
+                        <h2>Energy field wells</h2>
+                        <span class="panel-index">FIELDS</span>
+                    </div>
+                    <div class="ligand-meta">
+                        <span id="fields-summary">No ligand loaded</span>
+                        <span id="fields-backend"></span>
+                    </div>
+                    <div id="fields-content">
+                        <div class="field-buttons">
+                            <button type="button" class="field-btn" data-field="mep">⚡ Electrostatic well</button>
+                            <button type="button" class="field-btn" data-field="mep_qm">⚡ QM potential</button>
+                            <button type="button" class="field-btn" data-field="homo">⚛ HOMO</button>
+                            <button type="button" class="field-btn" data-field="lumo">⚛ LUMO</button>
+                            <button type="button" class="field-btn" data-field="density">◉ e⁻ density</button>
+                            <button type="button" class="field-btn" id="field-clear">✕ Clear</button>
+                        </div>
+                        <div class="field-controls">
+                            <label class="field-control">Isovalue
+                                <input type="range" id="field-iso" min="-1" max="1" step="0.05" value="0">
+                                <span id="field-iso-readout"></span>
+                            </label>
+                            <label class="field-control">Basis
+                                <select id="field-basis">
+                                    <option value="sto-3g" selected>STO-3G · fast</option>
+                                    <option value="6-31g">6-31G · better</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div id="field-status" class="field-status" data-tone="idle">Load a structure with a ligand first.</div>
+                        <div id="field-meta" class="field-meta"></div>
                     </div>
                 </section>
 

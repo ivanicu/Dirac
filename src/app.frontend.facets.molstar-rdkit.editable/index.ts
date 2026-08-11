@@ -64,6 +64,7 @@ import {
 import { LigandDepiction, type AtomHighlight, type AtomPosition } from '../chemistry.backend.perception.rdkit-wasm.editable/ligand-depiction';
 import { renderPropertiesPanel } from './facets/property-cockpit';
 import { initFieldWellsPanel, updateFieldWellsLigand } from './facets/field-wells';
+import { initFieldWellsPanel, updateFieldWellsLigand } from './facets/field-wells';
 import { initPharmacophoreDesigner, updatePharmacophoreDesigner } from './facets/pharmacophore-designer';
 import { PresetStructureRepresentations } from '../mol-plugin-state/builder/structure/representation-preset';
 import { StateTransforms } from '../mol-plugin-state/transforms';
@@ -317,6 +318,7 @@ class MolecularVfxLab {
         this.workbench.plugin.managers.interactivity.setProps({ granularity: 'residue' });
         this.workbench.plugin.managers.structure.selection.events.changed.subscribe(() => this.refreshMetrics());
         this.workbench.plugin.behaviors.interaction.click.subscribe(({ current }) => this.handleInteractionClick(current.loci));
+        initFieldWellsPanel(this.workbench.plugin);
         initFieldWellsPanel(this.workbench.plugin);
         initPharmacophoreDesigner(this.workbench.plugin);
         await this.workbench.setBackground(Color(0x0d141b));
@@ -870,6 +872,7 @@ class MolecularVfxLab {
             stats.textContent = '';
             this.ligandDepictionAtomPositions = [];
             updateFieldWellsLigand(null, null);
+            updateFieldWellsLigand(null, null);
             void updatePharmacophoreDesigner(null, this.currentFocusOptions(), { structureId: this.currentMolecule.id, ligandLabel: null });
             return;
         }
@@ -879,6 +882,7 @@ class MolecularVfxLab {
             target.innerHTML = '<p class="ledger-empty">RDKit cannot parse this ligand (ComponentBond / CCD data unavailable).</p>';
             summary.textContent = 'RDKit parse failed';
             stats.textContent = '';
+            updateFieldWellsLigand(null, null);
             updateFieldWellsLigand(null, null);
             void updatePharmacophoreDesigner(null, this.currentFocusOptions(), { structureId: this.currentMolecule.id, ligandLabel: null });
             return;
@@ -925,6 +929,9 @@ class MolecularVfxLab {
         // Property Optimization Cockpit facet reuses the same molfile
         // (computed once here) rather than re-running ligandLociToMolfile.
         void renderPropertiesPanel(analysis.molfile, ligandTarget?.label ?? null);
+        // Field Wells facet: same molfile carries scene coordinates, so backend
+        // cubes land aligned. A ligand change clears any displayed field.
+        updateFieldWellsLigand(analysis.molfile, ligandTarget?.label ?? null);
         // Field Wells facet: same molfile carries scene coordinates, so backend
         // cubes land aligned. A ligand change clears any displayed field.
         updateFieldWellsLigand(analysis.molfile, ligandTarget?.label ?? null);
