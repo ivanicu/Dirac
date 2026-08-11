@@ -14,6 +14,7 @@ import { StateSelection } from '../mol-state';
 import { Overpaint } from '../mol-theme/overpaint';
 import { Color } from '../mol-util/color';
 import { SecondaryStructureProvider } from '../mol-model-props/computed/secondary-structure';
+import { SecondaryStructureType } from '../mol-model/structure/model/types';
 import { RuntimeContext } from '../mol-task';
 import { MolScriptBuilder as MS } from '../mol-script/language/builder';
 import { compile } from '../mol-script/runtime/query/compiler';
@@ -33,7 +34,7 @@ export const StructuralSemanticLayers = [
     { id: 'glycan-role', label: 'Branched carbohydrate', group: 'Molecular roles', cost: 'low', description: 'Colors branched carbohydrate loci without adding a glycan representation.' },
     { id: 'ion-role', label: 'Ions', group: 'Molecular roles', cost: 'low', description: 'Colors ions present in the loaded structure. It does not claim a coordination geometry.' },
     { id: 'binding-site-neighborhood', label: 'Ligand neighborhood', group: 'Local relationships', cost: 'medium', description: 'Colors whole residues within 5 Å of ligand loci, excluding the ligand itself. This is a structural proximity calculation, not an affinity claim.' },
-    { id: 'secondary-structure-identity', label: 'Secondary-structure identity', group: 'Structural identity', cost: 'medium', description: 'Distinguishes protein coil/other, helices, and beta strands from Mol* secondary-structure data or its computed fallback.' },
+    { id: 'secondary-structure-identity', label: 'Secondary-structure identity', group: 'Structural identity', cost: 'medium', description: 'Fine-grained DSSP secondary-structure identity: α-helix, 3₁₀-helix, π-helix, β-strand/sheet, turn, bend, coil. Seven orthogonal colors from Mol* secondary-structure data or its computed fallback.' },
     { id: 'disulfide-bridges', label: 'Disulfide-linked cysteines', group: 'Covalent structure', cost: 'low', description: 'Marks cysteine residues participating in explicit or inferred Mol* disulfide bonds. Bond cylinders themselves are not replaced.' },
 ] as const satisfies readonly {
     id: string,
@@ -54,12 +55,37 @@ export const StructuralSemanticLayerColors = {
     ion: Color(0xc9a5f5),
     coil: Color(0x7f9aa6),
     helix: Color(0xdd7195),
+    helixAlpha: Color(0xdd5e8a),
+    helix310: Color(0x5eb8c9),
+    helixPi: Color(0xa06ec9),
     beta: Color(0xe8c45c),
+    turn: Color(0xe89c5c),
+    bend: Color(0x9db5bf),
     disulfide: Color(0xffdc6e),
     bindingSite: Color(0xffd166),
 } as const;
 
 const StructuralSemanticOverpaintTag = 'mol-plugin-chem-structural-semantic-layers';
+
+// Fine-grained secondary-structure queries — compiled MolScript expressions that
+// check specific DSSP-derived SecondaryStructureType flags. These enable the
+// 7-color subdivision of the secondary-structure-identity layer.
+function ssQuery(flag: number): (ctx: QueryContext) => StructureSelection {
+    return compile<StructureSelection>(MS.struct.modifier.union([
+        MS.struct.generator.atomGroups({
+            'residue-test': MS.core.flags.hasAny([
+                MS.ammp('secondaryStructureFlags'),
+                MS.core.type.bitflags([flag])
+            ])
+        })
+    ]));
+}
+
+const AlphaHelixQuery = ssQuery(SecondaryStructureType.Flag.HelixAlpha);
+const Helix310Query = ssQuery(SecondaryStructureType.Flag.Helix3Ten);
+const PiHelixQuery = ssQuery(SecondaryStructureType.Flag.HelixPi);
+const TurnQuery = ssQuery(SecondaryStructureType.Flag.Turn);
+const BendQuery = ssQuery(SecondaryStructureType.Flag.Bend);
 
 type BundleLayer = {
     bundle: StructureElement.Bundle,
@@ -147,11 +173,15 @@ function buildSemanticBundles(structure: Structure, active: ReadonlySet<Structur
     if (active.has('binding-site-neighborhood')) layers.push({ color: StructuralSemanticLayerColors.bindingSite, query: LigandNeighborhoodQuery });
 
     if (active.has('secondary-structure-identity')) {
-        // Protein is the honest "coil / other" base; helix and beta replace it
-        // only where Mol* identifies those secondary-structure categories.
+        // 7-color subdivision: coil base, then α/3₁₀/π helix + β + turn + bend overlay.
+        // Order matters: more specific types applied AFTER broader ones so they win.
         layers.push({ color: StructuralSemanticLayerColors.coil, query: StructureSelectionQueries.protein.query });
-        layers.push({ color: StructuralSemanticLayerColors.helix, query: StructureSelectionQueries.helix.query });
         layers.push({ color: StructuralSemanticLayerColors.beta, query: StructureSelectionQueries.beta.query });
+        layers.push({ color: StructuralSemanticLayerColors.turn, query: TurnQuery });
+        layers.push({ color: StructuralSemanticLayerColors.bend, query: BendQuery });
+        layers.push({ color: StructuralSemanticLayerColors.helixAlpha, query: AlphaHelixQuery });
+        layers.push({ color: StructuralSemanticLayerColors.helix310, query: Helix310Query });
+        layers.push({ color: StructuralSemanticLayerColors.helixPi, query: PiHelixQuery });
     }
     if (active.has('disulfide-bridges')) layers.push({ color: StructuralSemanticLayerColors.disulfide, query: StructureSelectionQueries.disulfideBridges.query });
 
