@@ -64,7 +64,9 @@ it was rendering. A new facet is wired once, there.
 | **job ledger (`app.job`)** | **WIRED** (was SEAM ONLY this morning) | every compute opens a row and closes it: 267 done · 73 failed · 7 cancelled, `SELECT count(*) FROM app.v_job_live` → 0 phantom rows. Failures carry the right code (`UNSUPPORTED` for a PF6⁻ Gasteiger refusal, `BUDGET` for a deadline) — a ledger that only records successes is the easiest one to lie with |
 | **job dedup / coordination** | SHIPPED | two identical concurrent requests now produce **ONE** computation: the second waits on `job_one_inflight` and reads the winner's row. Measured on a never-seen HOMO, 0.4 s apart — A 2.85 s `computed`, B 2.62 s `db` (waited 2.563 s), `opened 1 · joined 1`. It waits in the DATABASE, not on an in-process Event, because the requests that hurt come from different clients and will come from different hosts (P2) |
 | **orphan reaping** | SHIPPED | two independent criteria: the worker's pid is gone, OR the row is past a hard 1800 s ceiling. The pid check is precise and blind to pid reuse; the ceiling covers that AND is the only one that still works when a worker runs off-box. Reported separately, because "the process died" and "the job overran" are different facts |
-| **concurrency bound** | ABSENT, by decision | `ThreadingHTTPServer` still runs every DISTINCT request immediately — dedup removes duplicate work, not load. Nothing queues, nothing rejects a fifth simultaneous SCF. This is the next thing `app.job`'s `queued` state is for |
+| **concurrency bound** | SHIPPED | at most **2** concurrent SCFs (derived: idle RSS ~160 MB + pyscf's 4000 MB per-SCF planning budget against the 8 GB a unit file would reserve). Measured with 6 distinct requests fired together: gate peak 6, **running_peak 2**, all succeeded, wall 2.0 s in three clean waves. Classical fields (~0.1 s) are deliberately ungated — a semaphore would cost more than the work, and queueing them behind SCFs makes the interactive path hostage to the expensive one |
+| **`app.job.queued`** | SHIPPED | the state migration 007 declared in April and nothing could write, because nothing could wait. A quantum row is inserted `queued` (started_at NULL, per the CHECK) and promoted by `start()` on acquiring a slot — so `v_job_live`'s age stops reading queue time as compute time, which would make a four-deep queue look like four slow jobs |
+| **queue refusal** | SHIPPED | a caller who sends a short `max_seconds` is refused in seconds **with the queue depth in the message**, not held: "N quantum job(s) ahead of this one and 2 slot(s) total". "Too busy" without a number tells nobody whether to retry in ten seconds or ten minutes |
 | conformer coarse key | PARTIAL | `conformer_hash` with a det=+1 canonical frame (enantiomer-safe) is written; the Kabsch/RMSD coarse-hit *read* path is contract, not code |
 
 ## Contracts, gates, tests
@@ -97,6 +99,18 @@ What the audit found that a status table alone would have hidden:
 | the guard's tests cover the MECHANISM, not the two facets' DOM | no jsdom in this repo | **UNVERIFIED, not clean.** "The panel does not keep A's values under B's identity" was checked by reading the call sites, not by execution. Adding jsdom is a dependency decision, deliberately not made inside a bug fix |
 | 3 facts have more than one home (heavy-atom count, atom-index walker, staleness token) | 3 | 1 of 3 closed today |
 
+**THE WRITE SIDE LANDED 2026-08-11, which is what made the module real.**
+`index.ts` now writes through `ligandStore` inside `fanOutLigand()` — the one home
+for "a new active molecule exists" — and clears it when a structure has no
+deposited ligand. Measured in a browser through the app's own controls: generations
+advance 1 → 2 → 3 across a focus, a clear and an import; a stale token is rejected;
+and each origin is typed correctly (`loci` vs `import`, both `coordSpace: 'scene'`).
+The first version inferred origin from whether a `Structure` was present and typed
+every import as `loci` — an import IS loaded as a structure, so that test
+distinguishes nothing. `window.__diracStore` exposes the same singleton the facets
+read, because a property that cannot be observed from outside is one nobody
+notices losing, and this one was lost from the day it was written.
+
 **The decision, stated so it is not re-litigated silently:** the store is NOT
 deleted. The bug class it exists to prevent was demonstrated live today — a pasted
 molecule survived loading a deposited structure and won a branch in five facets,
@@ -124,12 +138,13 @@ load figure was wrong by ~3×.
 1. ~~Wire the job ledger~~ — **DONE.** Rows open and close, orphans are reaped on
    two criteria, and identical concurrent requests share one computation.
 2. ~~Close the frontend meta drift~~ — **DONE**, gap zero, and gate 7 is strict.
-3. **Bound concurrency.** Dedup removed duplicate work; it did not remove LOAD.
-   Five simultaneous distinct SCFs still all start. `app.job`'s `queued` state and
-   `v_job_live` are already there for it — this is the last piece of P1.
-4. **Adopt the store on the write side** — the remaining 3 unguarded async paths,
-   and then `index.ts` writing through `ligandStore` so the store's own generation
-   advances and `RequestGeneration` can be retired rather than multiplied.
+3. ~~Bound concurrency~~ — **DONE.** 2 slots, measured, with a refusal that
+   states the depth. P1 is complete.
+4. ~~Adopt the store on the write side~~ — **DONE.** `index.ts` writes through
+   `ligandStore` in `fanOutLigand()`; generations advance and are observable.
+   **What remains is mechanical:** 3 async paths still commit without a currency
+   check, and they can now use the store's own `isCurrent()` — at which point
+   `RequestGeneration` is retirable rather than a second clock to maintain.
 5. **Unblock the conformer facet** through the backend's real RDKit (ETKDG + MMFF).
 6. **A DOM test harness.** Three of today's defects were only visible on screen —
    a vanished meta row, a "null" rendered as text, a stale panel. Everything above
