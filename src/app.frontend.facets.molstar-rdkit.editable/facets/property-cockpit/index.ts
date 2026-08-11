@@ -14,10 +14,20 @@
  */
 
 import { computeLigandDescriptors, type DescriptorReport } from '../../../chemistry.backend.perception.rdkit-wasm.editable/descriptors';
+import { RequestGeneration } from '../../../app/services/ligand-store';
 
 function byId<T extends HTMLElement>(id: string): T | null {
     return document.getElementById(id) as T | null;
 }
+
+/**
+ * Stale-async guard for `renderPropertiesPanel`'s one await. See
+ * `RequestGeneration`'s own docstring for why this is not `ligandStore`
+ * itself (adoption is incremental; the lab does not write through the store
+ * yet) and not a bespoke `molfile !== requestMolfile` compare either (that
+ * shape already has three independent copies in this repo).
+ */
+const requestGen = new RequestGeneration();
 
 function fmt(n: number, digits = 1): string {
     if (!Number.isFinite(n)) return '—';
@@ -111,8 +121,16 @@ export function renderPropertiesHtml(report: DescriptorReport): string {
  * already produced for the 2D depiction panel, plus the ligand label.
  *
  * When ligand is null/empty, renders the "no ligand" state.
+ *
+ * STALE-ASYNC GUARD: `computeLigandDescriptors` is a multi-call RDKit-WASM
+ * round trip. If the lab calls this again for a different ligand before the
+ * first call's promise resolves, the first call's result must never paint —
+ * that is `docs/FRONTEND_STATE_AUDIT.md` §3 path #7, confirmed unguarded.
+ * The token is captured FIRST, before the "no ligand" early return too, so a
+ * clear-selection call also correctly supersedes an in-flight compute.
  */
 export async function renderPropertiesPanel(molfile: string | null, ligandLabel: string | null): Promise<void> {
+    const generation = requestGen.next();
     const content = byId<HTMLElement>('properties-content');
     const summary = byId<HTMLElement>('properties-summary');
     const summaryStats = byId<HTMLElement>('properties-summary-stats');
@@ -125,11 +143,17 @@ export async function renderPropertiesPanel(molfile: string | null, ligandLabel:
         return;
     }
 
+    // In-flight state, painted synchronously BEFORE the await: whatever the
+    // previous ligand's panel showed is gone the instant this call starts, so
+    // a superseded result below has nothing stale-but-correctly-labeled left
+    // to compete with — it can only ever lose to what is on screen already.
     summary.textContent = 'Computing descriptors…';
     summaryStats.textContent = '';
     content.innerHTML = '';
 
     const report = await computeLigandDescriptors(molfile);
+    if (!requestGen.isCurrent(generation)) return; // superseded — a newer call already owns the DOM
+
     if (!report) {
         content.innerHTML = '<p class="ledger-empty">RDKit descriptor computation unavailable for this ligand.</p>';
         summary.textContent = 'Descriptors unavailable';

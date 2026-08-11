@@ -1,7 +1,8 @@
 /**
  * LigandStore contract tests — each one is a witness for a bug that shipped.
  */
-import { LigandStore, requireScene, CoordSpaceError, heavyAtomsFromMolfile } from '../ligand-store';
+import { LigandStore, requireScene, CoordSpaceError, heavyAtomsFromMolfile,
+         RequestGeneration } from '../ligand-store';
 
 const MOLFILE_22 = ['', '  mol*', '', ' 22 22  0  0  0  0  0  0  0  0999 V2000'].join('\n');
 const MOLFILE_13 = ['', '  mol*', '', ' 13 13  0  0  0  0  0  0  0  0999 V2000'].join('\n');
@@ -149,5 +150,67 @@ describe('heavyAtomsFromMolfile', () => {
         expect(heavyAtomsFromMolfile('a\nb\nc\nnot a counts line')).toBe(0);
         // 0 matters: the prefetch policy compares heavyAtoms <= 40, and NaN
         // would make that comparison false and silently skip quantum prefetch.
+    });
+});
+
+
+describe('RequestGeneration · the stale-async guard', () => {
+    // The defect being prevented, in one sentence per test, because the symptom
+    // is silent: click ligand A, click B while A's multi-second RDKit or SCF work
+    // is still in flight, and A's numbers paint into B's panel with a confident
+    // label. Nothing throws; the wrong answer just appears.
+    //
+    // This class exists rather than LigandStore.generation() because the lab does
+    // not write through the store yet, so the store's generation NEVER ADVANCES —
+    // a guard built on it would be a check that cannot fail, which is worse than
+    // no guard because it reads as protection.
+
+    it('a token is current until the next one is taken', () => {
+        const gen = new RequestGeneration();
+        const a = gen.next();
+        expect(gen.isCurrent(a)).toBe(true);
+        const b = gen.next();
+        expect(gen.isCurrent(a)).toBe(false);   // A must not paint
+        expect(gen.isCurrent(b)).toBe(true);
+    });
+
+    it('the token actually MOVES — a guard on a constant cannot fire', () => {
+        const gen = new RequestGeneration();
+        const seen = new Set([gen.next(), gen.next(), gen.next()]);
+        expect(seen.size).toBe(3);
+    });
+
+    it('rejects a stale result in a real interleaving, not a simulated one', async () => {
+        const gen = new RequestGeneration();
+        const painted: string[] = [];
+        // A slow request for molecule A, then a fast one for B while A is in
+        // flight. Both resolve; only B may paint.
+        const render = async (label: string, delayMs: number) => {
+            const g = gen.next();
+            await new Promise(r => setTimeout(r, delayMs));
+            if (!gen.isCurrent(g)) return;      // the guard
+            painted.push(label);
+        };
+        const slowA = render('A', 40);
+        await new Promise(r => setTimeout(r, 5));
+        const fastB = render('B', 1);
+        await Promise.all([slowA, fastB]);
+        expect(painted).toEqual(['B']);
+    });
+
+    it('the LAST request wins even when it finishes first', async () => {
+        // The ordering that breaks a naive "compare to the current molfile" check:
+        // B finishes before A, so at the moment A resolves the panel already shows
+        // B — and A must still be rejected, not "re-applied because it is newer
+        // work".
+        const gen = new RequestGeneration();
+        const painted: string[] = [];
+        const render = async (label: string, delayMs: number) => {
+            const g = gen.next();
+            await new Promise(r => setTimeout(r, delayMs));
+            if (gen.isCurrent(g)) painted.push(label);
+        };
+        await Promise.all([render('A', 30), render('B', 2)]);
+        expect(painted).toEqual(['B']);
     });
 });

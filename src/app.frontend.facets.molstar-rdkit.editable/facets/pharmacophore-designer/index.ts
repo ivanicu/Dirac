@@ -36,6 +36,7 @@ import {
 import { ScreeningEngine, type ScreeningVerdict } from './screening';
 import { syncDesignerShape } from './shape';
 import { installDesignerDrag } from './drag';
+import { RequestGeneration } from '../../../app/services/ligand-store';
 
 /** 2D highlight colors — the Ligand tab's established atom-channel hues. */
 const Depiction2DColor: Record<DesignerFeatureKind, string> = {
@@ -66,6 +67,19 @@ class PharmacophoreDesigner {
     private selectedHitId: string | null = null;
     private screeningToken = 0;
     private hasLigand = false;
+    /**
+     * Guards `update()`'s one unguarded await (`computePharmacophoreFeatures`,
+     * `docs/FRONTEND_STATE_AUDIT.md` §3 path #8). Not `ligandStore` itself
+     * (adoption is incremental — the lab does not write through the store
+     * yet, so its generation never moves) and not a bespoke
+     * `structureId !== requestId` compare (that shape already has three
+     * independent copies in this repo) — see `RequestGeneration`'s docstring.
+     */
+    private readonly requestGen = new RequestGeneration();
+    /** True while a fresh (non-dirty) seed computation is in flight — the
+     *  in-flight state `renderSummary`/`renderFeatureList` paint so the panel
+     *  never keeps showing the PREVIOUS ligand's model under nothing. */
+    private seeding = false;
 
     init(plugin: PluginContext): void {
         this.plugin = plugin;
@@ -92,10 +106,23 @@ class PharmacophoreDesigner {
         this.wireControls();
     }
 
-    /** Lab lifecycle hook: called whenever the focused ligand may have changed. */
+    /**
+     * Lab lifecycle hook: called whenever the focused ligand may have changed.
+     *
+     * STALE-ASYNC GUARD: the token is captured FIRST, before every branch —
+     * including the "no ligand" clear and the dirty-model early return — so
+     * that ANY later call always supersedes an earlier one still awaiting
+     * `computePharmacophoreFeatures`. Without it, switching A -> B while A's
+     * perception call is still in flight can seed the model with A's
+     * features after B's own (possibly already-finished) update — the exact
+     * bug class `docs/FRONTEND_STATE_AUDIT.md` §3 path #8 names.
+     */
     async update(structure: Structure | null, options: LigandFocusOptions, source: { structureId: string | null; ligandLabel: string | null }): Promise<void> {
+        const generation = this.requestGen.next();
+
         if (!structure || !source.ligandLabel) {
             this.hasLigand = false;
+            this.seeding = false;
             if (!this.model.isEmpty()) this.model.clear();
             this.model.source = source;
             this.model.dirty = false;
@@ -114,8 +141,29 @@ class PharmacophoreDesigner {
             return;
         }
 
-        const features = await computePharmacophoreFeatures(structure, options);
-        this.model.seedFromLigand(features, source);
+        // In-flight state, painted synchronously BEFORE the await: the
+        // PREVIOUS ligand's feature list and summary are gone the instant a
+        // genuinely new seed starts, so a superseded result below has
+        // nothing stale-but-correctly-labeled left to compete with.
+        this.seeding = true;
+        this.renderSummary();
+        this.renderFeatureList();
+        try {
+            const features = await computePharmacophoreFeatures(structure, options);
+            if (!this.requestGen.isCurrent(generation)) return; // superseded — a newer update() already owns the panel
+            // Cleared BEFORE seedFromLigand: seeding's own onChange listener
+            // renders synchronously inside that call, and it must see the
+            // real data coming, not the in-flight placeholder it just replaced.
+            this.seeding = false;
+            this.model.seedFromLigand(features, source);
+        } finally {
+            // Only the call that is STILL current may clear the in-flight
+            // flag — a superseded call finishing late must not stop a
+            // still-running newer call's spinner. Also covers
+            // `computePharmacophoreFeatures` throwing: the panel must not
+            // spin forever on a failed perception call.
+            if (this.requestGen.isCurrent(generation)) this.seeding = false;
+        }
     }
 
     // === 3D ===
@@ -145,6 +193,11 @@ class PharmacophoreDesigner {
             stats.textContent = '';
             return;
         }
+        if (this.seeding) {
+            summary.textContent = 'Computing pharmacophore model…';
+            stats.textContent = '';
+            return;
+        }
         const src = this.model.source;
         summary.textContent = `${src.structureId ?? '?'} · ${src.ligandLabel ?? '?'}${this.model.dirty ? ' · edited' : ' · as perceived'}`;
         const counts = this.model.enabledCountByKind();
@@ -155,6 +208,13 @@ class PharmacophoreDesigner {
         const list = byId('designer-feature-list');
         if (!list) return;
         list.replaceChildren();
+        if (this.seeding) {
+            const loading = document.createElement('p');
+            loading.className = 'ledger-empty';
+            loading.textContent = 'Computing pharmacophore model…';
+            list.appendChild(loading);
+            return;
+        }
         if (this.model.isEmpty()) {
             const empty = document.createElement('p');
             empty.className = 'ledger-empty';

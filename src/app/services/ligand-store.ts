@@ -255,3 +255,38 @@ export class LigandStore {
 
 /** The app-wide instance. One home, module-scoped so a facet cannot make a second. */
 export const ligandStore = new LigandStore();
+
+/**
+ * A per-call generation clock — the SAME contract as `LigandStore.generation()`/
+ * `.isCurrent()`, for a consumer that still receives its ligand as a direct
+ * call argument from the lab rather than through `ligandStore.subscribe(...)`.
+ *
+ * WHY THIS EXISTS INSTEAD OF JUST USING `ligandStore` DIRECTLY: adoption of
+ * the store is deliberately incremental (see the module docstring) —
+ * `index.ts` does not call `setFromLoci`/`setFromImport`/`setFromSketch2d`
+ * yet, so `ligandStore.generation()` never advances when the lab switches
+ * ligand. A guard built on a value that never changes is a check that cannot
+ * fail — the exact bug class `docs/CHECKS_AUDIT.md` hunts, and worse than no
+ * check at all, because it *reads* as protection. Until the write side is
+ * wired (the expensive item in `docs/FRONTEND_STATE_AUDIT.md`'s remediation
+ * list, §6 — touches `index.ts` and all six facets in one pass), a consumer
+ * still needs a token that actually moves.
+ *
+ * WHY NOT A BESPOKE `value !== capturedValue` COMPARE INSTEAD: that shape
+ * already has three independent, disagreeing implementations in this repo
+ * (`docs/FRONTEND_STATE_AUDIT.md` §4.3 — field-wells' string identity,
+ * chemistry-cache's own counter, this store's counter). A fourth,
+ * differently-shaped one is exactly how that count grows to four. This is
+ * the ONE additional shape, added to the one file whose job is "stale-async
+ * solved once, here" — same two method names as the store's own, so the day
+ * a facet's caller adopts `ligandStore` for real, swapping
+ * `new RequestGeneration()` + `.next()`/`.isCurrent(g)` for
+ * `ligandStore.generation()`/`ligandStore.isCurrent(g)` changes the source of
+ * the number, not the shape of the call site.
+ */
+export class RequestGeneration {
+    private gen = 0;
+    /** Call at the top of the async entry point, before starting any work. */
+    next(): number { return ++this.gen; }
+    isCurrent(g: number): boolean { return g === this.gen; }
+}
