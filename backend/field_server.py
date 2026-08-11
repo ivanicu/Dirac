@@ -25,6 +25,7 @@ reported in meta; a failed SCF returns an error instead of a decorative field.
 from __future__ import annotations
 
 import hashlib
+import math
 import io
 import json
 import os
@@ -115,9 +116,9 @@ _producer_id: str | None = None
 # this version is re-registered with different source — a forgotten bump is a
 # loud startup error, never a silently stale cache (design: migration 006).
 PRODUCER_SERVICE = 'dirac-fields'
-PRODUCER_VERSION = '1.6'
-PRODUCER_NOTES = ('auto-store: every computed field persists in a background '
-                  'thread; browser cache serves the interaction (Ivan: 自动入库自动缓存)')
+PRODUCER_VERSION = '1.7'
+PRODUCER_NOTES = ('security hardening: Host/Origin allowlist, basis whitelist, '
+                  'finite max_seconds clamp (5-principal review P0-prime)')
 
 
 
@@ -765,24 +766,74 @@ def field_quantum(mol: Chem.Mol, kind: str, basis: str,
 
 # ── HTTP layer ──────────────────────────────────────────────────────────────
 
+def _allowed_hosts() -> set[str]:
+    """localhost + this box's own names/addresses. A Host outside this set is
+    DNS rebinding: a page Ivan opened anywhere resolving its own hostname to
+    this LAN IP. The Host check kills that class; echoing Origin only for
+    same-set origins kills drive-by reads; requiring application/json forces
+    a preflight so the check actually gates compute (a text/plain simple POST
+    skips preflight entirely)."""
+    import socket
+    hosts = {'localhost', '127.0.0.1', '[::1]'}
+    try:
+        hosts.add(socket.gethostname())
+        for info in socket.getaddrinfo(socket.gethostname(), None):
+            hosts.add(info[4][0])
+    except OSError:
+        pass
+    try:  # LAN IP via routing table, no traffic sent
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('192.0.2.1', 80))
+        hosts.add(s.getsockname()[0])
+        s.close()
+    except OSError:
+        pass
+    return hosts
+
+
+ALLOWED_HOSTS = _allowed_hosts()
+ALLOWED_BASIS = ('sto-3g', '6-31g', '6-31g*', 'def2-svp')  # = DB CHECK minus 'none'
+
+
 class Handler(BaseHTTPRequestHandler):
+    def _host_ok(self) -> bool:
+        host = (self.headers.get('Host') or '').rsplit(':', 1)[0]
+        return host in ALLOWED_HOSTS
+
+    def _cors_origin(self) -> str | None:
+        origin = self.headers.get('Origin')
+        if not origin:
+            return None
+        try:
+            host = origin.split('://', 1)[1].rsplit(':', 1)[0]
+        except IndexError:
+            return None
+        return origin if host in ALLOWED_HOSTS else None
+
     def _send(self, code: int, payload: dict):
         body = json.dumps(payload).encode()
         self.send_response(code)
         self.send_header('Content-Type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
+        origin = self._cors_origin()
+        if origin:
+            self.send_header('Access-Control-Allow-Origin', origin)
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
     def do_OPTIONS(self):
         self.send_response(204)
-        self.send_header('Access-Control-Allow-Origin', '*')
+        origin = self._cors_origin()
+        if origin:
+            self.send_header('Access-Control-Allow-Origin', origin)
         self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
 
     def do_GET(self):
+        if not self._host_ok():
+            self._send(403, {'ok': False, 'error': 'unrecognized Host'})
+            return
         if self.path == '/health':
             import pyscf
             import rdkit
@@ -793,6 +844,16 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {'ok': False, 'error': 'not found'})
 
     def do_POST(self):
+        if not self._host_ok():
+            self._send(403, {'ok': False, 'error': 'unrecognized Host'})
+            return
+        ctype = (self.headers.get('Content-Type') or '').split(';')[0].strip()
+        if ctype != 'application/json':
+            # A text/plain "simple" cross-origin POST skips the CORS preflight
+            # entirely; requiring JSON forces the preflight so the Origin
+            # allowlist actually gates compute.
+            self._send(415, {'ok': False, 'error': 'Content-Type must be application/json'})
+            return
         if self.path == '/embed':
             try:
                 length = int(self.headers.get('Content-Length', '0'))
@@ -824,12 +885,26 @@ class Handler(BaseHTTPRequestHandler):
             molblock = req['molfile']
             kind = req.get('kind', 'mep')
             basis = req.get('basis', DEFAULT_BASIS)
+            # Whitelist BEFORE any compute: an arbitrary basis (cc-pv5z on a
+            # 120-atom molecule) allocates unbounded memory in the init-guess
+            # phase the deadline provably cannot see, and an off-list basis
+            # that computes anyway strands an orphan blob against the DB
+            # CHECK. Same literal set as app.field_cube's constraint.
+            if basis not in ALLOWED_BASIS:
+                self._send(200, {'ok': False, 'error':
+                    f'basis {basis!r} not in {sorted(ALLOWED_BASIS)}'})
+                return
             # Classical mep has no basis; key it as 'none' so the cache row
             # satisfies the schema's classical/quantum pairing checks. mlp is
             # not in the app.field_kind enum and costs ~0.03 s — never cached.
             basis_key = 'none' if kind == 'mep' else basis
-            max_seconds = min(float(req.get('max_seconds', DEFAULT_MAX_SECONDS)),
-                              MAX_MAX_SECONDS)
+            # NaN fails every comparison, so min(float('nan'), cap) is nan and
+            # `time.time() > nan` is False: one JSON token would disable the
+            # deadline entirely, failing OPEN. Non-finite -> default.
+            req_seconds = float(req.get('max_seconds', DEFAULT_MAX_SECONDS))
+            if not math.isfinite(req_seconds):
+                req_seconds = DEFAULT_MAX_SECONDS
+            max_seconds = min(max(req_seconds, 1.0), MAX_MAX_SECONDS)
             spin = req.get('spin')
             spin = int(spin) if spin is not None else None
             molfile_sha = hashlib.sha256(molblock.encode()).digest()
