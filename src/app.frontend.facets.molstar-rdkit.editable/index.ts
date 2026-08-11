@@ -365,8 +365,10 @@ class MolecularVfxLab {
             this.updateLigandDepictionSelectionHighlights();
         });
         this.workbench.plugin.behaviors.interaction.click.subscribe(({ current }) => this.handleInteractionClick(current.loci));
-        initFieldWellsPanel(this.workbench.plugin);
-        initPharmacophoreDesigner(this.workbench.plugin);
+        // Other agents' facets — wrap in try/catch so their failures don't
+        // crash the core lab init and make the UI disappear.
+        try { initFieldWellsPanel(this.workbench.plugin); } catch (e) { console.error('[fields] init failed:', e); }
+        try { initPharmacophoreDesigner(this.workbench.plugin); } catch (e) { console.error('[designer] init failed:', e); }
         await this.workbench.setBackground(Color(0x0d141b));
         this.createControls();
         await this.loadMolecule(this.currentMolecule);
