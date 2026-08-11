@@ -708,3 +708,126 @@ function allOwnedOverlays(plugin: PluginContext) {
         ).withTag(RdkitChemicalLayerTag),
     );
 }
+
+// === Interactive SMARTS substructure search ===
+
+const SmartsSearchTag = 'rdkit-smarts-search';
+
+export interface SmartsSearchResult {
+    valid: boolean;
+    error?: string;
+    matchAtomIndices: Uint8Array;   // length = atomCount; 1 if atom is in any match
+    matchCount: number;             // number of distinct matches
+}
+
+/**
+ * Validate a SMARTS string and find matches in the given ligand molfile.
+ * Returns { valid: false, error } if SMARTS is invalid; otherwise the
+ * per-atom match flags + match count.
+ *
+ * Used by the interactive SMARTS search input in the Ligand panel.
+ * Atom-index contract: matches return indices into the molfile's atom list,
+ * identical to the rest of the substrate.
+ */
+export async function searchLigandSmarts(molfile: string, smarts: string): Promise<SmartsSearchResult | null> {
+    if (!smarts.trim()) {
+        return { valid: true, matchAtomIndices: new Uint8Array(0), matchCount: 0 };
+    }
+    const RDKit = await getRDKit();
+    const mol = RDKit.get_mol(molfile);
+    if (!mol || !mol.is_valid()) return null;
+    let qmol: JSMol | null = null;
+    try {
+        qmol = RDKit.get_qmol(smarts);
+        if (!qmol) return { valid: false, error: 'Invalid SMARTS syntax', matchAtomIndices: new Uint8Array(0), matchCount: 0 };
+
+        // Molfile atom count from line 4 (V2000 counts line).
+        const countsLine = molfile.split('\n')[3] || '';
+        const atomCount = parseInt(countsLine.slice(0, 3).trim(), 10) || 0;
+        if (atomCount === 0) return { valid: true, matchAtomIndices: new Uint8Array(0), matchCount: 0 };
+
+        const raw = mol.get_substruct_matches(qmol);
+        const parsed = JSON.parse(raw) as unknown;
+        const flags = new Uint8Array(atomCount);
+        let matchCount = 0;
+        if (Array.isArray(parsed)) {
+            for (const m of parsed as Array<{ atoms?: number[] }>) {
+                if (!m.atoms) continue;
+                matchCount++;
+                for (const idx of m.atoms) {
+                    if (typeof idx === 'number' && idx >= 0 && idx < atomCount) flags[idx] = 1;
+                }
+            }
+        }
+        return { valid: true, matchAtomIndices: flags, matchCount };
+    } catch (e) {
+        return { valid: false, error: e instanceof Error ? e.message : String(e), matchAtomIndices: new Uint8Array(0), matchCount: 0 };
+    } finally {
+        if (qmol) qmol.delete();
+        mol.delete();
+    }
+}
+
+/**
+ * Apply (or remove) a SMARTS search Overpaint overlay on the focused ligand.
+ * Pass `null` as result to clear. Caller is responsible for the debouncing;
+ * this function applies immediately.
+ */
+export async function applySmartsSearchOverlay(
+    plugin: PluginContext,
+    options: LigandFocusOptions,
+    result: SmartsSearchResult | null,
+): Promise<void> {
+    const state = plugin.state.data;
+    const update = state.build();
+
+    // Always remove this module's overlay first; re-add only if result has matches.
+    for (const cell of state.select(
+        StateSelection.Generators.ofTransformer(
+            StateTransforms.Representation.OverpaintStructureRepresentation3DFromBundle,
+        ).withTag(SmartsSearchTag),
+    )) {
+        update.delete(cell);
+    }
+
+    if (!result || !result.valid || result.matchCount === 0) {
+        await update.commit({ doNotUpdateCurrent: true });
+        return;
+    }
+
+    const structure = plugin.managers.structure.component.pivotStructure?.cell.obj?.data;
+    if (!structure) {
+        await update.commit({ doNotUpdateCurrent: true });
+        return;
+    }
+    const loci = lociFromFocusOptions(structure, options);
+    if (StructureElement.Loci.isEmpty(loci)) {
+        await update.commit({ doNotUpdateCurrent: true });
+        return;
+    }
+
+    const matched = filterLociByAtomIndex(loci, i => result.matchAtomIndices[i] === 1);
+    if (StructureElement.Loci.isEmpty(matched)) {
+        await update.commit({ doNotUpdateCurrent: true });
+        return;
+    }
+
+    for (const structureRef of plugin.managers.structure.component.currentStructures) {
+        for (const component of structureRef.components) {
+            for (const representation of component.representations) {
+                const repr = representation.cell;
+                const sourceData = repr.obj?.data.sourceData;
+                if (!sourceData) continue;
+                update.to(repr.transform.ref).apply(
+                    StateTransforms.Representation.OverpaintStructureRepresentation3DFromBundle,
+                    Overpaint.toBundle(Overpaint.filter(Overpaint.ofBundle([
+                        { bundle: StructureElement.Bundle.fromLoci(matched), color: Color(0xff6b35), clear: false },
+                    ], sourceData.root), sourceData) as Overpaint<StructureElement.Loci>),
+                    { tags: SmartsSearchTag },
+                );
+            }
+        }
+    }
+
+    await update.commit({ doNotUpdateCurrent: true });
+}

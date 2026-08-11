@@ -49,6 +49,8 @@ import {
     applyRdkitChemicalLayers,
     getRdkitChemicalLayerCounts,
     prepareLigandAnalysis,
+    searchLigandSmarts,
+    applySmartsSearchOverlay,
     RdkitChemicalLayers,
     type RdkitChemicalLayerId,
 } from '../chemistry.backend.perception.rdkit-wasm.editable/semantic-chemistry-rdkit';
@@ -302,6 +304,8 @@ class MolecularVfxLab {
     private ligandCutoff = 5;
     private interactionRecords: readonly SemanticInteractionRecord[] = [];
     private ligandDepictionAtomPositions: AtomPosition[] = [];
+    private smartsSearchMolfile: string | null = null;
+    private smartsSearchTimer: ReturnType<typeof setTimeout> | null = null;
     private busy = false;
 
     async init() {
@@ -384,6 +388,13 @@ class MolecularVfxLab {
             void this.perform(() => this.applyVisuals());
         });
         this.refreshLayerNavigation();
+
+        // SMARTS substructure search — debounced, validates on input, applies Overpaint.
+        const smartsInput = byId<HTMLInputElement>('smarts-input');
+        smartsInput.addEventListener('input', () => {
+            if (this.smartsSearchTimer) clearTimeout(this.smartsSearchTimer);
+            this.smartsSearchTimer = setTimeout(() => void this.runSmartsSearch(smartsInput.value), 350);
+        });
     }
 
     private createLayerSurface(
@@ -891,6 +902,58 @@ class MolecularVfxLab {
         // Property Optimization Cockpit facet reuses the same molfile
         // (computed once here) rather than re-running ligandLociToMolfile.
         void renderPropertiesPanel(analysis.molfile, ligandTarget?.label ?? null);
+        // SMARTS search uses the same molfile.
+        this.smartsSearchMolfile = analysis.molfile;
+        // Re-run the SMARTS search against the new ligand (if input is non-empty).
+        const smartsInput = byId<HTMLInputElement>('smarts-input');
+        if (smartsInput?.value) void this.runSmartsSearch(smartsInput.value);
+    }
+
+    private async runSmartsSearch(smarts: string) {
+        const input = byId<HTMLInputElement>('smarts-input');
+        const status = byId<HTMLElement>('smarts-status');
+        if (!input || !status) return;
+        if (!this.workbench) return;
+
+        // Empty input → clear overlay.
+        if (!smarts.trim()) {
+            input.dataset.error = 'false';
+            status.dataset.ok = '';
+            status.textContent = 'Type a SMARTS pattern to highlight matches on the ligand.';
+            await applySmartsSearchOverlay(this.workbench.plugin, this.currentFocusOptions(), null);
+            return;
+        }
+        if (!this.smartsSearchMolfile) {
+            status.dataset.ok = 'false';
+            status.textContent = 'No ligand loaded.';
+            return;
+        }
+
+        status.textContent = 'Searching…';
+        const result = await searchLigandSmarts(this.smartsSearchMolfile, smarts);
+        if (!result) {
+            input.dataset.error = 'true';
+            status.dataset.ok = 'false';
+            status.textContent = 'RDKit failed to parse the ligand molfile.';
+            return;
+        }
+        if (!result.valid) {
+            input.dataset.error = 'true';
+            status.dataset.ok = 'false';
+            status.textContent = `Invalid SMARTS · ${result.error ?? 'syntax error'}`;
+            await applySmartsSearchOverlay(this.workbench.plugin, this.currentFocusOptions(), null);
+            return;
+        }
+        input.dataset.error = 'false';
+        if (result.matchCount === 0) {
+            status.dataset.ok = '';
+            status.textContent = `0 matches.`;
+        } else {
+            const atomHits = result.matchAtomIndices.reduce((s, f) => s + (f ? 1 : 0), 0);
+            status.dataset.ok = 'true';
+            status.textContent = `${result.matchCount} match${result.matchCount === 1 ? '' : 'es'} · ${atomHits} atom${atomHits === 1 ? '' : 's'} highlighted.`;
+        }
+        await applySmartsSearchOverlay(this.workbench.plugin, this.currentFocusOptions(), result);
     }
 
     private handleLigandDepictionClick(event: MouseEvent) {

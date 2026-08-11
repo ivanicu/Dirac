@@ -566,6 +566,72 @@
         .ligand-legend-item i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
         .ligand-legend-note { color: var(--text-3); line-height: 1.4; }
 
+        /* SMARTS substructure search */
+        .smarts-search {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+        .smarts-search label {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--text-3);
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        #smarts-input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid var(--border-strong);
+            border-radius: 7px;
+            background: var(--surface-2);
+            color: var(--text);
+            font: inherit;
+            font-size: 12px;
+            font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+        }
+        #smarts-input:focus {
+            outline: 0;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgb(125 211 192 / 12%);
+        }
+        #smarts-input[data-error="true"] {
+            border-color: var(--high);
+            background: #22151533;
+        }
+        .smarts-status {
+            margin-top: 6px;
+            color: var(--text-3);
+            font-size: 10px;
+            line-height: 1.4;
+            font-variant-numeric: tabular-nums;
+        }
+        .smarts-status[data-ok="true"] { color: var(--accent); }
+        .smarts-status[data-ok="false"] { color: var(--high); }
+        .smarts-help {
+            margin-top: 8px;
+            font-size: 10px;
+        }
+        .smarts-help summary {
+            color: var(--text-3);
+            cursor: pointer;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+        }
+        .smarts-help ul {
+            margin: 6px 0 0 0;
+            padding-left: 16px;
+            color: var(--text-2);
+            line-height: 1.5;
+        }
+        .smarts-help code {
+            color: var(--accent);
+            font-family: ui-monospace, 'SF Mono', monospace;
+            font-size: 10px;
+        }
+
         /* Properties panel */
         .desc-grid {
             display: grid;
@@ -826,6 +892,22 @@
                         <span class="ligand-legend-item"><i style="background:#5fd0c8"></i>Donor</span>
                         <span class="ligand-legend-item"><i style="background:#e1a14e"></i>Acceptor</span>
                         <span class="ligand-legend-note">Highlights mirror the Semantics · RDKit toggles. Click an atom to select it in 3D.</span>
+                    </div>
+                    <div class="smarts-search">
+                        <label for="smarts-input">Substructure search · SMARTS</label>
+                        <input id="smarts-input" type="text" placeholder="e.g. [NX3][CX3](=O) for amide" autocomplete="off" spellcheck="false">
+                        <div id="smarts-status" class="smarts-status">Type a SMARTS pattern to highlight matches on the ligand.</div>
+                        <details class="smarts-help">
+                            <summary>Common SMARTS patterns</summary>
+                            <ul>
+                                <li><code>[NX3][CX3](=O)</code> — amide nitrogen</li>
+                                <li><code>[CX3](=O)[OX2H1]</code> — carboxylic acid</li>
+                                <li><code>c1ccccc1</code> — benzene ring</li>
+                                <li><code>[#7,#8;H1,H2,H3]</code> — H-bond donor</li>
+                                <li><code>[R]</code> — any ring atom</li>
+                                <li><code>[CX4]</code> — sp³ carbon</li>
+                            </ul>
+                        </details>
                     </div>
                 </section>
             </div>
