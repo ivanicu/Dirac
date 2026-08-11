@@ -62,6 +62,12 @@ import {
     PharmacophoreLayers,
     type PharmacophoreLayerId,
 } from '../chemistry.backend.perception.rdkit-wasm.editable/pharmacophore-features';
+import {
+    applyBondOrder3D,
+
+    BondOrder3DLayers,
+    type BondOrder3DLayerId,
+} from '../chemistry.backend.perception.rdkit-wasm.editable/bond-order-3d';
 import { LigandDepiction, type AtomHighlight, type AtomPosition } from '../chemistry.backend.perception.rdkit-wasm.editable/ligand-depiction';
 import { renderPropertiesPanel } from './facets/property-cockpit';
 import { initFieldWellsPanel, updateFieldWellsLigand, autoRenderElectrostaticWell } from './facets/field-wells';
@@ -169,6 +175,12 @@ const PharmacophoreLayerControls = PharmacophoreLayers.map(layer => ({
     recommended: false,
 }));
 
+const BondOrder3DLayerControls = BondOrder3DLayers.map(layer => ({
+    ...layer,
+    group: 'Pharmacophore',
+    recommended: false,
+}));
+
 const FocusLayerControls = FocusSemanticLayers.map(layer => ({
     ...layer,
     recommended: false,
@@ -191,6 +203,7 @@ const SemanticLayerControls = [
     ...AllEvidenceLayerControls,
     ...RdkitLayerControls,
     ...PharmacophoreLayerControls,
+    ...BondOrder3DLayerControls,
 ] as const;
 const VfxLayerControls = MolstarVisualUpgrades;
 const VisualLayerControls = [...SemanticLayerControls, ...VfxLayerControls] as const;
@@ -202,7 +215,7 @@ const SemanticUpgradeGroups = UpgradeGroups.filter(group =>
 );
 const VfxUpgradeGroups = UpgradeGroups.slice(9);
 type UpgradeGroup = typeof UpgradeGroups[number];
-type MolecularLayerId = MolstarVisualUpgradeId | ChemicalSemanticLayerId | StructuralSemanticLayerId | SemanticInteractionLayerId | ContextSemanticLayerId | FocusSemanticLayerId | EvidenceSemanticLayerId | RdkitChemicalLayerId | PharmacophoreLayerId;
+ type MolecularLayerId = MolstarVisualUpgradeId | ChemicalSemanticLayerId | StructuralSemanticLayerId | SemanticInteractionLayerId | ContextSemanticLayerId | FocusSemanticLayerId | EvidenceSemanticLayerId | RdkitChemicalLayerId | PharmacophoreLayerId | BondOrder3DLayerId;
 
 /**
  * The semantic controls are deliberately not presentation presets. This
@@ -254,8 +267,10 @@ const SemanticLayerGuides: Readonly<Record<Exclude<MolecularLayerId, MolstarVisu
     'ring-atoms-rdkit': { channel: 'recolour native geometry', expected: 'a uniform accent on every atom in any SSSR ring (aliphatic or aromatic).', use: 'Use to read the molecular scaffold at a glance — distinguishes the ring backbone from chain substituents.', empty: 'Empty when the ligand is acyclic (no rings at all).', fixture: '1CBS', representation: 'atomic-detail' },
     'sp3-carbons-rdkit': { channel: 'recolour native geometry', expected: 'an accent on every saturated sp³-hybridized carbon (4 single bonds, tetrahedral).', use: 'Use to read 3D-character of the scaffold — high sp³ fraction correlates with drug-likeness and lead-likeness (see Property Cockpit).', empty: 'Empty when the ligand has no sp³ carbons (fully aromatic / planar / unsaturated).', representation: 'atomic-detail' },
     'reactive-groups-rdkit': { channel: 'recolour native geometry', expected: 'red accents on atoms in aldehyde, Michael acceptor, epoxide, acyl halide, alkyl halide, nitro, disulfide, peroxide, azide, or isocyanate groups.', use: 'Use to flag compounds with potential assay interference or covalent reactivity before progressing to screening.', empty: 'Empty when no known reactive group is detected — a clean result.', representation: 'atomic-detail' },
-    'bond-order-rdkit': { channel: 'recolour native geometry', expected: 'blue accents on atoms in double bonds, purple on triple bonds.', use: 'Use to see WHERE unsaturation is without switching to 2D. Full double-line 3D rendering is future work.', empty: 'Empty when the ligand has no double or triple bonds (fully saturated).', fixture: '1CBS', representation: 'atomic-detail' },
+    'bond-order-rdkit': { channel: 'recolour native geometry', expected: 'blue accents on atoms in double bonds, purple on triple bonds.', use: 'Use to see WHERE unsaturation is without switching to 2D.', empty: 'Empty when the ligand has no double or triple bonds.', fixture: '1CBS', representation: 'atomic-detail' },
+    'pains-rdkit': { channel: 'recolour native geometry', expected: 'bright magenta accents on atoms matching known PAINS substructures (rhodanines, catechols, quinones, Michael acceptors, etc.).', use: 'Use to flag compounds with potential assay interference before progressing to screening.', empty: 'Empty when no PAINS pattern matches — a clean result.', representation: 'atomic-detail' },
     'pharmacophore-features-rdkit': { channel: 'add ligand-local geometry', expected: 'H-bond acceptor cones (red), donor sticks (blue), aromatic ring disks (amber), and hydrophobic halos (grey) drawn over the ligand.', use: 'Use to read the ligand recognition profile at a glance; this is the chemist\'s shorthand for "what does this molecule bind with".', empty: 'Empty when no ligand is present or RDKit perception yields no features.', fixture: '1CBS', representation: 'atomic-detail' },
+    'bond-order-3d-rdkit': { channel: 'add ligand-local geometry', expected: 'extra parallel cylinders next to double bonds (1 extra) and triple bonds (2 extra), ChemDraw-style.', use: 'Use to visually distinguish C=C, C≡C in 3D without switching to 2D depiction.', empty: 'Empty when the ligand has no double or triple bonds.', fixture: '1CBS', representation: 'atomic-detail' },
 };
 
 const CoreSemanticLegends: Partial<Record<Exclude<MolecularLayerId, MolstarVisualUpgradeId>, string>> = {
@@ -300,6 +315,10 @@ function isRdkitLayer(id: MolecularLayerId): id is RdkitChemicalLayerId {
 
 function isPharmacophoreLayer(id: MolecularLayerId): id is PharmacophoreLayerId {
     return PharmacophoreLayers.some(layer => layer.id === id);
+}
+
+function isBondOrder3DLayer(id: MolecularLayerId): id is BondOrder3DLayerId {
+    return BondOrder3DLayers.some(layer => layer.id === id);
 }
 
 const MesoscaleCopyTag = 'mn-vfx-mesoscale-copy';
@@ -710,7 +729,7 @@ class MolecularVfxLab {
         const structure = this.workbench.plugin.managers.structure.component.pivotStructure?.cell.obj?.data;
         if (!structure) return;
 
-        const rdkitLayerIds: RdkitChemicalLayerId[] = ['aromaticity-rdkit', 'donor-acceptor-rdkit', 'partial-charge-rdkit', 'stereo-rdkit', 'ring-atoms-rdkit', 'sp3-carbons-rdkit', 'reactive-groups-rdkit', 'bond-order-rdkit'];
+        const rdkitLayerIds: RdkitChemicalLayerId[] = ['aromaticity-rdkit', 'donor-acceptor-rdkit', 'partial-charge-rdkit', 'stereo-rdkit', 'ring-atoms-rdkit', 'sp3-carbons-rdkit', 'reactive-groups-rdkit', 'bond-order-rdkit', 'pains-rdkit'];
 
         if (!ligandAvailable) {
             for (const id of rdkitLayerIds) this.setRdkitAvailability(id, { available: false, text: 'Not present · no deposited ligand', signal: 'empty' });
@@ -771,6 +790,13 @@ class MolecularVfxLab {
                     ? `${counts.doubleBondAtoms} double · ${counts.tripleBondAtoms} triple bond atoms`
                     : 'No double or triple bonds (fully saturated)',
                 signal: counts.doubleBondAtoms + counts.tripleBondAtoms > 0 ? 'ready' : 'empty',
+            });
+            this.setRdkitAvailability('pains-rdkit', {
+                available: counts.painsLabels.length > 0,
+                text: counts.painsLabels.length > 0
+                    ? `⚠ PAINS: ${counts.painsLabels.slice(0,3).join(', ')}${counts.painsLabels.length > 3 ? ` +${counts.painsLabels.length - 3}` : ''}`
+                    : 'No PAINS matches — clean',
+                signal: counts.painsLabels.length > 0 ? 'active' : 'empty',
             });
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -1451,6 +1477,7 @@ class MolecularVfxLab {
         const evidenceLayers = [...this.enabledUpgrades].filter(isEvidenceLayer);
         const rdkitLayers = [...this.enabledUpgrades].filter(isRdkitLayer);
         const pharmacophoreEnabled = [...this.enabledUpgrades].some(isPharmacophoreLayer);
+        const bondOrder3DEnabled = [...this.enabledUpgrades].some(isBondOrder3DLayer);
         await applyStructuralSemanticLayers(this.workbench.plugin, structuralLayers);
         await applyChemicalSemanticLayers(this.workbench.plugin, chemicalLayers);
         await applyEvidenceSemanticLayers(this.workbench.plugin, evidenceLayers);
@@ -1459,6 +1486,7 @@ class MolecularVfxLab {
         await applyFocusSemanticLayers(this.workbench.plugin, focusLayers, this.currentFocusOptions());
         await applyRdkitChemicalLayers(this.workbench.plugin, rdkitLayers, this.currentFocusOptions());
         await applyPharmacophoreFeatures(this.workbench.plugin, pharmacophoreEnabled, this.currentFocusOptions());
+        await applyBondOrder3D(this.workbench.plugin, bondOrder3DEnabled, this.currentFocusOptions());
         this.renderContactLedger();
         this.refreshSemanticAvailability();
         void this.renderLigandDepiction();

@@ -26,6 +26,7 @@ import { Vec3 } from '../mol-math/linear-algebra';
 import { ComponentBond } from '../mol-model-formats/structure/property/bonds/chem_comp';
 import { StructureSelectionQueries } from '../mol-plugin-state/helpers/structure-selection-query';
 import type { LigandFocusOptions } from './semantic-focus';
+import { PAINS_SMARTS } from './pains-smarts';
 
 export type RdkitChemicalLayerId =
     | 'partial-charge-rdkit'
@@ -35,7 +36,8 @@ export type RdkitChemicalLayerId =
     | 'ring-atoms-rdkit'
     | 'sp3-carbons-rdkit'
     | 'reactive-groups-rdkit'
-    | 'bond-order-rdkit';
+    | 'bond-order-rdkit'
+    | 'pains-rdkit';
 
 export type RdkitChemicalLayerCost = 'low' | 'medium';
 
@@ -104,6 +106,13 @@ export const RdkitChemicalLayers: readonly RdkitChemicalLayerDefinition[] = Obje
         source: 'V2000 molfile bond block parsed from ligand molfile',
         description: 'Colors atoms participating in double bonds (blue) and triple bonds (purple). The 3D representation still draws single-line cylinders for all bonds; this layer at least shows WHERE the unsaturation is. Full double-line rendering requires a custom ShapeRepresentation (future work).',
     },
+    {
+        id: 'pains-rdkit',
+        label: 'PAINS alerts (~50 patterns)',
+        cost: 'medium',
+        source: 'Curated SMARTS from Baell & Walters 2010 PANS families',
+        description: 'Highlights atoms matching known Pan-Assay INterference compoundS (PAINS) substructures: rhodanines, catechols, quinones, Michael acceptors, N-oxides, alkyl halides, azo compounds, peroxides, epoxides, hydroxamic acids, maleimides, nitroaromatics, and more. Covers ~50 of the most common PAINS families.',
+    },
 ]);
 
 export interface RdkitChemicalLayerCounts {
@@ -121,6 +130,7 @@ export interface RdkitChemicalLayerCounts {
     readonly     reactiveGroups: readonly string[];
     readonly doubleBondAtoms: number;
     readonly tripleBondAtoms: number;
+    readonly painsLabels: readonly string[];
 }
 
 const RdkitChemicalLayerTag = 'rdkit-chemical-semantic-layers';
@@ -334,6 +344,8 @@ export interface LigandChemistry {
     reactiveGroupLabels: string[];    // human-readable list of found groups
     doubleBondAtoms: Uint8Array;      // atoms with at least one double bond
     tripleBondAtoms: Uint8Array;      // atoms with at least one triple bond
+    painsAtoms: Uint8Array;           // atoms matching any PAINS SMARTS
+    painsLabels: string[];            // matched PAINS family names
 }
 
 function smartsAtomIndices(RDKit: RDKitModule, mol: JSMol, smarts: string, atomCount: number): Uint8Array {
@@ -587,6 +599,18 @@ export async function computeLigandChemistry(molfile: string, atomCount: number)
             if (order === 3) { if (a1 >= 0 && a1 < atomCount) tripleBondAtoms[a1] = 1; if (a2 >= 0 && a2 < atomCount) tripleBondAtoms[a2] = 1; }
         }
 
+        // PAINS: run each SMARTS and flag matching atoms.
+        const painsAtoms = new Uint8Array(atomCount);
+        const painsLabels: string[] = [];
+        for (const [name, smarts] of PAINS_SMARTS) {
+            const flags = smartsAtomIndices(RDKit, mol, smarts, atomCount);
+            let found = false;
+            for (let i = 0; i < atomCount; i++) {
+                if (flags[i]) { painsAtoms[i] = 1; found = true; }
+            }
+            if (found) painsLabels.push(name);
+        }
+
         let partialCharges: Float32Array | null = null;
         let partialChargeMin = 0;
         let partialChargeMax = 0;
@@ -629,6 +653,8 @@ export async function computeLigandChemistry(molfile: string, atomCount: number)
             reactiveGroupLabels,
             doubleBondAtoms,
             tripleBondAtoms,
+            painsAtoms,
+            painsLabels,
         };
     } finally {
         if (mol) mol.delete();
@@ -704,15 +730,15 @@ function filterLociByAtomIndex(
 export async function getRdkitChemicalLayerCounts(structure: Structure, options: LigandFocusOptions = {}): Promise<RdkitChemicalLayerCounts> {
     const loci = lociFromFocusOptions(structure, options);
     if (StructureElement.Loci.isEmpty(loci)) {
-        return { hasLigand: false, atomCount: 0, aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0, reactiveGroups: [], doubleBondAtoms: 0, tripleBondAtoms: 0 };
+        return { hasLigand: false, atomCount: 0, aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0, reactiveGroups: [], doubleBondAtoms: 0, tripleBondAtoms: 0, painsLabels: [] };
     }
     const build = ligandLociToMolfile(loci);
     if (!build) {
-        return { hasLigand: true, atomCount: StructureElement.Loci.size(loci), aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0, reactiveGroups: [], doubleBondAtoms: 0, tripleBondAtoms: 0 };
+        return { hasLigand: true, atomCount: StructureElement.Loci.size(loci), aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0, reactiveGroups: [], doubleBondAtoms: 0, tripleBondAtoms: 0, painsLabels: [] };
     }
     const chem = await computeLigandChemistry(build.molfile, build.atomCount);
     if (!chem) {
-        return { hasLigand: true, atomCount: build.atomCount, aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0, reactiveGroups: [], doubleBondAtoms: 0, tripleBondAtoms: 0 };
+        return { hasLigand: true, atomCount: build.atomCount, aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0, reactiveGroups: [], doubleBondAtoms: 0, tripleBondAtoms: 0, painsLabels: [] };
     }
     const range = chem.partialCharges ? ([chem.partialChargeMin, chem.partialChargeMax] as const) : null;
     let chirR = 0, chirS = 0, chirU = 0;
@@ -734,6 +760,7 @@ export async function getRdkitChemicalLayerCounts(structure: Structure, options:
         reactiveGroups: chem.reactiveGroupLabels,
         doubleBondAtoms: countSetBits(chem.doubleBondAtoms),
         tripleBondAtoms: countSetBits(chem.tripleBondAtoms),
+        painsLabels: chem.painsLabels,
     };
 }
 
@@ -834,6 +861,11 @@ async function buildRdkitOverpaintLayers(
         if (!StructureElement.Loci.isEmpty(dblLoci)) out.push({ loci: dblLoci, color: Color(0x4dabf7) });
         const triLoci = filterLociByAtomIndex(loci, i => chem.tripleBondAtoms[i] === 1);
         if (!StructureElement.Loci.isEmpty(triLoci)) out.push({ loci: triLoci, color: Color(0xa06ec9) });
+    }
+
+    if (enabledIds.has('pains-rdkit') && chem.painsLabels.length > 0) {
+        const filtered = filterLociByAtomIndex(loci, i => chem.painsAtoms[i] === 1);
+        if (!StructureElement.Loci.isEmpty(filtered)) out.push({ loci: filtered, color: Color(0xff0066) });
     }
 
     return out;
