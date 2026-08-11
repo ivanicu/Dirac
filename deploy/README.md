@@ -11,7 +11,23 @@ three): PPID = 1 for all three processes.
 This directory does not fix that by itself — it documents the fix
 (`deploy/systemd/*.service`) and gives you a day-to-day tool for the same
 three services (`bin/dev`) plus a safe way to reclaim stale compute
-(`bin/dirac-sweep`). **The systemd units are not installed by this commit.**
+(`bin/dirac-sweep`).
+
+> **STATUS 2026-08-11 — INSTALLED AND RUNNING.** `dirac-fields.service` (:8901)
+> and `dirac-web.service` (:1338) are enabled under `systemctl --user`, with
+> linger ON, so both start at boot without a login. Supervision was PROVEN, not
+> assumed: `kill -9` on the fields daemon's MainPID and it returned with a new
+> pid inside 8 s, `/health` 200. `dirac-physics.service` (:8902) is installed but
+> NOT started — that port is held by a hand-run daemon belonging to another
+> session, and a second one cannot bind it. Hand it over with
+> `systemctl --user enable --now dirac-physics.service` once the manual process
+> is stopped.
+>
+> `dirac-backend.service` was SPLIT into `dirac-fields` + `dirac-physics` (the
+> merged file is in `_archive/`). Its own header had already argued for the
+> split; the port conflict above is what made it concrete, because a merged unit
+> restart-loops BOTH daemons when one port is taken — taking down a working
+> fields daemon in order to fail at starting a physics one.
 Installing them is a deliberate step — see below.
 
 ## What's here
@@ -20,7 +36,9 @@ Installing them is a deliberate step — see below.
 |---|---|
 | `bin/dev` | up / down / status / build / logs for fields, physics, web. Never touches a daemon it didn't start itself — another session's daemon survives `bin/dev down`. |
 | `bin/dirac-sweep` | the admin DELETE boundary for stale `app.field_cube` rows + orphaned `app.blob` bytes. CLI, not HTTP — see "why a CLI" below. |
-| `deploy/systemd/dirac-backend.service` | supervises the fields (:8901) + physics (:8902) python daemons. |
+| `deploy/systemd/dirac-fields.service` | supervises the fields daemon (:8901). INSTALLED + RUNNING. |
+| `deploy/systemd/dirac-physics.service` | supervises the physics daemon (:8902). Installed, NOT started — port held by a hand-run process. |
+| `deploy/systemd/_archive/dirac-backend.service.superseded` | the merged both-daemons unit these two replaced. Kept, not deleted: its header holds the measured memory-ceiling derivation both inherit. |
 | `deploy/systemd/dirac-web.service` | supervises the static web server (:1338). |
 
 ## Verified-live facts (re-check before trusting an older doc)
@@ -135,10 +153,11 @@ existing `dirac-sync.timer` in this same directory), not system units — no
 
 ```bash
 # from the repo root
-systemctl --user link "$PWD/deploy/systemd/dirac-backend.service"
+systemctl --user link "$PWD/deploy/systemd/dirac-fields.service"
+systemctl --user link "$PWD/deploy/systemd/dirac-physics.service"   # :8902 — see STATUS above before starting
 systemctl --user link "$PWD/deploy/systemd/dirac-web.service"
 systemctl --user daemon-reload
-systemctl --user enable --now dirac-backend.service
+systemctl --user enable --now dirac-fields.service
 systemctl --user enable --now dirac-web.service
 ```
 
@@ -150,25 +169,29 @@ unit starts isn't fighting an existing one for the port.
 
 Check it worked:
 ```bash
-systemctl --user status dirac-backend.service dirac-web.service
-journalctl --user -u dirac-backend.service -f
+systemctl --user status dirac-fields.service dirac-web.service
+# and the one nobody checks until after a reboot:
+loginctl show-user "$USER" -p Linger --value    # must be "yes"
+journalctl --user -u dirac-fields.service -f
+# NB: a journalctl -u against a unit name that does not exist prints NOTHING
+# and exits 0 — silence there is not "no errors", it is "no such unit".
 ```
 
 ### Uninstalling
 
 ```bash
-systemctl --user disable --now dirac-backend.service dirac-web.service
+systemctl --user disable --now dirac-fields.service dirac-physics.service dirac-web.service
 systemctl --user daemon-reload
 # the link target lives in this repo; nothing to delete outside it.
 # to fully remove the symlinks systemd creates in ~/.config/systemd/user/:
-systemctl --user link --now 2>/dev/null; rm -f ~/.config/systemd/user/dirac-backend.service ~/.config/systemd/user/dirac-web.service
+systemctl --user link --now 2>/dev/null; rm -f ~/.config/systemd/user/dirac-fields.service ~/.config/systemd/user/dirac-physics.service ~/.config/systemd/user/dirac-web.service
 systemctl --user daemon-reload
 ```
 
 ### Why the memory numbers are what they are
 
 Full derivation is in the comment block inside
-`deploy/systemd/dirac-backend.service` (it's the load-bearing copy — this is
+`deploy/systemd/dirac-fields.service` (it's the load-bearing copy — this is
 a summary, not a second source of truth). Headline: `MemoryHigh=6G`,
 `MemoryMax=8G`. Measured inputs:
 
@@ -197,7 +220,9 @@ a summary, not a second source of truth). Headline: `MemoryHigh=6G`,
 
 ### Known limitation, stated rather than hidden
 
-`dirac-backend.service` runs both python daemons under one unit via a
+RESOLVED 2026-08-11 — split into two units; kept because the reasoning is
+the reason the split happened. `dirac-backend.service` ran both python
+daemons under one unit via a
 `wait -n`-based bash wrapper (see the unit file's own top comment for the
 full reasoning) because this task granted exactly one backend unit path.
 Consequence: if physics crashes, fields restarts too (and vice versa) — a
@@ -206,7 +231,8 @@ worse blast radius than the two independent units
 implies would be correct. If that shared-fate restart becomes a real
 problem, the fix is a second unit file
 (`deploy/systemd/dirac-physics.service`, splitting the current
-`dirac-backend.service` into fields-only), which is a small change but is
+`dirac-backend.service` into fields-only) — DONE, see STATUS at the top —
+which was a small change but is
 explicitly out of scope for what was authorized here.
 
 ## `dirac-sync.timer` — read this before you rely on `main` being what you think it is

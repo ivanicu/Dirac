@@ -1,0 +1,42 @@
+# dirac-physics.service — Dirac physics daemon — sigma-hole surface MEP + torsion (:8902)
+#
+# SPLIT FROM dirac-backend.service, which supervised BOTH python daemons under
+# one wrapper. That file said so itself: "the correct systemd shape is almost
+# certainly two independent units, so a crash in one does not restart the
+# other", and it only existed in the merged form because the task that wrote it
+# was granted a single unit path. Two reasons the split is now worth the two
+# files:
+#
+# ① SHARED FATE. `wait -n` means a physics crash restarts the fields daemon,
+#    throwing away its in-memory SCF cache (a converged Fe-heme wavefunction is
+#    minutes of CPU) for a fault in a different process.
+# ② PORT OWNERSHIP, which is the concrete reason today: the physics daemon on
+#    :8902 is run by hand from another session right now. A merged unit would
+#    try to bind a port already in use, the wrapper would exit, and systemd
+#    would restart-loop BOTH — taking down a working fields daemon to fail at
+#    starting a physics one. Separate units let :8901 come under supervision
+#    immediately and :8902 be handed over whenever its owner is ready.
+
+[Unit]
+Description=Dirac physics daemon — sigma-hole surface MEP + torsion (:8902)
+After=postgresql.service network.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ivan/dirac
+ExecStart=/home/ivan/dirac/backend/env/bin/python backend/physics/server.py
+Restart=on-failure
+RestartSec=5
+
+# Ceilings carried over unchanged from dirac-backend.service, where they were
+# derived from measurement: pyscf plans around a 4000 MB max_memory per SCF
+# object, and idle RSS was measured at ~160 MB (fields) and ~1.06 GB (physics).
+# PER-UNIT now rather than shared, which is strictly safer: one runaway SCF can
+# no longer consume the other daemon's headroom before either gets throttled.
+MemoryHigh=6G
+MemoryMax=8G
+
+[Install]
+WantedBy=default.target
