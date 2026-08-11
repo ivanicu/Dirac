@@ -400,16 +400,33 @@ def test_iodobenzene_homo_matches_the_experimental_ionisation_potential():
 # INCIDENT 2 — one constant, two homes; and the Python/SQL join
 # ════════════════════════════════════════════════════════════════════════════
 
+# A basis name may appear in a module-level constant whose NAME declares that it
+# is classifying bases — MINIMAL_BASES is the live example: "which bases are too
+# small for a frontier energy to be quotable" is a DIFFERENT FACT from "the
+# default" and "the whitelist", and a different fact is entitled to its own home.
+#
+# The scanner convicted MINIMAL_BASES the hour it was added, which is the right
+# instinct applied to the wrong property: its rule was "the string 'sto-3g'
+# appears once", and the property is "the DEFAULT and the ALLOWED SET have one
+# home each". Narrowing by NAME rather than by line keeps the conviction power
+# where it belongs — a literal inside a FUNCTION BODY is still a stray, and that
+# is where the original incident lived (the HTTP layer's own 'sto-3g' default,
+# 07f703b).
+_BASIS_CONSTANT_HOMES = ('DEFAULT_BASIS', 'ALLOWED_BASIS')
+
+
 def _basis_literal_homes(tree: ast.Module) -> set[int]:
-    """Line numbers that are ALLOWED to contain a basis-name literal: the
-    DEFAULT_BASIS assignment and the ALLOWED_BASIS whitelist. Everything else
-    is a second home."""
+    """Line numbers ALLOWED to contain a basis-name literal: the DEFAULT_BASIS
+    assignment, the ALLOWED_BASIS whitelist, and any module-level constant whose
+    name ends in _BASES (a declared classification of bases). Everything else —
+    every literal in every function body — is a second home."""
     allowed: set[int] = set()
     for node in tree.body:
         if not isinstance(node, ast.Assign):
             continue
         names = {t.id for t in node.targets if isinstance(t, ast.Name)}
-        if names & {'DEFAULT_BASIS', 'ALLOWED_BASIS'}:
+        classifies = any(n.endswith('_BASES') for n in names)
+        if names & set(_BASIS_CONSTANT_HOMES) or classifies:
             allowed.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
     return allowed
 
@@ -480,7 +497,12 @@ def test_positive_control_the_basis_literal_scanner_can_fire():
     """A `0 found` from an instrument that has never returned non-zero is
     silence, not an acquittal. Plant a second home and require detection."""
     src, _ = _source_and_tree()
-    planted_src = src + "\n_PLANTED_SECOND_HOME = '6-31g'\n"
+    # Planted INSIDE A FUNCTION, because a module-level constant named *_BASES
+    # is now a legitimate home and planting one there would test the exemption
+    # rather than the scanner. A literal buried in a function body is exactly the
+    # shape of the original incident.
+    planted_src = src + ("\ndef _planted_second_home():\n"
+                         "    return '6-31g'\n")
     planted_tree = ast.parse(planted_src)
     hits = _stray_basis_literals(planted_tree, set(fs.ALLOWED_BASIS))
     assert hits, 'the scanner did not see a planted second home — it is blind'
@@ -596,8 +618,16 @@ def test_positive_control_benzene_classical_mep_has_resolution():
     assert meta['vmax'] - meta['vmin'] > 10.0, 'the field is flat — a zero-field tell'
     assert meta['net_charge'] == 0, f'benzene is neutral, got {meta["net_charge"]}'
     assert meta['units'] == 'kcal/mol' and meta['charges'] == 'gasteiger'
-    assert 0 < meta['iso_suggest'] < abs(meta['vmin']), (
-        f'iso_suggest={meta["iso_suggest"]} is not inside the field range')
+    # `iso_suggest` (a percentile of |field|) was replaced by a FIXED isovalue
+    # plus the value the box was sized for: a suggestion recomputed per molecule
+    # made two molecules incomparable, which is the opposite of what a contour is
+    # for. The invariant survives the rename — whatever isovalue is drawn must lie
+    # inside the field's own range, or the surface is empty or clipped — so it is
+    # asserted on the key that exists rather than deleted with the old name.
+    iso = float(meta.get('iso_sized_for') or meta['iso_fixed'])
+    assert 0 < iso < abs(meta['vmin']), (
+        f'iso={iso} is not inside the field range (vmin={meta["vmin"]}) — the '
+        f'surface would be empty or clipped')
     assert 'nan' not in cube.lower(), 'NaN reached the cube'
 
 
@@ -618,7 +648,15 @@ def test_the_cube_writer_states_the_geometry_it_was_given():
         f'cube declares {natoms} atoms, molecule has {mol.GetNumAtoms()}')
 
     origin_bohr = np.array([float(x) for x in lines[2].split()[1:4]])
-    expected_lo = coords.min(axis=0) - 4.0            # field_mep's pad default
+    # Read the pad ACTUALLY USED, not the requested default. field_mep grows the
+    # box until the contour closes, so the two differ whenever growth happened —
+    # benzene now lands at 8.0 A after two PAD_STEPs, and hardcoding 4.0 turned a
+    # units invariant into a test of the padding policy. The invariant being
+    # checked here is "origin (Bohr) x BOHR == the box corner", which must hold at
+    # ANY pad; the moment it also asserts WHICH pad, every tuning pass reads as a
+    # unit inversion.
+    pad_used = float(meta['pad_used_angstrom'])
+    expected_lo = coords.min(axis=0) - pad_used
     assert np.allclose(origin_bohr * fs.BOHR, expected_lo, atol=1e-4), (
         f'cube origin {origin_bohr * fs.BOHR} A != padded box corner '
         f'{expected_lo} — an Angstrom/Bohr inversion')
@@ -638,13 +676,66 @@ def test_the_cube_writer_states_the_geometry_it_was_given():
 # INCIDENT 4 — an atom cap cannot bound the clock
 # ════════════════════════════════════════════════════════════════════════════
 
+def test_a_zero_budget_is_refused_before_an_scf_object_exists():
+    """The pre-flight, which is a DIFFERENT guard from the in-loop watchdog.
+
+    `max_seconds=0` is documented across this repo as "refuse before doing any
+    work, tell me the cost". Until the pre-flight landed it was answered by the
+    watchdog after one SCF cycle — measured against the job ledger at 1.03 s and
+    1.28 s, recorded as BUDGET. A rule stated in four comments and implemented in
+    none of them is a rule about intentions.
+
+    The refusal must carry the ESTIMATE and the basis-function count, because
+    "too slow" without a number gives the caller nothing to send instead.
+    """
+    mol = prepared('c1ccccc1')
+    fs._scf_cache.clear()
+    t0 = time.time()
+    try:
+        fs.run_scf(mol, 'sto-3g', max_seconds=0.0)
+    except fs.FieldBudgetExceeded as e:
+        elapsed = time.time() - t0
+        assert elapsed < 1.0, (
+            f'the pre-flight took {elapsed:.2f} s — if it is not fast it is not a '
+            f'pre-flight, it is the watchdog wearing its name')
+        assert 'estimated' in str(e) and 'basis functions' in str(e), (
+            f'the refusal carries no estimate, so the caller cannot know what to '
+            f'send instead: {e}')
+    else:
+        raise AssertionError('a 0 s budget did not refuse before running')
+
+
 def test_deadline_fires_from_inside_the_scf_loop():
     """HF is O(nao^4) per ITERATION and the iteration count is unbounded, so
     MAX_QM_ATOMS bounds SIZE and nothing else. Benzene is 12 atoms — a tenth of
-    the atom cap — and a zero budget must still stop it, which can only happen
-    from a check inside the SCF loop. Positive control in the same test: the
-    same molecule with a real budget must converge, or the refusal above proves
-    nothing.
+    the atom cap — and a budget it cannot meet must still stop it, which can only
+    happen from a check inside the SCF loop. Positive control in the same test:
+    the same molecule with a real budget must converge, or the refusal above
+    proves nothing.
+
+    ⚠ THE BUDGET IS TINY-BUT-NONZERO, and the reason is an interaction that
+    broke this witness the moment a new guard landed. This test used
+    max_seconds=0.0. run_scf then gained a PRE-FLIGHT estimate, which refuses a
+    0 s budget BEFORE building an SCF object at all — correct behaviour, and
+    exactly what "refuse immediately and tell me the cost" is supposed to mean.
+    But it made this witness unreachable: it went red on a message that has no
+    cycle count because no cycle ever ran, and the in-loop watchdog it exists to
+    prove was no longer being exercised by it.
+    A new guard that shadows an older guard's test does not remove the need for
+    the older guard — it removes the EVIDENCE for it, which is worse, because the
+    suite still looks green in every other respect. So the budget here is now
+    0.001 s: above the pre-flight's estimate for benzene (it predicts ~0.0 s at
+    36 basis functions, so the screen passes) and far below what one iteration
+    costs, which puts the refusal back inside the loop where this test can see
+    it. The pre-flight's own behaviour is covered separately by the zero-budget
+    test, so both guards keep a witness of their own.
+
+    0.05 s is chosen against a MEASURED number, not by feel: the pre-flight's
+    model gives 2.8 * 5.9e-9 * 36^4.03 ~= 0.033 s for benzene at 36 basis
+    functions, so 0.05 clears the screen, while a converged benzene SCF is ~0.3 s
+    — an order of magnitude above it. If a much faster machine ever converges
+    benzene inside 0.05 s this test goes red rather than silently stopping being
+    a witness, which is the correct direction to fail.
     """
     if SKIP_SLOW:
         skip('DIRAC_TESTS_SKIP_SLOW=1 (this test runs a real sto-3g SCF, ~3 s)')
@@ -656,7 +747,7 @@ def test_deadline_fires_from_inside_the_scf_loop():
     fs._scf_cache.clear()
     t0 = time.time()
     try:
-        fs.run_scf(mol, 'sto-3g', max_seconds=0.0)
+        fs.run_scf(mol, 'sto-3g', max_seconds=0.05)
     except fs.FieldBudgetExceeded as e:
         elapsed = time.time() - t0
         assert elapsed < 30.0, f'the deadline took {elapsed:.1f} s to fire'
@@ -666,7 +757,7 @@ def test_deadline_fires_from_inside_the_scf_loop():
             f'tell a slow iteration from many iterations: {e}')
     else:
         raise AssertionError(
-            'a 0 s budget ran an SCF to completion — the deadline is not '
+            'a 0.05 s budget ran an SCF to completion — the deadline is not '
             'inside the SCF loop (this is the HEM incident: 22 cores, 36 min)')
 
     assert not fs._scf_cache, 'a refused SCF was cached — every retry now fails instantly'
