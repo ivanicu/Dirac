@@ -396,6 +396,23 @@ function isoMultiplier(): number {
  */
 let isoBase: number | null = null;
 
+/**
+ * The isovalue, LOCKED across molecules once it has been fitted.
+ *
+ * Fitting per molecule is automatic gain control: two analogues render equally
+ * hot even when one carries three times the potential, and the panel is built
+ * to invite exactly that comparison. A fixed constant is not the alternative —
+ * measured, the old one clipped the grid wall on every molecule tried, which
+ * is how the lipophilicity field came to render as a box.
+ *
+ * So: MEASURE it once, then HOLD it. The first molecule of a session fits the
+ * scale from its own field; every molecule after that is drawn on the same
+ * absolute surface and is therefore comparable. Re-fit is a deliberate act
+ * with a button, and the readout always says which regime it is in — a scale
+ * that changed silently underneath a comparison is the failure being fixed.
+ */
+const isoLock = new Map<FieldKind, { value: number, fittedOn: string }>();
+
 function currentIso(): number {
     if (!activeKind) return 0;
     return (isoBase ?? Kinds[activeKind].iso) * isoMultiplier();
@@ -406,7 +423,24 @@ function updateIsoReadout() {
     if (!el) return;
     if (!activeKind) { el.textContent = ''; return; }
     const sign = Kinds[activeKind].diverging ? '±' : '';
-    el.textContent = `${sign}${currentIso().toPrecision(3)} ${Kinds[activeKind].unit}`;
+    const lock = isoLock.get(activeKind);
+    let provenance = '';
+    if (lock && lock.fittedOn !== (ligandLabel ?? '')) {
+        provenance = ` · locked (fitted on ${lock.fittedOn})`;
+    } else if (lock) {
+        provenance = ' · fitted to this molecule';
+    }
+    el.textContent =
+        `${sign}${currentIso().toPrecision(3)} ${Kinds[activeKind].unit}${provenance}`;
+    const refit = byId<HTMLButtonElement>('field-refit');
+    if (refit) refit.hidden = !lock || lock.fittedOn === (ligandLabel ?? '');
+}
+
+/** Drop the held scale so the next render fits this molecule instead. */
+function refitIso() {
+    if (activeKind) isoLock.delete(activeKind);
+    const kind = activeKind;
+    if (kind) void requestField(kind);
 }
 
 function setButtonsEnabled() {
@@ -484,7 +518,17 @@ async function renderCube(cubeText: string, kind: FieldKind, meta?: FieldMeta) {
     // Adopt the backend's measured isovalue when it sent one; fall back to the
     // kind's constant otherwise. Set BEFORE the representations are built, or
     // the first frame is drawn at the old scale and corrected a tick later.
-    isoBase = typeof meta?.iso_suggest === 'number' ? meta.iso_suggest : null;
+    // Fit once, then hold. A held scale is what makes two molecules comparable;
+    // re-fitting each time is the gain control this exists to avoid.
+    const held = isoLock.get(kind);
+    if (held) {
+        isoBase = held.value;
+    } else if (typeof meta?.iso_suggest === 'number') {
+        isoBase = meta.iso_suggest;
+        isoLock.set(kind, { value: meta.iso_suggest, fittedOn: ligandLabel ?? '' });
+    } else {
+        isoBase = null;   // orbital/density: a normalised quantity keeps its constant
+    }
     if (!plugin) return;
     if (plugin.state.data.cells.has(REF_DATA)) {
         await plugin.build().delete(REF_DATA).commit();
@@ -692,6 +736,7 @@ export function initFieldWellsPanel(p: PluginContext) {
     // panel said "Solving…" for 36 minutes with every control disabled. The
     // daemon now stops itself too, but a bound the user cannot reach is not a
     // control, it is a promise.
+    byId('field-refit')?.addEventListener('click', () => refitIso());
     byId('field-cancel')?.addEventListener('click', () => {
         abortInFlight();
         busy = false;

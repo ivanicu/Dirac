@@ -495,7 +495,28 @@ def write_cube(origin_a, axes_a, dims, values, syms, coords_a, comment: str) -> 
     return out.getvalue()
 
 
+GRID_MAX_DIM = 128       # 128 cubed ~ 2M voxels
 ISO_ENCLOSED_FRACTION = 0.03   # the surface should wrap ~3% of the box
+
+
+def grid_spacing_meta(lo, hi, dims, requested: float) -> dict:
+    """The spacing the grid ACTUALLY has, not the one that was asked for.
+
+    dims is clamped to the 128 voxel cap and `axes` is then recomputed from the
+    clamped dims — so past a ~51 A box the grid silently coarsens while meta
+    kept reporting the requested 0.4 A. Nobody could see it, because the number
+    that was wrong was the number describing the number.
+
+    Invisible today at ligand scale; it fires the moment a selection is a
+    pocket, which is the feature being built next. A resolution claim is a
+    claim, and it gets measured like one.
+    """
+    actual = ((hi - lo) / (dims - 1))
+    return {
+        'spacing_requested': requested,
+        'spacing': [round(float(x), 4) for x in actual],
+        'grid_capped': bool((dims >= GRID_MAX_DIM).any()),
+    }
 
 
 def suggest_iso(v: np.ndarray) -> float:
@@ -544,7 +565,7 @@ def field_mep(mol: Chem.Mol, spacing=0.4, pad=4.0):
     lo = coords.min(axis=0) - pad
     hi = coords.max(axis=0) + pad
     dims = np.maximum(np.ceil((hi - lo) / spacing).astype(int) + 1, 8)
-    dims = np.minimum(dims, 128)  # hard cap: 128³ ≈ 2M voxels
+    dims = np.minimum(dims, GRID_MAX_DIM)  # hard cap: 128³ ≈ 2M voxels
     axes = np.diag((hi - lo) / (dims - 1))
 
     xs = np.linspace(lo[0], hi[0], dims[0])
@@ -564,7 +585,7 @@ def field_mep(mol: Chem.Mol, spacing=0.4, pad=4.0):
     meta = {
         'kind': 'mep', 'units': 'kcal/mol', 'charges': 'gasteiger',
         'net_charge': int(round(charges.sum())),
-        'dims': dims.tolist(), 'spacing': spacing,
+        'dims': dims.tolist(), **grid_spacing_meta(lo, hi, dims, spacing),
         'vmin': float(v.min()), 'vmax': float(v.max()),
         'iso_suggest': suggest_iso(v),
     }
@@ -590,7 +611,7 @@ def field_mlp(mol: Chem.Mol, spacing=0.4, pad=4.0):
     lo = coords.min(axis=0) - pad
     hi = coords.max(axis=0) + pad
     dims = np.maximum(np.ceil((hi - lo) / spacing).astype(int) + 1, 8)
-    dims = np.minimum(dims, 128)
+    dims = np.minimum(dims, GRID_MAX_DIM)
     axes = np.diag((hi - lo) / (dims - 1))
     xs = np.linspace(lo[0], hi[0], dims[0])
     ys = np.linspace(lo[1], hi[1], dims[1])
@@ -608,7 +629,7 @@ def field_mlp(mol: Chem.Mol, spacing=0.4, pad=4.0):
     meta = {
         'kind': 'mlp', 'units': 'MLP (Crippen/Fauchère)', 'method': 'crippen',
         'total_logp': float(f.sum()),
-        'dims': dims.tolist(), 'spacing': spacing,
+        'dims': dims.tolist(), **grid_spacing_meta(lo, hi, dims, spacing),
         'vmin': float(v.min()), 'vmax': float(v.max()),
         'iso_suggest': suggest_iso(v),
     }
