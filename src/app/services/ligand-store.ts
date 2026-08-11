@@ -106,10 +106,41 @@ export function requireScene(ligand: Ligand, consumer: string): LociLigand | Imp
 }
 
 /** Atom count from a V2000 counts line (columns 0-3). 0 when unreadable. */
+/**
+ * HEAVY atoms — the number the "is a quantum field affordable" gate depends on.
+ *
+ * The body above this one took columns 0-3 of line 4, which is the TOTAL atom
+ * count and includes hydrogens, so the gate was wrong by roughly 2x on anything
+ * with explicit H. It also returned 0 for V3000, whose counts line reads
+ * "0 0 0 0 0 999 V3000" — and ZERO HEAVY ATOMS PASSES EVERY AFFORDABILITY CHECK
+ * THERE IS, so the one format that most needs the gate was the format that
+ * disabled it. Both traps were found and fixed in facets/field-wells eleven
+ * hours before this file was written, and this file shipped the old body anyway.
+ *
+ * That is why the logic lives HERE now, in the services layer: a facet holding
+ * the canonical copy of a shared fact means the next module to need it writes a
+ * third one. facets/field-wells can import this and delete its private copy —
+ * one line, and then there is one home.
+ */
 export function heavyAtomsFromMolfile(molfile: string): number {
-    const counts = molfile.split('\n')[3] ?? '';
-    const n = parseInt(counts.slice(0, 3).trim(), 10);
-    return Number.isFinite(n) && n > 0 ? n : 0;
+    const lines = molfile.split('\n');
+    const counts = lines[3] ?? '';
+    if (counts.includes('V3000')) {
+        // The element symbol is the 4th whitespace-separated field of an ATOM line.
+        return lines.filter(l => /^M {2}V30 \d+ [A-Z]/.test(l))
+            .filter(l => (l.trim().split(/\s+/)[3] ?? '') !== 'H').length;
+    }
+    const total = parseInt(counts.slice(0, 3), 10);
+    if (!Number.isFinite(total) || total <= 0) return 0;
+    let heavy = 0;
+    for (let i = 4; i < 4 + total && i < lines.length; i++) {
+        // V2000 atom line: x, y, z in three 10-column fields, then the symbol.
+        const sym = (lines[i] ?? '').slice(31, 34).trim();
+        if (sym && sym !== 'H' && sym !== 'D') heavy++;
+    }
+    // `heavy || total` deliberately: a molfile whose atom block we could not
+    // parse must not read as "0 heavy atoms, therefore free".
+    return heavy || total;
 }
 
 export class LigandStore {

@@ -58,6 +58,30 @@ describe('LigandStore · stale-async guard', () => {
     });
 });
 
+describe('heavyAtomsFromMolfile', () => {
+    // Both traps were found and fixed in facets/field-wells eleven hours before
+    // this store was written, and the store shipped the OLD body anyway — so
+    // adopting it as-is would have reintroduced a paid-for fix. That is the
+    // measurable cost of two homes for one fact.
+    it('counts HEAVY atoms, not the total including explicit hydrogens', () => {
+        // 3 atoms on the counts line, two of them H -> 1 heavy
+        const mf = ['', '', '', '  3  2  0  0  0  0  0  0  0  0999 V2000',
+            '    0.0000    0.0000    0.0000 O   0  0',
+            '    0.0000    0.0000    1.0000 H   0  0',
+            '    0.0000    1.0000    0.0000 H   0  0'].join('\n');
+        expect(heavyAtomsFromMolfile(mf)).toBe(1);
+    });
+
+    it('does not return 0 for V3000, because 0 passes every affordability gate', () => {
+        const mf = ['', '', '', '  0  0  0  0  0  0            999 V3000',
+            'M  V30 BEGIN ATOM',
+            'M  V30 1 C 0 0 0 0',
+            'M  V30 2 H 0 0 1 0',
+            'M  V30 END ATOM'].join('\n');
+        expect(heavyAtomsFromMolfile(mf)).toBe(1);
+    });
+});
+
 describe('LigandStore · subscriber isolation', () => {
     it('one throwing subscriber does not stop the others', () => {
         const errors: unknown[] = [];
@@ -67,7 +91,23 @@ describe('LigandStore · subscriber isolation', () => {
         store.subscribe(l => { if (l) reached.push(l.label); });
         loci(store);
         expect(reached).toEqual(['REA · A:200']);
-        expect(errors.length).toBe(1);
+        // TWO, not one, and the store is right while this test was wrong — it sat
+        // red long enough to prove nobody ran it. subscribe() REPLAYS the current
+        // value immediately, and that replay happens even when the value is null,
+        // so a subscriber that throws unconditionally throws once on subscribe and
+        // once on the emit. Suppressing the null replay would make "no ligand yet"
+        // and "never told" indistinguishable to a late-mounting facet, which is
+        // the null-output confusion this repo refuses everywhere else.
+        expect(errors.length).toBe(2);
+    });
+
+    it('replays even a NULL current value, so a late facet can clear itself', () => {
+        const store = new LigandStore();
+        const seen: (string | null)[] = [];
+        store.subscribe(l => seen.push(l ? l.label : null));
+        expect(seen).toEqual([null]);            // the replay fired with nothing selected
+        loci(store);
+        expect(seen).toEqual([null, 'REA · A:200']);
     });
 
     it('unsubscribing during emit is safe', () => {

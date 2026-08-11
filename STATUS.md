@@ -76,6 +76,32 @@ it was rendering. A new facet is wired once, there.
 | frontend specs | THIN | 4 spec files. The store has 15 tests; the facets have none |
 | **frontend ↔ backend meta drift** | **KNOWN OPEN** | the facet's `FieldMeta` interface is 21 keys behind the backend. `node scripts/check_contract_drift.mjs` reports it as `FIND` (exit 2) rather than failing, because that file is owned by a parallel line of work — reported, dated, not hidden |
 
+## Frontend state layer — measured, and the measurement is unflattering
+
+`src/app/services/ligand-store.ts` is **SEAM ONLY**, and the audit that says so
+(`docs/FRONTEND_STATE_AUDIT.md`, 453 lines, every claim with a `file:line`) is
+worth more than the module: **8 modules hold "the current ligand" in some form and
+0 import the store.** One commit has ever touched it. `ARCHITECTURE.md` says the
+same thing from the other side — "reimplemented inline".
+
+What the audit found that a status table alone would have hidden:
+
+| finding | measured | state |
+|---|---|---|
+| the store shipped a heavy-atom count that a sibling facet had already fixed 11 h earlier — counting explicit H as heavy, returning 0 for V3000 (and 0 heavy atoms passes every affordability gate) | 2 red tests, then green | **FIXED today**, and the corrected logic now lives in the services layer so `facets/field-wells` can import it and delete its private copy |
+| its spec had a failing test nobody had run | 1 red of 9 | **FIXED** — the TEST was wrong, not the store: `subscribe()` replays the current value even when it is null, deliberately, so a late-mounting facet can clear itself. Now 12/12, with that intent asserted rather than assumed |
+| 10 async paths produce a ligand-shaped result; **7 commit it with no currency check**, two of them multi-second pyscf calls | 10 paths audited | **OPEN.** The user-visible symptom: click ligand A, click B while A's SCF runs, and A's result renders into B's scene |
+| 3 facts have more than one home (heavy-atom count, atom-index walker, staleness token) | 3 | 1 of 3 closed today |
+
+**The decision, stated so it is not re-litigated silently:** the store is NOT
+deleted. The bug class it exists to prevent was demonstrated live today — a pasted
+molecule survived loading a deposited structure and won a branch in five facets,
+because "which molecule is active" had four writers and no owner. But shelfware
+with a known defect is worse than no module, so its defects are fixed first and
+adoption is incremental: **one consumer at a time, each with the currency check
+wired, starting with the two unguarded SCF paths.** A big-bang adoption of a module
+nothing imports is how the 21-key contract drift happened on the other side.
+
 ## What is measured, and what is only claimed
 
 Re-derived today with commands (see `SPEC.md` §7 for the full ledger, M01–M10):
