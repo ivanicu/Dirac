@@ -88,15 +88,27 @@ def classify(error: str) -> str:
         return 'MMFF cannot type'
     if 'electron number' in lowered and 'spin' in lowered:
         return 'open shell / charge-spin mismatch'
+    if 'against a' in lowered and 'budget' in lowered:
+        return 'refused: predicted over budget'
     if 'timeout' in lowered:
-        return 'over the time budget'
+        return 'killed by the stopwatch (no reason available)'
     if 'killed' in lowered or 'memory' in lowered:
         return 'out of memory'
+    if 'usage:' in lowered or 'unrecognized argument' in lowered or 'traceback' in lowered:
+        # A broken harness is not a coverage result. Filing it as one is how a
+        # sweep reports 0% and reads like a finding about the code under test.
+        return 'HARNESS FAULT (not a result about the component)'
     return f'other: {error[:60]}'
 
 
-def run_one(smiles: str, basis: str, budget: int) -> dict:
-    """Worker mode, in a subprocess: embed, then try both components."""
+def run_one(smiles: str, basis: str, budget: int, component: str) -> dict:
+    """Worker mode: ONE component in its own subprocess.
+
+    The two components previously shared a subprocess and therefore a timeout,
+    so a slow SCF reported the 0.6-second force-field scan as failed too. The
+    first sweep called 21 of 68 molecules torsion failures on that basis; every
+    one of them was a QM timeout wearing the force field's name.
+    """
     from rdkit import Chem, RDLogger
     from rdkit.Chem import AllChem
     RDLogger.DisableLog('rdApp.*')
@@ -111,54 +123,65 @@ def run_one(smiles: str, basis: str, budget: int) -> dict:
     out['n_atoms'] = mol.GetNumAtoms()
     out['elements'] = sorted({a.GetSymbol() for a in mol.GetAtoms()})
 
-    from physics.torsion import compute_torsion_strain
     t0 = time.time()
-    try:
-        result = compute_torsion_strain(molblock, steps=18)
-        out['torsion'] = {'ok': True, 'seconds': round(time.time() - t0, 2),
-                          'n_scanned': result['meta']['n_scanned'],
-                          'total_strain': result['total_strain_kcal'],
-                          'unconverged': result['meta']['unconverged_minimisations']}
-    except Exception as exc:                                    # noqa: BLE001
-        out['torsion'] = {'ok': False, 'error': str(exc), 'seconds': round(time.time() - t0, 2)}
-
-    from physics.mep_surface import compute_surface_mep
-    t0 = time.time()
-    try:
-        result = compute_surface_mep(molblock, basis=basis, points_per_atom=40)
-        out['sigma_hole'] = {'ok': True, 'seconds': round(time.time() - t0, 2),
-                             'v_s_max': result['meta']['v_s_max_kcal_per_mol'],
-                             'v_s_min': result['meta']['v_s_min_kcal_per_mol'],
-                             'holes': result['meta']['sigma_holes_found'],
-                             'n_basis': result['meta']['n_basis']}
-    except Exception as exc:                                    # noqa: BLE001
-        out['sigma_hole'] = {'ok': False, 'error': str(exc), 'seconds': round(time.time() - t0, 2)}
+    if component == 'torsion':
+        from physics.torsion import compute_torsion_strain
+        try:
+            result = compute_torsion_strain(molblock, steps=18)
+            out['torsion'] = {'ok': True, 'seconds': round(time.time() - t0, 2),
+                              'n_scanned': result['meta']['n_scanned'],
+                              'total_strain': result['total_strain_kcal'],
+                              'unconverged': result['meta']['unconverged_minimisations']}
+        except Exception as exc:                                # noqa: BLE001
+            out['torsion'] = {'ok': False, 'error': str(exc), 'seconds': round(time.time() - t0, 2)}
+    else:
+        from physics.mep_surface import compute_surface_mep
+        try:
+            # The budget is handed to the module so an over-budget molecule is
+            # REFUSED WITH A REASON before it runs, instead of being killed by
+            # a stopwatch that cannot say why.
+            result = compute_surface_mep(molblock, basis=basis, points_per_atom=40,
+                                         max_seconds=budget)
+            out['sigma_hole'] = {'ok': True, 'seconds': round(time.time() - t0, 2),
+                                 'v_s_max': result['meta']['v_s_max_kcal_per_mol'],
+                                 'v_s_min': result['meta']['v_s_min_kcal_per_mol'],
+                                 'holes': result['meta']['sigma_holes_found'],
+                                 'n_basis': result['meta']['n_basis'],
+                                 'predicted': result['meta']['predicted_scf_seconds']}
+        except Exception as exc:                                # noqa: BLE001
+            out['sigma_hole'] = {'ok': False, 'error': str(exc), 'seconds': round(time.time() - t0, 2)}
     return out
 
 
-def drive(entries, basis: str, budget: int, workers: int):
+def drive(entries, basis: str, budget: int, torsion_budget: int, workers: int):
     env = dict(os.environ, OMP_NUM_THREADS='2', MKL_NUM_THREADS='2')
 
-    def one(entry):
-        entry_id, name, smiles, category = entry
-        cmd = [PYTHON, __file__, '--worker', smiles, '--basis', basis, '--budget', str(budget)]
-        started = time.time()
+    def one(entry, component: str, component_budget: int):
+        _, _, smiles, _ = entry
+        cmd = [PYTHON, __file__, '--worker', smiles, '--basis', basis,
+               '--budget', str(component_budget), '--component', component]
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=budget, env=env)
+            # +15 s so the module's own cost refusal wins the race against the
+            # stopwatch: a refusal carries a reason, a kill carries nothing.
+            proc = subprocess.run(cmd, capture_output=True, text=True,
+                                  timeout=component_budget + 15, env=env)
             payload = json.loads(proc.stdout.strip().splitlines()[-1]) if proc.stdout.strip() else {}
             if not payload:
-                payload = {'torsion': {'ok': False, 'error': proc.stderr[-200:] or 'no output'},
-                           'sigma_hole': {'ok': False, 'error': proc.stderr[-200:] or 'no output'}}
+                payload = {component: {'ok': False, 'error': proc.stderr[-200:] or 'no output'}}
         except subprocess.TimeoutExpired:
-            payload = {'torsion': {'ok': False, 'error': 'timeout'},
-                       'sigma_hole': {'ok': False, 'error': 'timeout'}}
-        payload.update(id=entry_id, name=name, category=category,
-                       wall_seconds=round(time.time() - started, 1))
+            payload = {component: {'ok': False, 'error': 'timeout'}}
         print('.', end='', flush=True)
         return payload
 
+    def both(entry):
+        entry_id, name, smiles, category = entry
+        merged = {'id': entry_id, 'name': name, 'category': category}
+        merged.update(one(entry, 'torsion', torsion_budget))
+        merged.update(one(entry, 'sigma_hole', budget))
+        return merged
+
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        return list(pool.map(one, entries))
+        return list(pool.map(both, entries))
 
 
 def report(rows, basis: str):
@@ -193,6 +216,7 @@ def report(rows, basis: str):
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--worker', metavar='SMILES')
+    parser.add_argument('--component', choices=('torsion', 'sigma_hole'), default='torsion')
     parser.add_argument('--basis', default='def2-svp')
     parser.add_argument('--budget', type=int, default=180)
     parser.add_argument('--torsion-budget', type=int, default=60)
@@ -202,7 +226,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.worker:
-        print(json.dumps(run_one(args.worker, args.basis, args.budget)))
+        print(json.dumps(run_one(args.worker, args.basis, args.budget, args.component)))
         return 0
 
     if args.set == 'hard':
@@ -211,9 +235,9 @@ def main() -> int:
         entries = ENTRY_RE.findall(LIBRARY_TS.read_text())
     if args.limit:
         entries = entries[:args.limit]
-    print(f'sweeping {len(entries)} library molecules, basis {args.basis}, '
-          f'{args.budget}s budget each, {args.workers} workers')
-    rows = drive(entries, args.basis, args.budget, args.workers)
+    print(f'sweeping {len(entries)} molecules, basis {args.basis}, '
+          f'{args.torsion_budget}s torsion / {args.budget}s QM budgets, {args.workers} workers')
+    rows = drive(entries, args.basis, args.budget, args.torsion_budget, args.workers)
     report(rows, args.basis)
     out = Path('/tmp/claude-1000/dirac-physics-coverage.json')
     out.write_text(json.dumps(rows, indent=1))

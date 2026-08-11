@@ -230,8 +230,11 @@ function renderMeta(meta: FieldMeta | null) {
         rows.push(['Crippen logP', (meta as { total_logp?: number }).total_logp!.toFixed(2)]);
     }
     if (meta.scf_energy_ha !== undefined) rows.push(['SCF energy', `${meta.scf_energy_ha.toFixed(4)} Ha`]);
-    if (meta.homo_ev !== undefined) rows.push(['HOMO', `${meta.homo_ev.toFixed(2)} eV`]);
-    if (meta.lumo_ev !== undefined && meta.lumo_ev !== null) rows.push(['LUMO', `${meta.lumo_ev.toFixed(2)} eV`]);
+    // One decimal, deliberately: Koopmans + minimal-basis errors are ~0.5-1 eV,
+    // and a second decimal would put false precision in front of a chemist
+    // (the physics session's absolute_uncertainty_pct lesson, applied here).
+    if (meta.homo_ev !== undefined) rows.push(['HOMO', `≈${meta.homo_ev.toFixed(1)} eV`]);
+    if (meta.lumo_ev !== undefined && meta.lumo_ev !== null) rows.push(['LUMO', `≈${meta.lumo_ev.toFixed(1)} eV`]);
     if (meta.net_charge !== undefined) rows.push(['Net charge', String(meta.net_charge)]);
     if (meta.natoms !== undefined) rows.push(['Atoms (with H)', String(meta.natoms)]);
     if (meta.nbasis !== undefined) rows.push(['Basis functions', String(meta.nbasis)]);
