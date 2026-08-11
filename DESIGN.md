@@ -80,3 +80,37 @@ primitives, ~32 scientific components, 14 chemist screens, 9 auth screens,
 10 admin screens, 8 platform pages, 4 mail templates. Priority: tokens →
 scientific components → admin → auth (login last: it is the most
 commoditized page in the set).
+
+## §8 · The chroma ceiling — mid-saturation is a number
+
+Ivan's ruling: 「颜色整体应该中饱和度一点,不要那么高的饱和度」.
+
+**Ceiling: OKLCH chroma ≤ 0.106. Working band: 0.088.**
+
+The ceiling is not chosen — it is the chroma of `#e0af68`, the gold already
+settled for ivan.icu, so the limit is a colour he approved rather than a number
+someone picked. Dirac's own hand-tuned palette (`accent` 0.088, `warn` 0.085,
+`danger` 0.081) was already inside it; what broke the band was reaching for
+Tailwind defaults (`#3b82f6` `#f43f5e` `#eab308`) for the scientific data
+colours, which measured 1.5–2.0× over.
+
+Measured in **OKLCH, never HSL**. HSL saturation is not perceptual: `#eab308`
+and `#22d3ee` both report S=100% while differing by 20% in real chroma, so an
+HSL cap passes colours that still glare.
+
+Desaturation is done by **holding hue and lightness and moving chroma only** —
+hue carries the meaning (blue = positive potential, red = negative; that is a
+chemistry convention, not decoration) and lightness carries legibility.
+
+Three things must survive it, and `design/check_palette.py` fails the build if
+they do not:
+
+1. every token at or under the ceiling;
+2. every token ≥ 3:1 against **its own theme's** background — the light theme
+   is a separate measurement, and the categorical chart ramp was found sitting
+   at 1.7–2.5:1 there because the dark values had been inherited unchanged;
+3. every diverging pair ≥ 0.10 ΔE apart — a calm palette that has merged `+`
+   and `−` has destroyed the readout it was calming.
+
+A rule written only in prose decays the first time someone is in a hurry. Run
+the gate.

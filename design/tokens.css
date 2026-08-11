@@ -28,36 +28,36 @@
     /* ── color · semantic ────────────────────────────────────────────── */
     --accent: #7dd3c0;          /* interactive / selected / ok-ish        */
     --accent-soft: #1c3a35;
-    --ok: #59d0a5;
+    --ok: #7dc9aa;
     --ok-soft: #12291f;
     --warn: #d4a574;
     --warn-soft: #2b2115;
     --danger: #e1a18e;          /* errors, refusals, destructive          */
     --danger-soft: #2b1a15;
-    --info: #7aa2f7;
+    --info: #88a4dc;
     --info-soft: #16202f;
 
     /* ── color · data-viz (scientific fields — brand-level assets) ───── */
     /* MEP / QM potential: chemistry convention, blue = +, red = −        */
-    --viz-mep-pos: #3b82f6;
-    --viz-mep-neg: #f43f5e;
+    --viz-mep-pos: #6788bc;
+    --viz-mep-neg: #bd777b;
     /* orbital phase (HOMO/LUMO)                                          */
-    --viz-orb-pos: #34d399;
-    --viz-orb-neg: #a78bfa;
+    --viz-orb-pos: #7fc7a5;
+    --viz-orb-neg: #a397d3;
     /* lipophilicity: gold = greasy, aqua = polar                         */
-    --viz-mlp-pos: #eab308;
-    --viz-mlp-neg: #22d3ee;
+    --viz-mlp-pos: #d5b979;
+    --viz-mlp-neg: #74ccdd;
     /* electron density (single-signed)                                   */
-    --viz-density: #f59e0b;
+    --viz-density: #d8aa75;
     /* colorblind-safe alternates (Okabe–Ito blue/orange) — user setting  */
-    --viz-cb-pos: #0072b2;
-    --viz-cb-neg: #e69f00;
+    --viz-cb-pos: #3b729c;
+    --viz-cb-neg: #cfa86e;
     /* categorical ramp for charts (6 steps, dark-tuned)                  */
     --viz-cat-1: #7dd3c0;
-    --viz-cat-2: #7aa2f7;
+    --viz-cat-2: #88a4dc;
     --viz-cat-3: #e0af68;
-    --viz-cat-4: #c792ea;
-    --viz-cat-5: #f4749b;
+    --viz-cat-4: #be9cd5;
+    --viz-cat-5: #d38d9f;
     --viz-cat-6: #89b482;
 
     /* ── 3D scene (canvas is part of the theme) ──────────────────────── */
@@ -125,24 +125,39 @@
     --text-2: #4c4c48;
     --text-3: #9a9a92;
 
-    --accent: #e5372b;
+    --accent: #b06d63;
     --accent-soft: #fdeeec;
-    --ok: #2c7a4b;
+    --ok: #3b7751;
     --ok-soft: #edf6f0;
-    --warn: #b3701c;
+    --warn: #a57646;
     --warn-soft: #faf3e8;
-    --danger: #e5372b;
+    --danger: #b06d63;
     --danger-soft: #fdeeec;
-    --info: #2456c4;
+    --info: #455f92;
     --info-soft: #eef2fc;
 
-    --viz-mep-pos: #2456c4;
-    --viz-mep-neg: #d21f3c;
+    --viz-mep-pos: #455f92;
+    --viz-mep-neg: #a15e5e;
     --viz-orb-pos: #1f7a53;
-    --viz-orb-neg: #7048c9;
-    --viz-mlp-pos: #a87900;
+    --viz-orb-neg: #6a5e96;
+    --viz-mlp-pos: #9d7d41;
     --viz-mlp-neg: #0e7f95;
-    --viz-density: #b0690a;
+    --viz-density: #a17141;
+
+
+    /* Chart ramp and colourblind pair need their own light values: the
+       dark-tuned ones were inherited unchanged and sat at 1.7–2.5:1 on a
+       near-white ground — charts that cannot be read in the light theme.
+       Hue and chroma are held; only lightness moves, so a series keeps its
+       identity across a theme swap. */
+    --viz-cat-1: #489e8d;
+    --viz-cat-2: #7691c8;
+    --viz-cat-3: #ae874f;
+    --viz-cat-4: #a685bc;
+    --viz-cat-5: #bf7b8d;
+    --viz-cat-6: #6e9867;
+    --viz-cb-pos: #3b729c;
+    --viz-cb-neg: #ad884e;
 
     --scene-bg: #f1f0eb;
     --scene-badge-bg: rgba(252, 252, 251, 0.86);
