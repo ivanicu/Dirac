@@ -99,6 +99,39 @@ reproducible with `coverage.py`. Note the library contains **no bromine and no
 iodine** — it is the wrong population for σ-hole testing, which is why the hard
 set exists and why several of its entries are expected to fail.
 
+## How much of the number may be believed — measured, not assumed
+
+The same molecule, run three ways by this code:
+
+| molecule | HF/def2-SVP | HF/def2-TZVP | B3LYP/def2-SVP |
+|---|---|---|---|
+| bromobenzene | +9.9 | +10.3 | +10.3 |
+| iodobenzene | +21.1 | +19.1 | +19.9 |
+| CF₃I | +41.4 | +38.1 | +34.2 |
+
+Basis moves V_S,max by **4–10%**; method by **3–22%**, worst on the strongly
+polarised CF₃I (8.1 kcal/mol). Geometry (MMFF-optimised, not QM-optimised) and
+surface point density are further terms that have not been measured. So:
+
+- **Orderings are robust.** I > Br held under every combination tried, which is
+  why the gates test orderings.
+- **Absolute values carry ~25% uncertainty** and are reported with it
+  (`meta.absolute_uncertainty_pct`). Printing "+21.1 kcal/mol" to one decimal is
+  false precision; round before showing it to a chemist.
+- `xc` selects a functional (`{"xc": "b3lyp"}`); HF remains the default because
+  the cost model was calibrated on it, but B3LYP is closer to the level most
+  published V_S,max values were computed at.
+
+**What is still missing is an external ruler.** Every number above is this
+code checked against itself at a better level of theory — convergence, not
+correctness. The right external anchors are Laurence's diiodine basicity scale
+(pK_BI₂) and the XB65/X40 benchmark interaction energies. Neither is wired up,
+because the per-molecule reference values are paywalled and **entering them
+from memory would fabricate the standard the test is supposed to provide** —
+the one number in a validation that may never be recalled. Note also the
+direction: pK_BI₂ is an ACCEPTOR (Lewis base) scale, so it tests V_S,min on the
+base, not the σ-hole on the donor.
+
 ## Validation
 
 `validate.py` is the reason to trust any of the above. Every gate is a known

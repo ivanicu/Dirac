@@ -290,7 +290,8 @@ def _classify_sigma_hole(rdmol, atom_positions: np.ndarray, point: np.ndarray,
 def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
                         isovalue: float = DEFAULT_ISOVALUE,
                         points_per_atom: int = 120,
-                        max_seconds: float = DEFAULT_MAX_SECONDS):
+                        max_seconds: float = DEFAULT_MAX_SECONDS,
+                        xc: str | None = None):
     """Full σ-hole analysis for one molecule.
 
     Returns a dict with `points` (Å, in the molfile frame), `values`
@@ -312,7 +313,11 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
             f'basis (sto-3g is ~{estimated_scf_seconds(mol.nao // 3):.0f} s here), '
             f'raise max_seconds deliberately, or trim the ligand.')
 
-    mf = scf.RHF(mol) if spin == 0 else scf.UHF(mol)
+    if xc:
+        mf = dft.RKS(mol) if spin == 0 else dft.UKS(mol)
+        mf.xc = xc
+    else:
+        mf = scf.RHF(mol) if spin == 0 else scf.UHF(mol)
     mf.max_cycle = 120
     energy = mf.kernel()
     if not mf.converged:
@@ -375,8 +380,17 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
         'values': values.astype(np.float32),
         'extrema': extrema,
         'meta': {
-            'method': 'RHF' if spin == 0 else 'UHF',
+            'method': (xc.upper() if xc else ('RHF' if spin == 0 else 'UHF')),
             'basis': basis,
+            # Measured on this code, not quoted: def2-SVP → def2-TZVP moves
+            # V_S,max by 4–10%, and HF → B3LYP by 3–22% (worst on CF3I, 8.1
+            # kcal/mol). Geometry and surface sampling are further, untested
+            # terms. So the ORDERINGS are robust — I > Br survived every
+            # combination — and an absolute value printed to one decimal is
+            # false precision. Anything downstream should round accordingly.
+            'absolute_uncertainty_pct': 25,
+            'uncertainty_note': ('basis ±10%, method ±22% (measured); orderings '
+                                 'are robust, absolute values are not'),
             'ecp': sorted(_ecp_for(atoms, basis)) or None,
             'scf_energy_ha': float(energy),
             'converged': True,

@@ -13,7 +13,7 @@ Protocol (JSON in, JSON out; errors arrive as 200 with ok:false, matching the
 fields backend so the front end has one error path):
 
   GET  /health
-  POST /surface/mep       {molfile, basis?, isovalue?, points_per_atom?, max_seconds?}
+  POST /surface/mep       {molfile, basis?, xc?, isovalue?, points_per_atom?, max_seconds?}
        → {ok, points_b64, values_b64, n_points, extrema, meta}
   POST /surface/mep_at    {molfile, points | points_b64, basis?}
        → {ok, values_b64, meta}
@@ -114,6 +114,7 @@ class Handler(BaseHTTPRequestHandler):
                     isovalue=float(req.get('isovalue', 0.001)),
                     points_per_atom=int(req.get('points_per_atom', 120)),
                     max_seconds=float(req.get('max_seconds', DEFAULT_MAX_SECONDS)),
+                    xc=req.get('xc'),
                 )
                 self._send(200, {
                     'ok': True,
