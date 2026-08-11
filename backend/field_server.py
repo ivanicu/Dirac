@@ -519,25 +519,58 @@ def grid_spacing_meta(lo, hi, dims, requested: float) -> dict:
     }
 
 
-def suggest_iso(v: np.ndarray) -> float:
-    """An isovalue taken from the field's OWN distribution.
+# ── the isovalue is a PHYSICAL CONSTANT, and the BOX is what adapts ─────────
+#
+# Three attempts at this, and the third is the one that is actually about the
+# molecule:
+#
+#   1. iso = 0.05 MLP, a constant tuned on aspirin. Measured: clipped the grid
+#      wall on all four molecules tried, INCLUDING aspirin. The lipophilicity
+#      field rendered as a gold crate.
+#   2. iso = 97th percentile of |field|. Never clips — and is a function of
+#      `pad`. Measured on aspirin: pad 3->10 A moves iso_suggest 25.5 -> 3.4
+#      kcal/mol, a 7.6x swing with the physics IDENTICAL. It is a measurement
+#      of the BOX. Worse, it selects the highest-|V| voxels, which are always
+#      INTERIOR: 84-94% of the enclosed volume sits inside the vdW surface,
+#      where nothing binds and where the softened Coulomb has the wrong sign.
+#      And it moves per molecule, so two analogues render equally hot.
+#   3. This. The contour is a FIXED value in physical units, identical across
+#      molecules and identical between the classical and quantum paths, so the
+#      same colour means the same kcal/mol everywhere. The crate was never an
+#      isovalue problem — it was a BOX problem — so the box is what adapts:
+#      grow the padding until the field on the wall falls below the contour.
+#
+# The lesson worth keeping: an adaptive RULER destroys comparison, an adaptive
+# BOX costs nothing. When a picture clips, widen the frame; do not move the
+# ruler and call the result measured.
 
-    MEP and MLP are sums of atomic contributions: their scale is set by the
-    molecule, not by the quantity. A constant default is therefore a guess
-    about a number that moves, and it moved — the app shipped iso=0.05 for MLP,
-    tuned on aspirin, which is 5–8% of the field's maximum on aspirin AND on
-    retinoic acid. At that level the surface encloses nearly the whole padded
-    grid and CLIPS AGAINST THE BOX WALL, so a chemist gets a gold crate with
-    the ligand somewhere inside it. Found by screenshot; no amount of reading
-    the code would have shown it, because the number is not wrong on its face.
+HARTREE_PER_E_TO_KCAL = 627.5094740631
 
-    A quantile is scale-free: whatever the units, the surface wraps the top few
-    percent of |field| and therefore looks like a lobe rather than a box.
-    Orbital and density cubes deliberately do NOT get this — a wavefunction is
-    normalised, which is exactly why the conventional 0.02–0.05 constants work
-    there and are worth keeping.
+# Contours a chemist can hold in their head, in the units the quantity is
+# quoted in. MEP: +-10 kcal/mol is roughly where a hydrogen-bond-relevant
+# feature sits. Both electrostatic paths share it — mep_qm's cube is in Ha/e
+# and is converted at the isovalue, so toggling classical/quantum no longer
+# silently moves the contour from 18 to 31.4 kcal/mol.
+FIXED_ISO = {
+    'mep': 10.0,        # kcal/mol
+    'mep_qm': 10.0,     # kcal/mol, converted to Ha/e for the cube
+    'mlp': 0.25,        # Crippen/Fauchere units
+}
+PAD_START = 4.0
+PAD_MAX = 12.0
+PAD_STEP = 2.0
+
+
+def wall_max(v: np.ndarray) -> float:
+    """The largest |field| anywhere on the six faces of the grid.
+
+    An isosurface only closes if this is BELOW the contour. Above it, the
+    surface runs off the edge of the box and is drawn as a flat face — the
+    crate. This is the quantity that was never measured while three different
+    isovalues were argued about.
     """
-    return round(float(np.quantile(np.abs(v), 1.0 - ISO_ENCLOSED_FRACTION)), 6)
+    faces = [v[0], v[-1], v[:, 0], v[:, -1], v[:, :, 0], v[:, :, -1]]
+    return float(max(np.abs(f).max() for f in faces))
 
 
 # ── classical MEP (Gasteiger + Coulomb) ─────────────────────────────────────
@@ -648,6 +681,16 @@ def ecp_for(syms: list[str], basis: str) -> dict:
     field decays to zero — and the sigma-hole comes out 58 kcal/mol wrong
     with the WRONG SIGN (measured by the physics session on iodobenzene).
     Every honesty gate passes; only the physics is false."""
+    # The try/except that used to live here was a CHECK THAT COULD NOT FIRE:
+    # gto.basis.load_ecp RETURNS [] for a basis that defines no ECP, it does
+    # not raise. So every Z>=37 element got an entry unconditionally, and with
+    # DEFAULT_BASIS='sto-3g' — which has no iodine ECP at all — pyscf printed
+    # "ECP sto-3g not found for I", built the ALL-ELECTRON molecule, and
+    # meta['ecp'] told the UI and app.field_cube that an ECP was used.
+    # The incident this function exists to prevent was shipping on the default
+    # path, wearing this function's own green light. Found 2026-08-11 by
+    # backend/tests/test_physics_contracts.py, which asserts the CLAIM implies
+    # the core was actually replaced (nelectron < sum of atomic numbers).
     from pyscf import gto
     pt = Chem.GetPeriodicTable()
     ecp = {}
@@ -655,11 +698,35 @@ def ecp_for(syms: list[str], basis: str) -> dict:
         if pt.GetAtomicNumber(s) < ECP_FROM_Z:
             continue
         try:
-            gto.basis.load_ecp(basis, s)
+            if not gto.basis.load_ecp(basis, s):
+                continue          # basis defines no ECP for this element
         except Exception:
-            continue  # this basis defines no ECP for the element (e.g. Br)
+            continue              # or refuses to describe one
         ecp[s] = basis
     return ecp
+
+
+def basis_covers(syms: list[str], basis: str) -> list[str]:
+    """Elements in `syms` that `basis` cannot describe at all.
+
+    Separate from ecp_for because they are different questions: ecp_for asks
+    "is the core replaced", this asks "does this basis exist for the element".
+    Measured coverage among the whitelist: 6-31g has neither Br nor I,
+    6-31g* has Br but not I, def2-svp has both. Without this, a bromo or iodo
+    compound under 6-31g raised pyscf's BasisNotFoundError — a RuntimeError,
+    so the HTTP layer reported reason='internal' with a traceback for a
+    request whose remedy ("use def2-svp") is obvious. A chemistry limit must
+    be refused as chemistry.
+    """
+    from pyscf import gto
+    missing = []
+    for s in sorted(set(syms)):
+        try:
+            if not gto.basis.load(basis, s):
+                missing.append(s)
+        except Exception:
+            missing.append(s)
+    return missing
 
 
 class FieldBudgetExceeded(Exception):
@@ -701,7 +768,30 @@ def run_scf(mol: Chem.Mol, basis: str, max_seconds: float = DEFAULT_MAX_SECONDS,
             spin: int | None = None):
     from pyscf import gto, scf
 
+    # The clamp lived ONLY in the HTTP handler, so run_scf(max_seconds=nan)
+    # ran unbounded: NaN fails every comparison, so the watchdog's
+    # `time.time() > deadline` was False forever. The library is about to be
+    # called by a CLI, a worker and a notebook — the 36-minute lesson must not
+    # be one nan away from being off at every one of those call sites.
+    # (backend/tests/test_physics_contracts.py, 2026-08-11)
+    # NON-FINITE is nonsense and falls back to the default. ZERO IS NOT: it is
+    # a legitimate, if extreme, request meaning "refuse before doing any work",
+    # and the deadline test uses exactly that to prove the watchdog lives inside
+    # the SCF loop. Conflating the two (my first version did) turned a 0 s
+    # budget into a 90 s run — a regression caught by that test within a minute.
+    if not math.isfinite(max_seconds):
+        max_seconds = DEFAULT_MAX_SECONDS
+    max_seconds = min(max(max_seconds, 0.0), MAX_MAX_SECONDS)
+
     syms, coords = mol_atoms(mol)
+    # A basis that cannot describe an element is a CHEMISTRY refusal, not an
+    # internal error: pyscf's BasisNotFoundError is a RuntimeError, which the
+    # HTTP layer reported as reason='internal' plus a traceback.
+    uncovered = basis_covers(syms, basis)
+    if uncovered:
+        raise ValueError(
+            f'basis {basis} does not cover {"/".join(uncovered)} — '
+            'def2-svp is the only whitelisted basis with iodine')
     if len(syms) > MAX_QM_ATOMS:
         raise ValueError(
             f'{len(syms)} atoms (with H) exceeds the interactive QM cap of {MAX_QM_ATOMS}'
