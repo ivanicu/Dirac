@@ -2,7 +2,18 @@
 
 This is the WHY and the growth map. For the WHAT — types, wire schemas, state
 machines, failure model, named constants — read `SPEC.md`; this file does not
-restate it. Verified against `HEAD` `54c24d4`, 2026-08-11. The previous version
+restate it. **Four documents, four rot rates, one home per fact:**
+
+| document | answers | rots when |
+|---|---|---|
+| `ARCHITECTURE.md` | why the layers are cut where they are | a layer boundary moves |
+| `SPEC.md` | the interfaces, flows and failure model | a contract changes |
+| `STATUS.md` | what is actually built, and what is a seam with nothing writing to it | any commit |
+| `ROADMAP.md` | how these seams reach the terminal state without a rewrite | the terminal state changes |
+
+**Deployment status lives in exactly one place — `STATUS.md`.** Short version, so
+nobody has to guess: NOT DEPLOYED, no auth, no public URL, three hand-started
+processes. Verified against `HEAD` `54c24d4`, 2026-08-11. The previous version
 of this file (removed here) was written 25 commits earlier, at `545f9f2`
 (2026-08-10 20:30) — before either of the two migrations that this document is
 mostly about existed. It described an `/embed` endpoint that returns "a

@@ -4,6 +4,7 @@ N: 8901-endpoints=2 consumers · facet-callsites=11 · field_cube-writers(py)=1 
 spec-budget: 600 lines / one session
 staleness-predicate: `python3 ~/.claude/skills/software-spec/scripts/spec_lint.py SPEC.md --rerun`
 INTERFACE: `contracts/iface.pyi` (Python half) · `contracts/iface.d.ts` (TS half)
+BUILD STATE: `STATUS.md` (what is shipped vs a seam with no writer) · `ROADMAP.md` (the phases and their rewrite tripwires). This spec describes the contracts, NOT how much of them is wired — asking one document to be both is how a spec starts lying about a system that has moved.
 FIGURE-2: §4 = the two stubs + the three STATE×EVENT tables + JOIN LEDGER + CONSTANT LEDGER + failure cells. Prose outside §4 is WHY.
 
 ## 0 · MEASUREMENT

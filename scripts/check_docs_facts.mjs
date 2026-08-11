@@ -311,6 +311,53 @@ for (const relFile of COMMAND_DOC_FILES) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// 3. STATUS.md's FACET TABLE vs the facets on disk — BOTH directions
+//
+// A construction-status document is the single most rot-prone artifact in a
+// repo, because it is the one people write instead of measuring. This check
+// makes the facet inventory the part that cannot drift: a facet directory with
+// no row is UNDOCUMENTED (someone shipped and did not say), and a row naming a
+// directory that does not exist is a STALE CLAIM (something was renamed or
+// removed and the status page still advertises it).
+//
+// Both directions matter and they fail differently: the first understates the
+// system, the second overstates it. Only one of those gets caught by a reader.
+// ─────────────────────────────────────────────────────────────────────────
+{
+    const FACET_DIR = 'src/app.frontend.facets.molstar-rdkit.editable/facets';
+    let dirs = [];
+    try {
+        dirs = fs.readdirSync(path.join(ROOT, FACET_DIR), { withFileTypes: true })
+            .filter(d => d.isDirectory() && !d.name.startsWith('_'))
+            .map(d => d.name);
+    } catch (e) {
+        violate('STATUS.md', 0, `cannot read ${FACET_DIR} (${e.message}) — this check is `
+            + 'BLIND, which is not the same as passing');
+    }
+    if (dirs.length) {
+        const statusText = read('STATUS.md');
+        // A row must reference the facet by its real path fragment, not by a
+        // prose name: `facets/field-wells/` is checkable, "the Fields facet" is
+        // not, and a check keyed on prose would convict on rewording.
+        for (const d of dirs) {
+            if (!statusText.includes(`facets/${d}/`)) {
+                violate('STATUS.md', 0, `facet \`${FACET_DIR}/${d}/\` has no row in `
+                    + `STATUS.md — an undocumented facet makes the status page understate `
+                    + `the system, and nobody notices an omission`);
+            }
+        }
+        for (const m of statusText.matchAll(/facets\/([a-z0-9-]+)\//g)) {
+            if (!dirs.includes(m[1])) {
+                violate('STATUS.md', 0, `STATUS.md claims a facet \`facets/${m[1]}/\` that `
+                    + `does not exist on disk — a stale claim OVERSTATES the system, which `
+                    + `is the direction a reader cannot catch`);
+            }
+        }
+        info.push(`STATUS.md facet table: ${dirs.length} facet directories, both directions checked`);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // REPORT
 // ─────────────────────────────────────────────────────────────────────────
 if (info.length) {
