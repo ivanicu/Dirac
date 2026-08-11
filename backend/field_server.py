@@ -1309,7 +1309,7 @@ def charge_table() -> dict[tuple[str, str], float]:
             return _charge_table
         import pdb2pqr
         path = (Path(pdb2pqr.__file__).parent / 'dat' / f'{CHARGE_FORCEFIELD}.DAT')
-        table: dict[tuple[str, str], float] = {}
+        raw: dict[str, dict[str, float]] = {}
         for line in path.read_text().splitlines():
             if not line.strip() or line.startswith('#'):
                 continue
@@ -1317,9 +1317,64 @@ def charge_table() -> dict[tuple[str, str], float]:
             if len(parts) < 3:
                 continue
             try:
-                table[(parts[0].upper(), parts[1].upper())] = float(parts[2])
+                raw.setdefault(parts[0].upper(), {})[parts[1].upper()] = float(parts[2])
             except ValueError:
                 continue
+
+        # ── UNITED ATOM, and this is not an optimisation ────────────────────
+        #
+        # A crystallographic protein has NO HYDROGENS. AMBER's charges assume
+        # every one of them, so summing only the heavy atoms loses all the
+        # compensating positive charge. Measured against the all-atom totals:
+        #
+        #     ALA   0.000 -> -0.535     PHE   0.000 -> -1.110
+        #     ASP  -1.000 -> -1.357     LYS  +1.000 -> -0.882
+        #     GLU  -1.000 -> -1.284     ARG  +1.000 -> -1.827
+        #
+        # Every residue reads too negative and THE TWO POSITIVE RESIDUES READ
+        # NEGATIVE. Arginine, +1 in reality, comes out at -1.83. That inverts
+        # the sign of exactly the question this field exists to answer — is the
+        # pocket positive where my ligand is negative — and it would have
+        # shipped looking entirely plausible: a coloured field, a named charge
+        # model, a printed net charge, and nothing on screen saying the
+        # hydrogens were never there.
+        #
+        # So each hydrogen's charge is folded onto the heavy atom it belongs
+        # to. Parentage comes from the PDB naming convention, which encodes it:
+        # strip the leading H and any trailing digits and you have the parent's
+        # suffix — HG12 -> "G1" -> CG1, HB3 -> "B" -> CB, HH11 -> "H1" -> NH1,
+        # and a bare H -> "" -> N.
+        table: dict[tuple[str, str], float] = {}
+        for res, atoms in raw.items():
+            folded = {n: q for n, q in atoms.items() if not n.startswith('H')}
+            suffix_to_heavy = {n[1:]: n for n in folded}
+            for name, q in atoms.items():
+                if not name.startswith('H'):
+                    continue
+                # Drop trailing digits ONE AT A TIME and take the first match.
+                # Stripping them all was wrong in exactly the case that matters:
+                # HH11 -> "H", which matches nothing, while its real parent NH1
+                # has suffix "H1". The four guanidinium hydrogens therefore
+                # never folded and arginine summed to -0.79 over its heavy
+                # atoms instead of +1.
+                suffix = name[1:]
+                parent = None
+                while True:
+                    parent = suffix_to_heavy.get(suffix)
+                    if parent is not None or not suffix or not suffix[-1].isdigit():
+                        break
+                    suffix = suffix[:-1]
+                if parent is None and suffix == '':
+                    parent = 'N' if 'N' in folded else None
+                if parent is None:
+                    # An unattachable hydrogen would silently vanish along with
+                    # its charge, which is the bug being fixed. Keep it as its
+                    # own site rather than dropping it.
+                    folded[name] = folded.get(name, 0.0) + q
+                    continue
+                folded[parent] = folded.get(parent, 0.0) + q
+            for n, q in folded.items():
+                table[(res, n)] = q
         _charge_table = table
         return table
 
