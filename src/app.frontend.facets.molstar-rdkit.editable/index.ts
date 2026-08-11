@@ -355,7 +355,13 @@ function byId<T extends HTMLElement>(id: string): T {
 class MolecularVfxLab {
     private workbench?: Awaited<ReturnType<typeof createChemWorkbench>>;
     private baseline?: MolstarVisualSnapshot;
-    private currentMolecule = MolecularControls.find(control => control.id === '1EMA')!;
+    // 1CBS, not 1EMA. The app booted on green fluorescent protein, whose chromophore is a
+    // covalently modified polymer residue rather than a deposited ligand — so mol*'s ligand
+    // query cannot see it, and Ligand, Properties, Fields, the SMARTS search and the bond
+    // atlas all render "no ligand loaded" on the first screen a new user ever sees, under a
+    // header that advertises "+ chromophore". 1CBS is the catalogue's own "Protein-ligand
+    // complex" and is the structure the README's demo section already uses.
+    private currentMolecule = MolecularControls.find(control => control.id === '1CBS')!;
     private currentRepresentation: RepresentationId = 'polymer-and-ligand';
     private enabledUpgrades = new Set<MolecularLayerId>(RecommendedMolstarVisualUpgrades);
     private framedLigandMolecule?: string;
