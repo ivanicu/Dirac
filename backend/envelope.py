@@ -140,7 +140,11 @@ UNITS_BY_KIND: dict[str, str] = {
 #     exists to close: filled with None, never silently absent.
 _COMMON = ('kind', 'units', 'method', 'cache', 'stored', 'computed_at', 'total_seconds')
 _GRID = ('dims', 'spacing_requested', 'spacing', 'grid_capped', 'vmin', 'vmax',
-         'iso_fixed', 'pad_used_angstrom', 'wall_max', 'contour_closes_in_box')
+         'iso_fixed', 'pad_used_angstrom', 'wall_max', 'contour_closes_in_box',
+         # The isovalue the BOX was sized for, beside the isovalue actually
+         # drawn (`iso_fixed`). Two numbers because they can disagree: a box
+         # grown to close a contour at one level is not evidence about another.
+         'iso_sized_for')
 _QUANTUM = ('basis', 'scf_energy_ha', 'converged', 'charge', 'spin', 'natoms',
             'nbasis', 'ecp', 'scf_seconds', 'scf_cycles', 'homo_ev', 'lumo_ev',
             'cube_seconds', 'cube_predicted_seconds',
@@ -165,7 +169,19 @@ _CLASSICAL_CAVEAT = ('sigma_hole_representable', 'model_caveat')
 # because the frame is not ours, this route cannot grow the box to close a
 # contour the way the ligand path does, so it reports instead of fixing.
 _REGION = ('n_sources_sent', 'n_sources_used', 'cutoff_angstrom',
-           'frame_is_callers')
+           'frame_is_callers',
+           # WHERE THE CHARGES CAME FROM, which for a group field is the whole
+           # question: the field is additive but the charge model is not, so a
+           # truncated pocket charged per-molecule is not the intact protein.
+           # 'caller-supplied' vs a residue-template source are different
+           # claims and must not both render as an unqualified number.
+           'charge_model',
+           # A REFUSAL, counted and explained. Crystallographic waters are left
+           # OUT because their hydrogens were never resolved: a bare oxygen
+           # contributes a fictitious monopole, and an invented orientation
+           # points the dipole confidently wrong. The count travels so the
+           # caller can see how much was excluded, not just that something was.
+           'waters_excluded', 'waters_note')
 
 FIELD_META_SCHEMA: dict[str, frozenset[str]] = {
     'mep': frozenset(_COMMON + _GRID + _CLASSICAL_CAVEAT

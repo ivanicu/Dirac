@@ -68,6 +68,10 @@ class FieldMeta(TypedDict, total=False):
     pad_used_angstrom: float        # [Angstrom] padding actually used (the BOX
                                      # adapts; the ruler — iso_fixed — never does)
     wall_max: float                 # largest |field| on the box's six faces
+    iso_sized_for: float             # [same units] the isovalue the BOX was sized for
+    charge_model: str               # where the charges came from (region route)
+    waters_excluded: int            # [count] crystallographic waters left out
+    waters_note: str | None         # why they were left out; None when there were none
     contour_closes_in_box: bool     # False = surface runs off the grid edge
                                      # and is drawn as a flat face
 
