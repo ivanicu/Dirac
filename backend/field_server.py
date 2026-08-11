@@ -65,13 +65,61 @@ _scf_lock = threading.Lock()
 
 _db_ok = False
 _toolkit_ids: dict[str, str] = {}
+_producer_id: str | None = None
+
+# Bump on ANY behaviour change. meta.register_producer RAISES at startup when
+# this version is re-registered with different source — a forgotten bump is a
+# loud startup error, never a silently stale cache (design: migration 006).
+PRODUCER_SERVICE = 'dirac-fields'
+PRODUCER_VERSION = '1.2'
+PRODUCER_NOTES = 'PF6- NaN refusal, SOSCF rescue, salt stripping, MLP field'
 
 
 def _db(): return psycopg.connect(DB_DSN, autocommit=True)
 
 
+def conformer_hash_for(mol_with_h: Chem.Mol) -> tuple[bytes, str]:
+    """32-byte conformer identity per the 006 contract.
+
+    Heavy atoms in RDKit canonical rank order → centroid at origin → rotate
+    onto principal axes of the (unit-mass) gyration tensor with per-axis sign
+    fixed by the third moment — and the third axis is the CROSS PRODUCT of the
+    first two, so det = +1 by construction: a mirror image cannot land on the
+    same frame, which is what keeps an enantiomer from being served its
+    partner's field. Coordinates quantised to 0.01 Å, hashed with the parent
+    InChIKey.
+    """
+    heavy = Chem.RemoveHs(mol_with_h)
+    n = heavy.GetNumAtoms()
+    ranks = list(Chem.CanonicalRankAtoms(heavy, breakTies=True))
+    order = sorted(range(n), key=lambda i: ranks[i])
+    conf = heavy.GetConformer()
+    coords = np.array([[conf.GetAtomPosition(i).x, conf.GetAtomPosition(i).y,
+                        conf.GetAtomPosition(i).z] for i in order])
+    syms = [heavy.GetAtomWithIdx(i).GetSymbol() for i in order]
+
+    x = coords - coords.mean(axis=0)
+    _, vecs = np.linalg.eigh(x.T @ x)
+    axes = vecs[:, ::-1]                      # largest-variance axis first
+    for k in range(2):                        # sign convention on axes 0, 1
+        y = x @ axes[:, k]
+        m3 = float((y ** 3).sum())
+        s = m3 if abs(m3) > 1e-8 else float(y[int(np.argmax(np.abs(y)))])
+        if s < 0:
+            axes[:, k] = -axes[:, k]
+    axes[:, 2] = np.cross(axes[:, 0], axes[:, 1])   # det = +1, always
+    y = np.round(x @ axes, 2)
+    y[y == 0.0] = 0.0                         # normalise -0.00 → 0.00
+
+    inchikey = Chem.MolToInchiKey(heavy)
+    payload = inchikey.encode() + b'|' + b';'.join(
+        f'{s},{px:.2f},{py:.2f},{pz:.2f}'.encode()
+        for s, (px, py, pz) in zip(syms, y))
+    return hashlib.sha256(payload).digest(), inchikey
+
+
 def db_init() -> bool:
-    global _db_ok
+    global _db_ok, _producer_id
     if psycopg is None:
         print('[db] psycopg not importable — persistent cache OFF', flush=True)
         return False
@@ -91,8 +139,14 @@ def db_init() -> bool:
                     'SELECT id FROM meta.toolkit WHERE name = %s AND version = %s',
                     (name, version))
                 _toolkit_ids[name] = cur.fetchone()[0]
+            source_sha = hashlib.sha256(open(__file__, 'rb').read()).digest()
+            cur.execute(
+                'SELECT meta.register_producer(%s, %s, %s, %s, %s)',
+                (PRODUCER_SERVICE, PRODUCER_VERSION, source_sha,
+                 _toolkit_ids['pyscf'], PRODUCER_NOTES))
+            _producer_id = cur.fetchone()[0]
         _db_ok = True
-        print(f'[db] persistent cube cache ON (dirac db, toolkits: {list(_toolkit_ids)})', flush=True)
+        print(f'[db] persistent cube cache ON (producer {PRODUCER_SERVICE}/{PRODUCER_VERSION})', flush=True)
     except Exception as e:
         print(f'[db] unavailable ({e}) — persistent cache OFF', flush=True)
         _db_ok = False
@@ -105,13 +159,17 @@ def db_get_cube(molfile_sha: bytes, kind: str, basis: str):
         return None
     try:
         with _db() as conn, conn.cursor() as cur:
+            # Reads go through the current-producer view (006): a row cached
+            # by a since-fixed generation of this service cannot be served.
             cur.execute(
                 'SELECT b.bytes, fc.scf_energy_ha, fc.converged, fc.n_atoms, '
                 '       fc.n_basis, fc.homo_ev, fc.lumo_ev, fc.seconds, '
                 '       app.scf_method_label(fc.scf_reference, fc.scf_converger), '
                 '       fc.computed_at '
-                'FROM app.field_cube fc JOIN app.blob b ON b.sha256 = fc.blob_sha256 '
-                'WHERE fc.molfile_sha256 = %s AND fc.kind = %s AND fc.basis = %s',
+                'FROM app.v_field_cube_current fc '
+                'JOIN app.blob b ON b.sha256 = fc.blob_sha256 '
+                'WHERE fc.molfile_sha256 = %s AND fc.kind = %s AND fc.basis = %s '
+                'ORDER BY fc.computed_at DESC LIMIT 1',
                 (molfile_sha, kind, basis))
             row = cur.fetchone()
         if row is None:
@@ -135,17 +193,37 @@ def db_get_cube(molfile_sha: bytes, kind: str, basis: str):
         return None
 
 
-def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict):
-    """Persist a computed cube. Quantum rows reach here only if converged —
-    and the schema CHECK would reject them anyway if this invariant broke."""
-    if not _db_ok:
+def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict,
+                mol: Chem.Mol | None = None):
+    """Persist a computed cube, stamped with this producer generation.
+    Quantum rows reach here only if converged — the schema CHECK would reject
+    them anyway. The coarse key (compound_id + conformer_hash) is written
+    all-or-nothing: it exists only when the compound is registered."""
+    if not _db_ok or _producer_id is None:
         return
     try:
         blob = cube.encode()
         blob_sha = hashlib.sha256(blob).digest()
         toolkit = _toolkit_ids['rdkit' if kind == 'mep' else 'pyscf']
         label = meta.get('method', 'gasteiger' if kind == 'mep' else None)
+
+        compound_id = None
+        conf_hash = None
+        if mol is not None:
+            try:
+                conf_hash_candidate, inchikey = conformer_hash_for(mol)
+            except Exception:
+                conf_hash_candidate, inchikey = None, None
+        else:
+            conf_hash_candidate, inchikey = None, None
+
         with _db() as conn, conn.cursor() as cur:
+            if inchikey:
+                cur.execute('SELECT id FROM chem.compound WHERE inchikey = %s',
+                            (inchikey,))
+                row = cur.fetchone()
+                if row:
+                    compound_id, conf_hash = row[0], conf_hash_candidate
             cur.execute(
                 'INSERT INTO app.blob (sha256, media_type, byte_len, bytes) '
                 'VALUES (%s, %s, %s, %s) ON CONFLICT (sha256) DO NOTHING',
@@ -154,19 +232,20 @@ def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict
                 'INSERT INTO app.field_cube '
                 '  (molfile_sha256, kind, basis, blob_sha256, scf_reference, '
                 '   scf_converger, scf_energy_ha, converged, n_atoms, n_basis, '
-                '   homo_ev, lumo_ev, seconds, toolkit_id) '
+                '   homo_ev, lumo_ev, seconds, toolkit_id, producer_id, '
+                '   compound_id, conformer_hash) '
                 'SELECT %s, %s, %s, %s, p.scf_reference, p.scf_converger, '
-                '       %s, %s, %s, %s, %s, %s, %s, %s '
+                '       %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s '
                 'FROM app.parse_scf_method(%s) AS p '
-                'ON CONFLICT (molfile_sha256, kind, basis) DO NOTHING',
+                'ON CONFLICT ON CONSTRAINT field_cube_exact_key DO NOTHING',
                 (molfile_sha, kind, basis, blob_sha,
                  meta.get('scf_energy_ha'),
                  True if kind != 'mep' else None,
                  meta.get('natoms'), meta.get('nbasis'),
                  meta.get('homo_ev'), meta.get('lumo_ev'),
                  meta.get('scf_seconds') if kind != 'mep' else meta.get('total_seconds'),
-                 toolkit, label))
-        print(f'[db] cached kind={kind} basis={basis}', flush=True)
+                 toolkit, _producer_id, compound_id, conf_hash, label))
+        print(f'[db] cached kind={kind} basis={basis} coarse={"yes" if conf_hash else "no"}', flush=True)
     except Exception as e:
         print(f'[db] write failed ({e}) — result served but not persisted', flush=True)
 
@@ -586,7 +665,7 @@ class Handler(BaseHTTPRequestHandler):
             print(f"[field] kind={kind} atoms={mol.GetNumAtoms()} "
                   f"t={meta['total_seconds']}s", flush=True)
             if cacheable:
-                db_put_cube(molfile_sha, kind, basis_key, cube, meta)
+                db_put_cube(molfile_sha, kind, basis_key, cube, meta, mol=mol)
             self._send(200, {'ok': True, 'cube': cube, 'meta': meta})
         except Exception as e:
             traceback.print_exc()
