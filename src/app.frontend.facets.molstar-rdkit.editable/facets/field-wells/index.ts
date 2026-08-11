@@ -147,37 +147,146 @@ const Kinds: Record<FieldKind, KindSpec> = {
     // Same units, same fixed contour and same colours as `mep` on purpose: the
     // whole value of the reverse field is comparing it against the ligand's
     // own, and a different scale would make that comparison a lie.
-    pocket_mep: { label: 'Pocket field (what the ligand sits in)', iso: 10, cubeScale: 1, diverging: true, unit: 'kcal/mol', posToken: '--viz-mep-pos', negToken: '--viz-mep-neg', posColor: 0x6788bc, negColor: 0xbd777b, quantum: false },
+    pocket_mep: { label: 'Pocket map (point charges, screened)', iso: 10, cubeScale: 1, diverging: true, unit: 'kcal/mol', posToken: '--viz-mep-pos', negToken: '--viz-mep-neg', posColor: 0x6788bc, negColor: 0xbd777b, quantum: false },
     mlp: { label: 'Lipophilicity', iso: 0.25, cubeScale: 1, diverging: true, unit: 'MLP', posToken: '--viz-mlp-pos', negToken: '--viz-mlp-neg', posColor: 0xd5b979, negColor: 0x74ccdd, quantum: false },
 };
 
+/**
+ * Where a field's cube came from. 'browser' never appears in a backend
+ * payload — normalize_meta() (backend/envelope.py) writes 'memory'|'db'|
+ * 'computed' here; this facet's own `cubeCache` hit path re-serves the SAME
+ * meta object it originally fetched rather than relabelling it.
+ */
+type CacheSource = 'browser' | 'memory' | 'db' | 'computed';
+
 interface FieldMeta {
     kind: string;
-    basis?: string;
+    basis?: string;                  // quantum kinds only
     method?: string;
+    /**
+     * Element symbols carrying a pseudopotential (quantum only, Z>=37 where
+     * the basis defines one). `normalize_meta()` backfills this with null on
+     * a DB cache row from before this key existed — a schema-declared key
+     * that is merely absent would be indistinguishable from "not recorded".
+     */
+    ecp?: string[] | null;
     scf_energy_ha?: number;
     homo_ev?: number;
     lumo_ev?: number;
     scf_seconds?: number;
+    /** DIIS cycles consumed (quantum only). Null = not tracked, or a cache
+     * row that predates this key. */
+    scf_cycles?: number | null;
+    /** cubegen wall time, [s] (quantum only). */
+    cube_seconds?: number | null;
+    /** cube admission-gate prediction, [s] (quantum only). */
+    cube_predicted_seconds?: number | null;
+    /** Formal charge the SCF actually ran at (quantum only). Null on a DB
+     * cache row — "a cache row genuinely does not know charge/spin/ecp
+     * today" (envelope.py). */
+    charge?: number | null;
+    /** Unpaired electrons the SCF actually ran at (quantum only). */
+    spin?: number | null;
+    /**
+     * Why the frontier orbital energies must not be quoted at this
+     * basis/charge (null = quotable). STO-3G ranks nitrobenzene as MORE
+     * electron-rich than benzene while def2-SVP ranks it last, and water's
+     * LUMO moves ~12 eV between the two levels — a number with no referent,
+     * printed to one decimal, is worse than no number.
+     */
+    frontier_caveat?: string | null;
     total_seconds?: number;
+    /**
+     * Which cache tier served this field. Present on every kind
+     * `normalize_meta()` covers (mep/mlp/mep_qm/homo/lumo/density); genuinely
+     * ABSENT (not null) on `/field/region`, which does not yet normalize its
+     * own exit.
+     */
+    cache?: CacheSource;
+    /** True = a background persist to the DB was SCHEDULED, not confirmed
+     * complete. Null on any kind the backend never persists (e.g. `mlp`). */
+    stored?: boolean | null;
+    /** ISO-8601; set on both cache hits and fresh computes. */
+    computed_at?: string | null;
     converged?: boolean;
     net_charge?: number;
     units?: string;
     natoms?: number;
     nbasis?: number;
+
+    // ── grid fields (field_mep / field_mlp / their _region variants) ──────
+    /** [nx, ny, nz] grid dimensions. Null on a DB cache hit for `mep` — the
+     * cube text carries its own axes, but today's read path does not return
+     * the grid-shape half of the meta at all. */
+    dims?: number[] | null;
+    /** [Angstrom] the spacing asked for. */
+    spacing_requested?: number | null;
+    /** [Angstrom] actual per-axis spacing; may exceed spacing_requested when
+     * grid_capped. */
+    spacing?: number[] | null;
+    /** True = dims hit the 128-voxel cap and the grid silently coarsened
+     * past the request. */
+    grid_capped?: boolean | null;
+    vmin?: number | null;
+    vmax?: number | null;
     /** The fixed contour the backend grew the box around. */
     iso_fixed?: number;
     pad_used_angstrom?: number;
     wall_max?: number;
+    /**
+     * The isovalue the BOX was SIZED for, beside `iso_fixed` — the one
+     * actually DRAWN. Two numbers because they can disagree: a box grown to
+     * close a contour at one level is not evidence about another.
+     * `field_mep`/`field_mlp` size the box for the isovalue-slider FLOOR
+     * (`iso_fixed * 0.1`) so the surface stays closed across the whole
+     * slider range; `/field/region` never sets this — its frame is the
+     * caller's, not grown.
+     */
+    iso_sized_for?: number | null;
     /** False = the surface runs off the grid and is drawn as a flat face. */
     contour_closes_in_box?: boolean;
+
+    // ── field_mep only ──────────────────────────────────────────────────────
+    charges?: string;                // 'gasteiger'
+    /** False = a halogen/chalcogen is present; a point-charge model reports
+     * the OPPOSITE SIGN there, not merely a less accurate one. Measured:
+     * bromobenzene -6.2 kcal/mol (Gasteiger) vs +9.9 (QM surface route) at
+     * the cap. */
+    sigma_hole_representable?: boolean;
+    /** What a Gasteiger point-charge map cannot show at all. */
+    model_caveat?: string;
+    /** What a point-charge pocket map structurally cannot contain. */
+    physics_caveat?: string;
+    dielectric?: string;
+
+    // ── field_mlp only ───────────────────────────────────────────────────────
+    /** Crippen atomic contributions, summed. */
+    total_logp?: number;
     /** MLP is one-signed for most drug-like molecules; measured, not assumed. */
     single_signed?: boolean;
-    /** Why the frontier orbital energies must not be quoted at this level. */
-    frontier_caveat?: string | null;
-    /** False when the molecule has a halogen/chalcogen a point charge cannot represent. */
-    sigma_hole_representable?: boolean;
-    model_caveat?: string;
+
+    // ── field_region only (SOURCE⊥FRAME: an arbitrary caller-supplied atom
+    // set, not tied to a molfile or the focused ligand) ────────────────────
+    n_sources_sent?: number;
+    n_sources_used?: number;
+    cutoff_angstrom?: number;
+    /** True = the box is the caller's frame, not grown to close the contour
+     * (contrast field_mep). */
+    frame_is_callers?: boolean;
+    /**
+     * Where the charges came from. A truncated pocket charged per-molecule
+     * is not the intact protein — a residue-template source and a
+     * caller-supplied one are different claims and must not both render as
+     * an unqualified number.
+     */
+    charge_model?: string | null;
+    /** [count] crystallographic waters left OUT — their hydrogens were
+     * never resolved, so a bare oxygen would contribute a fictitious
+     * monopole and an invented orientation would point the dipole
+     * confidently wrong. */
+    waters_excluded?: number | null;
+    /** Why they were left out; null when there were none. */
+    waters_note?: string | null;
 }
 
 let plugin: PluginContext | null = null;
@@ -490,21 +599,36 @@ function setButtonsEnabled() {
  * "Net charge null · Compute time null s" on any cache hit — visible only in a
  * screenshot, because the code reads correctly and the shapes differ.
  */
-function present<T>(v: T): v is NonNullable<T> {
+export function present<T>(v: T): v is NonNullable<T> {
     return v !== undefined && v !== null && (v as unknown) !== '';
 }
 
-function renderMeta(meta: FieldMeta | null) {
-    const el = byId('field-meta');
-    if (!el) return;
-    if (!meta) { el.innerHTML = ''; return; }
-    const rows: [string, string][] = [];
-    if (present(meta.method)) rows.push(['Method', meta.basis ? `${meta.method}/${meta.basis}` : meta.method]);
-    if (present(meta.units)) rows.push(['Units', meta.units]);
-    if ((meta as { total_logp?: number }).total_logp !== undefined) {
-        rows.push(['Crippen logP', (meta as { total_logp?: number }).total_logp!.toFixed(2)]);
-    }
-    if (present(meta.scf_energy_ha)) rows.push(['SCF energy', `${meta.scf_energy_ha.toFixed(4)} Ha`]);
+/** True when two already-rounded numbers are meaningfully different — plain
+ * `!==` would also fire on float noise the backend never intended as signal. */
+function numbersDiffer(a: number, b: number): boolean {
+    return Math.abs(a - b) > 1e-9;
+}
+
+export interface MetaRow { label: string; value: string; }
+
+/**
+ * Pure: meta -> what the panel should show. Kept apart from `renderMeta`
+ * (which owns only the DOM write) so the caveat-gating rules — the entire
+ * reason this file exists — can be exercised from a test with no browser.
+ *
+ * Every row and caveat is presence-checked with `present()`, so an absent OR
+ * explicitly-null key is omitted, never printed as the literal string
+ * "null" (that shipped once, and was caught only by a screenshot).
+ */
+export function buildMetaDisplay(meta: FieldMeta | null): { rows: MetaRow[], caveats: string[] } {
+    const rows: MetaRow[] = [];
+    const caveats: string[] = [];
+    if (!meta) return { rows, caveats };
+
+    if (present(meta.method)) rows.push({ label: 'Method', value: meta.basis ? `${meta.method}/${meta.basis}` : meta.method });
+    if (present(meta.units)) rows.push({ label: 'Units', value: meta.units });
+    if (present(meta.total_logp)) rows.push({ label: 'Crippen logP', value: meta.total_logp.toFixed(2) });
+    if (present(meta.scf_energy_ha)) rows.push({ label: 'SCF energy', value: `${meta.scf_energy_ha.toFixed(4)} Ha` });
     // One decimal, deliberately: Koopmans + minimal-basis errors are ~0.5-1 eV,
     // and a second decimal would put false precision in front of a chemist
     // (the physics session's absolute_uncertainty_pct lesson, applied here).
@@ -514,26 +638,62 @@ function renderMeta(meta: FieldMeta | null) {
     // moves ~12 eV to def2-SVP. A number with no referent, printed to one
     // decimal, is worse than no number: the decimal is itself a claim.
     if (meta.frontier_caveat) {
-        rows.push(['HOMO / LUMO', 'not quotable at this level']);
+        rows.push({ label: 'HOMO / LUMO', value: 'not quotable at this level' });
     } else {
-        if (present(meta.homo_ev)) rows.push(['HOMO', `≈${meta.homo_ev.toFixed(1)} eV`]);
-        if (present(meta.lumo_ev)) rows.push(['LUMO', `≈${meta.lumo_ev.toFixed(1)} eV`]);
+        if (present(meta.homo_ev)) rows.push({ label: 'HOMO', value: `≈${meta.homo_ev.toFixed(1)} eV` });
+        if (present(meta.lumo_ev)) rows.push({ label: 'LUMO', value: `≈${meta.lumo_ev.toFixed(1)} eV` });
     }
-    if (present(meta.net_charge)) rows.push(['Net charge', String(meta.net_charge)]);
-    if (present(meta.natoms)) rows.push(['Atoms (with H)', String(meta.natoms)]);
-    if (present(meta.nbasis)) rows.push(['Basis functions', String(meta.nbasis)]);
-    if (present(meta.total_seconds)) rows.push(['Compute time', `${meta.total_seconds} s`]);
-    const caveats: string[] = [];
+    if (present(meta.net_charge)) rows.push({ label: 'Net charge', value: String(meta.net_charge) });
+    if (present(meta.natoms)) rows.push({ label: 'Atoms (with H)', value: String(meta.natoms) });
+    if (present(meta.nbasis)) rows.push({ label: 'Basis functions', value: String(meta.nbasis) });
+    if (present(meta.total_seconds)) rows.push({ label: 'Compute time', value: `${meta.total_seconds} s` });
+    // Region route: WHERE the charges came from, and how much of the source
+    // was deliberately left out. Both are facts about the number above, not
+    // decoration — a group field is additive but the charge model is not, so
+    // a residue-template source and a caller-supplied one are different
+    // claims (envelope.py's `_REGION` comment).
+    if (present(meta.charge_model)) rows.push({ label: 'Charge model', value: meta.charge_model });
+    if (present(meta.waters_excluded)) rows.push({ label: 'Waters excluded', value: String(meta.waters_excluded) });
+
     if (meta.frontier_caveat) caveats.push(meta.frontier_caveat);
     if (meta.model_caveat) caveats.push(meta.model_caveat);
+    if (meta.physics_caveat) caveats.push(meta.physics_caveat);
+    if (meta.waters_note) caveats.push(meta.waters_note);
     if (meta.sigma_hole_representable === false) {
         caveats.push('This molecule has a halogen or chalcogen. A point-charge '
             + 'model is spherical, so a σ-hole is structurally impossible in it '
             + '— measured, it reports the opposite sign. Use the Physics tab, '
             + 'which computes the potential on the isodensity surface.');
     }
-    el.innerHTML = rows.map(([k, v]) =>
-        `<div class="field-meta-row"><span>${k}</span><span>${v}</span></div>`).join('')
+    // Only fires when there was something excluded — `waters_note` is null
+    // (never the string "null") when n_water was 0, per field_region().
+    if (present(meta.waters_note)) caveats.push(meta.waters_note);
+    // iso_sized_for is the isovalue the BOX was grown to keep closed at the
+    // isovalue-slider FLOOR; iso_fixed is the contour actually drawn at the
+    // slider's default. field_mep/field_mlp size for iso_fixed * 0.1, so the
+    // two numbers differ by design on every freshly-computed grid field — the
+    // difference is what tells a chemist how much slider room the box has,
+    // not an anomaly to hide. Absent on /field/region (never grown) and null
+    // on both sides for a DB cache hit that predates either key, so the guard
+    // is `present` on both, not just a `!==`.
+    if (present(meta.iso_sized_for) && present(meta.iso_fixed)
+        && numbersDiffer(meta.iso_sized_for, meta.iso_fixed)) {
+        const unit = present(meta.units) ? ` ${meta.units}` : '';
+        caveats.push(`Box grown to keep the surface closed down to `
+            + `${meta.iso_sized_for}${unit} on the isovalue slider; the contour `
+            + `drawn at the default position is ${meta.iso_fixed}${unit} — `
+            + `lowering the slider past the smaller number can reopen it.`);
+    }
+    return { rows, caveats };
+}
+
+function renderMeta(meta: FieldMeta | null) {
+    const el = byId('field-meta');
+    if (!el) return;
+    if (!meta) { el.innerHTML = ''; return; }
+    const { rows, caveats } = buildMetaDisplay(meta);
+    el.innerHTML = rows.map(({ label, value }) =>
+        `<div class="field-meta-row"><span>${label}</span><span>${value}</span></div>`).join('')
         + caveats.map(c => `<div class="field-caveat">${escapeHtml(c)}</div>`).join('');
 }
 
@@ -678,8 +838,13 @@ async function requestPocketField() {
         if (!payload.ok) { setStatus(payload.error, 'error'); return; }
         await renderCube(payload.cube, 'pocket_mep', payload.meta);
         renderMeta(payload.meta);
+        // present() before interpolation — the same class of bug as the
+        // meta-panel rows: a status line built with a bare template literal
+        // cannot tell an absent/null charge_model from the literal word.
+        const chargeModelNote = present(payload.meta.charge_model)
+            ? payload.meta.charge_model : 'charge model not recorded';
         setStatus(`Pocket field from ${payload.meta.n_sources_used} residue-shell `
-            + `atoms · ${payload.meta.charge_model}.`, 'ok');
+            + `atoms · ${chargeModelNote}.`, 'ok');
     } catch (e) {
         setStatus(`Backend unreachable — ${e instanceof Error ? e.message : String(e)}`, 'error');
     } finally {

@@ -46,6 +46,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 # route 404 — indistinguishable from "no such route", which is the fallback-
 # hides-the-primary's-death shape. So a failed import is REMEMBERED and served
 # as a 503 that names the exception, while /field keeps working.
+import jobs
 from envelope import normalize_meta
 
 # `meta.stored: true` is set when the persist thread is STARTED, not when it
@@ -57,6 +58,12 @@ from envelope import normalize_meta
 # line in a log nobody tails. A silent persist failure looks exactly like a
 # cache that is simply cold — and a cold cache that nobody can distinguish from
 # a broken one is how 19 rows sat unservable for a day.
+# app.job's writer. Created at db_init (it needs the worker name, which carries
+# the derived producer version) and left None when the database is unreachable —
+# every call site treats None as "no ledger", never as an error, because a job
+# row may not cost a result.
+_jobs: 'jobs.JobLedger | None' = None
+
 _persist = {'queued': 0, 'ok': 0, 'failed': 0, 'last_error': None}
 _persist_lock = threading.Lock()
 
@@ -294,6 +301,17 @@ def db_init() -> bool:
             _method_ids = method_registry.register_all(_db, sys.modules[__name__],
                                                       _toolkit_ids.get('pyscf'))
             print(f'[db] {len(_method_ids)} compute units registered', flush=True)
+            global _jobs
+            _jobs = jobs.JobLedger(
+                _db, jobs.make_worker_name(os.getpid(), _producer_version()))
+            # A restart leaves rows 'running' that no process is doing. Without
+            # the reap, v_job_live's age_seconds grows without bound and the
+            # ledger reports work nobody is performing — worse than no ledger,
+            # because it reads as a hung system.
+            reaped = _jobs.reap()
+            if reaped:
+                print(f'[job] reaped {reaped} orphaned row(s) from a previous run',
+                      flush=True)
         except Exception as e:
             # A method registry that cannot be written must not take the cache
             # down with it: rows keep their producer stamp, which is what the
@@ -1028,6 +1046,29 @@ def run_scf(mol: Chem.Mol, basis: str, max_seconds: float = DEFAULT_MAX_SECONDS,
         ecp=ecp or None,
         verbose=0,
     )
+    # ── PRE-FLIGHT, and it did not exist until now ────────────────────────
+    # The only cost gate on this path was the CUBE estimate (after the SCF) plus
+    # the in-loop watchdog. So `max_seconds=0` — documented everywhere in this
+    # repo as "refuse before doing any work, tell me the cost" — actually entered
+    # the SCF and was stopped by the watchdog after one cycle: measured 1.03 s and
+    # 1.28 s against the job ledger, recorded as BUDGET. A rule stated in four
+    # comments and implemented in none of them is a rule about my intentions.
+    #
+    # The model is the one already measured in this repo over 47 molecules
+    # (backend/physics/README.md): seconds ~ 5.9e-9 * nao^4.03, HF being O(N^4).
+    # It is a screen, not a prediction — the fit underestimates the middle of the
+    # range by up to ~2.8x, so the 2.8x safety factor from that same measurement
+    # is applied here rather than quietly dropped.
+    nao = gmol.nao_nr()
+    predicted_scf = 2.8 * 5.9e-9 * float(nao) ** 4.03
+    if predicted_scf > max_seconds:
+        raise FieldBudgetExceeded(
+            f'estimated {predicted_scf:.1f} s of SCF for {nao} basis functions '
+            f'({basis}, {len(syms)} atoms) against a {max_seconds:g} s budget — '
+            f'refused before starting. Send max_seconds >= {predicted_scf:.0f}, '
+            f'or a smaller basis. The estimate is an O(N^4) screen with a 2.8x '
+            f'safety factor, not a promise.')
+
     mf = scf.RHF(gmol) if spin == 0 else scf.UHF(gmol)
     mf.max_cycle = 120
     t0 = time.time()
@@ -1328,7 +1369,8 @@ MAX_REGION_SOURCES = 20000
 MAX_REGION_VOXELS = 2_200_000     # ~128³, the same ceiling the ligand path uses
 
 
-def field_region(sources, lo, hi, spacing: float, kind: str):
+def field_region(sources, lo, hi, spacing: float, kind: str,
+                 req_dielectric: str = 'r-dependent'):
     """The classical field of an arbitrary SOURCE set, sampled in a given FRAME.
 
     Why this route exists at all, and why it needs no chemistry:
@@ -1425,6 +1467,29 @@ def field_region(sources, lo, hi, spacing: float, kind: str):
     # A distance cutoff, because the ligand path's per-atom full-grid temporary
     # is ~50 MB at 128³ and a pocket has thousands of atoms. Sources far from
     # the frame contribute below the noise of the model itself.
+    # ── SCREENING, and the reason it is on by default ───────────────────
+    #
+    # A bare Coulomb sum in vacuum is not what a ligand experiences in a
+    # pocket. Two errors sit on top of an unscreened point-charge map and they
+    # are different sizes:
+    #
+    #   NON-ADDITIVITY. Real densities polarise each other, so the true
+    #   V(A∪B) is not V(A)+V(B). Measured here on a water dimer at H-bonding
+    #   distance, RHF/6-31G* on a 5 Å probe shell: the non-additive part is
+    #   1.95 kcal/mol against a 14.07 peak — 13.8%. Larger for charged
+    #   residues against a polarisable ligand. A point-charge model cannot
+    #   represent this at all, at any screening.
+    #
+    #   NO SCREENING. Larger still, and this one IS fixable here. A truncated
+    #   Asp- at 4 Å contributes ~83 kcal/mol unscreened, against the ±5-10
+    #   features a chemist actually reads. Unscreened, the charged residues
+    #   drown the map they are supposed to inform.
+    #
+    # eps(r) = 4r is the standard minimum distance-dependent dielectric for
+    # exactly this situation — cheap, and far closer than vacuum. It is NOT
+    # Poisson-Boltzmann and does not pretend to be; the model is named in the
+    # response so the picture cannot be mistaken for an interaction energy.
+    screen = str(req_dielectric).lower()
     cutoff = 25.0 if kind == 'mep' else 12.0
     near = ((coords >= lo - cutoff).all(axis=1) & (coords <= hi + cutoff).all(axis=1))
     used = int(near.sum())
@@ -1433,7 +1498,10 @@ def field_region(sources, lo, hi, spacing: float, kind: str):
     for w, c in zip(weights[near], coords[near]):
         d = np.linalg.norm(pts - c, axis=-1)
         if kind == 'mep':
-            v += w / np.maximum(d, 0.5)
+            dd = np.maximum(d, 0.5)
+            # eps(r) = 4r  =>  V = q / (4 r^2). Vacuum is available but must be
+            # asked for, because it is the answer to a different question.
+            v += w / (4.0 * dd * dd) if screen == 'r-dependent' else w / dd
         else:
             v += w * np.exp(-d / 2.0)
     if kind == 'mep':
@@ -1454,6 +1522,15 @@ def field_region(sources, lo, hi, spacing: float, kind: str):
         'net_charge': round(float(weights.sum()), 3),
         'charge_model': (f'{CHARGE_FORCEFIELD} residue templates (pdb2pqr)'
                          if kind == 'mep' else 'caller-supplied'),
+        'dielectric': screen if kind == 'mep' else None,
+        'physics_caveat': (
+            'Point charges with eps(r)=4r screening. This is a QUALITATIVE MAP '
+            'of where the pocket is positive or negative, not an interaction '
+            'energy. Two things it cannot contain: mutual polarisation and '
+            'charge transfer (measured non-additive by ~14% of peak on an '
+            'H-bonded water dimer at RHF/6-31G*), and any solvent beyond the '
+            'distance-dependent dielectric.'
+            if kind == 'mep' else None),
         'waters_excluded': n_water,
         'waters_note': (f'{n_water} crystallographic water(s) left OUT: their '
                         f'hydrogens were never resolved, and a bare oxygen would '
@@ -1614,6 +1691,7 @@ class Handler(BaseHTTPRequestHandler):
                              'scf_cached': len(_scf_cache),
                              'scf_cache_max': SCF_CACHE_MAX,
                              'persist': dict(_persist),
+                             'jobs': jobs.counters(),
                              'rss_mb': rss_mb})
         else:
             self._send(404, {'ok': False, 'error': 'not found'})
@@ -1640,7 +1718,8 @@ class Handler(BaseHTTPRequestHandler):
                 frame = req['frame']
                 cube, meta = field_region(
                     req['sources'], frame['lo'], frame['hi'],
-                    float(frame.get('spacing', 0.5)), req.get('kind', 'mep'))
+                    float(frame.get('spacing', 0.5)), req.get('kind', 'mep'),
+                    req_dielectric=req.get('dielectric', 'r-dependent'))
                 meta['total_seconds'] = round(time.time() - t0, 2)
                 print(f"[field/region] kind={meta['kind']} "
                       f"sources={meta['n_sources_used']}/{meta['n_sources_sent']} "
@@ -1673,6 +1752,12 @@ class Handler(BaseHTTPRequestHandler):
         if self.path != '/field':
             self._send(404, {'ok': False, 'error': 'not found'})
             return
+        # Declared BEFORE the try so the failure branches can close the row.
+        # A job that stays 'running' after its request has already failed is
+        # the shape reap() exists to clean up, and leaving it to reap means the
+        # ledger reports work nobody is doing until the next restart.
+        job_id = None
+        t_job = time.time()
         try:
             length = int(self.headers.get('Content-Length', '0'))
             if length > MAX_BODY_BYTES:
@@ -1701,7 +1786,18 @@ class Handler(BaseHTTPRequestHandler):
             req_seconds = float(req.get('max_seconds', DEFAULT_MAX_SECONDS))
             if not math.isfinite(req_seconds):
                 req_seconds = DEFAULT_MAX_SECONDS
-            max_seconds = min(max(req_seconds, 1.0), MAX_MAX_SECONDS)
+            # ZERO IS PRESERVED, and the 1.0 floor that used to be here defeated
+            # the feature it looked like it was protecting. `max_seconds: 0` means
+            # "tell me the cost, do not run", which run_scf's pre-flight now
+            # answers before building an SCF object. The floor turned that into
+            # "run for one second, then fail with BUDGET" — measured against the
+            # job ledger at 1.03 s and 1.28 s, which is a different question
+            # answered at a cost.
+            #
+            # A NEGATIVE budget clamps to 0 rather than to the default: it is not
+            # a request for the default, it is nonsense, and the safest reading of
+            # nonsense is "refuse and tell me what it would have cost".
+            max_seconds = min(max(req_seconds, 0.0), MAX_MAX_SECONDS)
             spin = req.get('spin')
             spin = int(spin) if spin is not None else None
             molfile_sha = hashlib.sha256(molblock.encode()).digest()
@@ -1722,6 +1818,21 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             t0 = time.time()
+            # The job row exists for the DURATION of the compute, which is the
+            # whole point: a 6-minute SCF was previously invisible until it
+            # finished. `open` returns None when the DB is down or an identical
+            # job is already in flight, and every path below tolerates None.
+            # Imported locally, matching every other use in this file — the
+            # module-level import list is deliberately minimal here.
+            import method_registry as _mr
+            method_row_id = _method_ids.get(_mr.KIND_TO_METHOD.get(kind, ''))
+            job_id = None
+            if _jobs is not None and method_row_id is not None:
+                job_id = _jobs.open(
+                    method_row_id=method_row_id, input_sha256=molfile_sha,
+                    params={'kind': kind, 'basis': basis_key,
+                            'spin': spin, 'max_seconds': max_seconds},
+                    budget_seconds=max_seconds)
             mol = prepare_mol(molblock)
             if kind == 'mep':
                 cube, meta = field_mep(mol)
@@ -1755,6 +1866,13 @@ class Handler(BaseHTTPRequestHandler):
             # computed.
             meta.setdefault('computed_at',
                             datetime.now(timezone.utc).isoformat())
+            if _jobs is not None:
+                # field_cube_id is deliberately NOT set here: the row is written
+                # by a background thread that may not have committed yet, and a
+                # job pointing at a row that does not exist would be a worse lie
+                # than a job with no pointer. The pointer lands when the async
+                # write learns to report back.
+                _jobs.done(job_id, seconds=meta['total_seconds'])
             # Lenient here, and the asymmetry with the cache path is deliberate:
             # a 6-minute SCF must not be discarded because a producer added a
             # key. It is logged at full volume instead — the drift is still
@@ -1772,10 +1890,22 @@ class Handler(BaseHTTPRequestHandler):
             # bigger budget" instead of showing a chemist a red failure for a
             # calculation that was merely slow.
             print(f'[field] budget exceeded: {e}', flush=True)
+            if _jobs is not None:
+                _jobs.failed(job_id, code='BUDGET', detail=str(e),
+                             seconds=time.time() - t_job)
             self._send(200, {'ok': False, 'error': str(e), 'reason': 'budget'})
         except Exception as e:
             traceback.print_exc()
             reason = 'unsupported' if isinstance(e, ValueError) else 'internal'
+            if _jobs is not None:
+                # ValueError is this service's chemistry refusal (an element with
+                # no basis, an unparameterised atom), which is UNSUPPORTED — not
+                # INTERNAL. Recording every failure as INTERNAL would make the
+                # ledger's error_code column useless for the one question it is
+                # for: was it us or the molecule?
+                _jobs.failed(job_id,
+                             code='UNSUPPORTED' if reason == 'unsupported' else 'INTERNAL',
+                             detail=str(e), seconds=time.time() - t_job)
             self._send(200, {'ok': False, 'error': str(e), 'reason': reason})
 
     def log_message(self, *args):
