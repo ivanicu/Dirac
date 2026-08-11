@@ -469,17 +469,28 @@ function setButtonsEnabled() {
     }
 }
 
+/**
+ * `undefined` and `null` are the same thing to a reader, and the two response
+ * paths disagree about which they use: the compute path omits a field it does
+ * not have, the DB cache path returns it as null. The panel printed
+ * "Net charge null · Compute time null s" on any cache hit — visible only in a
+ * screenshot, because the code reads correctly and the shapes differ.
+ */
+function present<T>(v: T): v is NonNullable<T> {
+    return v !== undefined && v !== null && (v as unknown) !== '';
+}
+
 function renderMeta(meta: FieldMeta | null) {
     const el = byId('field-meta');
     if (!el) return;
     if (!meta) { el.innerHTML = ''; return; }
     const rows: [string, string][] = [];
-    if (meta.method) rows.push(['Method', meta.basis ? `${meta.method}/${meta.basis}` : meta.method]);
-    if (meta.units) rows.push(['Units', meta.units]);
+    if (present(meta.method)) rows.push(['Method', meta.basis ? `${meta.method}/${meta.basis}` : meta.method]);
+    if (present(meta.units)) rows.push(['Units', meta.units]);
     if ((meta as { total_logp?: number }).total_logp !== undefined) {
         rows.push(['Crippen logP', (meta as { total_logp?: number }).total_logp!.toFixed(2)]);
     }
-    if (meta.scf_energy_ha !== undefined) rows.push(['SCF energy', `${meta.scf_energy_ha.toFixed(4)} Ha`]);
+    if (present(meta.scf_energy_ha)) rows.push(['SCF energy', `${meta.scf_energy_ha.toFixed(4)} Ha`]);
     // One decimal, deliberately: Koopmans + minimal-basis errors are ~0.5-1 eV,
     // and a second decimal would put false precision in front of a chemist
     // (the physics session's absolute_uncertainty_pct lesson, applied here).
@@ -491,13 +502,13 @@ function renderMeta(meta: FieldMeta | null) {
     if (meta.frontier_caveat) {
         rows.push(['HOMO / LUMO', 'not quotable at this level']);
     } else {
-        if (meta.homo_ev !== undefined) rows.push(['HOMO', `≈${meta.homo_ev.toFixed(1)} eV`]);
-        if (meta.lumo_ev !== undefined && meta.lumo_ev !== null) rows.push(['LUMO', `≈${meta.lumo_ev.toFixed(1)} eV`]);
+        if (present(meta.homo_ev)) rows.push(['HOMO', `≈${meta.homo_ev.toFixed(1)} eV`]);
+        if (present(meta.lumo_ev)) rows.push(['LUMO', `≈${meta.lumo_ev.toFixed(1)} eV`]);
     }
-    if (meta.net_charge !== undefined) rows.push(['Net charge', String(meta.net_charge)]);
-    if (meta.natoms !== undefined) rows.push(['Atoms (with H)', String(meta.natoms)]);
-    if (meta.nbasis !== undefined) rows.push(['Basis functions', String(meta.nbasis)]);
-    if (meta.total_seconds !== undefined) rows.push(['Compute time', `${meta.total_seconds} s`]);
+    if (present(meta.net_charge)) rows.push(['Net charge', String(meta.net_charge)]);
+    if (present(meta.natoms)) rows.push(['Atoms (with H)', String(meta.natoms)]);
+    if (present(meta.nbasis)) rows.push(['Basis functions', String(meta.nbasis)]);
+    if (present(meta.total_seconds)) rows.push(['Compute time', `${meta.total_seconds} s`]);
     const caveats: string[] = [];
     if (meta.frontier_caveat) caveats.push(meta.frontier_caveat);
     if (meta.model_caveat) caveats.push(meta.model_caveat);
