@@ -232,6 +232,19 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        # A page served from a public origin — https://ivan.icu/dirac, say — reaching a
+        # daemon on the visitor's own loopback is Local Network Access, and Chrome gates
+        # it twice: the browser asks the USER for permission, and the server must opt in
+        # on the preflight. Without this header the request fails even after the user
+        # grants it. Measured from the deployed page before it was added, Chrome's own
+        # words: "Permission was denied for this request to access the `loopback`
+        # address space", corsError LocalNetworkAccessPermissionDenied.
+        #
+        # Both spellings are sent on purpose: the header was renamed between the
+        # Private Network Access draft and the Local Network Access one that shipped,
+        # and which name a given Chrome build honours is not worth branching on.
+        self.send_header('Access-Control-Allow-Private-Network', 'true')
+        self.send_header('Access-Control-Allow-Local-Network', 'true')
         self.end_headers()
 
     def do_GET(self):

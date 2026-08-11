@@ -24,7 +24,30 @@
 import { PluginContext } from '../../../mol-plugin/context';
 import { torsionPanel, type TorsionRow } from './plot';
 
-const PHYSICS = `http://${window.location.hostname || '127.0.0.1'}:8902`;
+/**
+ * Where the physics daemon lives, which depends on where the PAGE came from.
+ *
+ * Served from this machine — 127.0.0.1:8101, or 192.168.1.3:8101 over the LAN — the
+ * daemon is on that same host, so the page's own hostname is right.
+ *
+ * Served from a public origin — https://ivan.icu/dirac — it is not: there is no daemon
+ * on that host and never will be. The only daemon that could answer is the one on the
+ * VISITOR's own machine, so the target is their loopback.
+ *
+ * That request is Local Network Access, and Chrome gates it twice: the browser asks the
+ * user for permission, and the daemon must opt in on the preflight (it now sends
+ * Access-Control-Allow-Private-Network / -Local-Network). Measured from the deployed
+ * page before the daemon opted in, Chrome's exact words were "Permission was denied for
+ * this request to access the `loopback` address space". So the public build is not
+ * permanently quantum-less — it needs a daemon running locally and one click of consent.
+ */
+const PHYSICS = (() => {
+    const host = window.location.hostname || '127.0.0.1';
+    const isLocalOrLan = host === 'localhost' || host === '127.0.0.1'
+        || /^10\./.test(host) || /^192\.168\./.test(host)
+        || /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+    return `http://${isLocalOrLan ? host : '127.0.0.1'}:8902`;
+})();
 
 /** The physics daemon's own budget, sent explicitly so the two cannot
  * disagree — the failure that held 22 cores for 36 minutes. */
