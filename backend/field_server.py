@@ -191,6 +191,14 @@ def embed_molecule(smiles: str | None, molblock: str | None, seed: int = 42):
     else:
         raise ValueError('provide smiles or molfile')
 
+    # Salts and mixtures: keep the largest fragment by heavy-atom count —
+    # standard med-chem behavior; the counter-ion is not the SAR object.
+    frags = Chem.GetMolFrags(mol, asMols=True, sanitizeFrags=False)
+    stripped = 0
+    if len(frags) > 1:
+        frags = sorted(frags, key=lambda f: f.GetNumHeavyAtoms(), reverse=True)
+        mol, stripped = frags[0], len(frags) - 1
+
     mol = Chem.AddHs(mol)
     params = AllChem.ETKDGv3()
     params.randomSeed = seed
@@ -223,6 +231,7 @@ def embed_molecule(smiles: str | None, molblock: str | None, seed: int = 42):
         'mmff_energy_kcal': energy,
         'embed': 'ETKDGv3',
         'seed': seed,
+        'fragments_stripped': stripped,
     }
     # Ship WITHOUT explicit hydrogens: the lab's ligand pipeline (perception,
     # depiction, pharmacophore, fields) expects heavy-atom molfiles exactly
@@ -290,7 +299,19 @@ def field_mep(mol: Chem.Mol, spacing=0.4, pad=4.0):
     charges = np.array(
         [float(a.GetProp('_GasteigerCharge')) for a in mol.GetAtoms()], dtype=float
     )
-    charges = np.nan_to_num(charges, nan=0.0, posinf=0.0, neginf=0.0)
+    # Gasteiger returns NaN for atoms it cannot parameterize (hypervalent P,
+    # many metals). Silently zeroing them once shipped a perfectly flat "well"
+    # for PF6- that rendered as a normal result — a zero field is silence, not
+    # a measurement. Refuse and point at the path that actually works.
+    bad = ~np.isfinite(charges)
+    if bad.any():
+        bad_syms = sorted({syms[i] for i in np.where(bad)[0]})
+        raise ValueError(
+            f'Gasteiger cannot parameterize {"/".join(bad_syms)} — no classical '
+            'MEP for this molecule. The QM potential (mep_qm) handles it.')
+    if float(np.abs(charges).max()) < 1e-6:
+        raise ValueError('all Gasteiger charges are zero — classical MEP would '
+                         'be an empty picture; use mep_qm')
 
     lo = coords.min(axis=0) - pad
     hi = coords.max(axis=0) + pad
@@ -315,6 +336,49 @@ def field_mep(mol: Chem.Mol, spacing=0.4, pad=4.0):
     meta = {
         'kind': 'mep', 'units': 'kcal/mol', 'charges': 'gasteiger',
         'net_charge': int(round(charges.sum())),
+        'dims': dims.tolist(), 'spacing': spacing,
+        'vmin': float(v.min()), 'vmax': float(v.max()),
+    }
+    return cube, meta
+
+
+# ── classical lipophilicity field (Crippen MLP) ─────────────────────────────
+
+def field_mlp(mol: Chem.Mol, spacing=0.4, pad=4.0):
+    """Molecular lipophilicity potential: Crippen atomic logP contributions
+    spread with the Fauchère exponential kernel MLP(r) = Σ f_i · e^(−d_i/2).
+    Positive lobes = lipophilic surface, negative = hydrophilic. This is the
+    'where is the molecule greasy' field — the SAR question logP alone hides.
+    Instant, no SCF, not DB-cached (recompute is cheaper than the roundtrip).
+    """
+    from rdkit.Chem import rdMolDescriptors
+    contribs = rdMolDescriptors._CalcCrippenContribs(mol)
+    f = np.array([c[0] for c in contribs], dtype=float)
+    if not np.isfinite(f).all():
+        raise ValueError('Crippen contributions undefined for this molecule')
+    syms, coords = mol_atoms(mol)
+
+    lo = coords.min(axis=0) - pad
+    hi = coords.max(axis=0) + pad
+    dims = np.maximum(np.ceil((hi - lo) / spacing).astype(int) + 1, 8)
+    dims = np.minimum(dims, 128)
+    axes = np.diag((hi - lo) / (dims - 1))
+    xs = np.linspace(lo[0], hi[0], dims[0])
+    ys = np.linspace(lo[1], hi[1], dims[1])
+    zs = np.linspace(lo[2], hi[2], dims[2])
+    gx, gy, gz = np.meshgrid(xs, ys, zs, indexing='ij')
+    pts = np.stack([gx, gy, gz], axis=-1)
+
+    v = np.zeros(tuple(dims), dtype=float)
+    for fi, c in zip(f, coords):
+        d = np.linalg.norm(pts - c, axis=-1)
+        v += fi * np.exp(-d / 2.0)
+
+    cube = write_cube(lo, axes, dims, v, syms, coords,
+                      'kind=mlp units=logP kernel=fauchere_exp_d_over_2 charges=crippen')
+    meta = {
+        'kind': 'mlp', 'units': 'MLP (Crippen/Fauchère)', 'method': 'crippen',
+        'total_logp': float(f.sum()),
         'dims': dims.tolist(), 'spacing': spacing,
         'vmin': float(v.min()), 'vmax': float(v.max()),
     }
@@ -496,11 +560,13 @@ class Handler(BaseHTTPRequestHandler):
             kind = req.get('kind', 'mep')
             basis = req.get('basis', DEFAULT_BASIS)
             # Classical mep has no basis; key it as 'none' so the cache row
-            # satisfies the schema's classical/quantum pairing checks.
+            # satisfies the schema's classical/quantum pairing checks. mlp is
+            # not in the app.field_kind enum and costs ~0.03 s — never cached.
             basis_key = 'none' if kind == 'mep' else basis
             molfile_sha = hashlib.sha256(molblock.encode()).digest()
+            cacheable = kind in ('mep', 'mep_qm', 'homo', 'lumo', 'density')
 
-            hit = db_get_cube(molfile_sha, kind, basis_key)
+            hit = db_get_cube(molfile_sha, kind, basis_key) if cacheable else None
             if hit is not None:
                 cube, meta = hit
                 print(f'[field] kind={kind} basis={basis_key} cache=db', flush=True)
@@ -511,13 +577,16 @@ class Handler(BaseHTTPRequestHandler):
             mol = prepare_mol(molblock)
             if kind == 'mep':
                 cube, meta = field_mep(mol)
+            elif kind == 'mlp':
+                cube, meta = field_mlp(mol)
             else:
                 cube, meta = field_quantum(mol, kind, basis)
             meta['total_seconds'] = round(time.time() - t0, 2)
             meta['cache'] = 'computed'
             print(f"[field] kind={kind} atoms={mol.GetNumAtoms()} "
                   f"t={meta['total_seconds']}s", flush=True)
-            db_put_cube(molfile_sha, kind, basis_key, cube, meta)
+            if cacheable:
+                db_put_cube(molfile_sha, kind, basis_key, cube, meta)
             self._send(200, {'ok': True, 'cube': cube, 'meta': meta})
         except Exception as e:
             traceback.print_exc()

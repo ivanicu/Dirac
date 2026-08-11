@@ -22,10 +22,20 @@ import { Color } from '../../../mol-util/color';
 const BACKEND = 'http://127.0.0.1:8901';
 const REF_DATA = 'field-wells-data';
 const REF_VOLUME = 'field-wells-volume';
-const REF_POS = 'field-wells-repr-pos';
-const REF_NEG = 'field-wells-repr-neg';
 
-export type FieldKind = 'mep' | 'mep_qm' | 'homo' | 'lumo' | 'density';
+/**
+ * Nested translucent shells per sign: the well reads as a potential GRADIENT
+ * instead of a single hard skin. Innermost shell = full isovalue, bright and
+ * opaque; outer shells at decreasing fractions fade out — contour lines in 3D.
+ */
+const SHELLS = [
+    { fraction: 1.0, alpha: 0.5, emissive: 0.4 },
+    { fraction: 0.55, alpha: 0.26, emissive: 0.28 },
+    { fraction: 0.3, alpha: 0.12, emissive: 0.18 },
+] as const;
+const shellRef = (sign: 'pos' | 'neg', i: number) => `field-wells-repr-${sign}-${i}`;
+
+export type FieldKind = 'mep' | 'mep_qm' | 'homo' | 'lumo' | 'density' | 'mlp';
 
 interface KindSpec {
     label: string;
@@ -44,6 +54,9 @@ const Kinds: Record<FieldKind, KindSpec> = {
     homo: { label: 'HOMO', iso: 0.04, diverging: true, unit: 'amp', posColor: 0x59d0a5, negColor: 0xc792ea, quantum: true },
     lumo: { label: 'LUMO', iso: 0.04, diverging: true, unit: 'amp', posColor: 0x59d0a5, negColor: 0xc792ea, quantum: true },
     density: { label: 'e⁻ density', iso: 0.05, diverging: false, unit: 'e/Bohr³', posColor: 0xe8b45a, negColor: 0xe8b45a, quantum: true },
+    // Default iso must sit BELOW the hydrophilic side's typical |min| (~0.06
+    // on aspirin) or the cyan lobes never exist and the field looks all-grease.
+    mlp: { label: 'Lipophilicity', iso: 0.05, diverging: true, unit: 'MLP', posColor: 0xd8b04a, negColor: 0x3fb9c9, quantum: false },
 };
 
 interface FieldMeta {
@@ -109,8 +122,11 @@ function renderMeta(meta: FieldMeta | null) {
     if (!el) return;
     if (!meta) { el.innerHTML = ''; return; }
     const rows: [string, string][] = [];
-    if (meta.method) rows.push(['Method', `${meta.method}/${meta.basis}`]);
+    if (meta.method) rows.push(['Method', meta.basis ? `${meta.method}/${meta.basis}` : meta.method]);
     if (meta.units) rows.push(['Units', meta.units]);
+    if ((meta as { total_logp?: number }).total_logp !== undefined) {
+        rows.push(['Crippen logP', (meta as { total_logp?: number }).total_logp!.toFixed(2)]);
+    }
     if (meta.scf_energy_ha !== undefined) rows.push(['SCF energy', `${meta.scf_energy_ha.toFixed(4)} Ha`]);
     if (meta.homo_ev !== undefined) rows.push(['HOMO', `${meta.homo_ev.toFixed(2)} eV`]);
     if (meta.lumo_ev !== undefined && meta.lumo_ev !== null) rows.push(['LUMO', `${meta.lumo_ev.toFixed(2)} eV`]);
@@ -122,15 +138,16 @@ function renderMeta(meta: FieldMeta | null) {
         `<div class="field-meta-row"><span>${k}</span><span>${v}</span></div>`).join('');
 }
 
-function reprParams(kind: FieldKind, sign: 1 | -1) {
+function reprParams(kind: FieldKind, sign: 1 | -1, shell: number) {
     const spec = Kinds[kind];
+    const s = SHELLS[shell];
     return createVolumeRepresentationParams(plugin!, activeVolume ?? undefined, {
         type: 'isosurface',
         typeParams: {
-            isoValue: Volume.IsoValue.absolute(sign * currentIso()),
-            alpha: 0.38,
+            isoValue: Volume.IsoValue.absolute(sign * currentIso() * s.fraction),
+            alpha: s.alpha,
             xrayShaded: true,
-            emissive: 0.25,
+            emissive: s.emissive,
         },
         color: 'uniform',
         colorParams: { value: Color(sign > 0 ? spec.posColor : spec.negColor) },
@@ -171,13 +188,15 @@ async function renderCube(cubeText: string, kind: FieldKind) {
     if (!activeVolume) throw new Error('volume creation failed');
 
     const reprs = plugin.build();
-    reprs.to(REF_VOLUME).apply(
-        StateTransforms.Representation.VolumeRepresentation3D,
-        reprParams(kind, 1), { ref: REF_POS });
-    if (spec.diverging) {
+    for (let i = 0; i < SHELLS.length; i++) {
         reprs.to(REF_VOLUME).apply(
             StateTransforms.Representation.VolumeRepresentation3D,
-            reprParams(kind, -1), { ref: REF_NEG });
+            reprParams(kind, 1, i), { ref: shellRef('pos', i) });
+        if (spec.diverging) {
+            reprs.to(REF_VOLUME).apply(
+                StateTransforms.Representation.VolumeRepresentation3D,
+                reprParams(kind, -1, i), { ref: shellRef('neg', i) });
+        }
     }
     await reprs.commit();
     updateIsoReadout();
@@ -185,13 +204,16 @@ async function renderCube(cubeText: string, kind: FieldKind) {
 
 async function updateIsoSurfaces() {
     if (!plugin || !activeKind || !activeVolume) return;
-    const spec = Kinds[activeKind];
     const update = plugin.build();
-    update.to(REF_POS).update(
-        StateTransforms.Representation.VolumeRepresentation3D, () => reprParams(activeKind!, 1));
-    if (spec.diverging && plugin.state.data.cells.has(REF_NEG)) {
-        update.to(REF_NEG).update(
-            StateTransforms.Representation.VolumeRepresentation3D, () => reprParams(activeKind!, -1));
+    for (let i = 0; i < SHELLS.length; i++) {
+        for (const sign of ['pos', 'neg'] as const) {
+            const ref = shellRef(sign, i);
+            if (!plugin.state.data.cells.has(ref)) continue;
+            const idx = i;
+            update.to(ref).update(
+                StateTransforms.Representation.VolumeRepresentation3D,
+                () => reprParams(activeKind!, sign === 'pos' ? 1 : -1, idx));
+        }
     }
     await update.commit();
     updateIsoReadout();
