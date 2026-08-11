@@ -122,12 +122,17 @@ _scf_lock = threading.Lock()
 _db_ok = False
 _toolkit_ids: dict[str, str] = {}
 _producer_id: str | None = None
+# method_id -> meta.method row id, filled at startup by method_registry.
+# The producer above versions the WHOLE service file; these version one compute
+# unit each (migration 007), which is why a comment edit no longer darkens
+# every cached SCF. Both are stamped during the transition window.
+_method_ids: dict[str, str] = {}
 
 # Bump on ANY behaviour change. meta.register_producer RAISES at startup when
 # this version is re-registered with different source — a forgotten bump is a
 # loud startup error, never a silently stale cache (design: migration 006).
 PRODUCER_SERVICE = 'dirac-fields'
-PRODUCER_VERSION = '1.9'
+PRODUCER_VERSION = '2.0'
 PRODUCER_NOTES = ('wall-clock deadline inside the SCF loop + measured cube-cost '
                   'refusal; open-shell d/f metals refused without an explicit '
                   'spin (group 12 exempt); salt stripping refuses to discard a '
@@ -190,7 +195,7 @@ def conformer_hash_for(mol_with_h: Chem.Mol) -> tuple[bytes, str]:
 
 
 def db_init() -> bool:
-    global _db_ok, _producer_id
+    global _db_ok, _producer_id, _method_ids
     if psycopg is None:
         print('[db] psycopg not importable — persistent cache OFF', flush=True)
         return False
@@ -216,6 +221,23 @@ def db_init() -> bool:
                 (PRODUCER_SERVICE, PRODUCER_VERSION, source_sha,
                  _toolkit_ids['pyscf'], PRODUCER_NOTES))
             _producer_id = cur.fetchone()[0]
+        # Compute-unit registration. Kept OUT of this function's body on
+        # purpose: the table of which functions can change which number is a
+        # fact about the physics, not about the HTTP server, and it lives in
+        # method_registry.py so this file's source hash stops being the thing
+        # that decides whether a cached SCF is still valid.
+        try:
+            import method_registry
+            _method_ids = method_registry.register_all(_db, sys.modules[__name__],
+                                                      _toolkit_ids.get('pyscf'))
+            print(f'[db] {len(_method_ids)} compute units registered', flush=True)
+        except Exception as e:
+            # A method registry that cannot be written must not take the cache
+            # down with it: rows keep their producer stamp, which is what the
+            # read path still uses today. Loud, not fatal.
+            print(f'[db] method registration failed ({e}) — rows will carry '
+                  'producer_id only', flush=True)
+            _method_ids = {}
         _db_ok = True
         print(f'[db] persistent cube cache ON (producer {PRODUCER_SERVICE}/{PRODUCER_VERSION})', flush=True)
     except Exception as e:
@@ -277,6 +299,17 @@ def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict
         blob_sha = hashlib.sha256(blob).digest()
         toolkit = _toolkit_ids['rdkit' if kind == 'mep' else 'pyscf']
         label = meta.get('method', 'gasteiger' if kind == 'mep' else None)
+        # DUAL WRITE, deliberately: producer_id stays because the read path and
+        # app.v_field_cube_current are keyed on it, method_row_id lands so the
+        # finer identity accumulates from today. Cutting over in one step would
+        # darken every existing row; this way the transition is a query, not an
+        # outage. NULL when registration failed — never a guessed id, because a
+        # wrong provenance stamp is worse than an absent one.
+        try:
+            import method_registry
+            method_row = _method_ids.get(method_registry.KIND_TO_METHOD.get(kind, ''))
+        except Exception:
+            method_row = None
 
         compound_id = None
         conf_hash = None
@@ -304,9 +337,9 @@ def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict
                 '  (molfile_sha256, kind, basis, blob_sha256, scf_reference, '
                 '   scf_converger, scf_energy_ha, converged, n_atoms, n_basis, '
                 '   homo_ev, lumo_ev, seconds, toolkit_id, producer_id, '
-                '   compound_id, conformer_hash) '
+                '   compound_id, conformer_hash, method_row_id) '
                 'SELECT %s, %s, %s, %s, p.scf_reference, p.scf_converger, '
-                '       %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s '
+                '       %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s '
                 'FROM app.parse_scf_method(%s) AS p '
                 'ON CONFLICT ON CONSTRAINT field_cube_exact_key DO NOTHING',
                 (molfile_sha, kind, basis, blob_sha,
@@ -315,7 +348,7 @@ def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict
                  meta.get('natoms'), meta.get('nbasis'),
                  meta.get('homo_ev'), meta.get('lumo_ev'),
                  meta.get('scf_seconds') if kind != 'mep' else meta.get('total_seconds'),
-                 toolkit, _producer_id, compound_id, conf_hash, label))
+                 toolkit, _producer_id, compound_id, conf_hash, method_row, label))
         print(f'[db] cached kind={kind} basis={basis} coarse={"yes" if conf_hash else "no"}', flush=True)
     except Exception as e:
         print(f'[db] write failed ({e}) — result served but not persisted', flush=True)
