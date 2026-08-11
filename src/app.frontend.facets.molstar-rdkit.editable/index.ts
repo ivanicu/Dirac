@@ -92,6 +92,7 @@ import gfpUrl from './assets/structures/1ema.cif';
 import p53DnaUrl from './assets/structures/1tup.cif';
 import porinUrl from './assets/structures/2por.cif';
 import hemoglobinUrl from './assets/structures/4hhb.cif';
+import { focusLociKeepingSlab } from './camera-slab';
 import './index.html';
 
 interface MolecularControl {
@@ -963,7 +964,7 @@ class MolecularVfxLab {
         const plugin = this.workbench.plugin;
         plugin.managers.interactivity.lociSelects.deselectAll();
         for (const loci of record.loci) plugin.managers.interactivity.lociSelects.select({ loci }, false);
-        plugin.managers.camera.focusLoci([...record.loci], { minRadius: 4, extraRadius: 3, durationMs: 250 });
+        focusLociKeepingSlab(plugin, [...record.loci], { minRadius: 4, extraRadius: 3, durationMs: 250 });
         this.setActiveContact(record.id);
     }
 
@@ -1288,7 +1289,7 @@ class MolecularVfxLab {
                     }]);
                     plugin.managers.interactivity.lociSelects.deselectAll();
                     plugin.managers.interactivity.lociSelects.select({ loci: atomLoci }, false);
-                    plugin.managers.camera.focusLoci(atomLoci, { minRadius: 4, extraRadius: 2, durationMs: 250 });
+                    focusLociKeepingSlab(plugin, atomLoci, { minRadius: 4, extraRadius: 2, durationMs: 250 });
                     return;
                 }
                 counter++;
@@ -1496,7 +1497,7 @@ class MolecularVfxLab {
         const loci = getLigandFocusLoci(structure, this.currentFocusOptions());
         if (StructureElement.Loci.isEmpty(loci)) return;
         this.framedLigandMolecule = this.currentMolecule.id;
-        this.workbench.plugin.managers.camera.focusLoci(loci, { minRadius: 8, extraRadius: 5, durationMs: 250 });
+        focusLociKeepingSlab(this.workbench.plugin, loci, { minRadius: 8, extraRadius: 5, durationMs: 250 });
     }
 
     private async applyRepresentationAndVisuals(resetCamera = true) {

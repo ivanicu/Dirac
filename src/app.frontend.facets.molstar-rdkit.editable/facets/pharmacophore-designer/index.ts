@@ -18,6 +18,8 @@
  */
 
 import { PluginContext } from '../../../mol-plugin/context';
+import { Sphere3D } from '../../../mol-math/geometry';
+import { focusSphereKeepingSlab } from '../../camera-slab';
 import { Structure } from '../../../mol-model/structure';
 import { Vec3 } from '../../../mol-math/linear-algebra';
 import { computePharmacophoreFeatures } from '../../../chemistry.backend.perception.rdkit-wasm.editable/pharmacophore-features';
@@ -129,7 +131,7 @@ class PharmacophoreDesigner {
 
     private focusFeature(f: DesignerFeature): void {
         if (!this.plugin) return;
-        this.plugin.managers.camera.focusSphere({ center: f.position, radius: Math.max(f.radius * 3, 6) }, { durationMs: 250 });
+        focusSphereKeepingSlab(this.plugin, { center: f.position, radius: Math.max(f.radius * 3, 6) } as Sphere3D, { durationMs: 250 });
     }
 
     // === Panel rendering ===
