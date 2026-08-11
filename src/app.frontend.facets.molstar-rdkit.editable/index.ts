@@ -1320,7 +1320,7 @@ class MolecularVfxLab {
         byId('status').textContent = 'Embedding molecule…';
         let payload: { ok: boolean, molfile?: string, error?: string, meta?: { smiles_canonical: string, inchikey: string, natoms_heavy: number, mmff_optimized: boolean } };
         try {
-            const resp = await fetch('http://127.0.0.1:8901/embed', {
+            const resp = await fetch(`http://${window.location.hostname || '127.0.0.1'}:8901/embed`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ smiles }),

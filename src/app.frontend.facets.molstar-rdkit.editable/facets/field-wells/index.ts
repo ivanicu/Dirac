@@ -19,7 +19,10 @@ import { createVolumeRepresentationParams } from '../../../mol-plugin-state/help
 import { Volume } from '../../../mol-model/volume';
 import { Color } from '../../../mol-util/color';
 
-const BACKEND = 'http://127.0.0.1:8901';
+// Follow the page's host: the daemon runs beside whatever served the app, so
+// a hardcoded 127.0.0.1 would point a Mac's browser at the Mac itself and
+// read as "backend offline" from every machine but this one.
+const BACKEND = `http://${window.location.hostname || '127.0.0.1'}:8901`;
 const REF_DATA = 'field-wells-data';
 const REF_VOLUME = 'field-wells-volume';
 

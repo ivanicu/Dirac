@@ -474,6 +474,30 @@ def field_mlp(mol: Chem.Mol, spacing=0.4, pad=4.0):
 
 # ── quantum fields (pyscf HF + cubegen) ─────────────────────────────────────
 
+ECP_FROM_Z = 37  # def2 bases replace core electrons with an ECP from Rb up
+
+
+def ecp_for(syms: list[str], basis: str) -> dict:
+    """Attach the matching ECP to every heavy element the basis defines one
+    for. WITHOUT this, pyscf silently treats e.g. iodine all-electron under a
+    basis never designed for it: SCF converges, charge balances, the far
+    field decays to zero — and the sigma-hole comes out 58 kcal/mol wrong
+    with the WRONG SIGN (measured by the physics session on iodobenzene).
+    Every honesty gate passes; only the physics is false."""
+    from pyscf import gto
+    pt = Chem.GetPeriodicTable()
+    ecp = {}
+    for s in set(syms):
+        if pt.GetAtomicNumber(s) < ECP_FROM_Z:
+            continue
+        try:
+            gto.basis.load_ecp(basis, s)
+        except Exception:
+            continue  # this basis defines no ECP for the element (e.g. Br)
+        ecp[s] = basis
+    return ecp
+
+
 def run_scf(mol: Chem.Mol, basis: str):
     from pyscf import gto, scf
 
@@ -485,9 +509,11 @@ def run_scf(mol: Chem.Mol, basis: str):
     charge = sum(a.GetFormalCharge() for a in mol.GetAtoms())
     nelec = sum(a.GetAtomicNum() for a in mol.GetAtoms()) - charge
     spin = nelec % 2  # singlet or doublet; anything fancier needs explicit input
+    ecp = ecp_for(syms, basis)
 
     key = hashlib.sha256(
-        (basis + repr(syms) + repr(coords.round(4).tolist()) + str(charge)).encode()
+        (basis + repr(sorted(ecp.items())) + repr(syms)
+         + repr(coords.round(4).tolist()) + str(charge)).encode()
     ).hexdigest()
     with _scf_lock:
         if key in _scf_cache:
@@ -496,6 +522,7 @@ def run_scf(mol: Chem.Mol, basis: str):
     gmol = gto.M(
         atom=[(s, tuple(c)) for s, c in zip(syms, coords)],
         unit='Angstrom', basis=basis, charge=charge, spin=spin,
+        ecp=ecp or None,
         verbose=0,
     )
     mf = scf.RHF(gmol) if spin == 0 else scf.UHF(gmol)
@@ -514,6 +541,7 @@ def run_scf(mol: Chem.Mol, basis: str):
         'gmol': gmol, 'mf': mf, 'energy': float(energy), 'method': method,
         'converged': bool(mf.converged), 'charge': charge, 'spin': spin,
         'natoms': len(syms), 'nbasis': int(gmol.nao), 'seconds': time.time() - t0,
+        'ecp': sorted(ecp) if ecp else [],
     }
     # Only positive results are cached: caching an unconverged SCF would make
     # every retry fail instantly from the cache, forever.
@@ -558,6 +586,7 @@ def field_quantum(mol: Chem.Mol, kind: str, basis: str):
         'scf_energy_ha': res['energy'], 'converged': True,
         'charge': res['charge'], 'spin': res['spin'],
         'natoms': res['natoms'], 'nbasis': res['nbasis'],
+        'ecp': res['ecp'],
         'scf_seconds': round(res['seconds'], 2),
         'homo_ev': float(mo_energy[nocc - 1] * 27.2114),
         'lumo_ev': float(mo_energy[nocc] * 27.2114) if nocc < len(mo_energy) else None,
@@ -686,6 +715,8 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == '__main__':
     port = int(sys.argv[1]) if len(sys.argv) > 1 else PORT
     db_init()
-    server = ThreadingHTTPServer(('127.0.0.1', port), Handler)
-    print(f'Dirac fields backend on http://127.0.0.1:{port}', flush=True)
+    # 0.0.0.0: the app is used from other machines on the LAN (Ivan's Mac);
+    # a loopback-only daemon reads as "backend offline" everywhere but here.
+    server = ThreadingHTTPServer(('0.0.0.0', port), Handler)
+    print(f'Dirac fields backend on 0.0.0.0:{port}', flush=True)
     server.serve_forever()
