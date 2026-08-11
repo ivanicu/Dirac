@@ -134,6 +134,31 @@ ALTER TABLE app.field_cube
 --      parent InChIKey
 -- Positive controls the producer owes: a random rigid transform of the same
 -- conformer must give the SAME hash; a mirror image must give a DIFFERENT one.
+--
+-- READ CONTRACT for a coarse-key hit, and it is not optional. A cached cube is
+-- coordinate-bound, so serving one into a different structure's scene requires
+-- a rigid transform. Do NOT store the write-time frame in a column: the frame
+-- would then have two homes (the row and the canonicalisation), and near
+-- degenerate inertia tensors — benzene, CH4, anything with two equal principal
+-- moments — let coordinate noise swap two axes, so the two sides recompute
+-- frames that differ by 90° and the field lands in the wrong place. That is
+-- internally consistent, invisible, and wrong.
+--
+-- The cube already carries its own atom block, so superpose on THAT:
+--   1. parse the cached cube's atoms
+--   2. Kabsch-superpose the requesting molecule's atoms onto them, in the same
+--      canonical rank order this hash contract uses
+--   3. ASSERT rmsd < 0.1 Å — otherwise treat the hit as a MISS, recompute, and
+--      log it. This is the positive control that fires on every coarse hit:
+--      a hash collision, a genuinely different conformer, or a mis-ordered
+--      atom list all show up as an exploded RMSD. Without it the coarse key is
+--      a mechanism that can only fail silently.
+--   4. apply the transform to the cube's origin, its three axis vectors and its
+--      atom block. The cube format allows non-axis-aligned vectors, so this is
+--      twelve numbers in the header and zero voxel resampling.
+--
+-- Near-degeneracy still costs hash agreement, and that is the safe direction:
+-- two identical conformers that hash differently merely miss the cache.
 ALTER TABLE app.field_cube
     ADD COLUMN compound_id uuid REFERENCES chem.compound(id),
     ADD COLUMN conformer_hash bytea
