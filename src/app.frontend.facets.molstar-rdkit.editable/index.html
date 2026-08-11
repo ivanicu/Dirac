@@ -790,7 +790,7 @@
         }
         .ligand-depiction svg { display: block; max-width: 100%; height: auto; cursor: pointer; border-radius: 5px; }
         .bond-atlas-block { margin-top: var(--sp-4, 16px); padding-top: var(--sp-3, 12px); border-top: 1px solid var(--border); }
-        .halogen-block { margin-top: var(--sp-4, 16px); padding-top: var(--sp-3, 12px); border-top: 1px solid var(--border); }
+        .halogen-block { margin-top: var(--sp-3, 12px); padding-top: var(--sp-3, 12px); border-top: 1px dashed var(--border); }
         .halogen-note-inline { color: var(--text-3); font-size: var(--fs-2xs, 9px); letter-spacing: var(--track-wide, .08em); text-transform: uppercase; }
         .halogen-row { border-left: 2px solid var(--border-strong); padding: var(--sp-2, 8px) 0 var(--sp-2, 8px) var(--sp-2, 8px); margin-bottom: var(--sp-2, 8px); }
         .halogen-row[data-tone="ok"] { border-left-color: var(--accent); }
@@ -1475,6 +1475,24 @@
                            below 150° from the C–X axis a positive cap is not a σ-hole.</p>
                         <div id="phys-surface-status" class="field-status" data-tone="idle">Load a ligand first.</div>
                         <div id="phys-surface-body"></div>
+
+                        <!-- The aiming half, directly under the depth half. The two were built in
+                             parallel by two sessions and first shipped in two different tabs, which
+                             is placement by implementation adjacency rather than by the question
+                             being asked: someone wondering whether a halogen is doing a job is
+                             standing here, not in the Ligand tab. -->
+                        <div class="halogen-block">
+                            <div class="phys-block-head">
+                                <h3>…and is it aimed at anything?</h3>
+                                <span class="halogen-note-inline">electronics vs geometry</span>
+                            </div>
+                            <p class="phys-why">Depth alone does not make a halogen bond; the hole has
+                               to point at a Lewis base. Under each verdict, greyed, is what a purely
+                               geometric profiler would report — PLIP's own constants, and PLIP accepts
+                               fluorine as a halogen-bond donor on geometry alone. Where the two rows
+                               disagree is the point.</p>
+                            <div id="halogen-audit" class="halogen-audit"></div>
+                        </div>
                     </div>
 
                     <div class="phys-block">
@@ -1555,14 +1573,6 @@
                     </div>
                     <div id="ligand-depiction" class="ligand-depiction">
                         <p class="ledger-empty">Switch to a structure with a deposited ligand to see the 2D depiction.</p>
-                    </div>
-                    <div class="halogen-block">
-                        <div class="ligand-meta">
-                            <span>Halogen audit</span>
-                            <span class="halogen-note-inline">electronics vs geometry</span>
-                        </div>
-                        <p class="bond-atlas-note">A σ-hole is directional. The row under each verdict is what a purely geometric profiler would report — PLIP's own constants, and PLIP accepts fluorine as a halogen-bond donor on geometry alone. Where the two rows disagree is the point.</p>
-                        <div id="halogen-audit" class="halogen-audit"></div>
                     </div>
                     <div class="bond-atlas-block">
                         <div class="ligand-meta">
