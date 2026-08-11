@@ -172,6 +172,13 @@ def test_every_function_survives_an_empty_result_set():
         'total_rows': 0, 'distinct_molecules': 0, 'total_bytes': 0,
         'rows_with_method_row_id': 0, 'rows_producer_only': 0,
         'rows_on_current_producer': 0, 'rows_on_superseded_producer': 0,
+        # From app.v_cache_health. Pinned EXACTLY rather than with a subset
+        # check, deliberately: this assertion is what caught the five keys
+        # being added, and a subset check would have let the console silently
+        # read a key nobody had decided to expose.
+        'rows_servable': 0, 'rows_producer_current': 0,
+        'producer_generations': 0, 'max_generations_per_unit': 0,
+        'compute_units': 0,
         'by_kind': [],
     }, cache
     json.dumps(cache)

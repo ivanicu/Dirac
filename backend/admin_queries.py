@@ -238,6 +238,28 @@ _CACHE_PRODUCER_SPLIT_ZERO = {
 }
 
 
+# app.v_cache_health (migration 010) is the AUTHORITY on invalidation churn,
+# and this module was reproducing an overlapping computation of its own instead
+# of reading it. Two reasons that is worse than a duplicate query: the view's
+# `max_generations_per_unit` is the number that made the cold-cache diagnosis
+# legible (13 producer generations in a day vs 2 per compute unit, i.e. reads
+# keyed on the producer invalidated ~6x more than the physics actually changed),
+# and it cannot be derived from the columns this module was selecting. A second
+# home for the same fact also drifts: the hand-rolled join called it
+# `rows_on_current_producer` while the view calls it `rows_producer_current`,
+# so the console had to read both spellings defensively to avoid rendering a
+# fabricated 0 — and a silent 0 there reads as "no churn", the exact opposite
+# of the condition it was measuring.
+_CACHE_HEALTH_SQL = """
+SELECT rows_total, rows_with_method, rows_servable, rows_producer_current,
+       producer_generations, max_generations_per_unit, compute_units
+  FROM app.v_cache_health
+"""
+_CACHE_HEALTH_ZERO = {'rows_total': 0, 'rows_with_method': 0, 'rows_servable': 0,
+                      'rows_producer_current': 0, 'producer_generations': 0,
+                      'max_generations_per_unit': 0, 'compute_units': 0}
+
+
 def cache_summary(conn=None, *, _force_empty: bool = False) -> dict:
     """What the cache is holding, plus two gaps made visible as numbers.
 
@@ -257,6 +279,8 @@ def cache_summary(conn=None, *, _force_empty: bool = False) -> dict:
         by_kind = _rows(conn, _CACHE_BY_KIND_SQL, _force_empty=_force_empty)
         split = _one(conn, _CACHE_PRODUCER_SPLIT_SQL, _force_empty=_force_empty,
                       default=_CACHE_PRODUCER_SPLIT_ZERO)
+        health = _one(conn, _CACHE_HEALTH_SQL, _force_empty=_force_empty,
+                      default=_CACHE_HEALTH_ZERO)
         return {
             'total_rows': totals['total_rows'],
             'distinct_molecules': totals['distinct_molecules'],
@@ -265,6 +289,14 @@ def cache_summary(conn=None, *, _force_empty: bool = False) -> dict:
             'rows_producer_only': totals['rows_producer_only'],
             'rows_on_current_producer': split['rows_on_current_producer'],
             'rows_on_superseded_producer': split['rows_on_superseded_producer'],
+            # From app.v_cache_health, under the VIEW's names. The overlapping
+            # local spelling above is kept for one release so the console does
+            # not break mid-flight, but the view's names are the ones to read.
+            'rows_servable': health['rows_servable'],
+            'rows_producer_current': health['rows_producer_current'],
+            'producer_generations': health['producer_generations'],
+            'max_generations_per_unit': health['max_generations_per_unit'],
+            'compute_units': health['compute_units'],
             'by_kind': by_kind,
         }
     finally:
