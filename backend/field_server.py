@@ -36,6 +36,7 @@ import threading
 import time
 import traceback
 from collections import OrderedDict
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # The ops surface, imported defensively at two levels of failure that must NOT
@@ -44,6 +45,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 # route 404 — indistinguishable from "no such route", which is the fallback-
 # hides-the-primary's-death shape. So a failed import is REMEMBERED and served
 # as a 503 that names the exception, while /field keeps working.
+from envelope import normalize_meta
+
 _ADMIN_IMPORT_ERROR: str | None = None
 try:
     from admin_routes import handle_admin as _handle_admin
@@ -355,7 +358,16 @@ def db_get_cube(molfile_sha: bytes, kind: str, basis: str):
             })
         else:
             meta.update({'units': 'kcal/mol', 'charges': 'gasteiger', 'method': 'gasteiger'})
-        return cube, meta
+        # ONE meta shape for both exits. A cache hit used to return a
+        # SMALLER dict than a fresh compute of the same kind, so rows the panel
+        # renders per-key ("Net charge", "Compute time") vanished when the
+        # answer came from the database — the field was identical, the readout
+        # silently lost half its rows, and the faster path looked like the
+        # poorer one. Missing keys become None, which SAYS "not recorded";
+        # absent keys say nothing and the UI cannot tell the difference.
+        # Strict here on purpose: a schema violation on this path costs a
+        # recompute, and losing that is the correct price for a loud failure.
+        return cube, normalize_meta(meta, source='db')
     except Exception as e:
         print(f'[db] read failed ({e}) — serving from compute', flush=True)
         return None
@@ -1540,6 +1552,22 @@ class Handler(BaseHTTPRequestHandler):
                     args=(molfile_sha, kind, basis_key, cube, meta),
                     kwargs={'mol': mol}, daemon=True).start()
                 meta['stored'] = True
+            # `computed_at` was declared for every kind and set by NOBODY on
+            # this path — only the cache-hit path had it, so "when was this
+            # computed" was answerable only for fields that were not just
+            # computed.
+            meta.setdefault('computed_at',
+                            datetime.now(timezone.utc).isoformat())
+            # Lenient here, and the asymmetry with the cache path is deliberate:
+            # a 6-minute SCF must not be discarded because a producer added a
+            # key. It is logged at full volume instead — the drift is still
+            # loud, just not fatal at the one point where the loss is
+            # unrecoverable.
+            try:
+                meta = normalize_meta(meta, source='computed')
+            except ValueError as exc:                        # noqa: BLE001
+                print(f'[meta] SHAPE DRIFT, serving un-normalised: {exc}',
+                      flush=True)
             self._send(200, {'ok': True, 'cube': cube, 'meta': meta})
         except FieldBudgetExceeded as e:
             # Not an error in the molecule — an error in what was asked of it.

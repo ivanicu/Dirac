@@ -166,6 +166,11 @@ interface FieldMeta {
     contour_closes_in_box?: boolean;
     /** MLP is one-signed for most drug-like molecules; measured, not assumed. */
     single_signed?: boolean;
+    /** Why the frontier orbital energies must not be quoted at this level. */
+    frontier_caveat?: string | null;
+    /** False when the molecule has a halogen/chalcogen a point charge cannot represent. */
+    sigma_hole_representable?: boolean;
+    model_caveat?: string;
 }
 
 let plugin: PluginContext | null = null;
@@ -478,14 +483,33 @@ function renderMeta(meta: FieldMeta | null) {
     // One decimal, deliberately: Koopmans + minimal-basis errors are ~0.5-1 eV,
     // and a second decimal would put false precision in front of a chemist
     // (the physics session's absolute_uncertainty_pct lesson, applied here).
-    if (meta.homo_ev !== undefined) rows.push(['HOMO', `≈${meta.homo_ev.toFixed(1)} eV`]);
-    if (meta.lumo_ev !== undefined && meta.lumo_ev !== null) rows.push(['LUMO', `≈${meta.lumo_ev.toFixed(1)} eV`]);
+    // An orbital energy is printed ONLY when the level of theory can carry it.
+    // At STO-3G the HOMO ordering of a substituted-benzene series inverts —
+    // nitrobenzene reads as more electron-rich than benzene — and the LUMO
+    // moves ~12 eV to def2-SVP. A number with no referent, printed to one
+    // decimal, is worse than no number: the decimal is itself a claim.
+    if (meta.frontier_caveat) {
+        rows.push(['HOMO / LUMO', 'not quotable at this level']);
+    } else {
+        if (meta.homo_ev !== undefined) rows.push(['HOMO', `≈${meta.homo_ev.toFixed(1)} eV`]);
+        if (meta.lumo_ev !== undefined && meta.lumo_ev !== null) rows.push(['LUMO', `≈${meta.lumo_ev.toFixed(1)} eV`]);
+    }
     if (meta.net_charge !== undefined) rows.push(['Net charge', String(meta.net_charge)]);
     if (meta.natoms !== undefined) rows.push(['Atoms (with H)', String(meta.natoms)]);
     if (meta.nbasis !== undefined) rows.push(['Basis functions', String(meta.nbasis)]);
     if (meta.total_seconds !== undefined) rows.push(['Compute time', `${meta.total_seconds} s`]);
+    const caveats: string[] = [];
+    if (meta.frontier_caveat) caveats.push(meta.frontier_caveat);
+    if (meta.model_caveat) caveats.push(meta.model_caveat);
+    if (meta.sigma_hole_representable === false) {
+        caveats.push('This molecule has a halogen or chalcogen. A point-charge '
+            + 'model is spherical, so a σ-hole is structurally impossible in it '
+            + '— measured, it reports the opposite sign. Use the Physics tab, '
+            + 'which computes the potential on the isodensity surface.');
+    }
     el.innerHTML = rows.map(([k, v]) =>
-        `<div class="field-meta-row"><span>${k}</span><span>${v}</span></div>`).join('');
+        `<div class="field-meta-row"><span>${k}</span><span>${v}</span></div>`).join('')
+        + caveats.map(c => `<div class="field-caveat">${escapeHtml(c)}</div>`).join('');
 }
 
 function reprParams(kind: FieldKind, sign: 1 | -1, shell: number) {

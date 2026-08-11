@@ -376,6 +376,14 @@
             font-variant-numeric: tabular-nums;
         }
 
+        /* A caveat is not a footnote: it is the difference between a number
+           and a number that may be quoted. It sits with the value, not in a doc. */
+        .field-caveat {
+            margin-top: 6px; padding: 6px 8px;
+            border: 1px solid var(--border); border-left: 2px solid var(--warn);
+            border-radius: 6px; background: var(--surface-2);
+            font-size: 9.5px; line-height: 1.5; color: var(--text-3);
+        }
         .field-meta { display: grid; gap: 3px; }
         .field-meta-row {
             display: flex;

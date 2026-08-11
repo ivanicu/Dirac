@@ -76,6 +76,14 @@ let molfile: string | null = null;
 let ligandLabel: string | null = null;
 let inFlight: AbortController | null = null;
 let busy = false;
+/**
+ * The extrema markers currently in the scene, so a re-run replaces them
+ * instead of stacking. Typed loosely on purpose: the concrete
+ * ShapeRepresentation type comes from a dynamic import inside markExtrema
+ * (the mol-geo/mol-repr modules are heavy and this facet must not pull them
+ * into the initial bundle), so it is not nameable at module scope.
+ */
+let lastMarkers: Parameters<NonNullable<PluginContext['canvas3d']>['remove']>[0] | null = null;
 
 function byId<T extends HTMLElement>(id: string): T | null {
     return document.getElementById(id) as T | null;
@@ -261,7 +269,16 @@ async function markExtrema(extrema: Extremum[]) {
     // markers render and refuse to be picked — the exact trap the
     // pharmacophore facet hit and documented.
     await repr.createOrUpdate({ alpha: 0.95 }).run();
-    plugin.add(repr as never, false);
+    // Canvas3D.add, not a state-tree transformer. These markers are a
+    // read-only annotation on a computed result — they are not part of the
+    // molecule's state, must not survive a state snapshot, and are replaced
+    // wholesale on the next run. The pharmacophore facet uses the state tree
+    // because its features are USER DATA that has to persist and be picked
+    // into an editing model; this is the other case, and using its machinery
+    // would put a derived quantity into the document.
+    if (lastMarkers) plugin.canvas3d?.remove(lastMarkers);
+    plugin.canvas3d?.add(repr);
+    lastMarkers = repr;
 }
 
 async function runSurface() {
