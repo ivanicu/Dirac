@@ -20,6 +20,7 @@ import { Grid, Volume } from '../../../mol-model/volume';
 import { Color } from '../../../mol-util/color';
 import { focusSphereKeepingSlab } from '../../camera-slab';
 import { buildSurroundingsRequest } from './surroundings';
+import { bakedField } from './baked';
 
 // Follow the page's host: the daemon runs beside whatever served the app, so
 // a hardcoded 127.0.0.1 would point a Mac's browser at the Mac itself and
@@ -373,6 +374,12 @@ const clientTimeoutMs = (budget: number) => (budget * 2 + 20) * 1000;
 
 /** The request the user can cancel — one at a time, by construction. */
 let inFlight: AbortController | null = null;
+/**
+ * Whether the compute backend answered its health check. On the deployed
+ * static site it never will, and that is the normal case there rather than an
+ * error — the answers ship with the page instead.
+ */
+let backendOnline = false;
 
 /** Fetch one field into the browser cache (deduplicated). Throws FieldRefusal;
  * returns null if the focused ligand changed while in flight. */
@@ -386,6 +393,21 @@ async function fetchField(kind: FieldKind, store = false,
         if (pending) return pending;
     }
     const requestMolfile = molfile;
+
+    // BAKED FIRST when there is no backend to ask. Backend-first while one is
+    // reachable, so a locally recomputed field is never shadowed by a bake
+    // that predates a physics change — that staleness is exactly what the
+    // producer-identity guard exists to prevent, and a bake is a cache too.
+    if (!backendOnline && requestMolfile) {
+        const baked = await bakedField(requestMolfile, kind);
+        if (baked && 'refused' in baked) throw new FieldRefusal(baked.refused, 'unsupported');
+        if (baked) {
+            const entry = { cube: baked.cube, meta: baked.meta as unknown as FieldMeta };
+            cubeCache.set(key, entry);
+            return entry;
+        }
+    }
+
     const basis = currentBasis();
     const controller = new AbortController();
     inFlight = controller;
@@ -414,6 +436,16 @@ async function fetchField(kind: FieldKind, store = false,
                     `cancelled after ${budget * 2 + 20} s — the daemon should have `
                     + `stopped itself at ${budget} s, so it is over its own bound`,
                     'budget');
+            }
+            // A backend that was up at health-check time and is not now: the
+            // bake is a better answer than an error, and it says it is baked.
+            if (requestMolfile) {
+                const baked = await bakedField(requestMolfile, kind);
+                if (baked && !('refused' in baked)) {
+                    const entry = { cube: baked.cube, meta: baked.meta as unknown as FieldMeta };
+                    cubeCache.set(key, entry);
+                    return entry;
+                }
             }
             throw new FieldRefusal(
                 e instanceof Error ? e.message : String(e), 'network');
@@ -988,9 +1020,17 @@ async function checkHealth() {
         const h = await resp.json();
         el.textContent = `backend online · rdkit ${h.rdkit} · pyscf ${h.pyscf}`;
         el.dataset.online = 'true';
+        backendOnline = true;
     } catch {
-        el.textContent = 'backend offline — backend/env/bin/python backend/field_server.py';
-        el.dataset.online = 'false';
+        backendOnline = false;
+        // On the deployed site this is the NORMAL state, not a fault: the
+        // daemons are unauthenticated quantum-chemistry servers and must not
+        // be public. Saying "offline" alone would read as breakage.
+        const baked = molfile ? await bakedField(molfile, 'mep') : null;
+        el.textContent = baked
+            ? 'precomputed fields — no backend needed'
+            : 'backend offline — backend/env/bin/python backend/field_server.py';
+        el.dataset.online = baked ? 'true' : 'false';
     }
 }
 
