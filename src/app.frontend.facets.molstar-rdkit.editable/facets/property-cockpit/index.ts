@@ -25,12 +25,13 @@ function fmt(n: number, digits = 1): string {
     return n.toFixed(digits);
 }
 
-function descCell(label: string, value: string, unit: string, threshold: string, pass: boolean): string {
+function descCell(label: string, value: string, unit: string, threshold: string, pass: boolean, layer?: string): string {
+    const clickAttr = layer ? ` data-toggle-layer="${layer}" style="cursor:pointer"` : '';
     return `
-        <div class="desc-cell" data-pass="${pass}">
+        <div class="desc-cell" data-pass="${pass}"${clickAttr}>
             <div class="desc-cell-label">${label}</div>
             <div class="desc-cell-value">${value}<span class="desc-cell-unit">${unit}</span></div>
-            <div class="desc-cell-threshold">${threshold}</div>
+            <div class="desc-cell-threshold">${threshold}${layer ? ' · click to highlight' : ''}</div>
         </div>`;
 }
 
@@ -68,13 +69,13 @@ export function renderPropertiesHtml(report: DescriptorReport): string {
             ${descCell('LogP', fmt(d.logP, 2), '', `≤ 5.0`, e.lipinski.logPPass)}
             ${descCell('TPSA', fmt(d.tpsa, 1), 'Å²', `≤ 140`, e.veber.tpsaPass)}
             ${descCell('Rot. bonds', String(d.numRotatableBonds), '', `≤ 10`, e.veber.rotatableBondsPass)}
-            ${descCell('HBD', String(d.hbd), '', `≤ 5`, e.lipinski.hbdPass)}
-            ${descCell('HBA', String(d.hba), '', `≤ 10`, e.lipinski.hbaPass)}
+            ${descCell('HBD', String(d.hbd), '', `≤ 5`, e.lipinski.hbdPass, 'donor-acceptor-rdkit')}
+            ${descCell('HBA', String(d.hba), '', `≤ 10`, e.lipinski.hbaPass, 'donor-acceptor-rdkit')}
             ${descCell('Heavy atoms', String(d.numHeavyAtoms), '', '', true)}
-            ${descCell('Rings', String(d.numRings), '', `ar ${d.numAromaticRings} / ali ${d.numAliphaticRings}`, true)}
+            ${descCell('Rings', String(d.numRings), '', `ar ${d.numAromaticRings} / ali ${d.numAliphaticRings}`, true, 'ring-atoms-rdkit')}
             ${descCell('Heterocycles', String(d.numHeterocycles), '', `${d.numAromaticHeterocycles} aromatic`, true)}
-            ${descCell('Stereo centers', String(d.numAtomStereoCenters), '', `${d.numUnspecifiedStereoCenters} unspecified`, d.numUnspecifiedStereoCenters === 0)}
-            ${descCell('Fraction sp³', fmt(d.fractionCSP3 * 100, 0), '%', '', true)}
+            ${descCell('Stereo centers', String(d.numAtomStereoCenters), '', `${d.numUnspecifiedStereoCenters} unspecified`, d.numUnspecifiedStereoCenters === 0, 'stereo-rdkit')}
+            ${descCell('Fraction sp³', fmt(d.fractionCSP3 * 100, 0), '%', '', true, 'sp3-carbons-rdkit')}
             ${descCell('Amide bonds', String(d.numAmideBonds), '', '', true)}
         </div>`;
 

@@ -237,11 +237,12 @@ const SemanticLayerGuides: Readonly<Record<Exclude<MolecularLayerId, MolstarVisu
     'ring-atoms-rdkit': { channel: 'recolour native geometry', expected: 'a uniform accent on every atom in any SSSR ring (aliphatic or aromatic).', use: 'Use to read the molecular scaffold at a glance — distinguishes the ring backbone from chain substituents.', empty: 'Empty when the ligand is acyclic (no rings at all).', fixture: '1CBS', representation: 'atomic-detail' },
     'sp3-carbons-rdkit': { channel: 'recolour native geometry', expected: 'an accent on every saturated sp³-hybridized carbon (4 single bonds, tetrahedral).', use: 'Use to read 3D-character of the scaffold — high sp³ fraction correlates with drug-likeness and lead-likeness (see Property Cockpit).', empty: 'Empty when the ligand has no sp³ carbons (fully aromatic / planar / unsaturated).', representation: 'atomic-detail' },
     'reactive-groups-rdkit': { channel: 'recolour native geometry', expected: 'red accents on atoms in aldehyde, Michael acceptor, epoxide, acyl halide, alkyl halide, nitro, disulfide, peroxide, azide, or isocyanate groups.', use: 'Use to flag compounds with potential assay interference or covalent reactivity before progressing to screening.', empty: 'Empty when no known reactive group is detected — a clean result.', representation: 'atomic-detail' },
+    'bond-order-rdkit': { channel: 'recolour native geometry', expected: 'blue accents on atoms in double bonds, purple on triple bonds.', use: 'Use to see WHERE unsaturation is without switching to 2D. Full double-line 3D rendering is future work.', empty: 'Empty when the ligand has no double or triple bonds (fully saturated).', fixture: '1CBS', representation: 'atomic-detail' },
     'pharmacophore-features-rdkit': { channel: 'add ligand-local geometry', expected: 'H-bond acceptor cones (red), donor sticks (blue), aromatic ring disks (amber), and hydrophobic halos (grey) drawn over the ligand.', use: 'Use to read the ligand recognition profile at a glance; this is the chemist\'s shorthand for "what does this molecule bind with".', empty: 'Empty when no ligand is present or RDKit perception yields no features.', fixture: '1CBS', representation: 'atomic-detail' },
 };
 
 const CoreSemanticLegends: Partial<Record<Exclude<MolecularLayerId, MolstarVisualUpgradeId>, string>> = {
-    'secondary-structure-identity': 'Legend · helix pink · beta strand gold · coil/other slate',
+    'secondary-structure-identity': 'Legend · α-helix pink · 3₁₀ teal · π violet · β gold · turn amber · bend grey · coil slate',
     'ligand-detail': 'Legend · element colours · carbon grey · nitrogen blue · oxygen red · sulfur gold',
     'ligand-interface-residues': 'Legend · mint side-chain sticks · whole residues inside the current cutoff',
     'ligand-pocket-surface': 'Legend · translucent cyan · molecular surface of the current residue shell',
@@ -426,6 +427,24 @@ class MolecularVfxLab {
                 void this.perform(() => this.renderLigandDepiction());
             });
         }
+
+        // Descriptor click→highlight: clicking a Property Cockpit gauge that
+        // has data-toggle-layer toggles the corresponding RDKit layer in 3D.
+        document.addEventListener('click', (e) => {
+            const cell = (e.target as HTMLElement).closest('[data-toggle-layer]');
+            if (!cell) return;
+            const layerId = cell.getAttribute('data-toggle-layer') as MolecularLayerId;
+            if (!layerId) return;
+            const cb = document.querySelector<HTMLInputElement>(`[data-upgrade="${layerId}"]`);
+            if (!cb || cb.disabled) return;
+            cb.checked = !cb.checked;
+            if (cb.checked) this.enabledUpgrades.add(layerId);
+            else this.enabledUpgrades.delete(layerId);
+            this.refreshLayerNavigation();
+            void this.perform(async () => {
+                await this.applySemanticLayers();
+            });
+        });
 
         // Copy-to-clipboard for canonical identifiers.
         document.querySelectorAll<HTMLButtonElement>('.btn-copy[data-copy]').forEach(btn => {
@@ -674,7 +693,7 @@ class MolecularVfxLab {
         const structure = this.workbench.plugin.managers.structure.component.pivotStructure?.cell.obj?.data;
         if (!structure) return;
 
-        const rdkitLayerIds: RdkitChemicalLayerId[] = ['aromaticity-rdkit', 'donor-acceptor-rdkit', 'partial-charge-rdkit', 'stereo-rdkit', 'ring-atoms-rdkit', 'sp3-carbons-rdkit', 'reactive-groups-rdkit'];
+        const rdkitLayerIds: RdkitChemicalLayerId[] = ['aromaticity-rdkit', 'donor-acceptor-rdkit', 'partial-charge-rdkit', 'stereo-rdkit', 'ring-atoms-rdkit', 'sp3-carbons-rdkit', 'reactive-groups-rdkit', 'bond-order-rdkit'];
 
         if (!ligandAvailable) {
             for (const id of rdkitLayerIds) this.setRdkitAvailability(id, { available: false, text: 'Not present · no deposited ligand', signal: 'empty' });
@@ -703,8 +722,8 @@ class MolecularVfxLab {
             this.setRdkitAvailability('partial-charge-rdkit', {
                 available: counts.partialChargeRange !== null,
                 text: counts.partialChargeRange
-                    ? `Gasteiger range ${counts.partialChargeRange[0].toFixed(2)} .. ${counts.partialChargeRange[1].toFixed(2)}`
-                    : 'Gasteiger computation unavailable in this RDKit-JS build',
+                    ? `Approx range ${counts.partialChargeRange[0].toFixed(2)} .. ${counts.partialChargeRange[1].toFixed(2)} (Allred-Rochow)`
+                    : 'Partial charge unavailable',
                 signal: counts.partialChargeRange ? 'ready' : 'empty',
             });
             this.setRdkitAvailability('stereo-rdkit', {
@@ -728,6 +747,13 @@ class MolecularVfxLab {
                     ? `⚠ ${counts.reactiveGroups.join(', ')}`
                     : 'No reactive groups detected',
                 signal: counts.reactiveGroups.length > 0 ? 'active' : 'empty',
+            });
+            this.setRdkitAvailability('bond-order-rdkit', {
+                available: counts.doubleBondAtoms + counts.tripleBondAtoms > 0,
+                text: counts.doubleBondAtoms + counts.tripleBondAtoms > 0
+                    ? `${counts.doubleBondAtoms} double · ${counts.tripleBondAtoms} triple bond atoms`
+                    : 'No double or triple bonds (fully saturated)',
+                signal: counts.doubleBondAtoms + counts.tripleBondAtoms > 0 ? 'ready' : 'empty',
             });
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);

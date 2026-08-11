@@ -34,7 +34,8 @@ export type RdkitChemicalLayerId =
     | 'stereo-rdkit'
     | 'ring-atoms-rdkit'
     | 'sp3-carbons-rdkit'
-    | 'reactive-groups-rdkit';
+    | 'reactive-groups-rdkit'
+    | 'bond-order-rdkit';
 
 export type RdkitChemicalLayerCost = 'low' | 'medium';
 
@@ -96,6 +97,13 @@ export const RdkitChemicalLayers: readonly RdkitChemicalLayerDefinition[] = Obje
         source: 'RDKit SMARTS patterns for common assay-interference and covalent-reactive groups',
         description: 'Highlights atoms in known problematic substructures: aldehyde, Michael acceptor, epoxide, acyl halide, alkyl halide, nitro, disulfide, peroxide, azide, diazonium. These are the top-10 most common flags in medicinal chemistry screening cascade (complement to full PAINS which requires a 400-pattern library).',
     },
+    {
+        id: 'bond-order-rdkit',
+        label: 'Bond order (double / triple)',
+        cost: 'low',
+        source: 'V2000 molfile bond block parsed from ligand molfile',
+        description: 'Colors atoms participating in double bonds (blue) and triple bonds (purple). The 3D representation still draws single-line cylinders for all bonds; this layer at least shows WHERE the unsaturation is. Full double-line rendering requires a custom ShapeRepresentation (future work).',
+    },
 ]);
 
 export interface RdkitChemicalLayerCounts {
@@ -110,7 +118,9 @@ export interface RdkitChemicalLayerCounts {
     readonly chiralCentersUndefined: number;
     readonly ringAtoms: number;
     readonly sp3Carbons: number;
-    readonly reactiveGroups: readonly string[];
+    readonly     reactiveGroups: readonly string[];
+    readonly doubleBondAtoms: number;
+    readonly tripleBondAtoms: number;
 }
 
 const RdkitChemicalLayerTag = 'rdkit-chemical-semantic-layers';
@@ -322,6 +332,8 @@ export interface LigandChemistry {
     sp3Carbons: Uint8Array;           // [CX4] SMARTS — tetrahedral saturated C
     reactiveGroups: Uint8Array;       // union of reactive SMARTS matches
     reactiveGroupLabels: string[];    // human-readable list of found groups
+    doubleBondAtoms: Uint8Array;      // atoms with at least one double bond
+    tripleBondAtoms: Uint8Array;      // atoms with at least one triple bond
 }
 
 function smartsAtomIndices(RDKit: RDKitModule, mol: JSMol, smarts: string, atomCount: number): Uint8Array {
@@ -404,6 +416,67 @@ function parseGasteigerCharges(mol: JSMol, atomCount: number): { charges: Float3
 
 function tryOrDefault<T>(fn: () => T, def: T = '' as unknown as T): T {
     try { return fn(); } catch { return def; }
+}
+
+// Allred-Rochow electronegativity values for partial-charge approximation.
+const ELECTRONEGATIVITY: Record<string, number> = {
+    H: 2.20, C: 2.55, N: 3.04, O: 3.44, F: 3.98,
+    P: 2.19, S: 2.58, CL: 3.16, BR: 2.96, I: 2.66,
+    B: 2.04, SI: 1.90, SE: 2.55, AS: 2.18,
+    LI: 0.98, NA: 0.93, K: 0.82, MG: 1.31, CA: 1.00,
+    FE: 1.83, CU: 1.90, ZN: 1.65, MN: 1.55, CO: 1.88,
+    NI: 1.91, MO: 2.16, W: 2.36,
+};
+
+/**
+ * Approximate partial charges via Allred-Rochow electronegativity differences.
+ * Fallback when RDKit-JS `compute_gasteiger_charges` is unavailable.
+ * δ_i = Σ_j (EN_i − EN_j) / degree_i, normalized so the range is ~[-0.5, +0.5].
+ */
+function approximatePartialCharges(molfile: string, atomCount: number): { charges: Float32Array; min: number; max: number } | null {
+    const lines = molfile.split('\n');
+    const countsLine = lines[3] || '';
+    const nAtoms = parseInt(countsLine.slice(0, 3).trim(), 10) || 0;
+    const nBonds = parseInt(countsLine.slice(3, 6).trim(), 10) || 0;
+    if (nAtoms !== atomCount || nAtoms === 0) return null;
+
+    // Parse element symbols
+    const elements: string[] = [];
+    for (let i = 0; i < nAtoms; i++) {
+        const ln = lines[4 + i] || '';
+        elements.push(ln.slice(31, 34).trim().toUpperCase());
+    }
+
+    // Parse bonds → neighbor adjacency + degree
+    const neighbors: number[][] = Array.from({ length: nAtoms }, () => []);
+    for (let b = 0; b < nBonds; b++) {
+        const ln = lines[4 + nAtoms + b] || '';
+        const a1 = parseInt(ln.slice(0, 3).trim(), 10) - 1;
+        const a2 = parseInt(ln.slice(3, 6).trim(), 10) - 1;
+        if (a1 >= 0 && a1 < nAtoms && a2 >= 0 && a2 < nAtoms) {
+            neighbors[a1].push(a2);
+            neighbors[a2].push(a1);
+        }
+    }
+
+    const charges = new Float32Array(nAtoms);
+    let min = Infinity;
+    let max = -Infinity;
+    for (let i = 0; i < nAtoms; i++) {
+        const enI = ELECTRONEGATIVITY[elements[i]] ?? 2.5;
+        const deg = neighbors[i].length || 1;
+        let delta = 0;
+        for (const j of neighbors[i]) {
+            const enJ = ELECTRONEGATIVITY[elements[j]] ?? 2.5;
+            delta += (enI - enJ);
+        }
+        charges[i] = delta / deg;
+        if (charges[i] < min) min = charges[i];
+        if (charges[i] > max) max = charges[i];
+    }
+
+    if (!Number.isFinite(min)) return null;
+    return { charges, min, max };
 }
 
 /**
@@ -497,6 +570,23 @@ export async function computeLigandChemistry(molfile: string, atomCount: number)
             if (found) reactiveGroupLabels.push(name);
         }
 
+        // Bond orders from the molfile bond block (V2000 format).
+        // Each bond line: a1(3) a2(3) order(3) ... where order is 1/2/3/4(aromatic).
+        const doubleBondAtoms = new Uint8Array(atomCount);
+        const tripleBondAtoms = new Uint8Array(atomCount);
+        const mbLines = molfile.split('\n');
+        const countsLine = mbLines[3] || '';
+        const nAtoms = parseInt(countsLine.slice(0, 3).trim(), 10) || 0;
+        const nBonds = parseInt(countsLine.slice(3, 6).trim(), 10) || 0;
+        for (let b = 0; b < nBonds; b++) {
+            const ln = mbLines[4 + nAtoms + b] || '';
+            const a1 = parseInt(ln.slice(0, 3).trim(), 10) - 1;
+            const a2 = parseInt(ln.slice(3, 6).trim(), 10) - 1;
+            const order = parseInt(ln.slice(6, 9).trim(), 10);
+            if (order === 2) { if (a1 >= 0 && a1 < atomCount) doubleBondAtoms[a1] = 1; if (a2 >= 0 && a2 < atomCount) doubleBondAtoms[a2] = 1; }
+            if (order === 3) { if (a1 >= 0 && a1 < atomCount) tripleBondAtoms[a1] = 1; if (a2 >= 0 && a2 < atomCount) tripleBondAtoms[a2] = 1; }
+        }
+
         let partialCharges: Float32Array | null = null;
         let partialChargeMin = 0;
         let partialChargeMax = 0;
@@ -509,6 +599,20 @@ export async function computeLigandChemistry(molfile: string, atomCount: number)
                 partialChargeMax = parsed.max;
             }
         } catch { /* leave null */ }
+
+        // Fallback: Allred-Rochow electronegativity approximation when Gasteiger
+        // is unavailable (RDKit-JS 2025.03.4 build doesn't expose the API).
+        // δ_i = Σ_j (EN_i - EN_j) / degree_i. Not as accurate as Gasteiger-Marsili
+        // but captures the electrostatic character: electronegative atoms (O, N, F)
+        // go negative, electropositive (metals) go positive.
+        if (!partialCharges) {
+            const approx = approximatePartialCharges(molfile, atomCount);
+            if (approx) {
+                partialCharges = approx.charges;
+                partialChargeMin = approx.min;
+                partialChargeMax = approx.max;
+            }
+        }
 
         return {
             aromaticAtoms: aromatic,
@@ -523,6 +627,8 @@ export async function computeLigandChemistry(molfile: string, atomCount: number)
             sp3Carbons,
             reactiveGroups,
             reactiveGroupLabels,
+            doubleBondAtoms,
+            tripleBondAtoms,
         };
     } finally {
         if (mol) mol.delete();
@@ -598,15 +704,15 @@ function filterLociByAtomIndex(
 export async function getRdkitChemicalLayerCounts(structure: Structure, options: LigandFocusOptions = {}): Promise<RdkitChemicalLayerCounts> {
     const loci = lociFromFocusOptions(structure, options);
     if (StructureElement.Loci.isEmpty(loci)) {
-        return { hasLigand: false, atomCount: 0, aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0, reactiveGroups: [] };
+        return { hasLigand: false, atomCount: 0, aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0, reactiveGroups: [], doubleBondAtoms: 0, tripleBondAtoms: 0 };
     }
     const build = ligandLociToMolfile(loci);
     if (!build) {
-        return { hasLigand: true, atomCount: StructureElement.Loci.size(loci), aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0, reactiveGroups: [] };
+        return { hasLigand: true, atomCount: StructureElement.Loci.size(loci), aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0, reactiveGroups: [], doubleBondAtoms: 0, tripleBondAtoms: 0 };
     }
     const chem = await computeLigandChemistry(build.molfile, build.atomCount);
     if (!chem) {
-        return { hasLigand: true, atomCount: build.atomCount, aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0, reactiveGroups: [] };
+        return { hasLigand: true, atomCount: build.atomCount, aromatic: 0, donors: 0, acceptors: 0, partialChargeRange: null, chiralCentersR: 0, chiralCentersS: 0, chiralCentersUndefined: 0, ringAtoms: 0, sp3Carbons: 0, reactiveGroups: [], doubleBondAtoms: 0, tripleBondAtoms: 0 };
     }
     const range = chem.partialCharges ? ([chem.partialChargeMin, chem.partialChargeMax] as const) : null;
     let chirR = 0, chirS = 0, chirU = 0;
@@ -626,6 +732,8 @@ export async function getRdkitChemicalLayerCounts(structure: Structure, options:
         ringAtoms: countSetBits(chem.ringAtoms),
         sp3Carbons: countSetBits(chem.sp3Carbons),
         reactiveGroups: chem.reactiveGroupLabels,
+        doubleBondAtoms: countSetBits(chem.doubleBondAtoms),
+        tripleBondAtoms: countSetBits(chem.tripleBondAtoms),
     };
 }
 
@@ -719,6 +827,13 @@ async function buildRdkitOverpaintLayers(
     if (enabledIds.has('reactive-groups-rdkit') && chem.reactiveGroupLabels.length > 0) {
         const filtered = filterLociByAtomIndex(loci, i => chem.reactiveGroups[i] === 1);
         if (!StructureElement.Loci.isEmpty(filtered)) out.push({ loci: filtered, color: Color(0xff4444) });
+    }
+
+    if (enabledIds.has('bond-order-rdkit')) {
+        const dblLoci = filterLociByAtomIndex(loci, i => chem.doubleBondAtoms[i] === 1);
+        if (!StructureElement.Loci.isEmpty(dblLoci)) out.push({ loci: dblLoci, color: Color(0x4dabf7) });
+        const triLoci = filterLociByAtomIndex(loci, i => chem.tripleBondAtoms[i] === 1);
+        if (!StructureElement.Loci.isEmpty(triLoci)) out.push({ loci: triLoci, color: Color(0xa06ec9) });
     }
 
     return out;
