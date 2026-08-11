@@ -13,17 +13,29 @@ This directory does not fix that by itself — it documents the fix
 three services (`bin/dev`) plus a safe way to reclaim stale compute
 (`bin/dirac-sweep`).
 
-> **STATUS 2026-08-11 — INSTALLED AND RUNNING.** `dirac-fields.service` (:8901)
-> and `dirac-web.service` (:1338) are enabled under `systemctl --user`, with
-> linger ON, so both start at boot without a login. Supervision was PROVEN, not
-> assumed: `kill -9` on the fields daemon's MainPID and it returned with a new
-> pid inside 8 s, `/health` 200. `dirac-physics.service` (:8902) is installed but
-> NOT started — that port is held by a hand-run daemon belonging to another
-> session, and a second one cannot bind it. Hand it over with
-> `systemctl --user enable --now dirac-physics.service` once the manual process
-> is stopped.
+> **STATUS 2026-08-11 — NOT DEPLOYED, BY DECISION.** Ivan: 「先不deploy」. The
+> units below were installed, started and then **uninstalled the same hour**; the
+> copies under `~/.config/systemd/user/` are gone and nothing dirac-related is
+> enabled except the pre-existing `dirac-sync.timer` (git auto-sync, unrelated to
+> the app). The three services are back to hand-started processes — which is what
+> `bin/dev` is for.
 >
-> `dirac-backend.service` was SPLIT into `dirac-fields` + `dirac-physics` (the
+> **What that hour bought, kept because it is not re-derivable from the files:**
+> the units were shown to WORK before being switched off. `kill -9` on the fields
+> daemon's MainPID returned a new pid inside 8 s with `/health` 200, and
+> `loginctl show-user -p Linger` was already `yes`, so nothing extra is needed for
+> start-at-boot when this is turned back on. That is the difference between a unit
+> file and a supervision story: this one has been executed. To deploy, follow the
+> install steps below — they are the exact commands that were run.
+>
+> **One real defect came out of it and is FIXED in the code, not here:** over
+> Tailscale the page served 200 while the fields daemon answered 403, because the
+> Host allowlist derived this box's addresses from the default route only. That is
+> the "backend offline" report from the Mac. `_allowed_hosts()` now enumerates
+> every interface address, with `DIRAC_EXTRA_HOSTS` for names.
+
+> **The unit was still SPLIT, and that stands regardless of deployment.**
+> `dirac-backend.service` became `dirac-fields` + `dirac-physics` (the
 > merged file is in `_archive/`). Its own header had already argued for the
 > split; the port conflict above is what made it concrete, because a merged unit
 > restart-loops BOTH daemons when one port is taken — taking down a working
