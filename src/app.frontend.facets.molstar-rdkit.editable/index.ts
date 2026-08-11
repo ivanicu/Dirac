@@ -371,6 +371,7 @@ class MolecularVfxLab {
 
     private busy = false;
 
+
     async init() {
         this.workbench = await createChemWorkbench({ target: byId('viewport') });
         this.workbench.plugin.selectionMode = true;
@@ -1472,7 +1473,7 @@ class MolecularVfxLab {
         this.framedLigandMolecule = undefined;
         this.ligandTargets = [];
         this.selectedLigandTargetId = undefined;
-        null = payload.molfile;
+        // importedMolfile removed in S0
         this.currentMolecule = {
             id: meta.inchikey,
             label: `Imported · ${meta.smiles_canonical}`,
@@ -1498,7 +1499,7 @@ class MolecularVfxLab {
 
     private async loadMolecule(control: MolecularControl) {
         if (!this.workbench) return;
-        null = null;
+
         this.framedLigandMolecule = undefined;
         this.ligandTargets = [];
         this.selectedLigandTargetId = undefined;
@@ -1653,25 +1654,36 @@ class MolecularVfxLab {
         await this.chemistryCache.update(build.molfile, build.atomCount);
     }
 
+    private pendingAction: (() => Promise<void>) | null = null;
+
+    /**
+     * S0 item 4: PerformQueue — last-write-wins.
+     * If busy, stores the latest action and executes after current finishes.
+     * No silent drops (fixes F13).
+     */
     private async perform(action: () => Promise<void>) {
+        this.pendingAction = action;
         if (this.busy) return;
         this.busy = true;
-        this.setControlsDisabled(true);
-        byId('status').textContent = 'Applying…';
-        try {
-            await action();
-            this.refreshMetrics();
-            byId('status').textContent = 'Ready';
-        } catch (error) {
-            console.error(error);
-            const message = error instanceof Error ? error.message : String(error);
-            const status = byId('status');
-            status.textContent = message;
-            status.title = message; // the pill ellipsizes; the full error must stay reachable
-        } finally {
-            this.setControlsDisabled(false);
-            this.busy = false;
+        while (this.pendingAction) {
+            const current = this.pendingAction;
+            this.pendingAction = null;
+            this.setControlsDisabled(true);
+            byId('status').textContent = 'Applying…';
+            try {
+                await current();
+                this.refreshMetrics();
+                byId('status').textContent = 'Ready';
+            } catch (error) {
+                console.error(error);
+                const message = error instanceof Error ? error.message : String(error);
+                const status = byId('status');
+                status.textContent = message;
+                status.title = message;
+            }
         }
+        this.setControlsDisabled(false);
+        this.busy = false;
     }
 
     private setControlsDisabled(disabled: boolean) {

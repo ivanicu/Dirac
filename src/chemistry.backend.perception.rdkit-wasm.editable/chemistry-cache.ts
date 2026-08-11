@@ -55,7 +55,7 @@ export class ChemistryCache {
     async update(molfile: string, atomCount: number): Promise<number> {
         this.generation++;
         const startGen = this.generation;
-        this.computing = true;
+
 
         // Run ALL independent RDKit computations in parallel.
         const [chemistry, descriptors, identifiers] = await Promise.all([
@@ -77,7 +77,7 @@ export class ChemistryCache {
             descriptors,
             identifiers,
         });
-        this.computing = false;
+        
         return startGen;
     }
 
