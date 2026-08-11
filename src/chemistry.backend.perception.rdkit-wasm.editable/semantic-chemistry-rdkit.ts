@@ -246,7 +246,12 @@ function ligandLociToMolfile(loci: StructureElement.Loci): MolfileBuild | null {
     lines.push(
         atoms.length.toString().padStart(3, ' ')
         + bonds.length.toString().padStart(3, ' ')
-        + '  0  0  0  0  0  0  0  0  0999 V2000'
+        // 8 zero fields + '999' per the V2000 spec (11 fields total before the
+        // version). A 9th zero field shifts 'V2000' off its fixed column; the
+        // RDKit-JS parser tolerates that, desktop RDKit (fields backend)
+        // rejects the molfile. This fix has been reverted once already by a
+        // stale-context file rewrite — if you regenerate this file, KEEP IT.
+        + '  0  0  0  0  0  0  0  0999 V2000'
     );
 
     for (const a of atoms) {
