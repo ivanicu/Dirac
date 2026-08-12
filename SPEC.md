@@ -1,5 +1,5 @@
 # Dirac system architecture · the buildable spec
-class: S · status: DRAFT · date: 2026-08-10 22:54 PDT · repo@662c386
+class: S · status: DRAFT · date: 2026-08-10 22:54 PDT · repo@662c386 (PRE-REWRITE SHA — history was rewritten 2026-08-11 to strip tooling trailers, so this hash no longer resolves; the date is the durable half)
 N: 8901-endpoints=2 consumers · facet-callsites=11 · field_cube-writers(py)=1 · tokens.css-consumers=4  [measured:M04]
 spec-budget: 600 lines / one session
 staleness-predicate: `python3 ~/.claude/skills/software-spec/scripts/spec_lint.py SPEC.md --rerun`
@@ -9,7 +9,7 @@ FIGURE-2: §4 = the two stubs + the three STATE×EVENT tables + JOIN LEDGER + CO
 
 ## 0 · MEASUREMENT
 ```
-when: 2026-08-10 22:54 PDT   against: /home/ivan/dirac@662c386
+when: 2026-08-10 22:54 PDT   against: /home/ivan/dirac@662c386 [pre-rewrite]
 $ curl -s http://127.0.0.1:8901/health
 {"ok": true, "rdkit": "2026.03.5", "pyscf": "2.14.0", "db_cache": "off", "scf_cached": 6, "scf_cache_max": 6, "rss_mb": 1077}
 $ (embed aspirin; field mep)  # full commands in §7 ledger M02

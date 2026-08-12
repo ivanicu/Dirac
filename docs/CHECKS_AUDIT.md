@@ -331,7 +331,7 @@ removes the sibling guard has something to check against.
 
 Reported across sessions rather than patched here, because both files were
 under live edit; the witnesses were written so that no change to this file is
-needed when the fix lands. All three went green on `dac99d6`.
+needed when the fix lands. All three went green on the physics session's commit "three guards that could not fire, two of them mine, one added an hour ago" — cited by SUBJECT, not by hash, because history was rewritten on 2026-08-11 to strip tooling trailers and every pre-rewrite SHA in this repo's docs stopped resolving. A subject line survives a message rewrite that only removes trailers; a hash does not survive anything.
 
 | | fix | how the fix was confirmed |
 |---|---|---|
@@ -370,7 +370,7 @@ $ backend/env/bin/python3 backend/tests/test_cannot_fire.py
 "check that cannot fire" witnesses — 4 tests, pytest ABSENT (standalone mode)
 every test below is EXPECTED TO FAIL until its named finding is fixed
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-# 2026-08-11 11:2x — after dac99d6. Kept ABOVE the original red run, not
+# 2026-08-11 11:2x — after the three-guards fix. Kept ABOVE the original red run, not
 # instead of it: a green board with no memory of having been red is exactly
 # the artifact this audit exists to distrust.
 PASS    [F1] test_mep_surface_ecp_claim_must_mean_core_electrons_were_replaced      0.26s
