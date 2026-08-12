@@ -1,0 +1,187 @@
+{
+  "schema_version": "1.0.0",
+  "method_id": "fields.qm.homo",
+  "summary": "Highest occupied molecular orbital amplitude on a grid, from a real RHF/UHF wavefunction.",
+  "description": "Runs an SCF and writes the HOMO amplitude as a Gaussian cube registered to the input geometry. Refuses rather than rendering a field from an unconverged wavefunction: a decorative isosurface is indistinguishable from a real one on screen.",
+  "implementation": {
+    "module": "backend.field_server",
+    "functions": ["field_quantum", "run_scf", "ecp_for", "write_cube", "prepare_mol"],
+    "constants": ["CUBE_GRID_MEP", "CUBE_GRID_ORB", "CUBE_MEP_FIXED", "CUBE_MEP_MARGINAL", "CUBE_ORB_FIXED", "CUBE_ORB_MARGINAL"]
+  },
+  "input": {
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["molecule"],
+      "properties": {
+        "molecule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "content", "dimensionality"],
+          "properties": {
+            "kind": { "const": "molfile" },
+            "content": { "type": "string", "minLength": 40 },
+            "format": { "enum": ["mdl-v2000", "mdl-v3000"], "default": "mdl-v2000" },
+            "dimensionality": {
+              "const": 3,
+              "description": "3 ONLY. A 2D structure must not reach a 3D physics method — the coordinate space is part of the type, and molecule.embed is the explicit step that produces 3D. An implicit SMILES→3D inside a field method would report one method having run when two did."
+            },
+            "coordinate_space": { "enum": ["molecular", "scene"], "default": "molecular" },
+            "coordinate_units": { "const": "angstrom", "default": "angstrom" },
+            "identity": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "inchikey": { "type": ["string", "null"] },
+                "compound_id": { "type": ["string", "null"] },
+                "conformer_hash": { "type": ["string", "null"] }
+              }
+            }
+          }
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "basis": {
+              "type": "string",
+              "enum": ["sto-3g", "6-31g", "6-31g*", "def2-svp"],
+              "default": "sto-3g",
+              "description": "METHOD-SPECIFIC, deliberately. The global Basis union was already false: the physics daemon accepts def2-tzvp and this method does not. A closed union at the domain level asserts that every method shares one basis vocabulary, which is not true and was never true."
+            },
+            "spin": {
+              "type": ["integer", "null"],
+              "default": null,
+              "description": "Unpaired electrons. null means 'infer from electron parity', which is REFUSED for a transition metal whose ground state is not the closed-shell singlet parity implies — see refusals."
+            }
+          }
+        }
+      }
+    },
+    "examples": [
+      {
+        "molecule": {
+          "kind": "molfile",
+          "content": "benzene\n  RDKit          3D\n\n 12 12  0  0  0  0  0  0  0  0999 V2000\n(elided in the descriptor; a full example lives in the fixtures)\n",
+          "dimensionality": 3,
+          "coordinate_space": "molecular"
+        },
+        "parameters": { "basis": "sto-3g", "spin": null }
+      }
+    ]
+  },
+  "output": {
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "wavefunction"],
+      "properties": {
+        "field": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "native_units", "grid", "extrema"],
+          "properties": {
+            "kind": { "const": "homo" },
+            "native_units": { "const": "amplitude" },
+            "grid": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["dimensions"],
+              "properties": {
+                "dimensions": { "type": "array", "items": { "type": "integer", "minimum": 2 }, "minItems": 3, "maxItems": 3 },
+                "spacing_angstrom": { "type": "number", "exclusiveMinimum": 0 }
+              }
+            },
+            "extrema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["min", "max"],
+              "properties": { "min": { "type": "number" }, "max": { "type": "number" } }
+            }
+          }
+        },
+        "wavefunction": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["converged", "method", "basis", "n_basis_functions"],
+          "properties": {
+            "converged": { "const": true, "description": "Only true is representable in a SUCCESS output. An unconverged SCF is a refusal, not a result with a flag — a caller that has to check a boolean will eventually not check it." },
+            "method": { "type": "string" },
+            "basis": { "type": "string" },
+            "n_basis_functions": { "type": "integer", "minimum": 1 },
+            "scf_energy_hartree": { "type": ["number", "null"] },
+            "homo_ev": { "type": ["number", "null"] },
+            "lumo_ev": { "type": ["number", "null"] },
+            "scf_cycles": { "type": ["integer", "null"] },
+            "ecp_elements": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "artifacts": [
+      {
+        "role": "field.cube",
+        "media_type": "application/vnd.dirac.gaussian-cube",
+        "typical_size_bytes": 1900000
+      }
+    ]
+  },
+  "refusals": [
+    {
+      "code": "UNSUPPORTED",
+      "condition": "the requested basis does not describe every element present",
+      "points_at": "fields.qm.homo with basis=def2-svp",
+      "measured": "6-31g has no iodine ECP; without one, iodine runs all-electron and the potential is wrong by 58 kcal/mol with no error raised"
+    },
+    {
+      "code": "OPEN_SHELL_SPIN_REQUIRED",
+      "condition": "a transition metal is present and spin was not given",
+      "points_at": null,
+      "measured": "electron parity implies a closed-shell singlet that is not the ground state; the previous vocabulary collapsed this into UNSUPPORTED, which reads as 'give up' rather than 'answer one question'"
+    },
+    {
+      "code": "UNCONVERGED",
+      "condition": "plain DIIS stalls and the second-order (newton) rescue also fails to converge",
+      "points_at": null,
+      "measured": "a field rendered from an unconverged wavefunction is visually indistinguishable from a converged one"
+    },
+    {
+      "code": "BUDGET",
+      "condition": "the pre-flight estimate exceeds compute_budget_seconds, or the in-loop watchdog fires",
+      "points_at": null,
+      "measured": "estimate is 2.8 x 5.9e-9 x nao^4.03 seconds, fitted over 47 molecules on this box; the 2.8x safety factor is the measured underestimate in the middle of the range"
+    },
+    {
+      "code": "TOO_LARGE",
+      "condition": "more than 120 atoms including hydrogens",
+      "points_at": null,
+      "measured": "beyond that, HF on this box is not interactive at any basis"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE",
+      "meaning": "The orbital energies are not quantitatively quotable at this basis.",
+      "scope": ["output.wavefunction.homo_ev", "output.wavefunction.lumo_ev"],
+      "measured": "STO-3G ranks nitrobenzene as more electron-rich than benzene while def2-SVP ranks it last, and water's LUMO moves 12 eV between the two"
+    }
+  ],
+  "execution": {
+    "supported_modes": ["sync", "job"],
+    "default_mode": "auto",
+    "inline_threshold_seconds": 2.0,
+    "resource_class": "cpu-qm",
+    "concurrency_class": "scf",
+    "supports_cancellation": false,
+    "deterministic": true,
+    "cacheable": true,
+    "side_effects": "writes_cache"
+  },
+  "exposure": {
+    "sdk": true,
+    "cli": true,
+    "mcp": "curated"
+  }
+}

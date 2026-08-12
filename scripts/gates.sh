@@ -145,6 +145,11 @@ if wanted physics; then
 fi
 
 if wanted contracts; then
+    # ADR-002: the canonical schemas are the root source, so a schema edited without
+    # regenerating must be a red build — otherwise "generated" means "generated once".
+    # Runs BEFORE the drift proof because a stale generator makes every downstream
+    # comparison a comparison against yesterday.
+    if ! run_gate 'gate-7a-contract-codegen' python3 scripts/gen_contracts.py --check; then :; fi
     # Its own red proof first, same rule as gate 8: this gate is green against
     # the real contracts, so a crafted conviction is its only evidence of
     # resolution. It runs on a COPY, so it cannot leave a defect behind.

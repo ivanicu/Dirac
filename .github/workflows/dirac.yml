@@ -82,6 +82,12 @@ jobs:
       # Exit 2 = contracts clean, src/ behind. Reported, not fatal: the frontend
       # interface is owned elsewhere and legitimately trails. Exit 1 (contracts
       # disagree with the code) fails the build.
+      - name: 'Gate 7a — canonical contracts validate and generated code is current'
+        if: ${{ !cancelled() }}
+        run: |
+          pip install --quiet jsonschema
+          python3 scripts/gen_contracts.py --check
+
       - name: 'Gate 7 — contract drift (errors.json / iface.* / FIELD_META_SCHEMA)'
         if: ${{ !cancelled() }}
         run: |
