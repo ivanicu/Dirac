@@ -47,6 +47,47 @@
     // long-form names, shown in the option tooltip rather than in the option text
     var FULLNAME = {'off': '统一石墨', 'd2': '包豪斯 · 白地', 'd3': '北欧 · 冷灰与鼠尾草', 'd5': '中世纪现代 · 芥末与孔雀', 'c7': 'Okabe-Ito · 双色盲安全'};
 
+    // ── the coarse layer ─────────────────────────────────────────────────────
+    // Ivan, on the MolecularNodes capsid render: 没有必要是每一个都单独标注,可以按大类标注.
+    // He is right, and the 27 classes are not wrong so much as WRONGLY SCALED. They were
+    // built for one binding site at 1,213 atoms, where telling a guanidinium from an
+    // imidazole is the whole point. On an assembly the same scheme is 27 hues at a few
+    // pixels each and the eye recovers nothing — the picture that works there groups by
+    // the object's own large parts and lets each part be ONE colour.
+    //
+    // So two coarse modes, both reusing the fine classifier rather than a second one:
+    //   grp  27 classes folded to 8, by what a chemist would point at from across a room
+    //   sub  one colour per CHAIN — the capsid look. Not a chemistry statement at all;
+    //        it says "these atoms are one subunit", which on an assembly is the fact
+    //        that carries the structure.
+    var COARSE = {
+        bb: 'back', gly: 'back', pro: 'back',
+        ali: 'phob', ph: 'arom', ind: 'arom',
+        oh: 'polr', phe_oh: 'arom', amd: 'polr', sh: 'polr', sme: 'phob',
+        coo: 'nega', gua: 'posi', nh3: 'posi', imi: 'posi',
+        pho: 'nuc', sug: 'nuc', pur: 'nuc', pyr: 'nuc',
+        lringC: 'lig', lchainC: 'lig', lN: 'lig', lO: 'lig', lS: 'lig', hal: 'lig',
+        ion: 'ion', wat: 'wat',
+    };
+    var COARSE_ORDER = ['back', 'phob', 'arom', 'polr', 'nega', 'posi', 'nuc', 'lig', 'ion', 'wat'];
+    var COARSE_NAMES = { back: '主链', phob: '疏水', arom: '芳香', polr: '极性', nega: '负电',
+                         posi: '正电', nuc: '核酸', lig: '配体', ion: '离子', wat: '水' };
+
+    function coarsePal(id, name, note, list) {
+        var m = {};
+        for (var i = 0; i < COARSE_ORDER.length; i++) m[COARSE_ORDER[i]] = parseInt(list[i].slice(1), 16);
+        return { id: id, name: name, note: note, m: m, kind: 'coarse' };
+    }
+
+    // Subunit ramp. Sampled to sit where the reference render sits: light, low-chroma,
+    // adjacent hues far enough apart to separate at a few pixels but none of them
+    // shouting. Twelve, cycled — an assembly with more chains than that reuses colours,
+    // which is honest: past a dozen, colour cannot carry identity anyway and the ramp
+    // is doing grouping, not naming.
+    var SUBUNIT = ['#8fb8a8', '#a9a3c4', '#c9c08a', '#8aa9c4', '#c4a3a9', '#96c0b4',
+                   '#b4aed0', '#d0c8a0', '#9fc0d0', '#d0b0a8', '#a8c8a0', '#c0a8c0']
+        .map(function (h) { return parseInt(h.slice(1), 16); });
+
     function pal(id, name, note, list) {
         var m = {};
         for (var i = 0; i < ORDER.length; i++) m[ORDER[i]] = parseInt(list[i].slice(1), 16);
@@ -79,6 +120,14 @@
              '#c9a02a', '#a08237',
              '#b06a3f', '#cdc4ac', '#6f9450', '#93b077',
              '#2b2a26', '#565349', '#2a5f9c', '#b04a30', '#d8ae1c', '#0f9478', '#8a9094', '#eae6db']),
+
+        // by big category, not by functional group
+        coarsePal('grp', '大类 · 八色', '把 27 个官能团折成 8 个大类:主链/疏水/芳香/极性/负电/正电/核酸/配体。远看能认出来的粒度,不是显微镜粒度。',
+            ['#cfcabd', '#b9c3ae', '#a9a3c4', '#8fb8bc', '#a9647a', '#5f7fa8', '#c0a86a', '#8a9aa4', '#9a8c74', '#e2e6e4']),
+
+        { id: 'sub', name: '亚基 · 每链一色', kind: 'chain',
+          note: '每条链一个柔和的色,像衣壳那种画法。它不陈述化学,它陈述"这些原子是同一个亚基" —— 在组装体上,那才是携带结构的事实。',
+          m: null },
 
         pal('c7', '色盲安全', '从公认的色盲安全色出发,按暖纸底重调,红色盲和绿色盲两种模拟同时验证过 —— 安全性最强的一版。',
             ['#bbb7ad', '#a69e8b', '#a69e8b', '#8a7f65',
@@ -187,8 +236,11 @@
         return l && l.workbench && l.workbench.plugin;
     }
 
+    // Default is a PALETTE now, not graphite. Ivan chose it off the d5 render.
+    // localStorage still wins, so anyone who has already picked one keeps theirs.
+    var DEFAULT = 'd5';
     function active() {
-        try { return localStorage.getItem(LS) || 'off'; } catch (e) { return 'off'; }
+        try { return localStorage.getItem(LS) || DEFAULT; } catch (e) { return DEFAULT; }
     }
     function setActive(id) {
         try { localStorage.setItem(LS, id); } catch (e) { }
@@ -216,11 +268,21 @@
                     var cur = p.managers.structure.hierarchy.current.structures;
                     if (cur && cur.length && cur[0].cell.obj) { full = cur[0].cell.obj.data; ref = cur[0].cell.transform.ref; }
                 } catch (e) { }
-                var map = classify(full, ref + ':' + palette.id);
+                // The chain mode needs no chemistry, so it does not pay for the fine
+                // classifier — it reads the chain segment straight off the hierarchy.
+                var map = palette.kind === 'chain' ? null : classify(full, ref + ':' + palette.id);
+                var chainOf = function (l) {
+                    var u = l.unit, h = u && u.model && u.model.atomicHierarchy;
+                    if (!h) return 0;
+                    try { return h.chainAtomSegments.index[l.element] | 0; }
+                    catch (e) { return u.id | 0; }
+                };
                 return {
                     factory: provider.factory, granularity: 'group',
                     color: function (l) {
+                        if (palette.kind === 'chain') return SUBUNIT[chainOf(l) % SUBUNIT.length];
                         var k = map.get(l.unit && (l.unit.id + ':' + l.element));
+                        if (k !== undefined && palette.kind === 'coarse') k = COARSE[k];
                         var c = k === undefined ? undefined : palette.m[k];
                         return c === undefined ? 0x8e8d87 : c;
                     },
@@ -243,7 +305,16 @@
         var structures = mgr.hierarchy.current.structures;
         if (!structures || !structures.length) return;
         var palette = PALETTES.filter(function (x) { return x.id === id; })[0];
-        if (!palette || !palette.m) return;
+        // `off` is already gone by the early return above, so this guard's only remaining
+        // job is to skip a palette with no colour table — and that is not the same as "no
+        // colour SOURCE". The chain mode computes its colour from the hierarchy and carries
+        // m: null legitimately; the original test dropped it before ensureTheme ever ran, so
+        // the theme was never registered and updateRepresentationsTheme silently no-opped,
+        // leaving the previous palette on screen. A no-op that looks like a working switch
+        // is the worst shape a failure can take: the dropdown said 亚基 and the picture said
+        // 大类, with nothing in the console.
+        if (!palette) return;
+        if (palette.kind !== 'chain' && !palette.m) return;
         var name = ensureTheme(p, palette);
         structures.forEach(function (s) {
             s.components.forEach(function (c) {
@@ -318,5 +389,7 @@
         get: active, set: setActive,
         stats: function () { return lastStats; },
         classes: CLASSES,
+        coarse: COARSE_NAMES,
+        subunitRamp: SUBUNIT.length,
     };
 })();
