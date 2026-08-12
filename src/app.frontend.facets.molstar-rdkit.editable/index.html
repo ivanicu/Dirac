@@ -1466,6 +1466,7 @@
                         <div id="contact-ledger">
                             <p class="ledger-empty">The ledger and 3D contact geometry share the same computed records.</p>
                         </div>
+                        <section id="interaction-run-record" class="compute-run-record" aria-label="Interaction computation record" hidden></section>
                     </section>
                 </section>
 
@@ -1505,6 +1506,7 @@
                         <span id="fields-summary">No ligand loaded</span>
                         <span id="fields-backend"></span>
                     </div>
+                    <section id="field-run-record" class="compute-run-record" aria-label="Field computation record" hidden></section>
                     <div id="fields-content">
                         <div class="field-buttons">
                             <!-- The glyph is the QUANTITY'S OWN SYMBOL, not an
@@ -1641,6 +1643,7 @@
                            the answer, it erases it — every halogen comes back looking like fluorine. For
                            a large ligand raise the budget instead; that costs time, not the conclusion.</p>
                         <div id="phys-surface-status" class="field-status" data-tone="idle">Load a ligand first.</div>
+                        <section id="phys-surface-run-record" class="compute-run-record" aria-label="Surface computation record" hidden></section>
                         <div id="phys-surface-body"></div>
 
                         <!-- The aiming half, directly under the depth half. The two were built in
@@ -1673,6 +1676,7 @@
                            and routinely sits several kcal/mol above its own relaxed geometry —
                            energy that comes straight out of the binding free energy.</p>
                         <div id="phys-torsion-status" class="field-status" data-tone="idle">Load a ligand first.</div>
+                        <section id="phys-torsion-run-record" class="compute-run-record" aria-label="Torsion computation record" hidden></section>
                         <div id="phys-torsion-body"></div>
                     </div>
                 </section>

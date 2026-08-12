@@ -90,6 +90,7 @@ import { MODULES, navigableViews, VIEWS, WORKSPACES, type ModuleDefinition,
     type WorkspaceId } from '../app/shell/registries';
 import { WorkspaceCanvas } from '../app/shell/workspace-canvas';
 import { DiracClient } from '../app/services/dirac-client';
+import { observedComputationRun, renderComputationRun } from '../app/services/computation-run';
 // A READ-ONLY handle on the store, for driving the real code from a test rather
 // than reasoning about it. Not a second code path: it exposes the same singleton
 // the facets read. The store's generation advancing on a ligand change is the
@@ -1356,6 +1357,26 @@ class MolecularVfxLab {
         byId('contact-ledger-summary').textContent = anyEnabled
             ? `${allRecords.length} ligand-local interactions (${[...new Set(allRecords.map(r => r.prefix))].join('/')})`
             : 'Enable an interaction layer to compute the ledger';
+
+        if (anyEnabled) {
+            renderComputationRun('interaction-run-record', observedComputationRun(
+                'structure.interactions', {
+                    executor: 'browser',
+                    methodId: 'molstar.interactions',
+                    version: 'workspace',
+                    provenance: {
+                        structure_id: this.currentMolecule.id,
+                        ligand_target: this.currentLigandTarget()?.label || 'none',
+                        cutoff_angstrom: this.ligandCutoff,
+                        enabled_layers: INTERACTION_LAYERS.filter(layer =>
+                            this.enabledUpgrades.has(layer.id as MolecularLayerId)).map(layer => layer.id),
+                        interaction_count: allRecords.length,
+                    },
+                    note: 'Geometry-qualified browser observation; it is not a binding energy or experimental measurement. The service handler remains registered-unavailable.',
+                }));
+        } else {
+            renderComputationRun('interaction-run-record', null);
+        }
 
         if (!anyEnabled || allRecords.length === 0) {
             const empty = document.createElement('p');

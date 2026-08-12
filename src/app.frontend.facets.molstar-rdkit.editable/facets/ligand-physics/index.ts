@@ -22,6 +22,8 @@
 import { PluginContext } from '../../../mol-plugin/context';
 import { DiracClient } from '../../../app/services/dirac-client';
 import { scientificContext } from '../../../app/context/scientific-context-store';
+import { computationRunFromEnvelope, failedComputationRun,
+    renderComputationRun } from '../../../app/services/computation-run';
 import { torsionPanel, type TorsionRow } from './plot';
 
 /**
@@ -100,6 +102,7 @@ let molfile: string | null = null;
 let ligandLabel: string | null = null;
 let inFlight: AbortController | null = null;
 let inFlightJobId: string | null = null;
+let inFlightRunHostId: string | null = null;
 let busy = false;
 /**
  * Monotonic ligand generation. A multi-second SCF that lands after the user
@@ -170,10 +173,14 @@ function setBusy(next: boolean) {
     if (cancel) { cancel.hidden = !busy; cancel.disabled = false; }
 }
 
-async function post(path: string, body: Record<string, unknown>, budget: number) {
+async function post(path: string, body: Record<string, unknown>, budget: number,
+    runHostId: string) {
     const controller = new AbortController();
     inFlight = controller;
     const timer = setTimeout(() => controller.abort(), clientTimeoutMs(budget));
+    let monitor: ReturnType<typeof setInterval> | null = null;
+    let monitorBusy = false;
+    let settled = false;
     try {
         const method = path === '/surface/mep'
             ? 'structure.surface.compute' : 'structure.torsion.analyze';
@@ -184,8 +191,34 @@ async function post(path: string, body: Record<string, unknown>, budget: number)
             budget_seconds: budget,
         }, { signal: controller.signal });
         inFlightJobId = String(accepted.meta?.job_id || '') || null;
+        inFlightRunHostId = runHostId;
+        renderComputationRun(runHostId,
+            computationRunFromEnvelope(method, accepted, accepted.ok ? 'queued' : undefined));
+        if (accepted.ok && inFlightJobId) {
+            const jobId = inFlightJobId;
+            monitor = setInterval(() => {
+                if (monitorBusy || settled || inFlight !== controller) return;
+                monitorBusy = true;
+                void dirac.jobGet(jobId).then(snapshot => {
+                    if (settled || inFlight !== controller || !snapshot.ok) return;
+                    const state = String(snapshot.data?.state || 'queued');
+                    const phase = state === 'running' ? 'running' : state === 'cancelled'
+                        ? 'cancelled' : 'queued';
+                    const run = computationRunFromEnvelope(method, accepted, phase);
+                    run.methodId = String(snapshot.data?.method_id || run.methodId || '') || undefined;
+                    run.version = String(snapshot.data?.method_version || run.version || '') || undefined;
+                    run.seconds = typeof snapshot.data?.seconds === 'number'
+                        ? snapshot.data.seconds : undefined;
+                    renderComputationRun(runHostId, run);
+                }).catch(() => { /* the blocking wait still owns the result */ })
+                    .finally(() => { monitorBusy = false; });
+            }, 1500);
+        }
         const env = await dirac.waitForCommandResult(
             accepted, budget * 2 + 20, controller.signal);
+        settled = true;
+        if (monitor) clearInterval(monitor);
+        renderComputationRun(runHostId, computationRunFromEnvelope(method, env));
         if (!env.ok) return { ok: false, error: env.error?.message || env.error?.code };
         if (method === 'structure.surface.compute') {
             const summary = (env.data?.summary || {}) as Record<string, any>;
@@ -196,10 +229,53 @@ async function post(path: string, body: Record<string, unknown>, budget: number)
         const profile = JSON.parse((await dirac.fetchArtifact(ref, controller.signal)).text());
         return { ok: true, ...profile };
     } finally {
+        settled = true;
+        if (monitor) clearInterval(monitor);
         clearTimeout(timer);
         if (inFlight === controller) inFlight = null;
         inFlightJobId = null;
+        inFlightRunHostId = null;
     }
+}
+
+async function cancelCurrentRun() {
+    const controller = inFlight;
+    const jobId = inFlightJobId;
+    const runHostId = inFlightRunHostId;
+    if (!controller && !jobId) return;
+    if (jobId) {
+        try {
+            const response = await dirac.execute('job.cancel', {
+                job_ref: { kind: 'job', id: jobId },
+            });
+            // The result may win the race while the cancel request is travelling.
+            // In that case, preserve the completed evidence card and let the original
+            // wait land the real result instead of claiming a cancellation.
+            if (inFlight !== controller) return;
+            if (response.ok && String(response.data?.state) === 'done') {
+                setStatus(runHostId === 'phys-torsion-run-record'
+                    ? 'phys-torsion-status' : 'phys-surface-status',
+                'Job completed before cancellation took effect; loading its result…', 'busy');
+                return;
+            }
+        } catch { /* abort the local wait even if the cancellation request failed */ }
+    }
+    if (inFlight !== controller) return;
+    controller?.abort();
+    inFlight = null;
+    if (runHostId) {
+        const command = runHostId === 'phys-torsion-run-record'
+            ? 'structure.torsion.analyze' : 'structure.surface.compute';
+        renderComputationRun(runHostId,
+            failedComputationRun(command, jobId
+                ? `Cancellation requested for durable Job ${jobId}`
+                : 'Cancelled before a durable Job was accepted.', 'cancelled'));
+    }
+    inFlightRunHostId = null;
+    setBusy(false);
+    setStatus(runHostId === 'phys-torsion-run-record'
+        ? 'phys-torsion-status' : 'phys-surface-status',
+    'Cancellation requested; running native work stops only at cooperative checkpoints.', 'idle');
 }
 
 // ── σ-hole ──────────────────────────────────────────────────────────────────
@@ -392,9 +468,14 @@ async function runSurface() {
     setStatus('phys-surface-status',
         `Solving surface electrostatics on ${ligandLabel ?? 'ligand'} in ${basis}… `
         + `(gives up at ${budget} s · Cancel to stop now)`, 'busy');
+    renderComputationRun('phys-surface-run-record', {
+        command: 'structure.surface.compute', phase: 'submitting', executor: 'service',
+        artifacts: [], provenance: { ligand: ligandLabel, basis, budget_seconds: budget },
+    });
     const generation = scientificContext.generation();
     try {
-        const out = await post('/surface/mep', { molfile, basis, max_seconds: budget }, budget);
+        const out = await post('/surface/mep', { molfile, basis, max_seconds: budget },
+            budget, 'phys-surface-run-record');
         if (!isCurrentLigandGeneration(generation)) {
             setStatus('phys-surface-status',
                 'Ligand changed while solving — result discarded rather than '
@@ -421,6 +502,8 @@ async function runSurface() {
             ? 'Cancelled.'
             : 'Dirac service unreachable on port 8901',
         aborted ? 'idle' : 'error');
+        renderComputationRun('phys-surface-run-record',
+            failedComputationRun('structure.surface.compute', e, aborted ? 'cancelled' : 'failed'));
     } finally {
         setBusy(false);
     }
@@ -432,9 +515,14 @@ async function runTorsion() {
     if (!molfile || busy) return;
     setBusy(true);
     setStatus('phys-torsion-status', `Scanning rotatable bonds on ${ligandLabel ?? 'ligand'}…`, 'busy');
+    renderComputationRun('phys-torsion-run-record', {
+        command: 'structure.torsion.analyze', phase: 'submitting', executor: 'service',
+        artifacts: [], provenance: { ligand: ligandLabel },
+    });
     const generation = scientificContext.generation();
     try {
-        const out = await post('/torsion/strain', { molfile }, BUDGET_SECONDS);
+        const out = await post('/torsion/strain', { molfile }, BUDGET_SECONDS,
+            'phys-torsion-run-record');
         if (!isCurrentLigandGeneration(generation)) {
             setStatus('phys-torsion-status',
                 'Ligand changed while scanning — result discarded rather than '
@@ -459,6 +547,8 @@ async function runTorsion() {
             ? 'Cancelled.'
             : 'Dirac service unreachable on port 8901',
         aborted ? 'idle' : 'error');
+        renderComputationRun('phys-torsion-run-record',
+            failedComputationRun('structure.torsion.analyze', e, aborted ? 'cancelled' : 'failed'));
     } finally {
         setBusy(false);
     }
@@ -487,17 +577,7 @@ export function initLigandPhysicsPanel(p: PluginContext) {
     plugin = p;
     byId('phys-run-surface')?.addEventListener('click', () => void runSurface());
     byId('phys-run-torsion')?.addEventListener('click', () => void runTorsion());
-    byId('phys-cancel')?.addEventListener('click', () => {
-        if (inFlightJobId) {
-            void dirac.execute('job.cancel', {
-                job_ref: { kind: 'job', id: inFlightJobId },
-            });
-        }
-        inFlight?.abort();
-        inFlight = null;
-        setBusy(false);
-        setStatus('phys-surface-status', 'Cancellation requested; running native work stops only at cooperative checkpoints.', 'idle');
-    });
+    byId('phys-cancel')?.addEventListener('click', () => void cancelCurrentRun());
     setBusy(false);
     void checkHealth();
 }
@@ -520,6 +600,8 @@ export function updateLigandPhysics(nextMolfile: string | null, label: string | 
             const host = byId(id);
             if (host) host.innerHTML = '';
         }
+        renderComputationRun('phys-surface-run-record', null);
+        renderComputationRun('phys-torsion-run-record', null);
         setStatus('phys-surface-status', molfile
             ? 'Not computed — this is a QM run, so it is on demand.' : 'Load a ligand first.');
         setStatus('phys-torsion-status', molfile

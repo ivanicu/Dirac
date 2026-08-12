@@ -243,8 +243,10 @@ export class DiracClient {
         molecule: Record<string, unknown>; fieldKind: string;
         parameters?: Record<string, unknown>; budgetSeconds?: number;
         timeout?: number; signal?: AbortSignal;
+        onAccepted?: (accepted: Envelope) => void;
     }): Promise<Envelope> {
         const accepted = await this.fieldCompute(input);
+        input.onAccepted?.(accepted);
         return this.waitForCommandResult(accepted, input.timeout ?? 300, input.signal);
     }
 
@@ -343,7 +345,7 @@ export class DiracClient {
             artifacts: [{
                 id: null,
                 // Computed over what arrived, so it is a real address even here.
-                sha256: '',                 // filled by field() when it can hash
+                sha256: '', // filled by field() when it can hash
                 role: 'field.cube',
                 media_type: 'application/vnd.dirac.gaussian-cube',
                 size_bytes: new TextEncoder().encode(cube).length,
@@ -535,6 +537,7 @@ export async function fetchField(
     args: {
         molfile: string; basis?: string; spin?: number | null;
         maxSeconds?: number; signal?: AbortSignal; methodId?: string;
+        onAccepted?: (accepted: Envelope) => void;
     },
 ): Promise<FieldResult> {
     const methodId = args.methodId
@@ -588,6 +591,7 @@ export async function fetchField(
             ...(args.spin != null ? { spin: args.spin } : {}),
         } : undefined,
         budgetSeconds: args.maxSeconds,
+        onAccepted: args.onAccepted,
     });
 
     if (!env.ok) throw new DiracError(env.error!, env);

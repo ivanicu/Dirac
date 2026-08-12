@@ -27,6 +27,8 @@ import { fieldOverlay } from './volume-overlay';
 // with the CLI's and the MCP adapter's semantics. Before this, the URL and the refusal
 // shape were rebuilt at five call sites and the sixth would have differed.
 import { DiracClient, DiracError, fetchField as sdkFetchField } from '../../../app/services/dirac-client';
+import { computationRunFromEnvelope, failedComputationRun, observedComputationRun,
+    renderComputationRun, type ComputationRunRecord } from '../../../app/services/computation-run';
 
 // A renderer that fails silently is indistinguishable from one that works but
 // has nothing to draw. The handle costs nothing and every harness can read it.
@@ -303,6 +305,7 @@ export type FieldView = {
     meta: Record<string, any> | null;
     digestVerified?: boolean;
     digestUnverifiedReason?: string;
+    run?: ComputationRunRecord;
 };
 
 let plugin: PluginContext | null = null;
@@ -380,6 +383,12 @@ function viewFromBaked(m: any, kind: FieldKind): FieldView {
         digestUnverifiedReason: 'this field came from the pre-baked static assets, which '
             + 'carry no digest — it is a fallback for an offline backend, not a computed '
             + 'result',
+        run: observedComputationRun('precomputed.field', {
+            executor: 'static', methodId: String(meta.method || meta.kind || kind),
+            version: meta.method_version ?? null,
+            provenance: { structure_id: structureId, baked: true },
+            note: 'Static fallback; no durable Job and no artifact digest are available.',
+        }),
     };
 }
 const pendingFetch = new Map<string, Promise<{ cube: string, view: FieldView } | null>>();
@@ -433,7 +442,8 @@ function molfileHeavyAtoms(mf: string): number {
  * two demand opposite next moves.
  */
 class FieldRefusal extends Error {
-    constructor(message: string, readonly reason: 'budget' | 'unsupported' | 'internal' | 'network') {
+    constructor(message: string,
+        readonly reason: 'budget' | 'unsupported' | 'internal' | 'network' | 'cancelled') {
         super(message);
     }
 }
@@ -451,6 +461,8 @@ const clientTimeoutMs = (budget: number) => (budget * 2 + 20) * 1000;
 
 /** The request the user can cancel — one at a time, by construction. */
 let inFlight: AbortController | null = null;
+let inFlightJobId: string | null = null;
+let inFlightCommand: 'structure.field.compute' | 'fields.region.mep' | null = null;
 /**
  * Whether the compute backend answered its health check. On the deployed
  * static site it never will, and that is the normal case there rather than an
@@ -466,7 +478,7 @@ export function setFieldStructureId(id: string | null) { structureId = id; }
 /** Fetch one field into the browser cache (deduplicated). Throws FieldRefusal;
  * returns null if the focused ligand changed while in flight. */
 async function fetchField(kind: FieldKind, store = false,
-    budget = QM_BUDGET_SECONDS): Promise<{ cube: string, view: FieldView } | null> {
+    budget = QM_BUDGET_SECONDS, reportActivity = false): Promise<{ cube: string, view: FieldView } | null> {
     const key = cacheKey(kind);
     if (!store) {
         const hit = cubeCache.get(key);
@@ -499,12 +511,24 @@ async function fetchField(kind: FieldKind, store = false,
     const basis = Kinds[kind].quantum ? currentBasis() : undefined;
     const controller = new AbortController();
     inFlight = controller;
-    const timer = setTimeout(() => controller.abort(), clientTimeoutMs(budget));
+    inFlightCommand = 'structure.field.compute';
+    let timedOut = false;
+    const timer = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+    }, clientTimeoutMs(budget));
     const p = (async () => {
         try {
             const got = await sdkFetchField(dirac, kind, {
                 molfile: requestMolfile!, basis, maxSeconds: budget,
                 signal: controller.signal,
+                onAccepted: accepted => {
+                    inFlightJobId = String(accepted.meta?.job_id || '') || null;
+                    if (reportActivity) {
+                        renderComputationRun('field-run-record',
+                            computationRunFromEnvelope('structure.field.compute', accepted, 'queued'));
+                    }
+                },
             });
             if (molfile !== requestMolfile) return null;
             // The digest check is REPORTED, not assumed. On this origin (plain http on a
@@ -515,6 +539,14 @@ async function fetchField(kind: FieldKind, store = false,
                 data: got.data, warnings: got.warnings, meta: got.envelope.meta ?? null,
                 digestVerified: got.digestVerified,
                 digestUnverifiedReason: got.digestUnverifiedReason,
+                run: {
+                    ...computationRunFromEnvelope('structure.field.compute', got.envelope),
+                    provenance: {
+                        ...(got.envelope.meta?.provenance || {}),
+                        artifact_digest: got.digestVerified ? 'verified'
+                            : got.digestUnverifiedReason || 'not verified',
+                    },
+                },
             };
             const entry = { cube: got.cube, view };
             cubeCache.set(key, entry);
@@ -539,6 +571,9 @@ async function fetchField(kind: FieldKind, store = false,
                     bucket);
             }
             if (controller.signal.aborted) {
+                if (!timedOut) {
+                    throw new FieldRefusal('Cancelled by user.', 'cancelled');
+                }
                 throw new FieldRefusal(
                     `cancelled after ${budget * 2 + 20} s — the daemon should have `
                     + `stopped itself at ${budget} s, so it is over its own bound`,
@@ -558,7 +593,11 @@ async function fetchField(kind: FieldKind, store = false,
                 e instanceof Error ? e.message : String(e), 'network');
         } finally {
             clearTimeout(timer);
-            if (inFlight === controller) inFlight = null;
+            if (inFlight === controller) {
+                inFlight = null;
+                inFlightJobId = null;
+                inFlightCommand = null;
+            }
             pendingFetch.delete(key);
         }
     })();
@@ -569,8 +608,21 @@ async function fetchField(kind: FieldKind, store = false,
 /** Abandon whatever is in flight. Used by the Cancel control and by any change
  * that makes the answer worthless before it arrives. */
 function abortInFlight() {
+    const jobId = inFlightJobId;
+    const command = inFlightCommand;
+    if (jobId) {
+        void dirac.execute('job.cancel', { job_ref: { kind: 'job', id: jobId } });
+    }
+    if (command) {
+        renderComputationRun('field-run-record',
+            failedComputationRun(command, jobId
+                ? `Cancellation requested for durable Job ${jobId}`
+                : 'Cancelled before a durable Job was accepted.', 'cancelled'));
+    }
     inFlight?.abort();
     inFlight = null;
+    inFlightJobId = null;
+    inFlightCommand = null;
     // A promise from the OLD molecule left in this map is not merely stale: a
     // request for the NEW molecule with the same kind|basis key joins it,
     // reads `molfile !== requestMolfile`, resolves null, and the panel reports
@@ -605,7 +657,7 @@ async function prefetchAll() {
     // deleted it and substituted a falsehood.
     const failed: { label: string, why: string }[] = [];
     for (const kind of kinds) {
-        if (molfile !== startedFor) return;   // ligand changed mid-prefetch
+        if (molfile !== startedFor) return; // ligand changed mid-prefetch
         setPrefetchNote(`Precomputing fields ${done}/${kinds.length} — ${Kinds[kind].label}…`);
         try {
             await fetchField(kind);
@@ -878,11 +930,16 @@ export function buildMetaDisplay(view: FieldView | null): { rows: MetaRow[], cav
 function renderMeta(view: FieldView | null) {
     const el = byId('field-meta');
     if (!el) return;
-    if (!view) { el.innerHTML = ''; return; }
+    if (!view) {
+        el.innerHTML = '';
+        renderComputationRun('field-run-record', null);
+        return;
+    }
     const { rows, caveats } = buildMetaDisplay(view);
     el.innerHTML = rows.map(({ label, value }) =>
         `<div class="field-meta-row"><span>${label}</span><span>${value}</span></div>`).join('')
         + caveats.map(c => `<div class="field-caveat">${escapeHtml(c)}</div>`).join('');
+    renderComputationRun('field-run-record', view.run ?? null);
 }
 
 function reprParams(kind: FieldKind, sign: 1 | -1, shell: number) {
@@ -1058,6 +1115,14 @@ async function requestPocketField() {
     setButtonsEnabled();
     setStatus(`Pocket field — ${built.sources.length} shell atoms as source, `
         + `sampled in the ligand's box…`, 'busy');
+    renderComputationRun('field-run-record', {
+        command: 'fields.region.mep', phase: 'submitting', executor: 'service',
+        artifacts: [], provenance: { source_atoms: built.sources.length },
+        note: 'Pocket sources define the field; the ligand defines only the sampling frame.',
+    });
+    const controller = new AbortController();
+    inFlight = controller;
+    inFlightCommand = 'fields.region.mep';
     try {
         // GROW THE FRAME UNTIL THE CONTOUR CLOSES. The ligand path does this
         // in the backend; here it cannot, because the frame belongs to the
@@ -1086,7 +1151,7 @@ async function requestPocketField() {
                     return { ...rest, xyz: [x, y, z] };
                 }),
                 frame: grown.frame,
-            }, { inlineMax: 0 });
+            }, { inlineMax: 0, signal: controller.signal });
             if (!env.ok) break;
             // The box-growing loop reads the CONTRACT-DECLARED flag now, not a key that
             // happened to be in an ungoverned dict.
@@ -1096,6 +1161,9 @@ async function requestPocketField() {
             const e = env?.error;
             setStatus(e ? `${e.user_message || e.message}${e.caller_action ? ' — ' + e.caller_action : ''}`
                         : 'the pocket field could not be computed', 'error');
+            renderComputationRun('field-run-record', env
+                ? computationRunFromEnvelope('fields.region.mep', env)
+                : failedComputationRun('fields.region.mep', 'No response envelope'));
             return;
         }
         const ref = (env.artifacts || [])[0];
@@ -1110,6 +1178,14 @@ async function requestPocketField() {
             meta: env.meta ?? null,
             digestVerified: got.verified,
             digestUnverifiedReason: got.unverifiedReason,
+            run: {
+                ...computationRunFromEnvelope('fields.region.mep', env),
+                provenance: {
+                    ...(env.meta?.provenance || {}),
+                    artifact_digest: got.verified ? 'verified'
+                        : got.unverifiedReason || 'not verified',
+                },
+            },
         };
         await renderCube(got.text(), 'pocket_mep', pview);
         renderMeta(pview);
@@ -1134,8 +1210,17 @@ async function requestPocketField() {
         setStatus(`Pocket map from ${sourceNote}, net charge ${model.net_charge} · `
             + `${chargeModelNote} · frame +${framePad} Å around the ligand.`, 'ok');
     } catch (e) {
+        if (controller.signal.aborted) {
+            setStatus('Pocket field cancelled.', 'idle');
+            return;
+        }
         setStatus(`Backend unreachable — ${e instanceof Error ? e.message : String(e)}`, 'error');
+        renderComputationRun('field-run-record', failedComputationRun('fields.region.mep', e));
     } finally {
+        if (inFlight === controller) {
+            inFlight = null;
+            inFlightCommand = null;
+        }
         busy = false;
         setButtonsEnabled();
     }
@@ -1176,8 +1261,12 @@ async function requestField(kind: FieldKind, budget = budgetFor(kind)) {
         ? `Solving ${spec.label} — pyscf SCF on ${ligandLabel ?? 'ligand'}… `
           + `(gives up at ${budget} s · Cancel to stop now)`
         : `Computing ${spec.label}…`, 'busy');
+    renderComputationRun('field-run-record', {
+        command: 'structure.field.compute', phase: 'submitting', executor: 'service',
+        artifacts: [], provenance: { field_kind: kind, basis: spec.quantum ? currentBasis() : 'not applicable' },
+    });
     try {
-        const entry = await fetchField(kind, false, budget);
+        const entry = await fetchField(kind, false, budget, true);
         if (entry === null || molfile !== requestMolfile) {
             setStatus('Ligand changed while computing — stale field discarded.', 'idle');
             return;
@@ -1192,6 +1281,16 @@ async function requestField(kind: FieldKind, budget = budgetFor(kind)) {
         const reason = e instanceof FieldRefusal ? e.reason : 'internal';
         const msg = e instanceof Error ? e.message : String(e);
         renderMeta(null);
+        if (reason === 'cancelled') {
+            renderComputationRun('field-run-record',
+                failedComputationRun('structure.field.compute', msg, 'cancelled'));
+            setStatus(msg, 'idle');
+            return;
+        }
+        const code = reason === 'budget' ? 'BUDGET'
+            : reason === 'unsupported' ? 'UNSUPPORTED' : 'INTERNAL';
+        renderComputationRun('field-run-record', computationRunFromEnvelope(
+            'structure.field.compute', { ok: false, error: { code, message: msg } }));
         if (reason === 'network') {
             setStatus(`Backend unreachable — start it with: `
                 + `backend/env/bin/python backend/field_server.py (${msg})`, 'error');
@@ -1299,8 +1398,8 @@ export function initFieldWellsPanel(p: PluginContext) {
         abortInFlight();
         busy = false;
         setButtonsEnabled();
-        setStatus('Cancelled. The daemon stops at its own deadline; '
-            + 'nothing is left running.', 'idle');
+        setStatus('Cancellation requested. The durable Job records the request; '
+            + 'native work stops at cooperative checkpoints.', 'idle');
     });
     // Changing basis invalidates the quantum entries only; classical fields
     // have no basis. Cheapest correct move: refetch on demand.
@@ -1340,7 +1439,7 @@ export function initFieldWellsPanel(p: PluginContext) {
 export function invalidateFieldsForGeometry(nextMolfile: string | null) {
     molfile = nextMolfile;
     abortInFlight();
-    cubeCache.clear();          // every entry was keyed to the old coordinates
+    cubeCache.clear(); // every entry was keyed to the old coordinates
 
     if (!activeKind) return;
     const spec = Kinds[activeKind];
