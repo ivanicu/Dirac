@@ -46,7 +46,7 @@ run_gate() {
 }
 
 # ---- gate selection -------------------------------------------------------
-ALL=(tsc build palette css migrations docs contracts physics commits portability layering)
+ALL=(tsc build palette css migrations docs contracts physics commits portability layering golden)
 if [ "$#" -eq 0 ]; then
     WANT=("${ALL[@]}")
 else
@@ -118,6 +118,19 @@ wanted docs    && run_gate 'gate-6-docs-facts'  node scripts/check_docs_facts.mj
 # violations that exist today, and three report N/A because their subject (SDK,
 # CLI, MCP) does not exist yet — deliberately not counted as passing, since a law
 # that passes for lack of a subject reads exactly like one being obeyed.
+# Gate 12 · the v1 compatibility surface. ADR-005 turns v1 into a codec over v2,
+# and that is only safe if v1's observable behaviour is pinned FIRST — from the
+# running service, not from a reading of the handler that is about to change.
+# SKIPPED, loudly, without a daemon: a golden comparison that cannot reach the
+# service must not report "unchanged".
+if wanted golden; then
+    if curl -s --max-time 3 http://127.0.0.1:8901/health >/dev/null 2>&1; then
+        run_gate 'gate-12-v1-golden' backend/env/bin/python scripts/capture_v1_golden.py
+    else
+        printf '%s\n' "${YEL:-}SKIP${OFF} gate-12-v1-golden (no daemon on 8901 — UNVERIFIED, not clean)"
+    fi
+fi
+
 if wanted layering; then
     run_gate 'gate-11-layering' python3 scripts/check_layering.py
 fi
