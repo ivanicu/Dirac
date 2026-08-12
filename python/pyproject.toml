@@ -18,6 +18,11 @@ local = ["rdkit", "pyscf", "numpy", "psycopg[binary]", "jsonschema"]
 
 [project.scripts]
 dirac = "dirac.cli:main"
+# The MCP server is an ENTRY POINT of the same package, not a separate program the host
+# has to locate. So a host config is `command: dirac-mcp` with no path, and — the point —
+# it shares one installed copy of the SDK with the CLI. Two installs could drift, and the
+# agent-facing one would be the one nobody noticed.
+dirac-mcp = "dirac.mcp:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

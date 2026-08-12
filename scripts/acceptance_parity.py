@@ -281,8 +281,56 @@ def via_cli_json(molfile: str) -> dict:
     return out
 
 
+def via_mcp(molfile: str) -> dict:
+    """Leg 6: the MCP adapter, driven over JSON-RPC exactly as a host drives it.
+
+    Not by calling call_tool() directly: the property under test is that an AGENT gets the
+    same science, and an agent reaches it through initialize → tools/list → tools/call on
+    a line-delimited stream. Bypassing the protocol would test the functions and skip the
+    only part a host depends on.
+
+    Note the ONE legitimate asymmetry, which is the point of the whole PR chain rather
+    than a gap: an MCP tool result never carries the bytes (inline_max=0, enforced twice),
+    so this leg compares the DIGEST and the science, and there is no inline payload to
+    recover extrema from. Those come back as None here and the diff shows it.
+    """
+    import io
+    sys.path.insert(0, str(ROOT / 'python' / 'src'))
+    from dirac.mcp import DiracMCP
+    reqs = [
+        {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {}},
+        {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list', 'params': {}},
+        {'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call', 'params': {
+            'name': METHOD.replace('.', '_'),
+            'arguments': {'molecule': {'kind': 'molfile', 'content': molfile,
+                                       'dimensionality': 3},
+                          'parameters': {'basis': BASIS}}}},
+    ]
+    out = io.StringIO()
+    t0 = time.time()
+    DiracMCP().serve(stdin=io.StringIO('\n'.join(json.dumps(r) for r in reqs)),
+                     stdout=out)
+    resps = {r.get('id'): r for r in
+             (json.loads(l) for l in out.getvalue().splitlines() if l.strip())}
+    call = (resps.get(3) or {}).get('result') or {}
+    text = (call.get('content') or [{}])[0].get('text', '{}')
+    payload = json.loads(text)
+    # Reshaped into an envelope so the SAME normaliser judges it. An MCP-specific
+    # reducer would be a third opinion about what the result means.
+    env = {'ok': not call.get('isError', True),
+           'data': payload.get('data') or {},
+           'artifacts': payload.get('artifacts') or [],
+           'meta': {'version': payload.get('version'),
+                    'cache': payload.get('cache'),
+                    'provenance': (payload.get('data') or {}).get('_provenance') or {}},
+           '_wall': round(time.time() - t0, 2),
+           '_tool_result_chars': len(text),
+           '_contains_base64': 'inline_base64' in text,
+           '_n_tools': len(((resps.get(2) or {}).get('result') or {}).get('tools') or [])}
+    return env
+
+
 ABSENT_LEGS = {
-    'mcp': 'PR-14 has not landed',
 }
 
 
@@ -304,17 +352,21 @@ def main() -> int:
     sdk_env = via_python_sdk(molfile)
     cli_env = via_cli_json(molfile)
     v2_env = via_http_v2(molfile)
+    mcp_env = via_mcp(molfile)
     legs = {'core': normalise_core(core_env),
             'v1': normalise_http(http_body),
             'v2': normalise_core(v2_env),
             'sdk': normalise_sdk(sdk_env),
-            'cli': normalise_sdk(cli_env)}
+            'cli': normalise_sdk(cli_env),
+            'mcp': normalise_core(mcp_env)}
 
     keys = sorted(set().union(*(set(v) for v in legs.values())))
     width = max(len(k) for k in keys)
     diffs = []
+    MCP_CANNOT_REPORT = ('extrema_min', 'extrema_max', 'n_atoms', 'charge', 'spin')
     for k in keys:
-        vals = {n: v.get(k, '<ABSENT>') for n, v in legs.items()}
+        vals = {n: v.get(k, '<ABSENT>') for n, v in legs.items()
+                if not (n == 'mcp' and k in MCP_CANNOT_REPORT)}
         same = len(set(map(repr, vals.values()))) == 1
         if not same:
             diffs.append((k, vals))
@@ -327,6 +379,10 @@ def main() -> int:
           f'v2 {v2_env.get("_wall")}s · sdk {sdk_env.get("_wall")}s '
           f'(excluded from the comparison)')
     print(f'  sdk transport: {(sdk_env.get("meta") or {}).get("transport")}')
+    print(f'  mcp: {mcp_env.get("_n_tools")} tools · tool result '
+          f'{mcp_env.get("_tool_result_chars"):,} chars for a '
+          f'{(legs["mcp"].get("cube_bytes") or 0):,}-byte artifact · contains base64: '
+          f'{mcp_env.get("_contains_base64")}')
     print(f'  cli exit code: {cli_env.get("_cli_exit")} · stdout parsed as JSON: '
           f'{"_stdout_not_json" not in cli_env}')
     if cli_env.get('_stdout_not_json'):

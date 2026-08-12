@@ -211,14 +211,41 @@ def evaluate() -> list[dict]:
                            'must not read as satisfied before there is anything to '
                            'satisfy it'))
         else:
-            src = mcp.read_text(encoding='utf-8')
-            spawns = [t for t in ('subprocess', 'Popen', 'os.system', 'shutil.which')
-                      if t in src]
+            # PARSED, not grepped. Written as a substring scan first and it FAILED the
+            # file immediately — on the docstring that explains the law, which names
+            # `subprocess` and `Popen` in prose. A text scan counts MENTIONS as USES, and
+            # the better the documentation the noisier the grep: the one file most likely
+            # to explain why spawning is forbidden is the one a substring rule convicts.
+            #
+            # PROXY LEDGER. PROPERTY: this module never starts a process. PROXY: imports
+            # of process-spawning modules plus calls to their known entry points, from the
+            # AST. IMPLICATION: proxy ⇒ property fails only for exotic dynamic dispatch
+            # (`__import__(''.join(...))`); property ⇒ proxy holds for every ordinary
+            # spelling. SAFE SIDE: a hit is a real import or call, so FAIL is sound; a
+            # clean parse is PASS with the dynamic-dispatch caveat recorded here.
+            spawns = sorted(imports_of(mcp) & {'subprocess', 'multiprocessing', 'pty'})
+            try:
+                tree = ast.parse(mcp.read_text(encoding='utf-8'))
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Call):
+                        f = node.func
+                        dotted = ''
+                        if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
+                            dotted = f'{f.value.id}.{f.attr}'
+                        elif isinstance(f, ast.Name):
+                            dotted = f.id
+                        if dotted in ('os.system', 'os.popen', 'os.execv', 'os.spawnv',
+                                      'subprocess.run', 'subprocess.Popen',
+                                      'shutil.which', 'Popen'):
+                            spawns.append(f'call {dotted}()')
+            except SyntaxError as e:
+                spawns.append(f'unparseable: {e}')
             out.append(law('MCP does not spawn the CLI',
                            'PASS' if not spawns else 'FAIL',
-                           'calls the SDK in-process' if not spawns
-                           else f'contains {spawns} — `MCP → spawn CLI → parse stdout` '
-                                f'is the exact shape the audit rejected'))
+                           'no process-spawning import or call (AST, not a text scan)'
+                           if not spawns
+                           else f'{spawns} — `MCP → spawn CLI → parse stdout` is the '
+                                f'exact shape the audit rejected'))
     return out
 
 
