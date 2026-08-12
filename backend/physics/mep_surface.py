@@ -66,7 +66,7 @@ DEFAULT_BASIS = 'def2-svp'
 # A single power law still cannot do better than ~3×, because iteration COUNT
 # depends on how hard the molecule is to converge — aspirin at nao 222 costs
 # nearly as much as naproxen at 308. This is an order-of-magnitude screen and
-# nothing more; the caller's timeout is the real protection.
+# nothing more; the shared in-process deadline is the real protection.
 COST_COEFFICIENT = 1.0e-4
 COST_EXPONENT = 2.12
 COST_SAFETY = 3.0
@@ -223,11 +223,18 @@ class _Field:
         self.dm = dm
         self.nao = mol.nao
 
-    def rho(self, pts_ang: np.ndarray) -> np.ndarray:
+    def rho(self, pts_ang: np.ndarray, *, deadline: float | None = None,
+            max_seconds: float = DEFAULT_MAX_SECONDS,
+            label: str = 'surface/mep') -> np.ndarray:
+        _check_deadline(deadline, max_seconds, label, 'density sampling')
         p = np.atleast_2d(np.asarray(pts_ang, float)) / BOHR
-        return dft.numint.eval_rho(self.mol, dft.numint.eval_ao(self.mol, p), self.dm)
+        out = dft.numint.eval_rho(self.mol, dft.numint.eval_ao(self.mol, p), self.dm)
+        _check_deadline(deadline, max_seconds, label, 'density sampling')
+        return out
 
-    def mep(self, pts_ang: np.ndarray) -> np.ndarray:
+    def mep(self, pts_ang: np.ndarray, *, deadline: float | None = None,
+            max_seconds: float = DEFAULT_MAX_SECONDS,
+            label: str = 'surface/mep') -> np.ndarray:
         """Electrostatic potential in kcal/mol per unit charge.
 
         Chunked because `int1e_grids` materialises an (npoints, nao, nao)
@@ -238,6 +245,7 @@ class _Field:
         chunk = max(1, int(2.0e8 / max(self.nao * self.nao * 8, 1)))
         out = np.empty(len(p))
         for start in range(0, len(p), chunk):
+            _check_deadline(deadline, max_seconds, label, 'potential evaluation')
             block = p[start:start + chunk]
             ints = self.mol.intor('int1e_grids', grids=block)
             v = -np.einsum('pij,ij->p', ints, self.dm)          # electrons
@@ -245,11 +253,15 @@ class _Field:
                 v += self.mol.atom_charge(i) / np.linalg.norm(
                     block - self.mol.atom_coord(i), axis=1)
             out[start:start + chunk] = v
+        _check_deadline(deadline, max_seconds, label, 'potential evaluation')
         return out * HARTREE_KCAL
 
 
 def _outer_isosurface_points(field: _Field, centers: np.ndarray,
-                             isovalue: float, per_atom: int) -> np.ndarray:
+                             isovalue: float, per_atom: int, *,
+                             deadline: float | None = None,
+                             max_seconds: float = DEFAULT_MAX_SECONDS,
+                             label: str = 'surface/mep') -> np.ndarray:
     """Sample the OUTER 0.001 a.u. envelope.
 
     For each atom and each direction, the ray is walked INWARD from outside
@@ -263,6 +275,7 @@ def _outer_isosurface_points(field: _Field, centers: np.ndarray,
 
     found = []
     for center in centers:
+        _check_deadline(deadline, max_seconds, label, 'surface search')
         starts = center + directions * span
         # Coarse inward march, vectorised over directions.
         t = np.full(len(directions), span)
@@ -270,8 +283,10 @@ def _outer_isosurface_points(field: _Field, centers: np.ndarray,
         t_hit = np.zeros(len(directions))
         step = 0.25
         while t.max() > 0.3:
+            _check_deadline(deadline, max_seconds, label, 'surface search')
             probe = center + directions * t[:, None]
-            inside = field.rho(probe) > isovalue
+            inside = field.rho(probe, deadline=deadline,
+                               max_seconds=max_seconds, label=label) > isovalue
             newly = inside & ~hit
             t_hit[newly] = t[newly]
             hit |= newly
@@ -285,8 +300,10 @@ def _outer_isosurface_points(field: _Field, centers: np.ndarray,
         hi = lo + step                        # outside
         d = directions[hit]
         for _ in range(18):
+            _check_deadline(deadline, max_seconds, label, 'surface refinement')
             mid = 0.5 * (lo + hi)
-            inside = field.rho(center + d * mid[:, None]) > isovalue
+            inside = field.rho(center + d * mid[:, None], deadline=deadline,
+                               max_seconds=max_seconds, label=label) > isovalue
             lo = np.where(inside, mid, lo)
             hi = np.where(inside, hi, mid)
         found.append(center + d * (0.5 * (lo + hi))[:, None])
@@ -369,7 +386,24 @@ def _classify_sigma_hole(rdmol, atom_positions: np.ndarray, point: np.ndarray,
 
 
 class PhysicsBudgetExceeded(Exception):
-    """Wall-clock budget exhausted inside the SCF loop."""
+    """Wall-clock budget exhausted in SCF or post-SCF surface construction."""
+
+
+def _check_deadline(deadline: float | None, max_seconds: float,
+                    label: str, stage: str) -> None:
+    """One wall-clock budget across SCF *and* post-SCF surface construction.
+
+    The original watchdog covered only SCF cycles. A 1CBS surface spent 19.75 s
+    in SCF and another 161 s finding/evaluating the surface, so a 90 s request
+    completed at 181.167 s while every SCF guard was green. The contract names
+    a wall-clock budget, not an SCF-only budget; every expensive stage therefore
+    reaches this same deadline.
+    """
+    if deadline is not None and time.time() >= deadline:
+        raise PhysicsBudgetExceeded(
+            f'{label} exceeded its {max_seconds:.0f} s wall-clock budget during '
+            f'{stage}. Raise "max_seconds", pick a smaller basis, reduce surface '
+            f'sampling, or trim the ligand.')
 
 
 def _install_watchdog(mf, deadline: float, max_seconds: float, label: str):
@@ -390,11 +424,8 @@ def _install_watchdog(mf, deadline: float, max_seconds: float, label: str):
 
     def _cb(envs):
         cycles[0] += 1
-        if time.time() > deadline:
-            raise PhysicsBudgetExceeded(
-                f'{label} SCF exceeded its {max_seconds:.0f} s budget after '
-                f'{cycles[0]} cycles. Raise "max_seconds", pick a smaller basis, '
-                f'or trim the ligand.')
+        _check_deadline(deadline, max_seconds, label,
+                        f'SCF cycle {cycles[0]}')
     mf.callback = _cb
     return cycles
 
@@ -413,6 +444,8 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
     """
     max_seconds = clamp_budget(max_seconds, DEFAULT_MAX_SECONDS)
     t0 = time.time()
+    deadline = t0 + max_seconds
+    _check_deadline(deadline, max_seconds, 'surface/mep', 'preflight')
     rdmol, atoms, charge, spin = _prepare(molblock)
 
     mol = gto.M(atom=[(s, c) for s, c in atoms], unit='Angstrom',
@@ -460,8 +493,9 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
     else:
         mf = scf.RHF(mol) if spin == 0 else scf.UHF(mol)
     mf.max_cycle = 120
-    _install_watchdog(mf, time.time() + max_seconds, max_seconds, 'surface/mep')
+    _install_watchdog(mf, deadline, max_seconds, 'surface/mep')
     energy = mf.kernel()
+    _check_deadline(deadline, max_seconds, 'surface/mep', 'SCF completion')
     if not mf.converged:
         # Same rule as the fields backend: a field from an unconverged SCF is
         # decoration, and V_S,max read off it is a number with no referent.
@@ -475,8 +509,11 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
     centers = np.array([c for _, c in atoms])
 
     t1 = time.time()
-    points = _outer_isosurface_points(field, centers, isovalue, points_per_atom)
-    values = field.mep(points)
+    points = _outer_isosurface_points(
+        field, centers, isovalue, points_per_atom, deadline=deadline,
+        max_seconds=max_seconds, label='surface/mep')
+    values = field.mep(points, deadline=deadline, max_seconds=max_seconds,
+                       label='surface/mep')
     t_surface = time.time() - t1
 
     from scipy.spatial import cKDTree
@@ -516,6 +553,8 @@ def compute_surface_mep(molblock: str, basis: str = DEFAULT_BASIS,
                     sigma['positive_cap'] = bool(values[i] > 0)
                     entry['sigma_hole'] = sigma
             extrema.append(entry)
+
+    _check_deadline(deadline, max_seconds, 'surface/mep', 'extrema analysis')
 
     sigma_holes = [e for e in extrema
                    if e.get('sigma_hole', {}).get('is_sigma_hole')]
@@ -567,6 +606,9 @@ def mep_at_points(molblock: str, points_ang, basis: str = DEFAULT_BASIS,
     duplicate, and the physics belongs where the wavefunction is.
     """
     max_seconds = clamp_budget(max_seconds, DEFAULT_MAX_SECONDS)
+    t0 = time.time()
+    deadline = t0 + max_seconds
+    _check_deadline(deadline, max_seconds, 'surface/mep_at', 'preflight')
     _, atoms, charge, spin = _prepare(molblock)
     mol = gto.M(atom=[(s, c) for s, c in atoms], unit='Angstrom',
                 basis=basis, ecp=_ecp_for(atoms, basis) or None,
@@ -576,11 +618,14 @@ def mep_at_points(molblock: str, points_ang, basis: str = DEFAULT_BASIS,
     # /surface/mep_at had NO cost gate and NO budget of any kind, while the
     # module README claimed requests are refused before running. That claim was
     # true of /surface/mep only.
-    _install_watchdog(mf, time.time() + max_seconds, max_seconds, 'surface/mep_at')
+    _install_watchdog(mf, deadline, max_seconds, 'surface/mep_at')
     energy = mf.kernel()
+    _check_deadline(deadline, max_seconds, 'surface/mep_at', 'SCF completion')
     if not mf.converged:
         raise ValueError(f'SCF did not converge (E={energy:.6f} Ha, basis={basis})')
-    values = _Field(mol, mf.make_rdm1()).mep(np.asarray(points_ang, float))
+    values = _Field(mol, mf.make_rdm1()).mep(
+        np.asarray(points_ang, float), deadline=deadline,
+        max_seconds=max_seconds, label='surface/mep_at')
     return values.astype(np.float32), {
         'method': 'RHF' if spin == 0 else 'UHF', 'basis': basis,
         'scf_energy_ha': float(energy), 'n_points': int(len(values)),

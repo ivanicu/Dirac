@@ -1,9 +1,9 @@
 {
   "schema": "https://dirac.local/schemas/software-architecture-twin/v2",
   "title": "Dirac Architecture Optimization Twin",
-  "generated_at": "2026-08-12T22:35:20.087405+00:00",
-  "source_base_commit": "9d38ca434c9404843640ed5d7a4cb5d0a315d135",
-  "source_fingerprint_sha256": "1cac62eded2068e99e0e88e03f37adf88f9d472e25eba7b0da833b47c2544f72",
+  "generated_at": "2026-08-12T22:41:11.802663+00:00",
+  "source_base_commit": "a54375d29439cb64b0289f02654a0a22ca0a075c",
+  "source_fingerprint_sha256": "3215fa41fa306c13b81a03d95359512482c31624e11dc9d19310e8a1632d68cc",
   "scope": {
     "included": [
       "all first-party Python, JavaScript, and Shell functions in backend, SDK, tooling, gates, and operations",
@@ -14,17 +14,17 @@
     "function_definition": "AST-declared functions, async functions, constructors, accessors, methods, arrows, function expressions, and named Shell functions.",
     "discovery_policy": "scripts/digital_twin_scope.json",
     "automatic_discovery": true,
-    "discovered_files": 327
+    "discovered_files": 328
   },
   "summary": {
-    "nodes": 3747,
-    "edges": 6513,
+    "nodes": 3754,
+    "edges": 6524,
     "flows": 6,
-    "source_files": 328,
+    "source_files": 329,
     "by_type": {
       "actor": 2,
       "artifact-role": 5,
-      "class": 88,
+      "class": 89,
       "command": 18,
       "contract": 1,
       "db-function": 11,
@@ -32,10 +32,10 @@
       "db-type": 35,
       "db-view": 13,
       "external-system": 4,
-      "function": 2104,
-      "method": 555,
+      "function": 2105,
+      "method": 558,
       "migration": 20,
-      "module": 221,
+      "module": 222,
       "object-kind": 36,
       "planned-command": 40,
       "planned-read-model": 30,
@@ -44,7 +44,7 @@
       "relation-kind": 24,
       "scientific-method": 12,
       "service": 3,
-      "source-file": 327,
+      "source-file": 328,
       "store": 5,
       "surface": 5,
       "system": 8,
@@ -56,16 +56,16 @@
     "typescript_diagnostics": []
   },
   "runtime_snapshot": {
-    "captured_at": "2026-08-12T22:35:19.919006+00:00",
+    "captured_at": "2026-08-12T22:41:11.667227+00:00",
     "source": "best-effort live probes",
     "refresh_policy_seconds": 60,
     "freshness_state": "fresh-at-generation",
-    "git_commit": "9d38ca434c9404843640ed5d7a4cb5d0a315d135",
+    "git_commit": "a54375d29439cb64b0289f02654a0a22ca0a075c",
     "systemd": [
       "Id=dirac-fields.service",
       "ActiveState=active",
       "SubState=running",
-      "MainPID=1821653",
+      "MainPID=2207008",
       "",
       "Id=dirac-web.service",
       "ActiveState=active",
@@ -91,30 +91,30 @@
       "schemas": 6
     },
     "operational_metrics": {
-      "jobs_total": 1127,
+      "jobs_total": 1128,
       "job_states": {
         "done": 837,
         "cancelled": 29,
-        "failed": 261
+        "failed": 262
       },
       "failure_codes": {
         "UNPARAMETERIZED": 44,
         "UNSUPPORTED": 134,
         "INTERNAL": 34,
-        "BUDGET": 49
+        "BUDGET": 50
       },
       "job_outcomes": {
         "cancelled": 29,
         "operational_failure": 34,
-        "expected_refusal": 227,
+        "expected_refusal": 228,
         "success": 837
       },
       "artifacts": 85,
       "cached_results": 5,
-      "registered_method_rows": 49,
+      "registered_method_rows": 51,
       "attention_items": 34,
       "approval_waits": 0,
-      "command_traces": 1148,
+      "command_traces": 1150,
       "observed_commands": 13
     },
     "command_observations": [
@@ -181,17 +181,17 @@
       {
         "command_id": "job.wait",
         "command_version": 1,
-        "invocation_count": 248,
-        "success_count": 248,
+        "invocation_count": 249,
+        "success_count": 249,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.922123,
-        "p95_dispatch_seconds": 0.222506,
+        "mean_dispatch_seconds": 0.922809,
+        "p95_dispatch_seconds": 0.22334,
         "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-        "last_observed_at": "2026-08-12T15:29:57.403528-07:00"
+        "last_observed_at": "2026-08-12T15:40:32.955312-07:00"
       },
       {
         "command_id": "method.list",
@@ -241,17 +241,17 @@
       {
         "command_id": "structure.surface.compute",
         "command_version": 1,
-        "invocation_count": 1,
+        "invocation_count": 2,
         "success_count": 1,
-        "expected_refusal_count": 0,
+        "expected_refusal_count": 1,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "job_count": 1,
+        "job_count": 2,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.008111,
-        "p95_dispatch_seconds": 0.008111,
+        "mean_dispatch_seconds": 0.016082,
+        "p95_dispatch_seconds": 0.023256,
         "first_observed_at": "2026-08-12T15:26:56.15788-07:00",
-        "last_observed_at": "2026-08-12T15:26:56.165992-07:00"
+        "last_observed_at": "2026-08-12T15:40:31.857851-07:00"
       },
       {
         "command_id": "structure.torsion.analyze",
@@ -353,12 +353,12 @@
       },
       {
         "method_id": "surface.mep",
-        "invocation_count": 1,
+        "invocation_count": 2,
         "success_count": 1,
-        "expected_refusal_count": 0,
+        "expected_refusal_count": 1,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "mean_dispatch_seconds": 0.008111
+        "mean_dispatch_seconds": 0.016082
       },
       {
         "method_id": "torsion.strain",
@@ -1020,7 +1020,7 @@
         "id": "source-auto-sync",
         "status": "pass",
         "label": "Architecture source auto-sync",
-        "value": "327 files",
+        "value": "328 files",
         "why": "The watcher must be active and every discovered first-party file must have an inventory node."
       },
       {
@@ -1048,7 +1048,7 @@
         "id": "dynamic-observation",
         "status": "pass",
         "label": "Node-keyed execution telemetry",
-        "value": "1148 traces · 13/18 commands observed",
+        "value": "1150 traces · 13/18 commands observed",
         "why": "Persistent traces bind real outcomes and latency to command and method nodes."
       },
       {
@@ -1065,7 +1065,7 @@
         "priority": "DONE",
         "kind": "signal-quality",
         "title": "Attention now separates expected refusals from actionable failures",
-        "evidence": "227 historical expected refusals remain in the Job ledger while Attention contains 34 actionable items: 34 operational, 0 scientific and 0 approval waits.",
+        "evidence": "228 historical expected refusals remain in the Job ledger while Attention contains 34 actionable items: 34 operational, 0 scientific and 0 approval waits.",
         "impact": "Operators see a ranked intervention queue without losing scientific refusal history, and every new Job carries actor, command and request identity.",
         "action": "Keep app.classify_job_outcome and app.v_attention under migration and contract gates.",
         "nodes": [
@@ -1079,7 +1079,7 @@
         "priority": "DONE",
         "kind": "twin-fidelity",
         "title": "Observed command traces are bound to architecture nodes",
-        "evidence": "1148 durable traces currently cover 13/18 commands; linked Jobs resolve to their eventual terminal outcome.",
+        "evidence": "1150 durable traces currently cover 13/18 commands; linked Jobs resolve to their eventual terminal outcome.",
         "impact": "Command and method inspectors now expose empirical traffic, latency, cache and failure-path data.",
         "action": "Let coverage accumulate from real use; do not manufacture traffic merely to turn coverage green.",
         "nodes": [
@@ -1408,6 +1408,18 @@
         "change_risk_score": 38
       },
       {
+        "node": "function:py:backend/physics/mep_surface.py:433:compute_surface_mep",
+        "name": "compute_surface_mep",
+        "path": "backend/physics/mep_surface.py",
+        "line": 433,
+        "layer": "scientific-compute",
+        "lines": 165,
+        "fan_in": 0,
+        "fan_out": 9,
+        "boundary_calls": 0,
+        "change_risk_score": 44
+      },
+      {
         "node": "function:py:backend/field_server.py:1426:run_scf",
         "name": "run_scf",
         "path": "backend/field_server.py",
@@ -1430,18 +1442,6 @@
         "fan_out": 14,
         "boundary_calls": 4,
         "change_risk_score": 100
-      },
-      {
-        "node": "function:py:backend/physics/mep_surface.py:402:compute_surface_mep",
-        "name": "compute_surface_mep",
-        "path": "backend/physics/mep_surface.py",
-        "line": 402,
-        "layer": "scientific-compute",
-        "lines": 157,
-        "fan_in": 0,
-        "fan_out": 8,
-        "boundary_calls": 0,
-        "change_risk_score": 42
       },
       {
         "node": "function:py:backend/invocation.py:321:InvocationService.invoke",
@@ -2300,7 +2300,7 @@
       "language": "python",
       "path": "backend/physics/mep_surface.py",
       "line": 218,
-      "end_line": 248,
+      "end_line": 257,
       "layer": "scientific-compute",
       "qualified_name": "_Field",
       "bases": [],
@@ -2311,14 +2311,14 @@
     {
       "language": "python",
       "path": "backend/physics/mep_surface.py",
-      "line": 371,
-      "end_line": 372,
+      "line": 388,
+      "end_line": 389,
       "layer": "scientific-compute",
       "qualified_name": "PhysicsBudgetExceeded",
       "bases": [
         "Exception"
       ],
-      "id": "class:py:backend/physics/mep_surface.py:371:PhysicsBudgetExceeded",
+      "id": "class:py:backend/physics/mep_surface.py:388:PhysicsBudgetExceeded",
       "type": "class",
       "name": "PhysicsBudgetExceeded"
     },
@@ -2583,6 +2583,20 @@
       "id": "class:py:backend/tests/test_security_pg.py:17:NoCommitConnection",
       "type": "class",
       "name": "NoCommitConnection"
+    },
+    {
+      "language": "python",
+      "path": "backend/tests/test_surface_budget.py",
+      "line": 19,
+      "end_line": 46,
+      "layer": "verification",
+      "qualified_name": "SurfaceBudgetTests",
+      "bases": [
+        "unittest.TestCase"
+      ],
+      "id": "class:py:backend/tests/test_surface_budget.py:19:SurfaceBudgetTests",
+      "type": "class",
+      "name": "SurfaceBudgetTests"
     },
     {
       "language": "python",
@@ -3144,17 +3158,17 @@
       "runtime_observation": {
         "command_id": "job.wait",
         "command_version": 1,
-        "invocation_count": 248,
-        "success_count": 248,
+        "invocation_count": 249,
+        "success_count": 249,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.922123,
-        "p95_dispatch_seconds": 0.222506,
+        "mean_dispatch_seconds": 0.922809,
+        "p95_dispatch_seconds": 0.22334,
         "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-        "last_observed_at": "2026-08-12T15:29:57.403528-07:00"
+        "last_observed_at": "2026-08-12T15:40:32.955312-07:00"
       }
     },
     {
@@ -3374,17 +3388,17 @@
       "runtime_observation": {
         "command_id": "structure.surface.compute",
         "command_version": 1,
-        "invocation_count": 1,
+        "invocation_count": 2,
         "success_count": 1,
-        "expected_refusal_count": 0,
+        "expected_refusal_count": 1,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "job_count": 1,
+        "job_count": 2,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.008111,
-        "p95_dispatch_seconds": 0.008111,
+        "mean_dispatch_seconds": 0.016082,
+        "p95_dispatch_seconds": 0.023256,
         "first_observed_at": "2026-08-12T15:26:56.15788-07:00",
-        "last_observed_at": "2026-08-12T15:26:56.165992-07:00"
+        "last_observed_at": "2026-08-12T15:40:31.857851-07:00"
       }
     },
     {
@@ -5304,8 +5318,8 @@
       "layer": "scientific-compute",
       "path": "backend/physics/README.md",
       "extension": ".md",
-      "bytes": 10780,
-      "sha256": "33ca6d924b486c4e9ae99fd1b56ba8074ce0db8ac2d73d0e160621ce502b7c84",
+      "bytes": 11003,
+      "sha256": "3c5af2c69c04c6dfe416837d55c6152e2fa69701987a455b13eba54d6c9d80e1",
       "generated": false,
       "id": "file:backend/physics/README.md",
       "type": "source-file",
@@ -5370,8 +5384,8 @@
       "layer": "scientific-compute",
       "path": "backend/physics/mep_surface.py",
       "extension": ".py",
-      "bytes": 26979,
-      "sha256": "cc838b8dad17221a3b4c71525f5cb49c25cc58c010f14c34e22d4dd62f7633fa",
+      "bytes": 29559,
+      "sha256": "af556a71a3251f5380d56ab039b3bf30719c73bf6a1c2c102f5a1bc84da3a80a",
       "generated": false,
       "id": "file:backend/physics/mep_surface.py",
       "type": "source-file",
@@ -5662,6 +5676,17 @@
       "id": "file:backend/tests/test_security_pg.py",
       "type": "source-file",
       "name": "test_security_pg.py"
+    },
+    {
+      "layer": "verification",
+      "path": "backend/tests/test_surface_budget.py",
+      "extension": ".py",
+      "bytes": 1839,
+      "sha256": "f675d49f962396e77a0026000317cc3075e513bb239d252275b59cc042fa2252",
+      "generated": false,
+      "id": "file:backend/tests/test_surface_budget.py",
+      "type": "source-file",
+      "name": "test_surface_budget.py"
     },
     {
       "layer": "infrastructure",
@@ -6668,8 +6693,8 @@
       "layer": "tooling",
       "path": "scripts/check_physics_contract.mjs",
       "extension": ".mjs",
-      "bytes": 10276,
-      "sha256": "3e823dde3ead9c1fd1525bb8e7a7a9425c2f082b84c397346a43b7fbc55e4d1d",
+      "bytes": 10579,
+      "sha256": "f047b2becb82d3e4b2805b2c937854998c96643aa3041a300b150800bdb2db36",
       "generated": false,
       "id": "file:scripts/check_physics_contract.mjs",
       "type": "source-file",
@@ -14028,14 +14053,17 @@
       "language": "python",
       "path": "backend/physics/mep_surface.py",
       "line": 226,
-      "end_line": 228,
+      "end_line": 233,
       "layer": "scientific-compute",
       "qualified_name": "_Field.rho",
       "owner": "_Field",
       "async_function": false,
       "parameters": [
         "self",
-        "pts_ang"
+        "pts_ang",
+        "deadline",
+        "max_seconds",
+        "label"
       ],
       "id": "function:py:backend/physics/mep_surface.py:226:_Field.rho",
       "type": "method",
@@ -14044,25 +14072,28 @@
     {
       "language": "python",
       "path": "backend/physics/mep_surface.py",
-      "line": 230,
-      "end_line": 248,
+      "line": 235,
+      "end_line": 257,
       "layer": "scientific-compute",
       "qualified_name": "_Field.mep",
       "owner": "_Field",
       "async_function": false,
       "parameters": [
         "self",
-        "pts_ang"
+        "pts_ang",
+        "deadline",
+        "max_seconds",
+        "label"
       ],
-      "id": "function:py:backend/physics/mep_surface.py:230:_Field.mep",
+      "id": "function:py:backend/physics/mep_surface.py:235:_Field.mep",
       "type": "method",
       "name": "mep"
     },
     {
       "language": "python",
       "path": "backend/physics/mep_surface.py",
-      "line": 251,
-      "end_line": 299,
+      "line": 260,
+      "end_line": 316,
       "layer": "scientific-compute",
       "qualified_name": "_outer_isosurface_points",
       "owner": null,
@@ -14071,17 +14102,20 @@
         "field",
         "centers",
         "isovalue",
-        "per_atom"
+        "per_atom",
+        "deadline",
+        "max_seconds",
+        "label"
       ],
-      "id": "function:py:backend/physics/mep_surface.py:251:_outer_isosurface_points",
+      "id": "function:py:backend/physics/mep_surface.py:260:_outer_isosurface_points",
       "type": "function",
       "name": "_outer_isosurface_points"
     },
     {
       "language": "python",
       "path": "backend/physics/mep_surface.py",
-      "line": 302,
-      "end_line": 342,
+      "line": 319,
+      "end_line": 359,
       "layer": "scientific-compute",
       "qualified_name": "_extrema",
       "owner": null,
@@ -14093,15 +14127,15 @@
         "top",
         "always_keep"
       ],
-      "id": "function:py:backend/physics/mep_surface.py:302:_extrema",
+      "id": "function:py:backend/physics/mep_surface.py:319:_extrema",
       "type": "function",
       "name": "_extrema"
     },
     {
       "language": "python",
       "path": "backend/physics/mep_surface.py",
-      "line": 331,
-      "end_line": 340,
+      "line": 348,
+      "end_line": 357,
       "layer": "scientific-compute",
       "qualified_name": "_extrema._cluster",
       "owner": "_extrema",
@@ -14111,15 +14145,15 @@
         "sign",
         "exempt"
       ],
-      "id": "function:py:backend/physics/mep_surface.py:331:_extrema._cluster",
+      "id": "function:py:backend/physics/mep_surface.py:348:_extrema._cluster",
       "type": "method",
       "name": "_cluster"
     },
     {
       "language": "python",
       "path": "backend/physics/mep_surface.py",
-      "line": 345,
-      "end_line": 367,
+      "line": 362,
+      "end_line": 384,
       "layer": "scientific-compute",
       "qualified_name": "_classify_sigma_hole",
       "owner": null,
@@ -14130,15 +14164,34 @@
         "point",
         "nearest_atom"
       ],
-      "id": "function:py:backend/physics/mep_surface.py:345:_classify_sigma_hole",
+      "id": "function:py:backend/physics/mep_surface.py:362:_classify_sigma_hole",
       "type": "function",
       "name": "_classify_sigma_hole"
     },
     {
       "language": "python",
       "path": "backend/physics/mep_surface.py",
-      "line": 375,
-      "end_line": 399,
+      "line": 392,
+      "end_line": 406,
+      "layer": "scientific-compute",
+      "qualified_name": "_check_deadline",
+      "owner": null,
+      "async_function": false,
+      "parameters": [
+        "deadline",
+        "max_seconds",
+        "label",
+        "stage"
+      ],
+      "id": "function:py:backend/physics/mep_surface.py:392:_check_deadline",
+      "type": "function",
+      "name": "_check_deadline"
+    },
+    {
+      "language": "python",
+      "path": "backend/physics/mep_surface.py",
+      "line": 409,
+      "end_line": 430,
       "layer": "scientific-compute",
       "qualified_name": "_install_watchdog",
       "owner": null,
@@ -14149,15 +14202,15 @@
         "max_seconds",
         "label"
       ],
-      "id": "function:py:backend/physics/mep_surface.py:375:_install_watchdog",
+      "id": "function:py:backend/physics/mep_surface.py:409:_install_watchdog",
       "type": "function",
       "name": "_install_watchdog"
     },
     {
       "language": "python",
       "path": "backend/physics/mep_surface.py",
-      "line": 391,
-      "end_line": 397,
+      "line": 425,
+      "end_line": 428,
       "layer": "scientific-compute",
       "qualified_name": "_install_watchdog._cb",
       "owner": "_install_watchdog",
@@ -14165,15 +14218,15 @@
       "parameters": [
         "envs"
       ],
-      "id": "function:py:backend/physics/mep_surface.py:391:_install_watchdog._cb",
+      "id": "function:py:backend/physics/mep_surface.py:425:_install_watchdog._cb",
       "type": "method",
       "name": "_cb"
     },
     {
       "language": "python",
       "path": "backend/physics/mep_surface.py",
-      "line": 402,
-      "end_line": 558,
+      "line": 433,
+      "end_line": 597,
       "layer": "scientific-compute",
       "qualified_name": "compute_surface_mep",
       "owner": null,
@@ -14187,15 +14240,15 @@
         "xc",
         "use_gpu"
       ],
-      "id": "function:py:backend/physics/mep_surface.py:402:compute_surface_mep",
+      "id": "function:py:backend/physics/mep_surface.py:433:compute_surface_mep",
       "type": "function",
       "name": "compute_surface_mep"
     },
     {
       "language": "python",
       "path": "backend/physics/mep_surface.py",
-      "line": 561,
-      "end_line": 587,
+      "line": 600,
+      "end_line": 632,
       "layer": "scientific-compute",
       "qualified_name": "mep_at_points",
       "owner": null,
@@ -14206,7 +14259,7 @@
         "basis",
         "max_seconds"
       ],
-      "id": "function:py:backend/physics/mep_surface.py:561:mep_at_points",
+      "id": "function:py:backend/physics/mep_surface.py:600:mep_at_points",
       "type": "function",
       "name": "mep_at_points"
     },
@@ -18814,6 +18867,54 @@
       "id": "function:py:backend/tests/test_security_pg.py:29:main",
       "type": "function",
       "name": "main"
+    },
+    {
+      "language": "python",
+      "path": "backend/tests/test_surface_budget.py",
+      "line": 20,
+      "end_line": 26,
+      "layer": "verification",
+      "qualified_name": "SurfaceBudgetTests.test_zero_budget_refuses_before_molecule_preparation",
+      "owner": "SurfaceBudgetTests",
+      "async_function": false,
+      "parameters": [
+        "self"
+      ],
+      "id": "function:py:backend/tests/test_surface_budget.py:20:SurfaceBudgetTests.test_zero_budget_refuses_before_molecule_preparation",
+      "type": "method",
+      "name": "test_zero_budget_refuses_before_molecule_preparation"
+    },
+    {
+      "language": "python",
+      "path": "backend/tests/test_surface_budget.py",
+      "line": 28,
+      "end_line": 34,
+      "layer": "verification",
+      "qualified_name": "SurfaceBudgetTests.test_surface_search_checks_the_same_expired_deadline",
+      "owner": "SurfaceBudgetTests",
+      "async_function": false,
+      "parameters": [
+        "self"
+      ],
+      "id": "function:py:backend/tests/test_surface_budget.py:28:SurfaceBudgetTests.test_surface_search_checks_the_same_expired_deadline",
+      "type": "method",
+      "name": "test_surface_search_checks_the_same_expired_deadline"
+    },
+    {
+      "language": "python",
+      "path": "backend/tests/test_surface_budget.py",
+      "line": 36,
+      "end_line": 46,
+      "layer": "verification",
+      "qualified_name": "SurfaceBudgetTests.test_potential_evaluation_checks_before_integrals",
+      "owner": "SurfaceBudgetTests",
+      "async_function": false,
+      "parameters": [
+        "self"
+      ],
+      "id": "function:py:backend/tests/test_surface_budget.py:36:SurfaceBudgetTests.test_potential_evaluation_checks_before_integrals",
+      "type": "method",
+      "name": "test_potential_evaluation_checks_before_integrals"
     },
     {
       "language": "python",
@@ -27919,11 +28020,11 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 100,
+      "line": 101,
       "column": 1,
-      "end_line": 102,
+      "end_line": 103,
       "end_column": 2,
-      "id": "function:ts:scripts/check_physics_contract.mjs:100:1:reachesScf",
+      "id": "function:ts:scripts/check_physics_contract.mjs:101:1:reachesScf",
       "type": "function",
       "name": "reachesScf"
     },
@@ -27938,11 +28039,11 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 104,
+      "line": 105,
       "column": 1,
-      "end_line": 122,
+      "end_line": 125,
       "end_column": 2,
-      "id": "function:ts:scripts/check_physics_contract.mjs:104:1:auditRoute",
+      "id": "function:ts:scripts/check_physics_contract.mjs:105:1:auditRoute",
       "type": "function",
       "name": "auditRoute"
     },
@@ -27956,11 +28057,11 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 106,
+      "line": 107,
       "column": 39,
-      "end_line": 106,
+      "end_line": 107,
       "end_column": 88,
-      "id": "function:ts:scripts/check_physics_contract.mjs:106:39:<anonymous>",
+      "id": "function:ts:scripts/check_physics_contract.mjs:107:39:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -27974,11 +28075,11 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 117,
+      "line": 118,
       "column": 9,
-      "end_line": 117,
+      "end_line": 118,
       "end_column": 72,
-      "id": "function:ts:scripts/check_physics_contract.mjs:117:9:<anonymous>",
+      "id": "function:ts:scripts/check_physics_contract.mjs:118:9:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -27992,11 +28093,29 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 119,
+      "line": 120,
       "column": 9,
-      "end_line": 119,
+      "end_line": 120,
       "end_column": 77,
-      "id": "function:ts:scripts/check_physics_contract.mjs:119:9:<anonymous>",
+      "id": "function:ts:scripts/check_physics_contract.mjs:120:9:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "javascript",
+      "qualified_name": "<anonymous>",
+      "parameters": [
+        "fn"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "scripts/check_physics_contract.mjs",
+      "layer": "tooling",
+      "line": 122,
+      "column": 9,
+      "end_line": 122,
+      "end_column": 75,
+      "id": "function:ts:scripts/check_physics_contract.mjs:122:9:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -28011,11 +28130,11 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 124,
+      "line": 127,
       "column": 1,
-      "end_line": 128,
+      "end_line": 131,
       "end_column": 2,
-      "id": "function:ts:scripts/check_physics_contract.mjs:124:1:audit",
+      "id": "function:ts:scripts/check_physics_contract.mjs:127:1:audit",
       "type": "function",
       "name": "audit"
     },
@@ -28029,11 +28148,11 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 126,
+      "line": 129,
       "column": 14,
-      "end_line": 126,
+      "end_line": 129,
       "end_column": 45,
-      "id": "function:ts:scripts/check_physics_contract.mjs:126:14:<anonymous>",
+      "id": "function:ts:scripts/check_physics_contract.mjs:129:14:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -28045,11 +28164,11 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 163,
+      "line": 166,
       "column": 1,
-      "end_line": 184,
+      "end_line": 188,
       "end_column": 2,
-      "id": "function:ts:scripts/check_physics_contract.mjs:163:1:selftest",
+      "id": "function:ts:scripts/check_physics_contract.mjs:166:1:selftest",
       "type": "function",
       "name": "selftest"
     },
@@ -28063,29 +28182,11 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 172,
+      "line": 176,
       "column": 27,
-      "end_line": 172,
+      "end_line": 176,
       "end_column": 51,
-      "id": "function:ts:scripts/check_physics_contract.mjs:172:27:<anonymous>",
-      "type": "function",
-      "name": "<anonymous>"
-    },
-    {
-      "language": "javascript",
-      "qualified_name": "<anonymous>",
-      "parameters": [
-        "m"
-      ],
-      "async": false,
-      "exported": false,
-      "path": "scripts/check_physics_contract.mjs",
-      "layer": "tooling",
-      "line": 173,
-      "column": 26,
-      "end_line": 173,
-      "end_column": 60,
-      "id": "function:ts:scripts/check_physics_contract.mjs:173:26:<anonymous>",
+      "id": "function:ts:scripts/check_physics_contract.mjs:176:27:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -28099,11 +28200,11 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 175,
+      "line": 179,
       "column": 48,
-      "end_line": 175,
+      "end_line": 179,
       "end_column": 60,
-      "id": "function:ts:scripts/check_physics_contract.mjs:175:48:<anonymous>",
+      "id": "function:ts:scripts/check_physics_contract.mjs:179:48:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -28117,11 +28218,11 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 208,
+      "line": 212,
       "column": 40,
-      "end_line": 208,
+      "end_line": 212,
       "end_column": 60,
-      "id": "function:ts:scripts/check_physics_contract.mjs:208:40:<anonymous>",
+      "id": "function:ts:scripts/check_physics_contract.mjs:212:40:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -28138,11 +28239,11 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 58,
+      "line": 59,
       "column": 1,
-      "end_line": 65,
+      "end_line": 66,
       "end_column": 2,
-      "id": "function:ts:scripts/check_physics_contract.mjs:58:1:matchBrace",
+      "id": "function:ts:scripts/check_physics_contract.mjs:59:1:matchBrace",
       "type": "function",
       "name": "matchBrace"
     },
@@ -28156,11 +28257,11 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 70,
+      "line": 71,
       "column": 1,
-      "end_line": 83,
+      "end_line": 84,
       "end_column": 2,
-      "id": "function:ts:scripts/check_physics_contract.mjs:70:1:routeBranches",
+      "id": "function:ts:scripts/check_physics_contract.mjs:71:1:routeBranches",
       "type": "function",
       "name": "routeBranches"
     },
@@ -28175,11 +28276,11 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 85,
+      "line": 86,
       "column": 1,
-      "end_line": 91,
+      "end_line": 92,
       "end_column": 2,
-      "id": "function:ts:scripts/check_physics_contract.mjs:85:1:pyFunctionBody",
+      "id": "function:ts:scripts/check_physics_contract.mjs:86:1:pyFunctionBody",
       "type": "function",
       "name": "pyFunctionBody"
     },
@@ -28194,11 +28295,11 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 95,
+      "line": 96,
       "column": 1,
-      "end_line": 98,
+      "end_line": 99,
       "end_column": 2,
-      "id": "function:ts:scripts/check_physics_contract.mjs:95:1:calledEntryPoints",
+      "id": "function:ts:scripts/check_physics_contract.mjs:96:1:calledEntryPoints",
       "type": "function",
       "name": "calledEntryPoints"
     },
@@ -28212,11 +28313,11 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 96,
+      "line": 97,
       "column": 79,
-      "end_line": 96,
+      "end_line": 97,
       "end_column": 88,
-      "id": "function:ts:scripts/check_physics_contract.mjs:96:79:<anonymous>",
+      "id": "function:ts:scripts/check_physics_contract.mjs:97:79:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -28230,11 +28331,11 @@
       "exported": false,
       "path": "scripts/check_physics_contract.mjs",
       "layer": "tooling",
-      "line": 97,
+      "line": 98,
       "column": 27,
-      "end_line": 97,
+      "end_line": 98,
       "end_column": 79,
-      "id": "function:ts:scripts/check_physics_contract.mjs:97:27:<anonymous>",
+      "id": "function:ts:scripts/check_physics_contract.mjs:98:27:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -54576,12 +54677,12 @@
       "name": "surface.mep",
       "runtime_observation": {
         "method_id": "surface.mep",
-        "invocation_count": 1,
+        "invocation_count": 2,
         "success_count": 1,
-        "expected_refusal_count": 0,
+        "expected_refusal_count": 1,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "mean_dispatch_seconds": 0.008111
+        "mean_dispatch_seconds": 0.016082
       }
     },
     {
@@ -55277,6 +55378,16 @@
     },
     {
       "language": "python",
+      "path": "backend/tests/test_surface_budget.py",
+      "line": 1,
+      "layer": "verification",
+      "qualified_name": "backend.tests.test_surface_budget",
+      "id": "module:py:backend/tests/test_surface_budget.py",
+      "type": "module",
+      "name": "test_surface_budget.py"
+    },
+    {
+      "language": "python",
       "path": "backend/traces.py",
       "line": 1,
       "layer": "infrastructure",
@@ -55868,7 +55979,7 @@
       "layer": "tooling",
       "line": 42,
       "column": 1,
-      "end_line": 225,
+      "end_line": 229,
       "end_column": 1,
       "id": "module:ts:scripts/check_physics_contract.mjs",
       "type": "module",
@@ -58671,16 +58782,16 @@
       "type": "service",
       "name": "dirac-fields.service :8901",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T22:35:19.919006+00:00",
+        "captured_at": "2026-08-12T22:41:11.667227+00:00",
         "source": "best-effort live probes",
         "refresh_policy_seconds": 60,
         "freshness_state": "fresh-at-generation",
-        "git_commit": "9d38ca434c9404843640ed5d7a4cb5d0a315d135",
+        "git_commit": "a54375d29439cb64b0289f02654a0a22ca0a075c",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
           "SubState=running",
-          "MainPID=1821653",
+          "MainPID=2207008",
           "",
           "Id=dirac-web.service",
           "ActiveState=active",
@@ -58706,30 +58817,30 @@
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 1127,
+          "jobs_total": 1128,
           "job_states": {
             "done": 837,
             "cancelled": 29,
-            "failed": 261
+            "failed": 262
           },
           "failure_codes": {
             "UNPARAMETERIZED": 44,
             "UNSUPPORTED": 134,
             "INTERNAL": 34,
-            "BUDGET": 49
+            "BUDGET": 50
           },
           "job_outcomes": {
             "cancelled": 29,
             "operational_failure": 34,
-            "expected_refusal": 227,
+            "expected_refusal": 228,
             "success": 837
           },
           "artifacts": 85,
           "cached_results": 5,
-          "registered_method_rows": 49,
+          "registered_method_rows": 51,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 1148,
+          "command_traces": 1150,
           "observed_commands": 13
         },
         "command_observations": [
@@ -58796,17 +58907,17 @@
           {
             "command_id": "job.wait",
             "command_version": 1,
-            "invocation_count": 248,
-            "success_count": 248,
+            "invocation_count": 249,
+            "success_count": 249,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.922123,
-            "p95_dispatch_seconds": 0.222506,
+            "mean_dispatch_seconds": 0.922809,
+            "p95_dispatch_seconds": 0.22334,
             "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-            "last_observed_at": "2026-08-12T15:29:57.403528-07:00"
+            "last_observed_at": "2026-08-12T15:40:32.955312-07:00"
           },
           {
             "command_id": "method.list",
@@ -58856,17 +58967,17 @@
           {
             "command_id": "structure.surface.compute",
             "command_version": 1,
-            "invocation_count": 1,
+            "invocation_count": 2,
             "success_count": 1,
-            "expected_refusal_count": 0,
+            "expected_refusal_count": 1,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "job_count": 1,
+            "job_count": 2,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.008111,
-            "p95_dispatch_seconds": 0.008111,
+            "mean_dispatch_seconds": 0.016082,
+            "p95_dispatch_seconds": 0.023256,
             "first_observed_at": "2026-08-12T15:26:56.15788-07:00",
-            "last_observed_at": "2026-08-12T15:26:56.165992-07:00"
+            "last_observed_at": "2026-08-12T15:40:31.857851-07:00"
           },
           {
             "command_id": "structure.torsion.analyze",
@@ -58968,12 +59079,12 @@
           },
           {
             "method_id": "surface.mep",
-            "invocation_count": 1,
+            "invocation_count": 2,
             "success_count": 1,
-            "expected_refusal_count": 0,
+            "expected_refusal_count": 1,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008111
+            "mean_dispatch_seconds": 0.016082
           },
           {
             "method_id": "torsion.strain",
@@ -58999,16 +59110,16 @@
       "type": "service",
       "name": "dirac-digital-twin.service",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T22:35:19.919006+00:00",
+        "captured_at": "2026-08-12T22:41:11.667227+00:00",
         "source": "best-effort live probes",
         "refresh_policy_seconds": 60,
         "freshness_state": "fresh-at-generation",
-        "git_commit": "9d38ca434c9404843640ed5d7a4cb5d0a315d135",
+        "git_commit": "a54375d29439cb64b0289f02654a0a22ca0a075c",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
           "SubState=running",
-          "MainPID=1821653",
+          "MainPID=2207008",
           "",
           "Id=dirac-web.service",
           "ActiveState=active",
@@ -59034,30 +59145,30 @@
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 1127,
+          "jobs_total": 1128,
           "job_states": {
             "done": 837,
             "cancelled": 29,
-            "failed": 261
+            "failed": 262
           },
           "failure_codes": {
             "UNPARAMETERIZED": 44,
             "UNSUPPORTED": 134,
             "INTERNAL": 34,
-            "BUDGET": 49
+            "BUDGET": 50
           },
           "job_outcomes": {
             "cancelled": 29,
             "operational_failure": 34,
-            "expected_refusal": 227,
+            "expected_refusal": 228,
             "success": 837
           },
           "artifacts": 85,
           "cached_results": 5,
-          "registered_method_rows": 49,
+          "registered_method_rows": 51,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 1148,
+          "command_traces": 1150,
           "observed_commands": 13
         },
         "command_observations": [
@@ -59124,17 +59235,17 @@
           {
             "command_id": "job.wait",
             "command_version": 1,
-            "invocation_count": 248,
-            "success_count": 248,
+            "invocation_count": 249,
+            "success_count": 249,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.922123,
-            "p95_dispatch_seconds": 0.222506,
+            "mean_dispatch_seconds": 0.922809,
+            "p95_dispatch_seconds": 0.22334,
             "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-            "last_observed_at": "2026-08-12T15:29:57.403528-07:00"
+            "last_observed_at": "2026-08-12T15:40:32.955312-07:00"
           },
           {
             "command_id": "method.list",
@@ -59184,17 +59295,17 @@
           {
             "command_id": "structure.surface.compute",
             "command_version": 1,
-            "invocation_count": 1,
+            "invocation_count": 2,
             "success_count": 1,
-            "expected_refusal_count": 0,
+            "expected_refusal_count": 1,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "job_count": 1,
+            "job_count": 2,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.008111,
-            "p95_dispatch_seconds": 0.008111,
+            "mean_dispatch_seconds": 0.016082,
+            "p95_dispatch_seconds": 0.023256,
             "first_observed_at": "2026-08-12T15:26:56.15788-07:00",
-            "last_observed_at": "2026-08-12T15:26:56.165992-07:00"
+            "last_observed_at": "2026-08-12T15:40:31.857851-07:00"
           },
           {
             "command_id": "structure.torsion.analyze",
@@ -59296,12 +59407,12 @@
           },
           {
             "method_id": "surface.mep",
-            "invocation_count": 1,
+            "invocation_count": 2,
             "success_count": 1,
-            "expected_refusal_count": 0,
+            "expected_refusal_count": 1,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008111
+            "mean_dispatch_seconds": 0.016082
           },
           {
             "method_id": "torsion.strain",
@@ -59327,16 +59438,16 @@
       "type": "service",
       "name": "dirac-web.service :1360",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T22:35:19.919006+00:00",
+        "captured_at": "2026-08-12T22:41:11.667227+00:00",
         "source": "best-effort live probes",
         "refresh_policy_seconds": 60,
         "freshness_state": "fresh-at-generation",
-        "git_commit": "9d38ca434c9404843640ed5d7a4cb5d0a315d135",
+        "git_commit": "a54375d29439cb64b0289f02654a0a22ca0a075c",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
           "SubState=running",
-          "MainPID=1821653",
+          "MainPID=2207008",
           "",
           "Id=dirac-web.service",
           "ActiveState=active",
@@ -59362,30 +59473,30 @@
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 1127,
+          "jobs_total": 1128,
           "job_states": {
             "done": 837,
             "cancelled": 29,
-            "failed": 261
+            "failed": 262
           },
           "failure_codes": {
             "UNPARAMETERIZED": 44,
             "UNSUPPORTED": 134,
             "INTERNAL": 34,
-            "BUDGET": 49
+            "BUDGET": 50
           },
           "job_outcomes": {
             "cancelled": 29,
             "operational_failure": 34,
-            "expected_refusal": 227,
+            "expected_refusal": 228,
             "success": 837
           },
           "artifacts": 85,
           "cached_results": 5,
-          "registered_method_rows": 49,
+          "registered_method_rows": 51,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 1148,
+          "command_traces": 1150,
           "observed_commands": 13
         },
         "command_observations": [
@@ -59452,17 +59563,17 @@
           {
             "command_id": "job.wait",
             "command_version": 1,
-            "invocation_count": 248,
-            "success_count": 248,
+            "invocation_count": 249,
+            "success_count": 249,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.922123,
-            "p95_dispatch_seconds": 0.222506,
+            "mean_dispatch_seconds": 0.922809,
+            "p95_dispatch_seconds": 0.22334,
             "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-            "last_observed_at": "2026-08-12T15:29:57.403528-07:00"
+            "last_observed_at": "2026-08-12T15:40:32.955312-07:00"
           },
           {
             "command_id": "method.list",
@@ -59512,17 +59623,17 @@
           {
             "command_id": "structure.surface.compute",
             "command_version": 1,
-            "invocation_count": 1,
+            "invocation_count": 2,
             "success_count": 1,
-            "expected_refusal_count": 0,
+            "expected_refusal_count": 1,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "job_count": 1,
+            "job_count": 2,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.008111,
-            "p95_dispatch_seconds": 0.008111,
+            "mean_dispatch_seconds": 0.016082,
+            "p95_dispatch_seconds": 0.023256,
             "first_observed_at": "2026-08-12T15:26:56.15788-07:00",
-            "last_observed_at": "2026-08-12T15:26:56.165992-07:00"
+            "last_observed_at": "2026-08-12T15:40:31.857851-07:00"
           },
           {
             "command_id": "structure.torsion.analyze",
@@ -59624,12 +59735,12 @@
           },
           {
             "method_id": "surface.mep",
-            "invocation_count": 1,
+            "invocation_count": 2,
             "success_count": 1,
-            "expected_refusal_count": 0,
+            "expected_refusal_count": 1,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008111
+            "mean_dispatch_seconds": 0.016082
           },
           {
             "method_id": "torsion.strain",
@@ -59667,16 +59778,16 @@
       "type": "store",
       "name": "PostgreSQL · dirac",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T22:35:19.919006+00:00",
+        "captured_at": "2026-08-12T22:41:11.667227+00:00",
         "source": "best-effort live probes",
         "refresh_policy_seconds": 60,
         "freshness_state": "fresh-at-generation",
-        "git_commit": "9d38ca434c9404843640ed5d7a4cb5d0a315d135",
+        "git_commit": "a54375d29439cb64b0289f02654a0a22ca0a075c",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
           "SubState=running",
-          "MainPID=1821653",
+          "MainPID=2207008",
           "",
           "Id=dirac-web.service",
           "ActiveState=active",
@@ -59702,30 +59813,30 @@
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 1127,
+          "jobs_total": 1128,
           "job_states": {
             "done": 837,
             "cancelled": 29,
-            "failed": 261
+            "failed": 262
           },
           "failure_codes": {
             "UNPARAMETERIZED": 44,
             "UNSUPPORTED": 134,
             "INTERNAL": 34,
-            "BUDGET": 49
+            "BUDGET": 50
           },
           "job_outcomes": {
             "cancelled": 29,
             "operational_failure": 34,
-            "expected_refusal": 227,
+            "expected_refusal": 228,
             "success": 837
           },
           "artifacts": 85,
           "cached_results": 5,
-          "registered_method_rows": 49,
+          "registered_method_rows": 51,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 1148,
+          "command_traces": 1150,
           "observed_commands": 13
         },
         "command_observations": [
@@ -59792,17 +59903,17 @@
           {
             "command_id": "job.wait",
             "command_version": 1,
-            "invocation_count": 248,
-            "success_count": 248,
+            "invocation_count": 249,
+            "success_count": 249,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.922123,
-            "p95_dispatch_seconds": 0.222506,
+            "mean_dispatch_seconds": 0.922809,
+            "p95_dispatch_seconds": 0.22334,
             "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-            "last_observed_at": "2026-08-12T15:29:57.403528-07:00"
+            "last_observed_at": "2026-08-12T15:40:32.955312-07:00"
           },
           {
             "command_id": "method.list",
@@ -59852,17 +59963,17 @@
           {
             "command_id": "structure.surface.compute",
             "command_version": 1,
-            "invocation_count": 1,
+            "invocation_count": 2,
             "success_count": 1,
-            "expected_refusal_count": 0,
+            "expected_refusal_count": 1,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "job_count": 1,
+            "job_count": 2,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.008111,
-            "p95_dispatch_seconds": 0.008111,
+            "mean_dispatch_seconds": 0.016082,
+            "p95_dispatch_seconds": 0.023256,
             "first_observed_at": "2026-08-12T15:26:56.15788-07:00",
-            "last_observed_at": "2026-08-12T15:26:56.165992-07:00"
+            "last_observed_at": "2026-08-12T15:40:31.857851-07:00"
           },
           {
             "command_id": "structure.torsion.analyze",
@@ -59964,12 +60075,12 @@
           },
           {
             "method_id": "surface.mep",
-            "invocation_count": 1,
+            "invocation_count": 2,
             "success_count": 1,
-            "expected_refusal_count": 0,
+            "expected_refusal_count": 1,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008111
+            "mean_dispatch_seconds": 0.016082
           },
           {
             "method_id": "torsion.strain",
@@ -60001,16 +60112,16 @@
       "type": "store",
       "name": "Architecture Twin JSON + HTML",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T22:35:19.919006+00:00",
+        "captured_at": "2026-08-12T22:41:11.667227+00:00",
         "source": "best-effort live probes",
         "refresh_policy_seconds": 60,
         "freshness_state": "fresh-at-generation",
-        "git_commit": "9d38ca434c9404843640ed5d7a4cb5d0a315d135",
+        "git_commit": "a54375d29439cb64b0289f02654a0a22ca0a075c",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
           "SubState=running",
-          "MainPID=1821653",
+          "MainPID=2207008",
           "",
           "Id=dirac-web.service",
           "ActiveState=active",
@@ -60036,30 +60147,30 @@
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 1127,
+          "jobs_total": 1128,
           "job_states": {
             "done": 837,
             "cancelled": 29,
-            "failed": 261
+            "failed": 262
           },
           "failure_codes": {
             "UNPARAMETERIZED": 44,
             "UNSUPPORTED": 134,
             "INTERNAL": 34,
-            "BUDGET": 49
+            "BUDGET": 50
           },
           "job_outcomes": {
             "cancelled": 29,
             "operational_failure": 34,
-            "expected_refusal": 227,
+            "expected_refusal": 228,
             "success": 837
           },
           "artifacts": 85,
           "cached_results": 5,
-          "registered_method_rows": 49,
+          "registered_method_rows": 51,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 1148,
+          "command_traces": 1150,
           "observed_commands": 13
         },
         "command_observations": [
@@ -60126,17 +60237,17 @@
           {
             "command_id": "job.wait",
             "command_version": 1,
-            "invocation_count": 248,
-            "success_count": 248,
+            "invocation_count": 249,
+            "success_count": 249,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.922123,
-            "p95_dispatch_seconds": 0.222506,
+            "mean_dispatch_seconds": 0.922809,
+            "p95_dispatch_seconds": 0.22334,
             "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-            "last_observed_at": "2026-08-12T15:29:57.403528-07:00"
+            "last_observed_at": "2026-08-12T15:40:32.955312-07:00"
           },
           {
             "command_id": "method.list",
@@ -60186,17 +60297,17 @@
           {
             "command_id": "structure.surface.compute",
             "command_version": 1,
-            "invocation_count": 1,
+            "invocation_count": 2,
             "success_count": 1,
-            "expected_refusal_count": 0,
+            "expected_refusal_count": 1,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "job_count": 1,
+            "job_count": 2,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.008111,
-            "p95_dispatch_seconds": 0.008111,
+            "mean_dispatch_seconds": 0.016082,
+            "p95_dispatch_seconds": 0.023256,
             "first_observed_at": "2026-08-12T15:26:56.15788-07:00",
-            "last_observed_at": "2026-08-12T15:26:56.165992-07:00"
+            "last_observed_at": "2026-08-12T15:40:31.857851-07:00"
           },
           {
             "command_id": "structure.torsion.analyze",
@@ -60298,12 +60409,12 @@
           },
           {
             "method_id": "surface.mep",
-            "invocation_count": 1,
+            "invocation_count": 2,
             "success_count": 1,
-            "expected_refusal_count": 0,
+            "expected_refusal_count": 1,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008111
+            "mean_dispatch_seconds": 0.016082
           },
           {
             "method_id": "torsion.strain",
@@ -60366,7 +60477,7 @@
       "type": "system",
       "name": "CommandDispatcher",
       "runtime_observation": {
-        "traces": 1148,
+        "traces": 1150,
         "observed_commands": 13
       }
     },
@@ -64079,6 +64190,11 @@
       "relation": "parsed-as"
     },
     {
+      "source": "file:backend/tests/test_surface_budget.py",
+      "target": "module:py:backend/tests/test_surface_budget.py",
+      "relation": "parsed-as"
+    },
+    {
       "source": "file:backend/traces.py",
       "target": "module:py:backend/traces.py",
       "relation": "parsed-as"
@@ -66604,73 +66720,93 @@
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/physics/mep_surface.py:251:_outer_isosurface_points",
+      "source": "function:py:backend/physics/mep_surface.py:260:_outer_isosurface_points",
       "target": "function:py:backend/physics/mep_surface.py:207:_fibonacci_directions",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/physics/mep_surface.py:302:_extrema",
-      "target": "function:py:backend/physics/mep_surface.py:331:_extrema._cluster",
+      "source": "function:py:backend/physics/mep_surface.py:260:_outer_isosurface_points",
+      "target": "function:py:backend/physics/mep_surface.py:392:_check_deadline",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/physics/mep_surface.py:402:compute_surface_mep",
+      "source": "function:py:backend/physics/mep_surface.py:319:_extrema",
+      "target": "function:py:backend/physics/mep_surface.py:348:_extrema._cluster",
+      "relation": "calls"
+    },
+    {
+      "source": "function:py:backend/physics/mep_surface.py:425:_install_watchdog._cb",
+      "target": "function:py:backend/physics/mep_surface.py:392:_check_deadline",
+      "relation": "calls"
+    },
+    {
+      "source": "function:py:backend/physics/mep_surface.py:433:compute_surface_mep",
       "target": "function:py:backend/physics/mep_surface.py:126:clamp_budget",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/physics/mep_surface.py:402:compute_surface_mep",
+      "source": "function:py:backend/physics/mep_surface.py:433:compute_surface_mep",
       "target": "function:py:backend/physics/mep_surface.py:148:_ecp_for",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/physics/mep_surface.py:402:compute_surface_mep",
+      "source": "function:py:backend/physics/mep_surface.py:433:compute_surface_mep",
       "target": "function:py:backend/physics/mep_surface.py:183:_prepare",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/physics/mep_surface.py:402:compute_surface_mep",
-      "target": "function:py:backend/physics/mep_surface.py:251:_outer_isosurface_points",
+      "source": "function:py:backend/physics/mep_surface.py:433:compute_surface_mep",
+      "target": "function:py:backend/physics/mep_surface.py:260:_outer_isosurface_points",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/physics/mep_surface.py:402:compute_surface_mep",
-      "target": "function:py:backend/physics/mep_surface.py:302:_extrema",
+      "source": "function:py:backend/physics/mep_surface.py:433:compute_surface_mep",
+      "target": "function:py:backend/physics/mep_surface.py:319:_extrema",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/physics/mep_surface.py:402:compute_surface_mep",
-      "target": "function:py:backend/physics/mep_surface.py:345:_classify_sigma_hole",
+      "source": "function:py:backend/physics/mep_surface.py:433:compute_surface_mep",
+      "target": "function:py:backend/physics/mep_surface.py:362:_classify_sigma_hole",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/physics/mep_surface.py:402:compute_surface_mep",
-      "target": "function:py:backend/physics/mep_surface.py:375:_install_watchdog",
+      "source": "function:py:backend/physics/mep_surface.py:433:compute_surface_mep",
+      "target": "function:py:backend/physics/mep_surface.py:392:_check_deadline",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/physics/mep_surface.py:402:compute_surface_mep",
+      "source": "function:py:backend/physics/mep_surface.py:433:compute_surface_mep",
+      "target": "function:py:backend/physics/mep_surface.py:409:_install_watchdog",
+      "relation": "calls"
+    },
+    {
+      "source": "function:py:backend/physics/mep_surface.py:433:compute_surface_mep",
       "target": "function:py:backend/physics/mep_surface.py:83:estimated_scf_seconds",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/physics/mep_surface.py:561:mep_at_points",
+      "source": "function:py:backend/physics/mep_surface.py:600:mep_at_points",
       "target": "function:py:backend/physics/mep_surface.py:126:clamp_budget",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/physics/mep_surface.py:561:mep_at_points",
+      "source": "function:py:backend/physics/mep_surface.py:600:mep_at_points",
       "target": "function:py:backend/physics/mep_surface.py:148:_ecp_for",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/physics/mep_surface.py:561:mep_at_points",
+      "source": "function:py:backend/physics/mep_surface.py:600:mep_at_points",
       "target": "function:py:backend/physics/mep_surface.py:183:_prepare",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/physics/mep_surface.py:561:mep_at_points",
-      "target": "function:py:backend/physics/mep_surface.py:375:_install_watchdog",
+      "source": "function:py:backend/physics/mep_surface.py:600:mep_at_points",
+      "target": "function:py:backend/physics/mep_surface.py:392:_check_deadline",
+      "relation": "calls"
+    },
+    {
+      "source": "function:py:backend/physics/mep_surface.py:600:mep_at_points",
+      "target": "function:py:backend/physics/mep_surface.py:409:_install_watchdog",
       "relation": "calls"
     },
     {
@@ -69989,43 +70125,48 @@
       "relation": "calls"
     },
     {
-      "source": "function:ts:scripts/check_physics_contract.mjs:104:1:auditRoute",
-      "target": "function:ts:scripts/check_physics_contract.mjs:95:1:calledEntryPoints",
+      "source": "function:ts:scripts/check_physics_contract.mjs:105:1:auditRoute",
+      "target": "function:ts:scripts/check_physics_contract.mjs:96:1:calledEntryPoints",
       "relation": "calls"
     },
     {
-      "source": "function:ts:scripts/check_physics_contract.mjs:106:39:<anonymous>",
-      "target": "function:ts:scripts/check_physics_contract.mjs:100:1:reachesScf",
+      "source": "function:ts:scripts/check_physics_contract.mjs:107:39:<anonymous>",
+      "target": "function:ts:scripts/check_physics_contract.mjs:101:1:reachesScf",
       "relation": "calls"
     },
     {
-      "source": "function:ts:scripts/check_physics_contract.mjs:106:39:<anonymous>",
-      "target": "function:ts:scripts/check_physics_contract.mjs:85:1:pyFunctionBody",
+      "source": "function:ts:scripts/check_physics_contract.mjs:107:39:<anonymous>",
+      "target": "function:ts:scripts/check_physics_contract.mjs:86:1:pyFunctionBody",
       "relation": "calls"
     },
     {
-      "source": "function:ts:scripts/check_physics_contract.mjs:117:9:<anonymous>",
-      "target": "function:ts:scripts/check_physics_contract.mjs:85:1:pyFunctionBody",
+      "source": "function:ts:scripts/check_physics_contract.mjs:118:9:<anonymous>",
+      "target": "function:ts:scripts/check_physics_contract.mjs:86:1:pyFunctionBody",
       "relation": "calls"
     },
     {
-      "source": "function:ts:scripts/check_physics_contract.mjs:119:9:<anonymous>",
-      "target": "function:ts:scripts/check_physics_contract.mjs:85:1:pyFunctionBody",
+      "source": "function:ts:scripts/check_physics_contract.mjs:120:9:<anonymous>",
+      "target": "function:ts:scripts/check_physics_contract.mjs:86:1:pyFunctionBody",
       "relation": "calls"
     },
     {
-      "source": "function:ts:scripts/check_physics_contract.mjs:124:1:audit",
-      "target": "function:ts:scripts/check_physics_contract.mjs:70:1:routeBranches",
+      "source": "function:ts:scripts/check_physics_contract.mjs:122:9:<anonymous>",
+      "target": "function:ts:scripts/check_physics_contract.mjs:86:1:pyFunctionBody",
       "relation": "calls"
     },
     {
-      "source": "function:ts:scripts/check_physics_contract.mjs:126:14:<anonymous>",
-      "target": "function:ts:scripts/check_physics_contract.mjs:104:1:auditRoute",
+      "source": "function:ts:scripts/check_physics_contract.mjs:127:1:audit",
+      "target": "function:ts:scripts/check_physics_contract.mjs:71:1:routeBranches",
       "relation": "calls"
     },
     {
-      "source": "function:ts:scripts/check_physics_contract.mjs:163:1:selftest",
-      "target": "function:ts:scripts/check_physics_contract.mjs:124:1:audit",
+      "source": "function:ts:scripts/check_physics_contract.mjs:129:14:<anonymous>",
+      "target": "function:ts:scripts/check_physics_contract.mjs:105:1:auditRoute",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:scripts/check_physics_contract.mjs:166:1:selftest",
+      "target": "function:ts:scripts/check_physics_contract.mjs:127:1:audit",
       "relation": "calls"
     },
     {
@@ -76285,12 +76426,12 @@
     },
     {
       "source": "method:surface.mep",
-      "target": "function:py:backend/physics/mep_surface.py:375:_install_watchdog",
+      "target": "function:py:backend/physics/mep_surface.py:409:_install_watchdog",
       "relation": "implemented-by"
     },
     {
       "source": "method:surface.mep",
-      "target": "function:py:backend/physics/mep_surface.py:402:compute_surface_mep",
+      "target": "function:py:backend/physics/mep_surface.py:433:compute_surface_mep",
       "relation": "implemented-by"
     },
     {
@@ -76330,12 +76471,12 @@
     },
     {
       "source": "method:surface.mep_at",
-      "target": "function:py:backend/physics/mep_surface.py:375:_install_watchdog",
+      "target": "function:py:backend/physics/mep_surface.py:409:_install_watchdog",
       "relation": "implemented-by"
     },
     {
       "source": "method:surface.mep_at",
-      "target": "function:py:backend/physics/mep_surface.py:561:mep_at_points",
+      "target": "function:py:backend/physics/mep_surface.py:600:mep_at_points",
       "relation": "implemented-by"
     },
     {
@@ -78960,7 +79101,7 @@
     },
     {
       "source": "module:py:backend/physics/mep_surface.py",
-      "target": "class:py:backend/physics/mep_surface.py:371:PhysicsBudgetExceeded",
+      "target": "class:py:backend/physics/mep_surface.py:388:PhysicsBudgetExceeded",
       "relation": "contains"
     },
     {
@@ -78995,47 +79136,52 @@
     },
     {
       "source": "module:py:backend/physics/mep_surface.py",
-      "target": "function:py:backend/physics/mep_surface.py:230:_Field.mep",
+      "target": "function:py:backend/physics/mep_surface.py:235:_Field.mep",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/physics/mep_surface.py",
-      "target": "function:py:backend/physics/mep_surface.py:251:_outer_isosurface_points",
+      "target": "function:py:backend/physics/mep_surface.py:260:_outer_isosurface_points",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/physics/mep_surface.py",
-      "target": "function:py:backend/physics/mep_surface.py:302:_extrema",
+      "target": "function:py:backend/physics/mep_surface.py:319:_extrema",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/physics/mep_surface.py",
-      "target": "function:py:backend/physics/mep_surface.py:331:_extrema._cluster",
+      "target": "function:py:backend/physics/mep_surface.py:348:_extrema._cluster",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/physics/mep_surface.py",
-      "target": "function:py:backend/physics/mep_surface.py:345:_classify_sigma_hole",
+      "target": "function:py:backend/physics/mep_surface.py:362:_classify_sigma_hole",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/physics/mep_surface.py",
-      "target": "function:py:backend/physics/mep_surface.py:375:_install_watchdog",
+      "target": "function:py:backend/physics/mep_surface.py:392:_check_deadline",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/physics/mep_surface.py",
-      "target": "function:py:backend/physics/mep_surface.py:391:_install_watchdog._cb",
+      "target": "function:py:backend/physics/mep_surface.py:409:_install_watchdog",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/physics/mep_surface.py",
-      "target": "function:py:backend/physics/mep_surface.py:402:compute_surface_mep",
+      "target": "function:py:backend/physics/mep_surface.py:425:_install_watchdog._cb",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/physics/mep_surface.py",
-      "target": "function:py:backend/physics/mep_surface.py:561:mep_at_points",
+      "target": "function:py:backend/physics/mep_surface.py:433:compute_surface_mep",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/physics/mep_surface.py",
+      "target": "function:py:backend/physics/mep_surface.py:600:mep_at_points",
       "relation": "contains"
     },
     {
@@ -80661,6 +80807,26 @@
     {
       "source": "module:py:backend/tests/test_security_pg.py",
       "target": "function:py:backend/tests/test_security_pg.py:29:main",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/tests/test_surface_budget.py",
+      "target": "class:py:backend/tests/test_surface_budget.py:19:SurfaceBudgetTests",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/tests/test_surface_budget.py",
+      "target": "function:py:backend/tests/test_surface_budget.py:20:SurfaceBudgetTests.test_zero_budget_refuses_before_molecule_preparation",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/tests/test_surface_budget.py",
+      "target": "function:py:backend/tests/test_surface_budget.py:28:SurfaceBudgetTests.test_surface_search_checks_the_same_expired_deadline",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/tests/test_surface_budget.py",
+      "target": "function:py:backend/tests/test_surface_budget.py:36:SurfaceBudgetTests.test_potential_evaluation_checks_before_integrals",
       "relation": "contains"
     },
     {
@@ -83485,92 +83651,92 @@
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:100:1:reachesScf",
+      "target": "function:ts:scripts/check_physics_contract.mjs:101:1:reachesScf",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:104:1:auditRoute",
+      "target": "function:ts:scripts/check_physics_contract.mjs:105:1:auditRoute",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:106:39:<anonymous>",
+      "target": "function:ts:scripts/check_physics_contract.mjs:107:39:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:117:9:<anonymous>",
+      "target": "function:ts:scripts/check_physics_contract.mjs:118:9:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:119:9:<anonymous>",
+      "target": "function:ts:scripts/check_physics_contract.mjs:120:9:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:124:1:audit",
+      "target": "function:ts:scripts/check_physics_contract.mjs:122:9:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:126:14:<anonymous>",
+      "target": "function:ts:scripts/check_physics_contract.mjs:127:1:audit",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:163:1:selftest",
+      "target": "function:ts:scripts/check_physics_contract.mjs:129:14:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:172:27:<anonymous>",
+      "target": "function:ts:scripts/check_physics_contract.mjs:166:1:selftest",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:173:26:<anonymous>",
+      "target": "function:ts:scripts/check_physics_contract.mjs:176:27:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:175:48:<anonymous>",
+      "target": "function:ts:scripts/check_physics_contract.mjs:179:48:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:208:40:<anonymous>",
+      "target": "function:ts:scripts/check_physics_contract.mjs:212:40:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:58:1:matchBrace",
+      "target": "function:ts:scripts/check_physics_contract.mjs:59:1:matchBrace",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:70:1:routeBranches",
+      "target": "function:ts:scripts/check_physics_contract.mjs:71:1:routeBranches",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:85:1:pyFunctionBody",
+      "target": "function:ts:scripts/check_physics_contract.mjs:86:1:pyFunctionBody",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:95:1:calledEntryPoints",
+      "target": "function:ts:scripts/check_physics_contract.mjs:96:1:calledEntryPoints",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:96:79:<anonymous>",
+      "target": "function:ts:scripts/check_physics_contract.mjs:97:79:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:scripts/check_physics_contract.mjs",
-      "target": "function:ts:scripts/check_physics_contract.mjs:97:27:<anonymous>",
+      "target": "function:ts:scripts/check_physics_contract.mjs:98:27:<anonymous>",
       "relation": "contains"
     },
     {

@@ -15,7 +15,7 @@
 // A gate that string-matched those sentences would convict when someone EDITED
 // THE DOC, which is backwards. So this gate does the thing the sentences claim
 // is universal, and requires it to actually be universal: every route that can
-// reach an SCF must carry all four protections. The doc's promise becomes an
+// reach an SCF must carry all five protections. The doc's promise becomes an
 // executable invariant, and prose is then free to be prose.
 //
 // PROXY LEDGER (this file's own honesty, per the repo's standing rule):
@@ -23,7 +23,7 @@
 //               and refuses a basis it cannot describe.
 //   PROXY       static source structure: the handler branch passes max_seconds
 //               and calls validated_basis(); the target function calls
-//               clamp_budget() and _install_watchdog().
+//               clamp_budget(), _install_watchdog(), and _check_deadline().
 //   IMPLICATION missing call ⇒ missing protection (sound). Present call ⇒ the
 //               protection WORKS is NOT implied — a clamp could be wrong, a
 //               watchdog could be installed with a broken deadline.
@@ -47,12 +47,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SERVER = 'backend/physics/server.py';
 const SURFACE = 'backend/physics/mep_surface.py';
 
-// The four protections, in the order a request meets them.
+// The five protections, in the order a request meets them.
 const PROTECTIONS = [
     ['basis_validated', 'refuses a basis it cannot describe (validated_basis)'],
     ['budget_passed', 'passes the caller max_seconds through to the compute call'],
     ['budget_clamped', 'normalises a non-finite budget (clamp_budget)'],
     ['watchdog', 'bounds the SCF per cycle (_install_watchdog)'],
+    ['whole_deadline', 'bounds post-SCF surface construction (_check_deadline)'],
 ];
 
 function matchBrace(text, openIdx, open = '(', close = ')') {
@@ -107,7 +108,7 @@ function auditRoute(branch, surfaceText) {
     if (!scfEntries.length) return null;          // not an SCF route; out of scope
 
     const found = { basis_validated: false, budget_passed: false,
-                    budget_clamped: false, watchdog: false };
+                    budget_clamped: false, watchdog: false, whole_deadline: false };
     found.basis_validated = /validated_basis\s*\(/.test(branch.body);
     found.budget_passed = /max_seconds\s*=/.test(branch.body);
 
@@ -117,6 +118,8 @@ function auditRoute(branch, surfaceText) {
         fn => /clamp_budget\s*\(/.test(pyFunctionBody(surfaceText, fn)));
     found.watchdog = scfEntries.every(
         fn => /_install_watchdog\s*\(/.test(pyFunctionBody(surfaceText, fn)));
+    found.whole_deadline = scfEntries.every(
+        fn => /_check_deadline\s*\(/.test(pyFunctionBody(surfaceText, fn)));
 
     return { route: branch.route, entries: scfEntries, found };
 }
@@ -166,11 +169,12 @@ function selftest() {
     for (const r of rows) {
         for (const [key] of PROTECTIONS) if (!r.found[key]) missing.push(`${r.route}:${key}`);
     }
-    const expected = ['/surface/mep_at:basis_validated', '/surface/mep_at:budget_passed',
+    const expected = ['/surface/mep:whole_deadline',
+                      '/surface/mep_at:basis_validated', '/surface/mep_at:budget_passed',
                       '/surface/mep_at:budget_clamped', '/surface/mep_at:watchdog'];
     const ok = rows.length === 2
         && expected.every(e => missing.includes(e))
-        && !missing.some(m => m.startsWith('/surface/mep:'));
+        && missing.includes('/surface/mep_at:whole_deadline');
     console.log('── selftest: the crafted broken source must be convicted ──');
     console.log(`  routes audited : ${rows.map(r => r.route).join(', ') || '(none)'}`);
     console.log(`  convictions    : ${missing.join(', ') || '(none)'}`);
@@ -179,7 +183,7 @@ function selftest() {
             + 'so a green run against the real files proves nothing');
         process.exit(1);
     }
-    console.log('SELFTEST PASS — 4 convictions on mep_at, 0 on the protected route');
+    console.log('SELFTEST PASS — old SCF-only protection is convicted on both routes');
     process.exit(0);
 }
 
@@ -203,7 +207,7 @@ if (!rows.length) {
 }
 
 let failed = 0;
-console.log(`── ${SERVER}: every SCF route must carry all four protections ──`);
+console.log(`── ${SERVER}: every SCF route must carry all five protections ──`);
 for (const r of rows) {
     const missing = PROTECTIONS.filter(([k]) => !r.found[k]);
     const mark = missing.length ? 'FAIL' : 'OK  ';
