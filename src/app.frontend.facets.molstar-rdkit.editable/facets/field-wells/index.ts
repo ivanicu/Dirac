@@ -961,6 +961,9 @@ async function requestField(kind: FieldKind, budget = budgetFor(kind)) {
         }
         await renderCube(entry.cube, kind, entry.meta);
         renderMeta(entry.meta);
+        if (spec.quantum && typeof entry.meta.total_seconds === 'number') {
+            lastQuantumSeconds = Math.round(entry.meta.total_seconds);
+        }
         setStatus(`${spec.label} rendered for ${ligandLabel ?? 'ligand'}.`, 'ok');
     } catch (e) {
         const reason = e instanceof FieldRefusal ? e.reason : 'internal';
@@ -1082,6 +1085,58 @@ export function initFieldWellsPanel(p: PluginContext) {
  * pasted SMILES ends with a rendered well without another click. Skips
  * silently when a field is already up or a request is in flight.
  */
+/**
+ * The geometry moved — an atom was dragged, a pose was edited.
+ *
+ * A field is a function OF THE COORDINATES. The moment they change, the
+ * surface on screen belongs to a molecule that no longer exists, and it is
+ * still drawn in exactly the right place, registered to atoms that have moved.
+ * That is the worst failure this codebase has a name for: not an error, a
+ * picture that looks right.
+ *
+ * What can follow a drag and what cannot is a measured fact, not a preference:
+ *
+ *     mep      0.1 s     mlp   1.5 s        -> can recompute live
+ *     homo    15 s       mep_qm  226 s      -> cannot, at any frame rate
+ *
+ * (226 s is lapatinib at 234 basis functions, measured today.) So the classical
+ * pair recomputes on a debounce and the quantum four go STALE AND SAY SO. The
+ * one thing not on offer is leaving a quantum surface up as if it still
+ * described the molecule.
+ */
+export function invalidateFieldsForGeometry(nextMolfile: string | null) {
+    molfile = nextMolfile;
+    abortInFlight();
+    cubeCache.clear();          // every entry was keyed to the old coordinates
+
+    if (!activeKind) return;
+    const spec = Kinds[activeKind];
+    if (spec.quantum) {
+        // Clear it. A quantum field cannot be re-solved at drag speed, and
+        // dimming it or captioning it "stale" leaves a wrong surface on screen
+        // for a reader who is looking at the molecule, not at the caption.
+        const stale = activeKind;
+        void clearField();
+        setStatus(`Geometry changed — ${spec.label} cleared. It took `
+            + `${lastQuantumSeconds ?? '15+'} s to solve and cannot follow a drag; `
+            + `click it again when the pose is where you want it.`, 'idle');
+        offerRetry(stale, budgetFor(stale));
+        return;
+    }
+    // Classical: cheap enough to follow the geometry.
+    if (geometryTimer !== null) window.clearTimeout(geometryTimer);
+    geometryTimer = window.setTimeout(() => {
+        geometryTimer = null;
+        if (activeKind && !Kinds[activeKind].quantum) void requestField(activeKind);
+    }, GEOMETRY_DEBOUNCE_MS);
+}
+
+/** Long enough that a drag does not queue a request per frame, short enough
+ * that the field feels attached to the atom rather than chasing it. */
+const GEOMETRY_DEBOUNCE_MS = 250;
+let geometryTimer: number | null = null;
+let lastQuantumSeconds: number | null = null;
+
 export function autoRenderElectrostaticWell() {
     if (molfile && !busy && !activeKind) void requestField('mep');
 }
