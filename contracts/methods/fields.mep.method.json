@@ -1,0 +1,254 @@
+{
+  "schema_version": "1.0.0",
+  "method_id": "fields.mep",
+  "summary": "Classical electrostatic potential from Gasteiger point charges, on a grid sized to close its own contour.",
+  "implementation": {
+    "module": "backend.field_server",
+    "functions": [
+      "field_mep",
+      "prepare_mol",
+      "write_cube"
+    ],
+    "constants": [
+      "FIXED_ISO",
+      "GRID_MAX_DIM",
+      "ISO_ENCLOSED_FRACTION",
+      "ISO_SLIDER_FLOOR",
+      "PAD_MAX",
+      "PAD_STEP"
+    ]
+  },
+  "input": {
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "molecule"
+      ],
+      "properties": {
+        "molecule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "content",
+            "dimensionality"
+          ],
+          "properties": {
+            "kind": {
+              "const": "molfile"
+            },
+            "content": {
+              "type": "string",
+              "minLength": 40
+            },
+            "format": {
+              "enum": [
+                "mdl-v2000",
+                "mdl-v3000"
+              ],
+              "default": "mdl-v2000"
+            },
+            "dimensionality": {
+              "const": 3,
+              "description": "3 ONLY. A 2D structure must not reach a 3D physics method; molecule.embed is the explicit step that produces 3D, and an implicit SMILES→3D would report one method having run when two did."
+            },
+            "coordinate_space": {
+              "enum": [
+                "molecular",
+                "scene"
+              ],
+              "default": "molecular"
+            },
+            "coordinate_units": {
+              "const": "angstrom",
+              "default": "angstrom"
+            },
+            "identity": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "inchikey": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "compound_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "conformer_hash": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "spacing_angstrom": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 0.4
+            },
+            "pad_angstrom": {
+              "type": "number",
+              "minimum": 0,
+              "default": 4.0,
+              "description": "Starting pad. The box GROWS from here until the contour closes, so the value used is reported and may differ."
+            }
+          }
+        }
+      }
+    }
+  },
+  "output": {
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field"
+      ],
+      "properties": {
+        "field": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "native_units",
+            "grid",
+            "extrema"
+          ],
+          "properties": {
+            "kind": {
+              "const": "mep"
+            },
+            "native_units": {
+              "const": "kcal/mol"
+            },
+            "grid": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "dimensions"
+              ],
+              "properties": {
+                "dimensions": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": {
+                    "type": "integer",
+                    "minimum": 2
+                  }
+                },
+                "spacing_angstrom": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            },
+            "extrema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "min",
+                "max"
+              ],
+              "properties": {
+                "min": {
+                  "type": "number"
+                },
+                "max": {
+                  "type": "number"
+                }
+              }
+            },
+            "contour_closes_in_box": {
+              "type": "boolean"
+            }
+          }
+        },
+        "charges": {
+          "const": "gasteiger"
+        },
+        "net_charge": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "sigma_hole_representable": {
+          "type": "boolean"
+        }
+      }
+    },
+    "artifacts": [
+      {
+        "role": "field.cube",
+        "media_type": "application/vnd.dirac.gaussian-cube",
+        "typical_size_bytes": 1900000
+      }
+    ]
+  },
+  "refusals": [
+    {
+      "code": "UNPARAMETERIZED",
+      "condition": "Gasteiger has no parameters for an element present (hypervalent P, several metals)",
+      "points_at": "fields.qm.mep_qm",
+      "measured": "PF6- returns NaN charges; nan_to_num laundered them into a flat zero field that was cached and served as a result"
+    },
+    {
+      "code": "UNPARAMETERIZED",
+      "condition": "every charge is zero, so the field carries no information",
+      "points_at": "fields.qm.mep_qm",
+      "measured": "a zero field is silence, not a measurement"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "SIGMA_HOLE_NOT_REPRESENTABLE",
+      "meaning": "A spherical point charge cannot represent a sigma-hole at all, so this map cannot answer a halogen-bonding question.",
+      "scope": [
+        "output.field"
+      ],
+      "measured": "bromobenzene at the cap: Gasteiger -6.2 kcal/mol vs the QM surface route +9.9 — opposite signs, ~16 kcal/mol apart"
+    },
+    {
+      "code": "CLASSICAL_MODEL_SCOPE",
+      "meaning": "Point charges: no lone-pair or sigma-hole anisotropy, and ~0.4x the QM molecular dipole. A qualitative map, not an interaction energy.",
+      "scope": [
+        "output.field"
+      ],
+      "measured": "~0.4x the QM dipole"
+    }
+  ],
+  "execution": {
+    "supported_modes": [
+      "sync"
+    ],
+    "default_mode": "sync",
+    "inline_threshold_seconds": 5.0,
+    "resource_class": "cpu-classical",
+    "concurrency_class": "classical",
+    "supports_cancellation": false,
+    "deterministic": true,
+    "cacheable": true,
+    "side_effects": "writes_cache"
+  },
+  "exposure": {
+    "sdk": true,
+    "cli": true,
+    "mcp": "curated"
+  }
+}

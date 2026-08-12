@@ -1,0 +1,192 @@
+{
+  "schema_version": "1.0.0",
+  "method_id": "molecule.embed",
+  "summary": "SMILES or a 2D molfile to an ETKDG-embedded 3D conformer, MMFF-optimised where MMFF can type it.",
+  "description": "The EXPLICIT step between a 2D input and any 3D physics method. It exists as its own method so that a field invocation never silently embeds: two methods ran, and the provenance says so.",
+  "implementation": {
+    "module": "backend.field_server",
+    "functions": [
+      "embed_molecule"
+    ],
+    "constants": []
+  },
+  "input": {
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "smiles": {
+          "type": "string",
+          "minLength": 1
+        },
+        "molfile": {
+          "type": "string",
+          "minLength": 40
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "seed": {
+              "type": "integer",
+              "default": 42,
+              "description": "Determinism is part of the contract: same input and seed, same coordinates."
+            },
+            "optimize": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "smiles"
+          ]
+        },
+        {
+          "required": [
+            "molfile"
+          ]
+        }
+      ]
+    }
+  },
+  "output": {
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "molecule"
+      ],
+      "properties": {
+        "molecule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "content",
+            "dimensionality"
+          ],
+          "properties": {
+            "kind": {
+              "const": "molfile"
+            },
+            "content": {
+              "type": "string",
+              "minLength": 40
+            },
+            "format": {
+              "enum": [
+                "mdl-v2000",
+                "mdl-v3000"
+              ],
+              "default": "mdl-v2000"
+            },
+            "dimensionality": {
+              "const": 3,
+              "description": "3 ONLY. A 2D structure must not reach a 3D physics method; molecule.embed is the explicit step that produces 3D, and an implicit SMILES→3D would report one method having run when two did."
+            },
+            "coordinate_space": {
+              "enum": [
+                "molecular",
+                "scene"
+              ],
+              "default": "molecular"
+            },
+            "coordinate_units": {
+              "const": "angstrom",
+              "default": "angstrom"
+            },
+            "identity": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "inchikey": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "compound_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "conformer_hash": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "embedding": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "method": {
+              "const": "ETKDGv3"
+            },
+            "mmff_optimized": {
+              "type": "boolean"
+            },
+            "seed": {
+              "type": "integer"
+            },
+            "n_atoms_heavy": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "artifacts": [
+      {
+        "role": "molecule.molfile",
+        "media_type": "chemical/x-mdl-molfile",
+        "typical_size_bytes": 4000,
+        "optional": true
+      }
+    ]
+  },
+  "refusals": [
+    {
+      "code": "PARSE",
+      "condition": "the input cannot be read as a molecule",
+      "points_at": null,
+      "measured": "no retry on the same bytes can succeed"
+    },
+    {
+      "code": "UNPARAMETERIZED",
+      "condition": "MMFF cannot type the molecule and optimize was requested",
+      "points_at": "molecule.embed with optimize=false",
+      "measured": "MMFF cannot type PF6-, boronic acids or selenomethionine"
+    }
+  ],
+  "warnings": [],
+  "execution": {
+    "supported_modes": [
+      "sync"
+    ],
+    "default_mode": "sync",
+    "inline_threshold_seconds": 5.0,
+    "resource_class": "cpu-cheminformatics",
+    "concurrency_class": "classical",
+    "supports_cancellation": false,
+    "deterministic": true,
+    "cacheable": false,
+    "side_effects": "none"
+  },
+  "exposure": {
+    "sdk": true,
+    "cli": true,
+    "mcp": "curated"
+  }
+}

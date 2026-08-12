@@ -1,0 +1,222 @@
+{
+  "schema_version": "1.0.0",
+  "method_id": "fields.mlp",
+  "summary": "Molecular lipophilicity potential from Crippen atomic contributions with a Fauchere distance kernel.",
+  "implementation": {
+    "module": "backend.field_server",
+    "functions": [
+      "field_mlp",
+      "prepare_mol",
+      "write_cube"
+    ],
+    "constants": [
+      "FIXED_ISO",
+      "GRID_MAX_DIM",
+      "ISO_ENCLOSED_FRACTION",
+      "ISO_SLIDER_FLOOR",
+      "PAD_MAX",
+      "PAD_STEP"
+    ]
+  },
+  "input": {
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "molecule"
+      ],
+      "properties": {
+        "molecule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "content",
+            "dimensionality"
+          ],
+          "properties": {
+            "kind": {
+              "const": "molfile"
+            },
+            "content": {
+              "type": "string",
+              "minLength": 40
+            },
+            "format": {
+              "enum": [
+                "mdl-v2000",
+                "mdl-v3000"
+              ],
+              "default": "mdl-v2000"
+            },
+            "dimensionality": {
+              "const": 3,
+              "description": "3 ONLY. A 2D structure must not reach a 3D physics method; molecule.embed is the explicit step that produces 3D, and an implicit SMILES→3D would report one method having run when two did."
+            },
+            "coordinate_space": {
+              "enum": [
+                "molecular",
+                "scene"
+              ],
+              "default": "molecular"
+            },
+            "coordinate_units": {
+              "const": "angstrom",
+              "default": "angstrom"
+            },
+            "identity": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "inchikey": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "compound_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "conformer_hash": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "spacing_angstrom": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 0.4
+            }
+          }
+        }
+      }
+    }
+  },
+  "output": {
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field"
+      ],
+      "properties": {
+        "field": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "native_units",
+            "grid",
+            "extrema"
+          ],
+          "properties": {
+            "kind": {
+              "const": "mlp"
+            },
+            "native_units": {
+              "const": "MLP (Crippen/Fauchere)"
+            },
+            "grid": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "dimensions"
+              ],
+              "properties": {
+                "dimensions": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": {
+                    "type": "integer",
+                    "minimum": 2
+                  }
+                },
+                "spacing_angstrom": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            },
+            "extrema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "min",
+                "max"
+              ],
+              "properties": {
+                "min": {
+                  "type": "number"
+                },
+                "max": {
+                  "type": "number"
+                }
+              }
+            },
+            "contour_closes_in_box": {
+              "type": "boolean"
+            }
+          }
+        },
+        "total_logp": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "single_signed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "artifacts": [
+      {
+        "role": "field.cube",
+        "media_type": "application/vnd.dirac.gaussian-cube",
+        "typical_size_bytes": 1900000
+      }
+    ]
+  },
+  "refusals": [
+    {
+      "code": "UNPARAMETERIZED",
+      "condition": "Crippen has no contribution for an atom type present",
+      "points_at": null,
+      "measured": "exotic elements have no Crippen parameters at all"
+    }
+  ],
+  "warnings": [],
+  "execution": {
+    "supported_modes": [
+      "sync"
+    ],
+    "default_mode": "sync",
+    "inline_threshold_seconds": 5.0,
+    "resource_class": "cpu-classical",
+    "concurrency_class": "classical",
+    "supports_cancellation": false,
+    "deterministic": true,
+    "cacheable": false,
+    "side_effects": "none"
+  },
+  "exposure": {
+    "sdk": true,
+    "cli": true,
+    "mcp": "curated"
+  }
+}

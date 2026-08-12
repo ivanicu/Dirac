@@ -1,0 +1,188 @@
+{
+  "schema_version": "1.0.0",
+  "method_id": "surface.mep",
+  "summary": "Electrostatic potential on the molecular surface, from a QM density — the route that can answer a sigma-hole question.",
+  "description": "DECLARED HERE, NOT YET REGISTERED AT RUNTIME. This method lives in the physics daemon, which has no method registry: no method_id, no implementation version, no descriptor, and an in-process job queue that does not survive a restart. ADR-002 makes this manifest the authority, so declaring it is correct — and saying that it is unregistered is the difference between a plan and a claim.",
+  "implementation": {
+    "module": "backend.physics.server",
+    "functions": [
+      "compute_surface_mep"
+    ],
+    "constants": []
+  },
+  "input": {
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "molecule"
+      ],
+      "properties": {
+        "molecule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "content",
+            "dimensionality"
+          ],
+          "properties": {
+            "kind": {
+              "const": "molfile"
+            },
+            "content": {
+              "type": "string",
+              "minLength": 40
+            },
+            "format": {
+              "enum": [
+                "mdl-v2000",
+                "mdl-v3000"
+              ],
+              "default": "mdl-v2000"
+            },
+            "dimensionality": {
+              "const": 3,
+              "description": "3 ONLY. A 2D structure must not reach a 3D physics method; molecule.embed is the explicit step that produces 3D, and an implicit SMILES→3D would report one method having run when two did."
+            },
+            "coordinate_space": {
+              "enum": [
+                "molecular",
+                "scene"
+              ],
+              "default": "molecular"
+            },
+            "coordinate_units": {
+              "const": "angstrom",
+              "default": "angstrom"
+            },
+            "identity": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "inchikey": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "compound_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "conformer_hash": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "basis": {
+              "type": "string",
+              "enum": [
+                "sto-3g",
+                "6-31g",
+                "6-31g*",
+                "def2-svp",
+                "def2-tzvp"
+              ],
+              "default": "sto-3g",
+              "description": "METHOD-SPECIFIC, deliberately. The global Basis union was already false: the physics daemon accepts def2-tzvp and the fields daemon does not."
+            }
+          }
+        }
+      }
+    }
+  },
+  "output": {
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "type": "object"
+        }
+      }
+    },
+    "artifacts": [
+      {
+        "role": "surface.points",
+        "media_type": "application/vnd.dirac.float32-xyz",
+        "typical_size_bytes": 400000
+      }
+    ]
+  },
+  "refusals": [
+    {
+      "code": "UNSUPPORTED",
+      "condition": "the requested basis does not describe every element present",
+      "points_at": "the same method with basis=def2-svp",
+      "measured": "6-31g has no iodine ECP; without one iodine runs all-electron and the potential is wrong by 58 kcal/mol with no error raised"
+    },
+    {
+      "code": "OPEN_SHELL_SPIN_REQUIRED",
+      "condition": "a transition metal is present and spin was not supplied",
+      "points_at": null,
+      "measured": "electron parity implies a closed-shell singlet that is not the ground state; collapsing this into UNSUPPORTED reads as \"give up\" rather than \"answer one question\""
+    },
+    {
+      "code": "UNCONVERGED",
+      "condition": "DIIS stalls and the second-order (newton) rescue also fails",
+      "points_at": null,
+      "measured": "a field rendered from an unconverged wavefunction is visually indistinguishable from a converged one"
+    },
+    {
+      "code": "BUDGET",
+      "condition": "the pre-flight estimate exceeds compute_budget_seconds, or the in-loop watchdog fires",
+      "points_at": null,
+      "measured": "estimate 2.8 x 5.9e-9 x nao^4.03 s, fitted over 47 molecules; the 2.8x factor is the measured underestimate mid-range"
+    },
+    {
+      "code": "TOO_LARGE",
+      "condition": "more than 120 atoms including hydrogens",
+      "points_at": null,
+      "measured": "beyond that, HF on this box is not interactive at any basis"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE",
+      "meaning": "Orbital energies are not quantitatively quotable at this basis.",
+      "scope": [
+        "output.wavefunction.homo_ev",
+        "output.wavefunction.lumo_ev"
+      ],
+      "measured": "STO-3G ranks nitrobenzene as more electron-rich than benzene while def2-SVP ranks it last; water's LUMO moves 12 eV"
+    }
+  ],
+  "execution": {
+    "supported_modes": [
+      "sync",
+      "job"
+    ],
+    "default_mode": "job",
+    "inline_threshold_seconds": 2.0,
+    "resource_class": "cpu-qm",
+    "concurrency_class": "scf",
+    "supports_cancellation": false,
+    "deterministic": true,
+    "cacheable": true,
+    "side_effects": "writes_cache"
+  },
+  "exposure": {
+    "sdk": true,
+    "cli": true,
+    "mcp": "curated"
+  }
+}

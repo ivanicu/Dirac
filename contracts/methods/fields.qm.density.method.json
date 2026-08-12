@@ -1,8 +1,7 @@
 {
   "schema_version": "1.0.0",
-  "method_id": "fields.qm.homo",
-  "summary": "Highest occupied molecular orbital amplitude on a grid, from a real RHF/UHF wavefunction.",
-  "description": "Runs an SCF and writes the HOMO amplitude as a Gaussian cube registered to the input geometry. Refuses rather than rendering a field from an unconverged wavefunction: a decorative isosurface is indistinguishable from a real one on screen.",
+  "method_id": "fields.qm.density",
+  "summary": "Total electron density on a grid, from a real RHF/UHF wavefunction.",
   "implementation": {
     "module": "backend.field_server",
     "functions": [
@@ -55,7 +54,7 @@
             },
             "dimensionality": {
               "const": 3,
-              "description": "3 ONLY. A 2D structure must not reach a 3D physics method — the coordinate space is part of the type, and molecule.embed is the explicit step that produces 3D. An implicit SMILES→3D inside a field method would report one method having run when two did."
+              "description": "3 ONLY. A 2D structure must not reach a 3D physics method; molecule.embed is the explicit step that produces 3D, and an implicit SMILES→3D would report one method having run when two did."
             },
             "coordinate_space": {
               "enum": [
@@ -107,7 +106,7 @@
                 "def2-svp"
               ],
               "default": "sto-3g",
-              "description": "METHOD-SPECIFIC, deliberately. The global Basis union was already false: the physics daemon accepts def2-tzvp and this method does not. A closed union at the domain level asserts that every method shares one basis vocabulary, which is not true and was never true."
+              "description": "METHOD-SPECIFIC, deliberately. The global Basis union was already false: the physics daemon accepts def2-tzvp and the fields daemon does not."
             },
             "spin": {
               "type": [
@@ -115,26 +114,12 @@
                 "null"
               ],
               "default": null,
-              "description": "Unpaired electrons. null means 'infer from electron parity', which is REFUSED for a transition metal whose ground state is not the closed-shell singlet parity implies — see refusals."
+              "description": "Unpaired electrons; null means infer from parity, which is REFUSED for a transition metal."
             }
           }
         }
       }
-    },
-    "examples": [
-      {
-        "molecule": {
-          "kind": "molfile",
-          "content": "benzene\n  RDKit          3D\n\n 12 12  0  0  0  0  0  0  0  0999 V2000\n(elided in the descriptor; a full example lives in the fixtures)\n",
-          "dimensionality": 3,
-          "coordinate_space": "molecular"
-        },
-        "parameters": {
-          "basis": "sto-3g",
-          "spin": null
-        }
-      }
-    ]
+    }
   },
   "output": {
     "schema": {
@@ -142,8 +127,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "field",
-        "wavefunction"
+        "field"
       ],
       "properties": {
         "field": {
@@ -157,10 +141,10 @@
           ],
           "properties": {
             "kind": {
-              "const": "homo"
+              "const": "density"
             },
             "native_units": {
-              "const": "amplitude"
+              "const": "e/Bohr^3"
             },
             "grid": {
               "type": "object",
@@ -171,12 +155,12 @@
               "properties": {
                 "dimensions": {
                   "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
                   "items": {
                     "type": "integer",
                     "minimum": 2
-                  },
-                  "minItems": 3,
-                  "maxItems": 3
+                  }
                 },
                 "spacing_angstrom": {
                   "type": "number",
@@ -199,6 +183,9 @@
                   "type": "number"
                 }
               }
+            },
+            "contour_closes_in_box": {
+              "type": "boolean"
             }
           }
         },
@@ -214,7 +201,7 @@
           "properties": {
             "converged": {
               "const": true,
-              "description": "Only true is representable in a SUCCESS output. An unconverged SCF is a refusal, not a result with a flag — a caller that has to check a boolean will eventually not check it."
+              "description": "Only true is representable in a SUCCESS output. An unconverged SCF is a refusal, not a result with a flag — a caller who has to check a boolean will eventually not check it."
             },
             "method": {
               "type": "string"
@@ -272,18 +259,18 @@
     {
       "code": "UNSUPPORTED",
       "condition": "the requested basis does not describe every element present",
-      "points_at": "fields.qm.homo with basis=def2-svp",
-      "measured": "6-31g has no iodine ECP; without one, iodine runs all-electron and the potential is wrong by 58 kcal/mol with no error raised"
+      "points_at": "the same method with basis=def2-svp",
+      "measured": "6-31g has no iodine ECP; without one iodine runs all-electron and the potential is wrong by 58 kcal/mol with no error raised"
     },
     {
       "code": "OPEN_SHELL_SPIN_REQUIRED",
-      "condition": "a transition metal is present and spin was not given",
+      "condition": "a transition metal is present and spin was not supplied",
       "points_at": null,
-      "measured": "electron parity implies a closed-shell singlet that is not the ground state; the previous vocabulary collapsed this into UNSUPPORTED, which reads as 'give up' rather than 'answer one question'"
+      "measured": "electron parity implies a closed-shell singlet that is not the ground state; collapsing this into UNSUPPORTED reads as \"give up\" rather than \"answer one question\""
     },
     {
       "code": "UNCONVERGED",
-      "condition": "plain DIIS stalls and the second-order (newton) rescue also fails to converge",
+      "condition": "DIIS stalls and the second-order (newton) rescue also fails",
       "points_at": null,
       "measured": "a field rendered from an unconverged wavefunction is visually indistinguishable from a converged one"
     },
@@ -291,7 +278,7 @@
       "code": "BUDGET",
       "condition": "the pre-flight estimate exceeds compute_budget_seconds, or the in-loop watchdog fires",
       "points_at": null,
-      "measured": "estimate is 2.8 x 5.9e-9 x nao^4.03 seconds, fitted over 47 molecules on this box; the 2.8x safety factor is the measured underestimate in the middle of the range"
+      "measured": "estimate 2.8 x 5.9e-9 x nao^4.03 s, fitted over 47 molecules; the 2.8x factor is the measured underestimate mid-range"
     },
     {
       "code": "TOO_LARGE",
@@ -303,12 +290,12 @@
   "warnings": [
     {
       "code": "MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE",
-      "meaning": "The orbital energies are not quantitatively quotable at this basis.",
+      "meaning": "Orbital energies are not quantitatively quotable at this basis.",
       "scope": [
         "output.wavefunction.homo_ev",
         "output.wavefunction.lumo_ev"
       ],
-      "measured": "STO-3G ranks nitrobenzene as more electron-rich than benzene while def2-SVP ranks it last, and water's LUMO moves 12 eV between the two"
+      "measured": "STO-3G ranks nitrobenzene as more electron-rich than benzene while def2-SVP ranks it last; water's LUMO moves 12 eV"
     }
   ],
   "execution": {

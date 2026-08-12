@@ -67,6 +67,36 @@ def validate(descriptors: list[dict]) -> list[str]:
                 Draft202012Validator.check_schema(sch)
             except Exception as exc:                                 # noqa: BLE001
                 problems.append(f'{mid}: {side}.schema is not a valid schema: {exc}')
+        # ── the descriptor's implementation claim vs the RUNTIME registry ────
+        # A descriptor that names functions the registry does not hash is a
+        # descriptor whose implementation digest means something else. Compared as
+        # SETS: my first version of this check compared LISTS and reported a
+        # mismatch on fields.qm.homo that was only ordering — the third time today
+        # an instrument, not the data, was wrong. Order is not semantic here.
+        impl = d.get('implementation') or {}
+        if impl.get('module') == 'backend.field_server':
+            try:
+                import sys as _sys
+                _sys.path.insert(0, str(ROOT / 'backend'))
+                import method_registry as _mr                        # noqa: PLC0415
+                unit = _mr.UNITS.get(mid)
+            except Exception as exc:                                 # noqa: BLE001
+                problems.append(f'{mid}: cannot read the runtime registry to '
+                                f'cross-check implementation ({exc}) — reported '
+                                f'rather than skipped')
+                unit = None
+            if unit is not None:
+                if set(impl.get('functions', ())) != set(unit['fns']):
+                    problems.append(
+                        f'{mid}: implementation.functions '
+                        f'{sorted(set(impl.get("functions", ())))} != registry '
+                        f'{sorted(set(unit["fns"]))}')
+                if set(impl.get('constants', ())) != set(unit.get('consts', ())):
+                    problems.append(
+                        f'{mid}: implementation.constants '
+                        f'{sorted(set(impl.get("constants", ())))} != registry '
+                        f'{sorted(set(unit.get("consts", ())))}')
+
         in_schema = (d.get('input') or {}).get('schema')
         if in_schema:
             try:

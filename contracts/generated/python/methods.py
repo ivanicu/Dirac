@@ -3,7 +3,33 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-MethodId = Literal["fields.qm.homo"]
+MethodId = Literal["fields.mep", "fields.mlp", "fields.qm.density", "fields.qm.homo", "fields.qm.lumo", "fields.qm.mep_qm", "molecule.embed", "surface.mep", "surface.mep_at", "torsion.strain"]
+
+# fields.mep — Classical electrostatic potential from Gasteiger point charges, on a grid sized to close its own contour.
+class FieldsMepParameters(TypedDict, total=False):
+    spacing_angstrom: float
+    pad_angstrom: float
+
+FIELDSMEP_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 'inline_threshold_seconds': 5.0, 'resource_class': 'cpu-classical', 'concurrency_class': 'classical', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
+FIELDSMEP_REFUSALS = ['UNPARAMETERIZED']
+FIELDSMEP_WARNINGS = ['CLASSICAL_MODEL_SCOPE', 'SIGMA_HOLE_NOT_REPRESENTABLE']
+
+# fields.mlp — Molecular lipophilicity potential from Crippen atomic contributions with a Fauchere distance kernel.
+class FieldsMlpParameters(TypedDict, total=False):
+    spacing_angstrom: float
+
+FIELDSMLP_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 'inline_threshold_seconds': 5.0, 'resource_class': 'cpu-classical', 'concurrency_class': 'classical', 'supports_cancellation': False, 'deterministic': True, 'cacheable': False, 'side_effects': 'none'}
+FIELDSMLP_REFUSALS = ['UNPARAMETERIZED']
+FIELDSMLP_WARNINGS = []
+
+# fields.qm.density — Total electron density on a grid, from a real RHF/UHF wavefunction.
+class FieldsQmDensityParameters(TypedDict, total=False):
+    basis: Literal["sto-3g", "6-31g", "6-31g*", "def2-svp"]
+    spin: int | None
+
+FIELDSQMDENSITY_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'auto', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
+FIELDSQMDENSITY_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
+FIELDSQMDENSITY_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
 
 # fields.qm.homo — Highest occupied molecular orbital amplitude on a grid, from a real RHF/UHF wavefunction.
 class FieldsQmHomoParameters(TypedDict, total=False):
@@ -14,4 +40,55 @@ FIELDSQMHOMO_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'a
 FIELDSQMHOMO_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
 FIELDSQMHOMO_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
 
-METHOD_IDS = ['fields.qm.homo']
+# fields.qm.lumo — Lowest unoccupied molecular orbital amplitude on a grid, from a real RHF/UHF wavefunction.
+class FieldsQmLumoParameters(TypedDict, total=False):
+    basis: Literal["sto-3g", "6-31g", "6-31g*", "def2-svp"]
+    spin: int | None
+
+FIELDSQMLUMO_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'auto', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
+FIELDSQMLUMO_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
+FIELDSQMLUMO_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
+
+# fields.qm.mep_qm — Electrostatic potential from the QM density, rather than from point charges.
+class FieldsQmMepQmParameters(TypedDict, total=False):
+    basis: Literal["sto-3g", "6-31g", "6-31g*", "def2-svp"]
+    spin: int | None
+
+FIELDSQMMEPQM_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'auto', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
+FIELDSQMMEPQM_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
+FIELDSQMMEPQM_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
+
+# molecule.embed — SMILES or a 2D molfile to an ETKDG-embedded 3D conformer, MMFF-optimised where MMFF can type it.
+class MoleculeEmbedParameters(TypedDict, total=False):
+    seed: int
+    optimize: bool
+
+MOLECULEEMBED_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 'inline_threshold_seconds': 5.0, 'resource_class': 'cpu-cheminformatics', 'concurrency_class': 'classical', 'supports_cancellation': False, 'deterministic': True, 'cacheable': False, 'side_effects': 'none'}
+MOLECULEEMBED_REFUSALS = ['PARSE', 'UNPARAMETERIZED']
+MOLECULEEMBED_WARNINGS = []
+
+# surface.mep — Electrostatic potential on the molecular surface, from a QM density — the route that can answer a sigma-hole question.
+class SurfaceMepParameters(TypedDict, total=False):
+    basis: Literal["sto-3g", "6-31g", "6-31g*", "def2-svp", "def2-tzvp"]
+
+SURFACEMEP_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
+SURFACEMEP_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
+SURFACEMEP_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
+
+# surface.mep_at — Potential evaluated at caller-supplied coordinates, so the client can colour its own surface mesh.
+class SurfaceMepAtParameters(TypedDict, total=False):
+    basis: Literal["sto-3g", "6-31g", "6-31g*", "def2-svp", "def2-tzvp"]
+
+SURFACEMEPAT_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
+SURFACEMEPAT_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
+SURFACEMEPAT_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
+
+# torsion.strain — Relaxed torsion scan around a rotatable bond: where the given pose sits on the rotor energy curve.
+class TorsionStrainParameters(TypedDict, total=False):
+    basis: Literal["sto-3g", "6-31g", "6-31g*", "def2-svp", "def2-tzvp"]
+
+TORSIONSTRAIN_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
+TORSIONSTRAIN_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
+TORSIONSTRAIN_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
+
+METHOD_IDS = ['fields.mep', 'fields.mlp', 'fields.qm.density', 'fields.qm.homo', 'fields.qm.lumo', 'fields.qm.mep_qm', 'molecule.embed', 'surface.mep', 'surface.mep_at', 'torsion.strain']
