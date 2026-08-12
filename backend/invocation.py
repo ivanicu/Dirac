@@ -47,6 +47,7 @@ from typing import Any, Callable, Protocol
 
 import artifacts as A
 import catalog as C
+import execution as E
 import failures
 
 
@@ -131,11 +132,13 @@ class InvocationService:
                  store: Any | None = None,
                  ledger: Any | None = None,
                  cache: Any | None = None,
+                 executor: Any | None = None,
                  toolkit_versions: dict[str, str] | None = None) -> None:
         self.catalog = catalog
         self.store = store or A.MemoryArtifactStore()
         self.ledger = ledger
         self.cache = cache
+        self.executor = executor or E.InlineExecutor()
         self.toolkit_versions = toolkit_versions or {}
         self.counters = {'invoked': 0, 'cache_hit': 0, 'refused': 0, 'failed': 0,
                          'artifacts_registered': 0}
@@ -174,6 +177,46 @@ class InvocationService:
         out['method_id'] = method_id
         out['version'] = spec.version
         return out
+
+    # ── job control surface ─────────────────────────────────────────────────
+    def capabilities(self) -> dict:
+        return {
+            'job_store': {
+                'kind': getattr(self.ledger, 'kind', 'none') if self.ledger else 'none',
+                'durability': (getattr(self.ledger, 'durability', 'none')
+                               if self.ledger else 'none'),
+            },
+            'artifact_store': {
+                'kind': getattr(self, 'store_kind', type(self.store).__name__),
+                'durability': ('durable' if getattr(self, 'store_kind', '') == 'postgres'
+                               else 'process'),
+            },
+            'executor': {'kind': getattr(self.executor, 'kind', 'unknown')},
+            # Inline Python cannot interrupt C/Fortran work. Queued cancellation becomes
+            # available when ThreadExecutor owns a submitted future.
+            'cancellation': 'queued-only',
+        }
+
+    def list_jobs(self, *, state: str | None = None, limit: int = 100) -> list[dict]:
+        if self.ledger is None or not hasattr(self.ledger, 'list'):
+            return []
+        return self.ledger.list(state=state, limit=limit)
+
+    def get_job(self, job_id: str) -> dict:
+        row = self.ledger.get(job_id) if self.ledger is not None and \
+            hasattr(self.ledger, 'get') else None
+        if row is None:
+            raise failures.DiracNotFound(
+                f'no job {job_id!r}', details={'job_id': job_id})
+        return row
+
+    def cancel_job(self, job_id: str) -> dict:
+        row = self.ledger.request_cancel(job_id) if self.ledger is not None and \
+            hasattr(self.ledger, 'request_cancel') else None
+        if row is None:
+            raise failures.DiracNotFound(
+                f'no job {job_id!r}', details={'job_id': job_id})
+        return row
 
     # ── the write side ────────────────────────────────────────────────────────
     def invoke(self, method_id: str, payload: dict, *,
@@ -233,7 +276,7 @@ class InvocationService:
                 method_id=method_id, version=spec.version, budget_seconds=budget,
                 job_id=job_id, spec=spec,
                 deadline=(t0 + budget) if budget else None)
-            out = handler(payload, ctx)
+            out = self.executor.execute(handler, payload, ctx)
             if not isinstance(out, HandlerResult):
                 raise failures.DiracInternal(
                     f'{method_id}: its handler returned {type(out).__name__}, not a '
@@ -259,7 +302,11 @@ class InvocationService:
                                  inline_max=inline_max, request_id=request_id,
                                  job_id=job_id)
             if job_id is not None and self.ledger is not None:
-                self.ledger.done(job_id, seconds=round(time.time() - t0, 3))
+                self.ledger.done(
+                    job_id, seconds=round(time.time() - t0, 3),
+                    result_summary={'ok': True,
+                                    'result_keys': sorted(out.result),
+                                    'artifact_roles': [role for role, _ in out.artifacts]})
             return env
 
         except failures.DiracFailure as f:
@@ -314,7 +361,7 @@ class InvocationService:
                 method_row_id=getattr(self.ledger, 'method_row_for',
                                       lambda _m: None)(spec.method_id),
                 input_sha256=hashlib.sha256(canonical.encode()).digest(),
-                params={'method_id': spec.method_id},
+                params=dict(payload.get('parameters') or {}),
                 budget_seconds=budget, queued=False)
             return job_id
         except Exception as e:                                     # noqa: BLE001

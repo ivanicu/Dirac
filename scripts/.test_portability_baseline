@@ -1,4 +1,4 @@
-7
+9
 # Suites that import on a clean interpreter (no RDKit/numpy/pyscf), out of 13.
 # 3 → 4 on 2026-08-11 when backend/failures.py landed: refusal SEMANTICS became
 # testable without a chemistry toolkit, which is the first time this number moved

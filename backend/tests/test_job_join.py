@@ -85,10 +85,10 @@ def test_the_index_actually_refuses_a_second_inflight_row():
     assert first and not conflict1, f'the first insert failed: {first} {conflict1}'
     second, conflict2 = L.open(method_row_id=a_method_row(), input_sha256=sha,
                                params=params)
-    assert second is None and conflict2, (
-        f'a second identical in-flight row was ACCEPTED (id={second}) — '
-        f'job_one_inflight is not covering (method, input, params), so nothing '
-        f'would ever join and both requests would compute')
+    assert second == first and conflict2, (
+        f'the second open returned id={second}, conflict={conflict2} instead of '
+        f'joining existing job {first} — job_one_inflight is not covering the '
+        f'canonical request digest, so both requests would compute')
     L.failed(first, code='CANCELLED', detail='TEST premise row')
 
 

@@ -30,7 +30,9 @@ from typing import Any
 
 import artifacts
 import catalog
+import execution
 import invocation
+import jobs
 
 DEFAULT_DSN = 'dbname=dirac user=ivan'
 
@@ -142,9 +144,27 @@ def default_cache():
         return None
 
 
+def default_jobs():
+    """The deployment's JobStore, with an explicit process-durable fallback."""
+    try:
+        import field_server as FS
+        if not getattr(FS, '_db_ok', False):
+            FS.db_init()
+        if getattr(FS, '_db_ok', False):
+            current = getattr(FS, '_jobs', None)
+            if current is not None:
+                current.bind_method_rows(getattr(FS, '_method_ids', {}))
+                return current
+    except Exception as e:                                          # noqa: BLE001
+        print(f'[kernel] durable job store unavailable ({type(e).__name__}: {e}) — '
+              'job handles survive only this process', file=sys.stderr, flush=True)
+    return jobs.MemoryJobStore()
+
+
 def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
           store: Any | None = None, cache: Any | None = None,
-          with_cache: bool = True) -> invocation.InvocationService:
+          with_cache: bool = True, job_store: Any | None = None,
+          executor: Any | None = None) -> invocation.InvocationService:
     """A ready kernel. The only supported way to get one.
 
     `with_versions=False` skips the field_server import, for a caller that wants a
@@ -161,9 +181,14 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
     # what makes deleting the route's orchestration a refactor rather than a regression:
     # without it every cache hit becomes a fresh SCF.
     ca = cache if cache is not None else (default_cache() if with_cache else None)
-    svc = invocation.InvocationService(cat, store=st, cache=ca,
+    js = job_store if job_store is not None else default_jobs()
+    ex = executor or execution.InlineExecutor()
+    svc = invocation.InvocationService(cat, store=st, cache=ca, ledger=js, executor=ex,
                                       toolkit_versions=toolkit_versions())
     svc.store_kind = kind                    # type: ignore[attr-defined]
     svc.cache_kind = ('injected' if cache is not None
                       else ('field_cube' if ca is not None else 'none'))  # type: ignore[attr-defined]
+    svc.job_store_kind = getattr(js, 'kind', 'injected')  # type: ignore[attr-defined]
+    svc.job_durability = getattr(js, 'durability', 'unknown')  # type: ignore[attr-defined]
+    svc.executor_kind = getattr(ex, 'kind', 'injected')  # type: ignore[attr-defined]
     return svc

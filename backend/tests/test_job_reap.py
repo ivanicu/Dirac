@@ -64,12 +64,13 @@ def insert_running(worker: str, *, age_seconds: int = 0) -> str:
     sha = hashlib.sha256(f'{worker}|{age_seconds}|test'.encode()).digest()
     with fs._db() as conn, conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO app.job (method_row_id, state, input_sha256, params, "
+            "INSERT INTO app.job (method_row_id, state, input_sha256, request_digest, params, "
             "       worker, started_at, created_at) "
-            "VALUES (%s, 'running', %s, %s, %s, "
+            "VALUES (%s, 'running', %s, %s, %s, %s, "
             "        now() - %s * interval '1 second', "
             "        now() - %s * interval '1 second') RETURNING id",
-            (a_method_row(), sha, json.dumps({'test': True, 'age': age_seconds}),
+            (a_method_row(), sha, sha,
+             json.dumps({'test': True, 'age': age_seconds}),
              worker, age_seconds, age_seconds))
         return str(cur.fetchone()[0])
 

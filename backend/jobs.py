@@ -41,8 +41,11 @@ Three properties that are the actual content:
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import threading
 import uuid
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 # Counted rather than logged-and-forgotten. Same reasoning as the persist
@@ -89,6 +92,15 @@ def job_error_code(code: str | None) -> str:
     return 'INTERNAL'
 
 
+def canonical_request_digest(method_row_id: str, input_sha256: bytes,
+                             params: dict) -> bytes:
+    material = json.dumps(
+        {'method': str(method_row_id), 'input_sha256': bytes(input_sha256).hex(),
+         'parameters': params}, sort_keys=True, separators=(',', ':'),
+        ensure_ascii=False)
+    return hashlib.sha256(material.encode()).digest()
+
+
 class JobLedger:
     """Writes job rows through a caller-supplied connection factory.
 
@@ -97,16 +109,28 @@ class JobLedger:
     raises — which is the only way to prove property ① instead of asserting it.
     """
 
-    def __init__(self, connect: Callable[[], Any], worker: str) -> None:
+    kind = 'postgres'
+    durability = 'durable'
+
+    def __init__(self, connect: Callable[[], Any], worker: str,
+                 method_rows: dict[str, str] | None = None) -> None:
         self._connect = connect
         self.worker = worker
+        self._method_rows = dict(method_rows or {})
+
+    def method_row_for(self, method_id: str) -> str | None:
+        return self._method_rows.get(method_id)
+
+    def bind_method_rows(self, rows: dict[str, str]) -> None:
+        self._method_rows = dict(rows)
 
     # ── lifecycle ────────────────────────────────────────────────────────
     def open(self, *, method_row_id: str, input_sha256: bytes, params: dict,
              budget_seconds: float | None = None, est_seconds: float | None = None,
              compound_id: str | None = None,
              conformer_hash: bytes | None = None,
-             queued: bool = False) -> tuple[str | None, bool]:
+             queued: bool = False,
+             request_digest: bytes | None = None) -> tuple[str | None, bool]:
         """Insert a 'running' row. Returns (job_id, conflicted).
 
         THE SECOND VALUE EXISTS BECAUSE None HAD THREE MEANINGS — database
@@ -130,7 +154,8 @@ class JobLedger:
         if budget is not None and budget <= 0:
             budget = None
         try:
-            import json
+            request_digest = request_digest or canonical_request_digest(
+                method_row_id, input_sha256, params)
             with self._connect() as conn, conn.cursor() as cur:
                 # 'queued' MUST have a NULL started_at and 'running' MUST have one —
                 # job_running_has_start says `(state = 'queued') = (started_at IS
@@ -139,13 +164,14 @@ class JobLedger:
                 state = 'queued' if queued else 'running'
                 started = None if queued else 'now()'
                 cur.execute(
-                    "INSERT INTO app.job (method_row_id, state, input_sha256, params, "
+                    "INSERT INTO app.job (method_row_id, state, input_sha256, "
+                    "       request_digest, params, "
                     "       budget_seconds, est_seconds, compound_id, conformer_hash, "
                     f"       worker, started_at) "
-                    f"VALUES (%s, '{state}', %s, %s, %s, %s, %s, %s, %s, "
+                    f"VALUES (%s, '{state}', %s, %s, %s, %s, %s, %s, %s, %s, "
                     f"        {started or 'NULL'}) "
                     'RETURNING id',
-                    (method_row_id, input_sha256, json.dumps(params), budget,
+                    (method_row_id, input_sha256, request_digest, json.dumps(params), budget,
                      est_seconds, compound_id, conformer_hash, self.worker))
                 row = cur.fetchone()
             _bump('opened')
@@ -161,6 +187,18 @@ class JobLedger:
                 conflict = True
             else:
                 _bump('write_failed', f'{type(e).__name__}: {e}')
+            if conflict:
+                try:
+                    with self._connect() as conn, conn.cursor() as cur:
+                        cur.execute(
+                            'SELECT id FROM app.job WHERE method_row_id = %s '
+                            'AND request_digest = %s '
+                            "AND state IN ('queued','running') ORDER BY created_at DESC LIMIT 1",
+                            (method_row_id, request_digest))
+                        row = cur.fetchone()
+                    return (str(row[0]) if row else None), True
+                except Exception as lookup_error:                    # noqa: BLE001
+                    _bump('write_failed', f'{type(lookup_error).__name__}: {lookup_error}')
             return None, conflict
 
     def start(self, job_id: str | None) -> None:
@@ -183,16 +221,20 @@ class JobLedger:
             _bump('write_failed', f'{type(e).__name__}: {e}')
 
     def done(self, job_id: str | None, *, seconds: float,
-             field_cube_id: str | None = None, peak_rss_mb: int | None = None) -> None:
+             field_cube_id: str | None = None, peak_rss_mb: int | None = None,
+             result_summary: dict | None = None) -> None:
         if job_id is None:
             return
         try:
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute(
                     "UPDATE app.job SET state = 'done', finished_at = now(), "
-                    '       seconds = %s, field_cube_id = %s, peak_rss_mb = %s '
+                    '       seconds = %s, field_cube_id = %s, peak_rss_mb = %s, '
+                    '       result_summary = %s '
                     "WHERE id = %s AND state = 'running'",
-                    (round(float(seconds), 3), field_cube_id, peak_rss_mb, job_id))
+                    (round(float(seconds), 3), field_cube_id, peak_rss_mb,
+                     json.dumps(result_summary) if result_summary is not None else None,
+                     job_id))
             _bump('done')
         except Exception as e:                                        # noqa: BLE001
             _bump('write_failed', f'{type(e).__name__}: {e}')
@@ -221,9 +263,78 @@ class JobLedger:
         except Exception as e:                                        # noqa: BLE001
             _bump('write_failed', f'{type(e).__name__}: {e}')
 
+    # ── public query/cancellation contract ──────────────────────────────
+    def get(self, job_id: str) -> dict | None:
+        rows = self._query_jobs('WHERE j.id = %s', (job_id,), limit=1)
+        return rows[0] if rows else None
+
+    def list(self, *, state: str | None = None, limit: int = 100) -> list[dict]:
+        if state:
+            return self._query_jobs('WHERE j.state = %s', (state,), limit=limit)
+        return self._query_jobs('', (), limit=limit)
+
+    def request_cancel(self, job_id: str) -> dict | None:
+        """Cancel queued work; report running work as not interruptible.
+
+        A queued row can transition atomically; a running row remains running and its
+        cancel_requested_at records intent without pretending the SCF was interrupted.
+        """
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    'UPDATE app.job SET cancel_requested_at = coalesce('
+                    'cancel_requested_at, now()) '
+                    "WHERE id = %s AND state IN ('queued','running')", (job_id,))
+                cur.execute(
+                    "UPDATE app.job SET state = 'cancelled', "
+                    "       started_at = coalesce(started_at, now()), finished_at = now(), "
+                    "       error_code = 'CANCELLED', error_detail = 'cancelled while queued' "
+                    " WHERE id = %s AND state = 'queued' RETURNING id", (job_id,))
+                cancelled = cur.fetchone() is not None
+            job = self.get(job_id)
+            if job is not None:
+                job['cancel'] = {
+                    'requested': True,
+                    'accepted': cancelled,
+                    'capability': ('queued' if cancelled else 'not_interruptible'),
+                }
+            return job
+        except Exception as e:                                       # noqa: BLE001
+            _bump('write_failed', f'{type(e).__name__}: {e}')
+            return None
+
+    def _query_jobs(self, where: str, params: tuple, *, limit: int) -> list[dict]:
+        sql = (
+            'SELECT j.id, m.method_id, m.version, j.state::text, j.params, '
+            'j.budget_seconds, j.est_seconds, j.seconds, j.error_code::text, '
+            'j.error_detail, j.worker, j.created_at, j.started_at, j.finished_at, '
+            'j.request_digest, j.durability, j.cancel_requested_at, j.result_summary, '
+            "coalesce(jsonb_agg(jsonb_build_object('id', a.id, 'role', ja.role, "
+            "'sha256', encode(a.blob_sha256, 'hex'), 'media_type', a.media_type, "
+            "'size_bytes', a.size_bytes)) FILTER (WHERE a.id IS NOT NULL), '[]'::jsonb) "
+            'FROM app.job j JOIN meta.method m ON m.id = j.method_row_id '
+            'LEFT JOIN app.job_artifact ja ON ja.job_id = j.id '
+            'LEFT JOIN app.artifact a ON a.id = ja.artifact_id '
+            f'{where} GROUP BY j.id, m.method_id, m.version ORDER BY j.created_at DESC '
+            'LIMIT %s')
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(sql, (*params, max(1, min(int(limit), 500))))
+                rows = cur.fetchall()
+        except Exception as e:                                       # noqa: BLE001
+            _bump('write_failed', f'{type(e).__name__}: {e}')
+            return []
+        keys = ('id', 'method_id', 'method_version', 'state', 'parameters',
+                'budget_seconds', 'estimated_seconds', 'seconds', 'error_code',
+                'error_detail', 'worker', 'created_at', 'started_at', 'finished_at',
+                'request_digest', 'durability', 'cancel_requested_at', 'result_summary',
+                'artifacts')
+        return [{k: _json_value(v) for k, v in zip(keys, row)} for row in rows]
+
     # ── coordination ─────────────────────────────────────────────────────
     def wait_for(self, *, method_row_id: str, input_sha256: bytes, params: dict,
-                 timeout: float, poll: float = 0.25) -> dict:
+                 timeout: float, poll: float = 0.25,
+                 request_digest: bytes | None = None) -> dict:
         """Wait for the identical job someone else is already running.
 
         THIS IS THE LEDGER BECOMING A COORDINATOR RATHER THAN AN OBSERVER, and
@@ -246,11 +357,11 @@ class JobLedger:
         compute it after all, because a waiter that gives up must degrade to
         doing the work rather than to an error the molecule did not cause.
         """
-        import json
         import time
         deadline = time.time() + max(0.0, timeout)
         t0 = time.time()
-        params_json = json.dumps(params)
+        request_digest = request_digest or canonical_request_digest(
+            method_row_id, input_sha256, params)
         last: dict = {}          # observations, never a verdict
         while time.time() < deadline:
             try:
@@ -258,10 +369,9 @@ class JobLedger:
                     cur.execute(
                         'SELECT state::text, error_code::text, error_detail '
                         '  FROM app.job '
-                        ' WHERE method_row_id = %s AND input_sha256 = %s '
-                        "   AND md5(params::text) = md5(%s::jsonb::text) "
+                        ' WHERE method_row_id = %s AND request_digest = %s '
                         ' ORDER BY created_at DESC LIMIT 1',
-                        (method_row_id, input_sha256, params_json))
+                        (method_row_id, request_digest))
                     row = cur.fetchone()
             except Exception as e:                                   # noqa: BLE001
                 _bump('write_failed', f'{type(e).__name__}: {e}')
@@ -357,6 +467,138 @@ class JobLedger:
         except Exception as e:                                        # noqa: BLE001
             _bump('write_failed', f'{type(e).__name__}: {e}')
             return out
+
+
+PostgresJobStore = JobLedger
+
+
+class MemoryJobStore:
+    """The same job contract with process-lifetime durability.
+
+    This is a real fallback, not a fake durable handle: callers can inspect ``durability``
+    and know that a restart will erase the records.
+    """
+
+    kind = 'memory'
+    durability = 'process'
+
+    def __init__(self) -> None:
+        self.worker = 'memory'
+        self._rows: dict[str, dict] = {}
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def method_row_for(method_id: str) -> str:
+        return method_id
+
+    def open(self, *, method_row_id: str, input_sha256: bytes, params: dict,
+             budget_seconds: float | None = None, est_seconds: float | None = None,
+             queued: bool = False, request_digest: bytes | None = None,
+             **_kw) -> tuple[str | None, bool]:
+        digest = bytes(request_digest or canonical_request_digest(
+            method_row_id, input_sha256, params)).hex()
+        with self._lock:
+            for row in self._rows.values():
+                if (row['_digest'] == digest and row['method_id'] == method_row_id
+                        and row['parameters'] == params
+                        and row['state'] in ('queued', 'running')):
+                    return row['id'], True
+            jid = new_uuid()
+            now = _now()
+            self._rows[jid] = {
+                'id': jid, 'method_id': method_row_id, 'method_version': None,
+                'state': 'queued' if queued else 'running', 'parameters': dict(params),
+                'budget_seconds': budget_seconds, 'estimated_seconds': est_seconds,
+                'seconds': None, 'error_code': None, 'error_detail': None,
+                'worker': self.worker, 'created_at': now,
+                'started_at': None if queued else now, 'finished_at': None,
+                'request_digest': digest, 'durability': self.durability,
+                'cancel_requested_at': None, 'result_summary': None,
+                'artifacts': [], '_digest': digest,
+            }
+        return jid, False
+
+    def start(self, job_id: str | None) -> None:
+        with self._lock:
+            row = self._rows.get(job_id or '')
+            if row and row['state'] == 'queued':
+                row['state'], row['started_at'] = 'running', _now()
+
+    def done(self, job_id: str | None, *, seconds: float,
+             result_summary: dict | None = None, **_kw) -> None:
+        with self._lock:
+            row = self._rows.get(job_id or '')
+            if row and row['state'] == 'running':
+                row.update(state='done', seconds=round(float(seconds), 3),
+                           finished_at=_now(), result_summary=result_summary)
+
+    def failed(self, job_id: str | None, *, code: str, detail: str,
+               seconds: float | None = None) -> None:
+        with self._lock:
+            row = self._rows.get(job_id or '')
+            if row and row['state'] in ('queued', 'running'):
+                row.update(state='cancelled' if code == 'CANCELLED' else 'failed',
+                           started_at=row['started_at'] or _now(), finished_at=_now(),
+                           seconds=seconds, error_code=code, error_detail=detail)
+
+    def get(self, job_id: str) -> dict | None:
+        with self._lock:
+            row = self._rows.get(job_id)
+            return _public_memory(row) if row else None
+
+    def list(self, *, state: str | None = None, limit: int = 100) -> list[dict]:
+        with self._lock:
+            rows = [r for r in self._rows.values() if state is None or r['state'] == state]
+            rows.sort(key=lambda r: r['created_at'], reverse=True)
+            return [_public_memory(r) for r in rows[:max(1, min(int(limit), 500))]]
+
+    def request_cancel(self, job_id: str) -> dict | None:
+        with self._lock:
+            row = self._rows.get(job_id)
+            if row is None:
+                return None
+            accepted = row['state'] == 'queued'
+            if row['state'] in ('queued', 'running'):
+                row['cancel_requested_at'] = row['cancel_requested_at'] or _now()
+            if accepted:
+                row.update(state='cancelled', started_at=_now(), finished_at=_now(),
+                           error_code='CANCELLED', error_detail='cancelled while queued')
+            out = _public_memory(row)
+            out['cancel'] = {'requested': True, 'accepted': accepted,
+                             'capability': ('queued' if accepted else
+                                            'not_interruptible')}
+            return out
+
+    def reap(self) -> dict[str, int]:
+        return {'dead_worker': 0, 'overran': 0}
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _public_memory(row: dict) -> dict:
+    return {k: v for k, v in row.items() if not k.startswith('_')}
+
+
+def _json_value(value: Any) -> Any:
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return bytes(value).hex()
+    if isinstance(value, list):
+        return [_json_value(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _json_value(v) for k, v in value.items()}
+    try:
+        from decimal import Decimal
+        if isinstance(value, Decimal):
+            return float(value)
+    except ImportError:                                             # pragma: no cover
+        pass
+    return value
 
 
 # The hard ceiling: MAX_MAX_SECONDS in field_server is 900 s, and a job that has

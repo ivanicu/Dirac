@@ -310,10 +310,38 @@ def handle_v2(method: str, path: str, body: dict | None) -> tuple[int, dict] | N
     """
     if not path.startswith('/v2/'):
         return None
-    q = path.split('?', 1)
-    path = q[0]
+    split = urllib.parse.urlsplit(path)
+    path = split.path
+    query = urllib.parse.parse_qs(split.query)
 
     try:
+        if method == 'GET' and path == '/v2/meta':
+            svc = _kernel()
+            return 200, {'ok': True,
+                         'data': {'api_version': '2.0.0',
+                                  'supported_envelopes': [2],
+                                  'capabilities': svc.capabilities()},
+                         'meta': {'envelope': 2}}
+
+        if method == 'GET' and path == '/v2/jobs':
+            svc = _kernel()
+            state = (query.get('state') or [None])[0]
+            limit = int((query.get('limit') or ['100'])[0])
+            return 200, {'ok': True,
+                         'data': {'jobs': svc.list_jobs(state=state, limit=limit)},
+                         'meta': {'envelope': 2,
+                                  'durability': getattr(svc, 'job_durability', None)}}
+
+        if path.startswith('/v2/jobs/'):
+            rest = urllib.parse.unquote(path[len('/v2/jobs/'):]).strip('/')
+            if method == 'POST' and rest.endswith('/cancel'):
+                job_id = rest[:-len('/cancel')].strip('/')
+                return 200, {'ok': True, 'data': _kernel().cancel_job(job_id),
+                             'meta': {'envelope': 2}}
+            if method == 'GET' and rest and '/' not in rest:
+                return 200, {'ok': True, 'data': _kernel().get_job(rest),
+                             'meta': {'envelope': 2}}
+
         if method == 'GET' and path == '/v2/methods':
             svc = _kernel()
             return 200, {'ok': True, 'data': {'methods': svc.list_methods()},
@@ -489,7 +517,8 @@ def db_init() -> bool:
                   f'({len(_method_versions)} source digests)', file=sys.stderr, flush=True)
             global _jobs
             _jobs = jobs.JobLedger(
-                _db, jobs.make_worker_name(os.getpid(), _producer_version()))
+                _db, jobs.make_worker_name(os.getpid(), _producer_version()),
+                method_rows=_method_ids)
             # A restart leaves rows 'running' that no process is doing. Without
             # the reap, v_job_live's age_seconds grows without bound and the
             # ledger reports work nobody is performing — worse than no ledger,
