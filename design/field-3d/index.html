@@ -73,6 +73,22 @@
   figcaption .cost { display:block; margin-top:8px; padding-top:7px; border-top:1px dotted var(--rule);
                      font-size:9px; color:var(--ink-3); }
   figcaption .cost b { color:var(--accent); font-weight:600; }
+  /* ── the hero ─────────────────────────────────────────────────────────── */
+  .hero { display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);
+          gap:38px; align-items:start; padding:44px 0 8px; border-bottom:1px solid var(--rule); }
+  .hero .frame { border:1px solid var(--rule); background:#0e0e0c; }
+  .hero h2 { font-family:var(--serif); font-weight:400; font-size:26px; margin:0 0 14px; letter-spacing:-.01em; }
+  .hero p { font-size:11.5px; line-height:1.72; color:var(--ink-2); margin:0 0 13px; max-width:60ch; }
+  .hero p strong { color:var(--ink); font-weight:600; }
+  .chan { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:16px 0 0; }
+  .chan button { text-align:left; padding:9px 11px; border:1px solid var(--rule); background:transparent;
+                 font:inherit; font-size:10px; color:var(--ink-2); cursor:pointer; line-height:1.45; }
+  .chan button[aria-pressed="true"] { border-color:var(--ink); color:var(--ink); background:rgba(128,128,128,.09); }
+  .chan button b { display:block; font-size:10.5px; color:var(--ink); margin-bottom:2px; }
+  .chan button[aria-pressed="false"] b { color:var(--ink-3); }
+  .chan button em { font-style:normal; color:var(--ink-3); }
+  @media (max-width:980px){ .hero{grid-template-columns:1fr;} }
+
   figure.broken .frame { background:repeating-linear-gradient(45deg,#f3e6e2,#f3e6e2 6px,#ecd8d2 6px,#ecd8d2 12px); }
 
   footer { max-width:1400px; margin:60px auto 0; padding:28px 40px 0; border-top:1px solid var(--rule);
@@ -126,7 +142,41 @@
   <div class="perf" id="perf">—</div>
 </div></div>
 
-<main id="main"></main>
+<main id="main"><section class="hero" id="hero">
+  <div class="frame" style="position:relative;aspect-ratio:1;cursor:grab">
+    <canvas id="heroCv"></canvas></div>
+  <div>
+    <h2>Those three are one instrument, not three candidates</h2>
+    <p>
+      Silhouette, gradient magnitude and volumetric LIC are <strong>the same
+      discovery three times</strong>. Every one is dark-ground, additive and
+      <strong>non-occluding</strong>: the field arrives as light rather than as
+      plastic, and the molecule stays visible through it. That is a compositing
+      model, not a look — and additive light is commutative, so they do not fight
+      when stacked. The neutral shell (33) is already in the same family.
+    </p>
+    <p>
+      They also share one gap, and in this domain it is the worst one available:
+      <strong>none of them carries sign.</strong> |∇V| discards it by
+      construction, LIC's noise destroys it, a rim is the thinnest possible
+      carrier for a hue. Donor versus acceptor is the first question anyone asks
+      of an electrostatic potential. Three languages that cannot answer it are an
+      atmosphere, not an instrument.
+    </p>
+    <p>
+      So: treat them as <strong>separable channels of one render</strong> and add
+      back the one they are all missing. Switch each off to see what it was
+      carrying.
+    </p>
+    <div class="chan" id="chan">
+      <button data-c="0" aria-pressed="true"><b>Shape</b><em>rim of the ±iso surface — the only channel that states a boundary</em></button>
+      <button data-c="1" aria-pressed="true"><b>Steepness</b><em>|∇V| in solvent — where a partner feels a force</em></button>
+      <button data-c="2" aria-pressed="true"><b>Direction</b><em>LIC grain along ∇V — which way it pulls</em></button>
+      <button data-c="3" aria-pressed="true"><b>Sign</b><em>the channel all three originals threw away</em></button>
+      <button data-c="g" aria-pressed="false" style="grid-column:1/-1"><b>Ground: dark → the app's own #f1f0eb</b><em>every one of these was designed on black; the panel is on paper. Additive inverts to subtractive — the architecture survives, the palette does not.</em></button>
+    </div>
+  </div>
+</section></main>
 
 <footer>
   <p>
@@ -198,6 +248,7 @@
   const byFam = {};
   for (const m of MODES) (byFam[m.fam] = byFam[m.fam] || []).push(m);
 
+  const HERO = MODES.find(m => m.fam === 'HERO');
   for (const key of Object.keys(FAMS)) {
     const items = byFam[key] || [];
     if (!items.length) continue;
@@ -228,6 +279,24 @@
   document.getElementById('title').textContent =
     `${idx} volumetric languages for one molecular field`;
 
+  // ── the hero ────────────────────────────────────────────────────────────
+  const HSIZE = 560, HR = Math.round(HSIZE * Math.min(DPR, 1.4));
+  const heroEngine = await FieldEngine.create(D, HR);
+  const heroCv = document.getElementById('heroCv');
+  heroCv.width = heroCv.height = HR;
+  heroCv.style.width = heroCv.style.height = '100%';
+  const heroCtx = heroCv.getContext('2d');
+  const chan = [1, 1, 1, 1]; let ground = 0;
+  for (const b of document.querySelectorAll('#chan button')) {
+    b.onclick = () => {
+      const on = b.getAttribute('aria-pressed') !== 'true';
+      b.setAttribute('aria-pressed', on);
+      if (b.dataset.c === 'g') { ground = on ? 1 : 0;
+        document.querySelector('#hero .frame').style.background = on ? '#f1f0eb' : '#0e0e0c'; }
+      else chan[+b.dataset.c] = on ? 1 : 0;
+    };
+  }
+
   // ── shared camera ───────────────────────────────────────────────────────
   const view = { yaw: 0.55, pitch: 0.28, dist: D._dist, spin: true };
   let iso = 0.22, steps = 112, skeleton = true;
@@ -244,8 +313,12 @@
 
   // drag ANY tile, they all turn — one camera is the whole point of the page
   let drag = null;
-  for (const t of tiles) {
-    const f = t.fig.querySelector('.frame');
+  // NOT `frames`: window.frames is a built-in, so `const frames` throws
+  // "Identifier 'frames' has already been declared" and kills the whole script
+  // — the page rendered nothing at all and the only symptom was a blank hero.
+  const dragFrames = [...tiles.map(t => t.fig.querySelector('.frame')),
+                      document.querySelector('#hero .frame')].filter(Boolean);
+  for (const f of dragFrames) {
     f.addEventListener('pointerdown', ev => {
       drag = { x: ev.clientX, y: ev.clientY, yaw: view.yaw, pitch: view.pitch };
       f.setPointerCapture(ev.pointerId); view.spin = false;
@@ -291,10 +364,20 @@
     const rot = orbit(view.yaw, view.pitch);
     const pts = projectAtoms(D, rot, view.dist, TILE);
 
+    if (HERO) {
+      heroEngine.render(HERO.k, HERO.s, HERO.bg, rot, view.dist, iso, Math.max(steps, 128),
+                        now*0.001, chan, ground);
+      heroCtx.drawImage(heroEngine.canvas, 0, 0, HR, HR);
+      if (skeleton) {
+        const hp = projectAtoms(D, rot, view.dist, HR);
+        drawSkeleton(heroCtx, hp, HR, ground < 0.5);
+      }
+    }
+
     let total = 0;
     for (const t of tiles) {
       const t0 = performance.now();
-      const ok = engine.render(t.m.k, t.m.s, t.m.bg, rot, view.dist, iso, steps, now * 0.001);
+      const ok = engine.render(t.m.k, t.m.s, t.m.bg, rot, view.dist, iso, steps, now * 0.001, [1,1,1,1], 0);
       if (!ok) {
         if (!t.fig.classList.contains('broken')) {
           t.fig.classList.add('broken');

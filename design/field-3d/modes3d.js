@@ -845,3 +845,148 @@ const FAMILIES3D = {
 
 window.MODES3D = M;
 window.FAMILIES3D = FAMILIES3D;
+
+
+/**
+ * ══ THE COMPOSITE ═══════════════════════════════════════════════════════════
+ *
+ * Ivan kept three: silhouette (05), gradient magnitude (21), volumetric LIC
+ * (24). They are not three picks. They are ONE discovery wearing three hats:
+ * every one of them is DARK-GROUND, ADDITIVE, and NON-OCCLUDING — the field
+ * arrives as light rather than as plastic, and the molecule stays visible
+ * through it. That is a compositing model, not a look, and additive light is
+ * commutative, so the three do not fight when stacked. Neither does the fourth
+ * one that belongs with them, the neutral shell (33), which is already dark and
+ * already additive.
+ *
+ * They also share one fatal gap, and it is the gap that matters most in this
+ * particular domain: NONE OF THEM CARRIES SIGN. |grad V| discards it by
+ * construction, LIC's noise destroys it, and a rim is the thinnest possible
+ * carrier for a hue. For an electrostatic potential, sign — donor versus
+ * acceptor — is the first question anyone asks. Three languages that cannot
+ * answer it are an atmosphere, not an instrument.
+ *
+ * So the proposal is not "ship three of thirty-seven". It is: treat them as
+ * SEPARABLE CHANNELS of one render, and add back the channel they are all
+ * missing. Shape from the rim, steepness from |grad V|, direction from the LIC
+ * grain, sign from a signed tint — four orthogonal quantities on four channels
+ * that a viewer can decode independently, and each can be switched off to see
+ * what it was carrying.
+ *
+ * The ground toggle is here because the app's scene background is #f1f0eb.
+ * These languages were all designed on black. Whether an additive model
+ * survives inversion onto the panel's actual paper is a question to LOOK at,
+ * not to argue about.
+ */
+M.push({ k:'composite', fam:'HERO', t:'The composite', bg:'vec3(0.055,0.055,0.050)',
+ d:'Silhouette, steepness, direction and sign as four independent channels of one additive render.',
+ c:'Proposes: those three are one instrument with a missing channel, not three candidates.',
+ s:`vec4 shade(vec3 ro, vec3 rd, float t0, float t1) {
+    float dt = (t1-t0)/float(uSteps);
+    vec3 DARK  = vec3(0.055,0.055,0.050);
+    vec3 PAPERBG = vec3(0.945,0.941,0.921);        // the app's own --scene-bg
+    float L = uGround;                              // 0 dark, 1 paper
+    vec3 base = mix(DARK, PAPERBG, L);
+
+    float steep = 0.0, grain = 0.0, signAcc = 0.0, wSign = 0.0;
+    vec3  rim = vec3(0.0);
+    float prev = 0.0; bool first = true;
+
+    for (int i = 0; i < 512; i++) {
+        if (i >= uSteps) break;
+        vec3 p = ro + rd*(t0 + dt*float(i));
+        vec3 u = uvw(p);
+        float v = mep(u);
+        bool solvent = rho(u) <= uRhoSurf;
+
+        // ① SHAPE — the rim, and the only channel that states a boundary.
+        // Also gated on known(): the window drives the value to zero across the
+        // face, which registers as a genuine level CROSSING, so the rim drew a
+        // flat quadrilateral where the box is. Third artefact from one window —
+        // the value, its derivative, and now its level set.
+        if (!first && known(u) > 0.985 && abs(v) > uIso && abs(prev) <= uIso) {
+            vec3 n = normalize(-gradMep(u)*sign(v));
+            float r = pow(1.0 - abs(dot(n, rd)), 3.0);
+            rim += mix(vec3(1.0), (v < 0.0 ? NEG : POS), 0.55) * r * 1.35;
+        }
+        prev = v; first = false;
+
+        if (!solvent) continue;
+        // THE WINDOW HAS A DERIVATIVE. boxWin() removes the hexagonal box from
+        // every value-based mode, and in doing so it puts a large artificial
+        // gradient at exactly the box face — so the two gradient channels drew
+        // the box straight back, fainter and harder to attribute. A fix applied
+        // to a quantity is not applied to its derivative.
+        if (known(u) < 0.985) continue;
+        vec3 g = gradMep(u); float gm = length(g);
+
+        // ② STEEPNESS — where a partner feels a force, not where V is large
+        steep += gm * dt * 0.30;
+
+        // ③ DIRECTION — noise smeared along grad V; the grain IS the vector
+        if (gm > 0.04) {
+            vec3 dir = g/gm; float sm = 0.0;
+            for (int k = -3; k <= 3; k++) sm += hash(floor((u + dir*float(k)*0.011)*150.0));
+            grain += pow(sm/7.0, 3.0) * clamp(gm*0.5,0.0,1.0) * dt * 3.4;
+        }
+
+    }
+
+    // ④ SIGN — and the ray integral was the WRONG CARRIER for it. A weighted
+    // mean along a ray is a weak, washy quantity: weight it honestly by its own
+    // support and it nearly vanishes; do not, and it paints the whole bounding
+    // box. Two rounds of tuning were two rounds of arguing with the estimator
+    // instead of replacing it.
+    //
+    // Family C already contains the answer. Sign is meaningful WHERE A PARTNER
+    // CAN TOUCH IT, so it belongs on the 0.001 a.u. density surface — a hard
+    // 2D locus, one value per ray, nothing to average away. Drawn at low alpha
+    // it stays non-occluding, which is the property the other three channels
+    // were chosen for in the first place.
+    float dt2 = (t1-t0)/float(uSteps);
+    float prevR = -1.0; bool firstR = true;
+    for (int i = 0; i < 512; i++) {
+        if (i >= uSteps) break;
+        vec3 u = uvw(ro + rd*(t0 + dt2*float(i)));
+        float r = rho(u);
+        if (!firstR && r > uRhoSurf && prevR <= uRhoSurf) {
+            signAcc = clamp(mep(u)/0.55, -1.0, 1.0);
+            wSign = max(0.0, dot(normalize(-gradRho(u)), -rd));   // facing the eye
+            break;
+        }
+        prevR = r; firstR = false;
+    }
+
+    steep = clamp(steep, 0.0, 1.0);
+    // A MEAN IS NOT A MEASUREMENT UNTIL YOU SAY HOW MUCH IT AVERAGED. sgn is
+    // the signal-weighted mean sign along the ray, and a ray that grazes the
+    // molecule and collects almost nothing still returns a full-strength +-1 —
+    // so the sign channel painted the entire box cross-section a flat colour
+    // and read, again, as a box. Scale by the WEIGHT that produced the mean.
+    float sgn = signAcc;
+    float face = 0.30 + 0.70*wSign;      // the surface reads brighter facing you
+
+    // additive on black; the SAME quantities subtractive on paper, because ink
+    // removes light where a phosphor adds it. The architecture inverts; the
+    // palette does not, which is the whole reason this toggle exists.
+    vec3 shapeC = rim * uChan.x;
+    vec3 steepC = vec3(0.62,0.72,0.95) * pow(steep,0.75) * 1.30 * uChan.y;
+    vec3 grainC = vec3(0.80,0.84,0.95) * grain * 0.85 * uChan.z;
+    vec3 signC  = (sgn < 0.0 ? NEG : POS) * abs(sgn) * face * uChan.w;
+
+    vec3 outc;
+    if (L < 0.5) {
+        // TONE MAP, do not just add. Four additive channels summed past 1.0 and
+        // clipped to white, which destroys the one channel whose entire content
+        // is hue — the sign. Exposure keeps the ratios, so red stays red at the
+        // top end instead of every bright region becoming the same white.
+        vec3 lin = shapeC*0.55 + steepC*0.80 + grainC*0.62 + signC*1.45;
+        outc = base + (vec3(1.0) - exp(-lin * 1.25));
+    } else {
+        float ink = clamp(dot(shapeC, vec3(0.33)) + dot(steepC, vec3(0.30))
+                        + dot(grainC, vec3(0.30)), 0.0, 1.0);
+        outc = base * (1.0 - ink*0.92);
+        outc = mix(outc, (sgn<0.0?NEG:POS), abs(sgn)*0.40*uChan.w);
+    }
+    return vec4(outc, 1.0);
+ }` });

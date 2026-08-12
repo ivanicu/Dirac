@@ -33,6 +33,8 @@ uniform float uRhoSurf;      // density surface, in the texture's own [0,1]
 uniform float uTime;
 uniform vec2  uRes;
 uniform int   uSteps;
+uniform vec4  uChan;    // hero composite: shape · steepness · direction · sign
+uniform float uGround;  // 0 = dark ground, 1 = the app's own #f1f0eb paper
 
 const vec3 NEG = vec3(0.855, 0.400, 0.416);   // the app's own diverging pair,
 const vec3 POS = vec3(0.322, 0.478, 0.769);   // OKLCH chroma <= 0.106
@@ -221,7 +223,7 @@ class FieldEngine {
             this.failed.set(mode, gl.getProgramInfoLog(p)); return null;
         }
         p._u = {};
-        for (const u of ['uVol','uHalf','uRot','uDist','uIso','uRhoSurf','uTime','uRes','uSteps'])
+        for (const u of ['uVol','uHalf','uRot','uDist','uIso','uRhoSurf','uTime','uRes','uSteps','uChan','uGround'])
             p._u[u] = gl.getUniformLocation(p, u);
         this.programs.set(mode, p);
         return p;
@@ -240,7 +242,7 @@ class FieldEngine {
         return s;
     }
 
-    render(mode, body, bg, rot, dist, iso, steps, t) {
+    render(mode, body, bg, rot, dist, iso, steps, t, chan, ground) {
         const gl = this.gl, p = this.program(mode, body, bg);
         if (!p) return false;
         gl.viewport(0, 0, this.size, this.size);
@@ -259,6 +261,8 @@ class FieldEngine {
         gl.uniform1f(p._u.uTime, t);
         gl.uniform2f(p._u.uRes, this.size, this.size);
         gl.uniform1i(p._u.uSteps, steps);
+        gl.uniform4fv(p._u.uChan, chan || [1,1,1,1]);
+        gl.uniform1f(p._u.uGround, ground || 0);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         return true;
     }
