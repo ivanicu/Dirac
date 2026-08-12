@@ -33,6 +33,7 @@ import os
 import sys
 import tempfile
 import threading
+import urllib.parse
 import time
 import traceback
 from collections import OrderedDict
@@ -217,6 +218,23 @@ PRODUCER_NOTES = ('wall-clock deadline inside the SCF loop + measured cube-cost 
 
 
 def _db(): return psycopg.connect(DB_DSN, autocommit=True)
+
+
+# ── the artifact store (PR-04) ─────────────────────────────────────────────────
+#
+# One instance, created on first use rather than at import: this daemon must start
+# and serve fields when the database is down (_db_ok already governs the cache the
+# same way), and a store constructed at import time would make artifact support a
+# startup dependency instead of a degradable feature.
+_artifact_store_singleton = None
+
+
+def _artifact_store():
+    global _artifact_store_singleton
+    if _artifact_store_singleton is None:
+        import artifacts_pg
+        _artifact_store_singleton = artifacts_pg.PostgresArtifactStore(_db)
+    return _artifact_store_singleton
 
 
 def canonical_heavy_coords(mol_with_h: Chem.Mol) -> tuple[list[str], np.ndarray]:
@@ -437,7 +455,7 @@ def cacheable_meta(meta: dict) -> dict:
 
 
 def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict,
-                mol: Chem.Mol | None = None):
+                mol: Chem.Mol | None = None, job_id: str | None = None):
     """Persist a computed cube, stamped with this producer generation.
     Quantum rows reach here only if converged — the schema CHECK would reject
     them anyway. The coarse key (compound_id + conformer_hash) is written
@@ -511,6 +529,35 @@ def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict
         print(f'[db] cached kind={kind} basis={basis} coarse={"yes" if conf_hash else "no"}', flush=True)
         with _persist_lock:
             _persist['ok'] += 1
+        # ── register the cube as an ADDRESSABLE artifact (PR-04) ─────────────
+        #
+        # The bytes are already in app.blob two statements up; this adds the NAME
+        # that makes them referenceable — "blob X is the field.cube of job Y" —
+        # which is what lets a v2 response ship 200 bytes instead of 2.5 MB.
+        #
+        # Deliberately AFTER the field_cube write and in its own try: the cache is
+        # what serves the interaction, and an artifact-registration failure must
+        # not cost a user their cached cube. The failure is counted, not swallowed
+        # — a silent registration failure would make /v2/artifacts return NOT_FOUND
+        # for cubes that exist, which reads as a broken reference rather than as a
+        # broken writer.
+        try:
+            art = _artifact_store().put(
+                blob, role='field.cube',
+                metadata={'kind': kind, 'basis': basis,
+                          'dims': meta.get('dims'), 'spacing': meta.get('spacing')},
+                method_id=method_row)
+            if job_id:
+                _artifact_store().link_to_job(job_id, art.id, 'field.cube')
+            with _persist_lock:
+                _persist['artifacts'] = _persist.get('artifacts', 0) + 1
+        except Exception as e:                                       # noqa: BLE001
+            print(f'[artifact] registration FAILED for {kind}: {e} — the cube is '
+                  f'cached and servable, but it has no address, so /v2/artifacts '
+                  f'will report NOT_FOUND for bytes that exist', flush=True)
+            with _persist_lock:
+                _persist['artifact_failed'] = _persist.get('artifact_failed', 0) + 1
+                _persist['last_artifact_error'] = f'{type(e).__name__}: {e}'
     except Exception as e:
         # LOUD, and counted. The response for this cube already said stored:true;
         # the only remaining honesty available is that the discrepancy is
@@ -1830,6 +1877,107 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_bytes(self, code: int, data: bytes, media_type: str,
+                    *, headers: dict | None = None):
+        """A raw payload. The one response in this service that is not JSON.
+
+        Separate from _send because an artifact must NOT be JSON-wrapped: a client
+        that asked for a Gaussian cube gets the cube's bytes, byte-for-byte, so its
+        SHA-256 matches the digest it was promised. Wrapping them would make the
+        advertised digest unverifiable without the client knowing which of a dozen
+        JSON encodings we used — which is the difference between an address and a
+        label.
+        """
+        self.send_response(code)
+        self.send_header('Content-Type', media_type)
+        self.send_header('Content-Length', str(len(data)))
+        self.send_header('Accept-Ranges', 'bytes')
+        origin = self._cors_origin()
+        if origin:
+            self.send_header('Access-Control-Allow-Origin', origin)
+            # Without this the browser can read the body and NOT the digest, so the
+            # frontend could not verify what it downloaded. The header exists to be
+            # read cross-origin or it may as well not be sent.
+            self.send_header('Access-Control-Expose-Headers',
+                             'X-Dirac-Sha256, X-Dirac-Artifact-Id, Content-Range')
+        for k, v in (headers or {}).items():
+            self.send_header(k, str(v))
+        self.end_headers()
+        if self.command != 'HEAD':
+            self.wfile.write(data)
+
+    def _handle_artifact(self, path: str) -> bool:
+        """GET /v2/artifacts/<address>[/metadata]. True if this route owned it.
+
+        `<address>` is a uuid, a bare sha256, or `sha256:<hex>` — all three, because
+        the digest is the identity and a client that has verified bytes holds the
+        digest, not our uuid.
+        """
+        if not path.startswith('/v2/artifacts/'):
+            return False
+        rest = path[len('/v2/artifacts/'):].split('?')[0]
+        want_metadata = rest.endswith('/metadata')
+        if want_metadata:
+            rest = rest[: -len('/metadata')]
+        address = urllib.parse.unquote(rest).strip('/')
+        if not address:
+            self._send(404, {'ok': False, 'error': {
+                'code': 'NOT_FOUND',
+                'message': 'no artifact address given; the form is '
+                           '/v2/artifacts/<uuid|sha256>[/metadata]'}})
+            return True
+        try:
+            import artifacts as A
+            store = _artifact_store()
+            if want_metadata:
+                art = store.head(address)
+                # The reference, and nothing else — this is the request a client
+                # makes to decide whether it wants 2.5 MB, so returning the bytes
+                # here would defeat the purpose of asking.
+                self._send(200, {'ok': True, 'data': art.to_reference(),
+                                 'meta': {'envelope': 2}})
+                return True
+            art, data, rng = store.read_range(address, self.headers.get('Range'))
+            headers = {'X-Dirac-Sha256': art.sha256,
+                       'X-Dirac-Artifact-Id': art.id or '',
+                       'X-Dirac-Role': art.role,
+                       'ETag': f'"{art.sha256}"',
+                       # Immutable because the name IS the content: bytes under this
+                       # address can never change, so a cache may keep them forever.
+                       'Cache-Control': 'public, max-age=31536000, immutable'}
+            if rng is not None:
+                lo, hi = rng
+                headers['Content-Range'] = f'bytes {lo}-{hi}/{art.size_bytes}'
+                # The digest describes the WHOLE object, and a partial response must
+                # say so or a client will check 200 bytes against it and conclude the
+                # store is corrupt.
+                headers['X-Dirac-Sha256-Covers'] = 'whole-object'
+                self._send_bytes(206, data, art.media_type, headers=headers)
+            else:
+                self._send_bytes(200, data, art.media_type, headers=headers)
+            return True
+        except Exception as e:                                        # noqa: BLE001
+            failure = failures.from_exception(e)
+            self._send(failure.http_status if failure.code == 'NOT_FOUND' else 500,
+                       {'ok': False, 'error': failure.to_error_payload(),
+                        'meta': {'envelope': 2}})
+            return True
+
+    def do_HEAD(self):
+        """HEAD on an artifact: the size and the digest, no body.
+
+        Present because it is what a CLI's `--dry-run` and any resumable download
+        need, and because _send_bytes already suppresses the body for HEAD — so the
+        alternative was a 501 on a request whose answer we already compute.
+        """
+        if not self._host_ok():
+            self.send_response(403)
+            self.end_headers()
+            return
+        if not self._handle_artifact(self.path):
+            self.send_response(404)
+            self.end_headers()
+
     def do_OPTIONS(self):
         self.send_response(204)
         origin = self._cors_origin()
@@ -1850,6 +1998,11 @@ class Handler(BaseHTTPRequestHandler):
         admin = _handle_admin(self.path)
         if admin is not None:
             self._send(*admin)
+            return
+        # Artifacts (PR-04). Owns its own dispatch and returns True when it has
+        # answered, for the same reason as _handle_admin: the routing table stays
+        # readable here and the bodies live where they can be tested.
+        if self._handle_artifact(self.path):
             return
         if self.path == '/health':
             import pyscf
@@ -2137,7 +2290,7 @@ class Handler(BaseHTTPRequestHandler):
                 threading.Thread(
                     target=db_put_cube,
                     args=(molfile_sha, kind, basis_key, cube, meta),
-                    kwargs={'mol': mol}, daemon=True).start()
+                    kwargs={'mol': mol, 'job_id': job_id}, daemon=True).start()
                 with _persist_lock:
                     _persist['queued'] += 1
                 # ENQUEUED, not completed. contracts/iface.pyi says so too — a

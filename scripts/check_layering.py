@@ -110,6 +110,24 @@ def evaluate() -> list[dict]:
                    'PASS' if not bad else 'FAIL',
                    'clean' if not bad else f'imports {sorted(bad)}'))
 
+    # ── ENFORCED: artifact addressing is transport- and storage-free ──────────
+    # The split between artifacts.py (arithmetic) and artifacts_pg.py (psycopg) is
+    # the whole reason an offline CLI, an SDK and an MCP adapter can share digest
+    # and threshold logic. A single `import psycopg` in the wrong file undoes it
+    # invisibly — the code keeps working here and stops working everywhere else.
+    art = ROOT / 'backend' / 'artifacts.py'
+    bad = imports_of(art) & (HTTP_MODULES | DB_MODULES | SCIENCE_MODULES)
+    out.append(law('artifacts.py imports no HTTP, DB or science',
+                   'PASS' if not bad else 'FAIL',
+                   'clean' if not bad else f'imports {sorted(bad)}'))
+
+    # ── ENFORCED: the DB adapter must not reach back up into the server ────────
+    apg = ROOT / 'backend' / 'artifacts_pg.py'
+    bad = imports_of(apg) & (HTTP_MODULES | SCIENCE_MODULES | {'field_server'})
+    out.append(law('artifacts_pg.py imports no HTTP, science or the server',
+                   'PASS' if not bad else 'FAIL',
+                   'clean' if not bad else f'imports {sorted(bad)}'))
+
     # ── ENFORCED: the frontend service layer is DOM- and Mol*-free ────────────
     svc = ROOT / 'src' / 'app' / 'services'
     offenders = []

@@ -140,6 +140,20 @@ class DiracTooLarge(DiracFailure):
         super().__init__('TOO_LARGE', message, **kw)
 
 
+class DiracNotFound(DiracFailure):
+    """The address is well-formed and nothing is there.
+
+    Kept distinct from UNSUPPORTED because the caller's next move is completely
+    different: UNSUPPORTED means change the request, NOT_FOUND means the thing you
+    are holding a reference to is gone (or was never here) and re-sending the same
+    reference will never work. An artifact store that collapsed the two would tell a
+    CLI to retry a digest that does not exist.
+    """
+
+    def __init__(self, message: str, **kw: Any) -> None:
+        super().__init__('NOT_FOUND', message, **kw)
+
+
 class DiracInternal(DiracFailure):
     """Nothing about the request is known to be wrong. OUR fault.
 
