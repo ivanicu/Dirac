@@ -1,0 +1,144 @@
+{
+  "schema_version": "1.0.0",
+  "commands": [
+    {
+      "id": "system.health", "version": 1, "category": "system",
+      "mutability": "query", "execution_class": "instant", "executors": ["service"],
+      "idempotency_policy": "safe", "job_policy": "forbidden", "provenance_policy": "optional",
+      "input_object_kinds": [], "output_object_kinds": [], "errors": ["INTERNAL"],
+      "handler": "handlers:system_health", "input_schema": {"type":"object","additionalProperties":false},
+      "output_schema": {"type":"object"}
+    },
+    {
+      "id": "system.capabilities", "version": 1, "category": "system",
+      "mutability": "query", "execution_class": "instant", "executors": ["service"],
+      "idempotency_policy": "safe", "job_policy": "forbidden", "provenance_policy": "optional",
+      "input_object_kinds": [], "output_object_kinds": [], "errors": ["INTERNAL"],
+      "handler": "handlers:system_capabilities", "input_schema": {"type":"object","additionalProperties":false},
+      "output_schema": {"type":"object"}
+    },
+    {
+      "id": "system.version", "version": 1, "category": "system",
+      "mutability": "query", "execution_class": "instant", "executors": ["service"],
+      "idempotency_policy": "safe", "job_policy": "forbidden", "provenance_policy": "optional",
+      "input_object_kinds": [], "output_object_kinds": [], "errors": ["INTERNAL"],
+      "handler": "handlers:system_version", "input_schema": {"type":"object","additionalProperties":false},
+      "output_schema": {"type":"object"}
+    },
+    {
+      "id": "method.list", "version": 1, "category": "method",
+      "mutability": "query", "execution_class": "instant", "executors": ["service"],
+      "idempotency_policy": "safe", "job_policy": "forbidden", "provenance_policy": "optional",
+      "input_object_kinds": [], "output_object_kinds": [], "errors": ["INTERNAL"],
+      "handler": "handlers:method_list", "input_schema": {"type":"object","additionalProperties":false},
+      "output_schema": {"type":"object","required":["methods"]}
+    },
+    {
+      "id": "method.describe", "version": 1, "category": "method",
+      "mutability": "query", "execution_class": "instant", "executors": ["service"],
+      "idempotency_policy": "safe", "job_policy": "forbidden", "provenance_policy": "optional",
+      "input_object_kinds": [], "output_object_kinds": [], "errors": ["NOT_FOUND"],
+      "handler": "handlers:method_describe", "input_schema": {"type":"object","additionalProperties":false,"required":["method_id"],"properties":{"method_id":{"type":"string"}}},
+      "output_schema": {"type":"object"}
+    },
+    {
+      "id": "method.estimate", "version": 1, "category": "method",
+      "mutability": "query", "execution_class": "instant", "executors": ["service"],
+      "idempotency_policy": "safe", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["molecule"], "output_object_kinds": [], "errors": ["NOT_FOUND", "INVALID_PARAMETERS"],
+      "handler": "handlers:method_estimate", "input_schema": {"type":"object","additionalProperties":false,"required":["method_id","input"],"properties":{"method_id":{"type":"string"},"input":{"type":"object"}}},
+      "output_schema": {"type":"object"}
+    },
+    {
+      "id": "job.get", "version": 1, "category": "job",
+      "mutability": "query", "execution_class": "instant", "executors": ["service"],
+      "idempotency_policy": "safe", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["job"], "output_object_kinds": ["job"], "errors": ["NOT_FOUND"],
+      "handler": "handlers:job_get", "input_schema": {"type":"object","additionalProperties":false,"required":["job_ref"],"properties":{"job_ref":{"$ref":"object-ref"}}},
+      "output_schema": {"type":"object"}
+    },
+    {
+      "id": "job.list", "version": 1, "category": "job",
+      "mutability": "query", "execution_class": "instant", "executors": ["service"],
+      "idempotency_policy": "safe", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": [], "output_object_kinds": ["job"], "errors": ["INTERNAL"],
+      "handler": "handlers:job_list", "input_schema": {"type":"object","additionalProperties":false,"properties":{"state":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":500}}},
+      "output_schema": {"type":"object","required":["jobs"]}
+    },
+    {
+      "id": "job.wait", "version": 1, "category": "job",
+      "mutability": "query", "execution_class": "long", "executors": ["service"],
+      "idempotency_policy": "safe", "job_policy": "observes", "provenance_policy": "required",
+      "input_object_kinds": ["job"], "output_object_kinds": ["job"], "errors": ["NOT_FOUND"],
+      "handler": "handlers:job_wait", "input_schema": {"type":"object","additionalProperties":false,"required":["job_ref"],"properties":{"job_ref":{"$ref":"object-ref"},"timeout":{"type":"number","minimum":0}}},
+      "output_schema": {"type":"object"}
+    },
+    {
+      "id": "job.cancel", "version": 1, "category": "job",
+      "mutability": "mutation", "execution_class": "instant", "executors": ["service"],
+      "idempotency_policy": "idempotent", "job_policy": "observes", "provenance_policy": "required",
+      "input_object_kinds": ["job"], "output_object_kinds": ["job"], "errors": ["NOT_FOUND", "CANCELLED"],
+      "handler": "handlers:job_cancel", "input_schema": {"type":"object","additionalProperties":false,"required":["job_ref"],"properties":{"job_ref":{"$ref":"object-ref"}}},
+      "output_schema": {"type":"object"}
+    },
+    {
+      "id": "molecule.describe", "version": 1, "category": "molecule",
+      "mutability": "query", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "safe", "job_policy": "optional", "provenance_policy": "required",
+      "input_object_kinds": ["molecule"], "output_object_kinds": ["molecule"], "errors": ["PARSE"],
+      "handler": "handlers:molecule_describe", "input_schema": {"type":"object","additionalProperties":false,"required":["molecule"],"properties":{"molecule":{"type":"object"}}},
+      "output_schema": {"type":"object"}
+    },
+    {
+      "id": "molecule.properties", "version": 1, "category": "molecule",
+      "mutability": "query", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "safe", "job_policy": "optional", "provenance_policy": "required",
+      "input_object_kinds": ["molecule"], "output_object_kinds": ["prediction"], "errors": ["PARSE"],
+      "handler": "handlers:molecule_properties", "input_schema": {"type":"object","additionalProperties":false,"required":["molecule"],"properties":{"molecule":{"type":"object"}}},
+      "output_schema": {"type":"object"}
+    },
+    {
+      "id": "conformer.generate", "version": 1, "category": "conformer",
+      "mutability": "compute", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "deterministic-with-seed", "job_policy": "optional", "provenance_policy": "required",
+      "input_object_kinds": ["molecule"], "output_object_kinds": ["conformer"], "errors": ["PARSE", "UNSUPPORTED"],
+      "handler": "handlers:conformer_generate", "input_schema": {"type":"object"},
+      "output_schema": {"type":"object"}
+    },
+    {
+      "id": "structure.field.compute", "version": 1, "category": "structure",
+      "mutability": "compute", "execution_class": "long", "executors": ["service"],
+      "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",
+      "input_object_kinds": ["molecule", "complex"], "output_object_kinds": ["field", "artifact", "job"],
+      "errors": ["PARSE", "UNSUPPORTED", "TOO_LARGE", "BUDGET", "UNCONVERGED"],
+      "handler": "handlers:structure_field_compute", "input_schema": {"type":"object","required":["molecule","field_kind"]},
+      "output_schema": {"type":"object"}
+    },
+    {
+      "id": "structure.interactions", "version": 1, "category": "structure",
+      "mutability": "compute", "execution_class": "interactive", "executors": ["browser", "service"],
+      "idempotency_policy": "safe", "job_policy": "optional", "provenance_policy": "required",
+      "input_object_kinds": ["complex"], "output_object_kinds": ["prediction"],
+      "errors": ["UNSUPPORTED"], "handler": "handlers:unavailable",
+      "input_schema": {"type":"object"}, "output_schema": {"type":"object"}
+    },
+    {
+      "id": "structure.surface.compute", "version": 1, "category": "structure",
+      "mutability": "compute", "execution_class": "long", "executors": ["service"],
+      "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",
+      "input_object_kinds": ["molecule", "complex"], "output_object_kinds": ["field", "artifact", "job"],
+      "errors": ["PARSE", "UNSUPPORTED", "TOO_LARGE", "BUDGET", "UNCONVERGED"],
+      "handler": "handlers:structure_surface_compute", "input_schema": {"type":"object","required":["molecule"]},
+      "output_schema": {"type":"object"}
+    },
+    {
+      "id": "structure.torsion.analyze", "version": 1, "category": "structure",
+      "mutability": "compute", "execution_class": "long", "executors": ["service"],
+      "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",
+      "input_object_kinds": ["molecule", "pose"], "output_object_kinds": ["prediction", "artifact", "job"],
+      "errors": ["PARSE", "UNPARAMETERIZED", "UNSUPPORTED"],
+      "handler": "handlers:structure_torsion_analyze", "input_schema": {"type":"object","required":["molecule"]},
+      "output_schema": {"type":"object"}
+    }
+  ]
+}

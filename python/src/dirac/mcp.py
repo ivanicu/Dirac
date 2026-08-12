@@ -65,28 +65,25 @@ class DiracMCP:
         if self._tools is not None:
             return self._tools
         out: list[dict] = []
-        for m in self.client.methods():
-            # `executable` comes from the descriptor: a method with no handler can be
-            # described and not run, and offering it as a tool would be a promise the
-            # system cannot keep.
-            if not m.get('executable'):
+        for command in self.client.commands():
+            # Mutations stay excluded until an approval policy exists. The remaining
+            # tools are a projection of the command registry, never a second API.
+            if command.get('mutability') == 'mutation':
                 continue
-            mid = m['method_id']
+            command_id = command['id']
             try:
-                d = self.client.describe(mid)
+                d = self.client.command(command_id)
             except errors.DiracError:
                 continue
             out.append({
-                'name': mid.replace('.', '_'),
+                'name': command_id.replace('.', '_'),
                 'description': (
-                    f'{d.get("summary", "")} {d.get("description", "")}'.strip()
-                    + '\n\nReturns a REFERENCE to the field artifact, not the bytes: a '
-                      'Gaussian cube is megabytes and no model needs them in context. '
-                      'Use dirac_artifact_head for its size and media type, or '
-                      'dirac_artifact_text for a bounded head of the file (the first '
-                      '~200 bytes are the grid geometry).'),
+                    f'Dirac semantic command {command_id}; '
+                    f'{d.get("mutability")} / {d.get("execution_class")}, '
+                    f'job policy {d.get("job_policy")}. Long compute returns a durable '
+                    'Job reference; artifacts remain content-addressed references.'),
                 'inputSchema': d.get('input_schema') or {'type': 'object'},
-                '_method_id': mid,
+                '_command_id': command_id,
             })
         out.extend([
             {'name': 'dirac_methods',
@@ -119,10 +116,10 @@ class DiracMCP:
         self._tools = out
         return out
 
-    def _method_for_tool(self, name: str) -> str | None:
+    def _command_for_tool(self, name: str) -> str | None:
         for t in self.tools():
             if t['name'] == name:
-                return t.get('_method_id')
+                return t.get('_command_id')
         return None
 
     # ── dispatch ──────────────────────────────────────────────────────────────
@@ -135,20 +132,24 @@ class DiracMCP:
         them — this method's whole job is not to lose them.
         """
         if name == 'dirac_methods':
-            return self._ok({'methods': self.client.methods()})
+            env = self.client.execute('method.list')
+            return self._ok(env.get('data') or {})
         if name == 'dirac_describe':
-            return self._ok(self.client.describe(args['method_id']))
+            env = self.client.execute('method.describe', {'method_id': args['method_id']})
+            return self._ok(env.get('data') or {})
         if name == 'dirac_estimate':
-            return self._ok(self.client.estimate(args['method_id'],
-                                                 args.get('input') or {}))
+            env = self.client.execute('method.estimate', {
+                'method_id': args['method_id'], 'input': args.get('input') or {}})
+            return self._ok(env.get('data') or {})
         if name in ('dirac_artifact_head', 'dirac_artifact_text'):
             return self._artifact(name, args)
 
-        mid = self._method_for_tool(name)
-        if mid is None:
+        command_id = self._command_for_tool(name)
+        if command_id is None:
             return self._error('NOT_FOUND', f'no tool named {name!r}',
                                {'available': [t['name'] for t in self.tools()]})
-        env = self.client.invoke(mid, args, inline_max=INLINE_MAX)
+        env = self.client.execute(
+            command_id, args, actor={'kind': 'agent', 'id': 'mcp'})
         if not env.get('ok'):
             err = env.get('error') or {}
             return self._error(err.get('code', 'INTERNAL'),
@@ -166,7 +167,9 @@ class DiracMCP:
                          if k not in ('inline_base64', 'inline')})
         return self._ok({'data': env.get('data'), 'artifacts': arts,
                          'warnings': env.get('warnings') or [],
-                         'method_id': mid,
+                         'command': command_id,
+                         'command_version': (env.get('meta') or {}).get('command_version'),
+                         'job_id': (env.get('meta') or {}).get('job_id'),
                          'version': (env.get('meta') or {}).get('version'),
                          'cache': (env.get('meta') or {}).get('cache'),
                          'seconds': (env.get('meta') or {}).get('seconds')})

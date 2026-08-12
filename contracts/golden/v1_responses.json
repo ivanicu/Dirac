@@ -80,13 +80,13 @@
         "kind": "homo",
         "lumo_ev": 15.2807,
         "method": "RHF",
-        "method_version": "c6bc04cc54f4",
+        "method_version": "9066ada2392d",
         "natoms": 3,
         "nbasis": 7,
         "scf_cycles": 7,
         "scf_energy_ha": -74.9586082709,
         "spin": 0,
-        "toolkit_wrote_at": null,
+        "toolkit_wrote_at": "Wed Aug 12 01:38:43 2026",
         "units": "amp"
       },
       "ok": true
@@ -134,13 +134,13 @@
         "kind": "homo",
         "lumo_ev": 15.2807,
         "method": "RHF",
-        "method_version": "c6bc04cc54f4",
+        "method_version": "9066ada2392d",
         "natoms": 3,
         "nbasis": 7,
         "scf_cycles": 7,
         "scf_energy_ha": -74.9586082709,
         "spin": 0,
-        "toolkit_wrote_at": null,
+        "toolkit_wrote_at": "Wed Aug 12 01:38:43 2026",
         "units": "amp"
       },
       "ok": true

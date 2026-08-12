@@ -4,12 +4,13 @@
 
 ![Dirac's Fields facet: the 1CBS retinoid-binding protein's beta-barrel with a classical electrostatic potential well rendered as a translucent isosurface around the retinoic-acid ligand inside the pocket, computed by the local backend and served from the browser cache](docs/screenshots/02_fields_electrostatic_well.png)
 
-**Where things stand:** [`STATUS.md`](STATUS.md) — what is built, and what is a seam
-with nothing writing to it yet. [`ROADMAP.md`](ROADMAP.md) — how these seams reach an
-AI-native scientific OS without a rewrite, and the seven changes that would break
-that path. Not deployed: no auth, no public URL, three hand-started processes.
+**Where things stand:** [`STATUS.md`](STATUS.md) records live evidence;
+[`ARCHITECTURE.md`](ARCHITECTURE.md) describes the current platform boundaries; and
+[`docs/product/PRODUCT_ARCHITECTURE.md`](docs/product/PRODUCT_ARCHITECTURE.md) defines
+the product architecture. The local supervised deployment has no authentication and is
+not a public multi-user service.
 
-Schrödinger's Maestro / LiveDesign stack is the commercial state-of-the-art for structure-based molecular design. It is closed, expensive, and desktop-native. **Dirac is the open-source, browser-native answer** — built on the [mol\*](https://github.com/molstar/molstar) 3D engine and the [RDKit-JS](https://github.com/rdkit/rdkit-js) cheminformatics runtime, with every computation happening in the browser via WebAssembly. No license server, no install, no Python backend required for the core workflow.
+Schrödinger's Maestro / LiveDesign stack is the commercial state-of-the-art for structure-based molecular design. It is closed, expensive, and desktop-native. **Dirac is the open-source, browser-native answer** — built on the [mol\*](https://github.com/molstar/molstar) 3D engine and the [RDKit-JS](https://github.com/rdkit/rdkit-js) cheminformatics runtime. Interactive perception stays in-browser; real 3D embedding and scientific computation use the optional local Python service through the same command, Job, artifact and provenance contracts.
 
 The name is intentional. In physics, Schrödinger's equation describes matter at non-relativistic energies; Dirac's equation is its upgrade to the relativistic regime, predicting spin, antimatter, and the fine structure of hydrogen. **Dirac the project aims to be that kind of upgrade over Schrödinger the product** — same domain, deeper formulation, open and accessible.
 
@@ -34,9 +35,10 @@ Dirac is **one integrated app** with multiple facets, all sharing the same mol\*
 | <img src="docs/screenshots/04_designer_pharmacophore.png" width="320" alt="Designer facet: pharmacophore feature list and 3D glyphs"> | **Designer** — Pharmacophore Designer feature list auto-derived from the ligand (2 HBA, 1 HBD, 19 hydrophobic points), each with an editable radius, shown in the 3D pocket. |
 | <img src="docs/screenshots/05_ops_console.png" width="320" alt="Ops console reading the live field backend snapshot"> | **Ops console** — live read of `/admin/snapshot` from the field backend: 0 jobs running, field-cache health (68 rows, 291.6 MB across 5 field kinds), and the stale-sweep reclaim list. |
 
-### Optional fields backend
+### Optional scientific application service
 
-The core workflow stays 100% in-browser. The **Fields** facet is the one exception by design — real SCF does not belong in wasm. It talks to a local daemon that turns the focused ligand's molfile into Gaussian-cube scalar fields (already in scene coordinates):
+The browser can explore bundled examples without a backend. Real embedding, fields,
+surface MEP and torsion analysis use the unified local application service:
 
 ```bash
 backend/env/bin/python backend/field_server.py     # 0.0.0.0:8901 (LAN-reachable, unauthenticated); the Fields tab shows online/offline honestly
@@ -51,8 +53,8 @@ git clone https://github.com/ivanicu/Dirac.git
 cd Dirac
 npm ci                                                       # use ci, not install (see AGENTS.md)
 node ./scripts/build.mjs -a dirac --prd                       # one-shot production build
-node_modules/.bin/http-server build/dirac -p 1338 -g
-# open http://localhost:1338/
+node_modules/.bin/http-server build/dirac -p 1360 -g
+# open http://localhost:1360/
 ```
 
 First page load fetches `RDKit_minimal.wasm` (~7 MB) from `src/app.frontend.facets.molstar-rdkit.editable/assets/rdkit/`. Browser-cached afterwards.
@@ -68,15 +70,13 @@ First page load fetches `RDKit_minimal.wasm` (~7 MB) from `src/app.frontend.face
 ## Architecture in one paragraph
 
 ```
-mol* Structure ──► V2000 molfile (via ComponentBond from CCD)
-                 │
-                 └─► RDKit-JS (WASM, in-browser)
-                        ├── get_qmol + get_substruct_matches → SMARTS flags
-                        ├── get_new_coords → 2D molfile → SVG (publication depiction)
-                        └── (compute_gasteiger_charges — NOT exposed in 2025.03.4 build)
+GUI / CLI / MCP ─► SDK ─► CommandDispatcher ─► InvocationService
+                                      ├─► MethodCatalog + cache
+                                      ├─► durable JobStore + Executor
+                                      └─► content-addressed ArtifactStore + provenance
 
-3D pharmacophore ─► mol* Shape (MeshBuilder) ─► ShapeRepresentation3D state node
-2D SVG ─► bond-path centroid fallback ─► atom-position table ─► click → mol* Loci
+AppShell ─► ScientificContextStore ─► composable modules
+        └─► one persistent SceneService / mol* instance
 ```
 
 The atom-index contract is the load-bearing seam: ligand loci iteration order is preserved through molfile construction, RDKit parsing, SMARTS predicates, 2D SVG generation, and 3D click-back selection. Every layer uses the same walker.

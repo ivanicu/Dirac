@@ -193,10 +193,11 @@ def test_classical_fields_are_NOT_gated():
         f'{after}) — the bound has been applied to the interactive path')
 
 
-for name, fn in list(globals().items()):
-    if name.startswith('test_') and callable(fn):
-        check(name, fn)
+if os.environ.get('DIRAC_IMPORT_PROBE') != '1':
+    for name, fn in list(globals().items()):
+        if name.startswith('test_') and callable(fn):
+            check(name, fn)
 
-print('─' * 100)
-print(f'{len(PASS)} passed · {len(FAIL)} failed · {len(SKIP)} skipped')
-sys.exit(1 if FAIL else 0)
+    print('─' * 100)
+    print(f'{len(PASS)} passed · {len(FAIL)} failed · {len(SKIP)} skipped')
+    sys.exit(1 if FAIL else 0)

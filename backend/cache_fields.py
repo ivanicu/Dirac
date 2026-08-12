@@ -108,7 +108,8 @@ class FieldCubeCache:
         return self._as_handler_result(method_id, kind, basis, cube, meta)
 
     def store(self, method_id: str, payload: dict, out: HandlerResult, *,
-              seconds: float, job_id: str | None = None) -> None:
+              seconds: float, job_id: str | None = None,
+              envelope: dict | None = None) -> None:
         """Queue a validated computed field for durable persistence.
 
         The invocation never waits for PostgreSQL. This preserves the existing interaction

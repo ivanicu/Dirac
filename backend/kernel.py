@@ -143,6 +143,30 @@ def default_cache():
         return None
 
 
+def default_result_cache(store: Any, dsn: str = DEFAULT_DSN):
+    """Generic durable cache, enabled only with the same durable ArtifactStore.
+
+    A database cache paired with a memory artifact store would return references that
+    the process cannot resolve, so assembly rejects that incoherent pairing up front.
+    """
+    try:
+        import psycopg
+        import cache_fields
+        import cache_results
+        import artifacts_pg
+        if not isinstance(store, artifacts_pg.PostgresArtifactStore):
+            return None
+        connect = lambda: psycopg.connect(dsn, autocommit=True)
+        with connect() as conn, conn.cursor() as cur:
+            cur.execute('SELECT 1 FROM app.v_result_cache_servable LIMIT 0')
+        return cache_results.PostgresResultCache(
+            connect, store, excluded_methods=cache_fields.CACHEABLE_KIND)
+    except Exception as e:                                          # noqa: BLE001
+        print(f'[kernel] generic result cache unavailable ({type(e).__name__}: {e}) — '
+              'deterministic non-field methods will compute', file=sys.stderr, flush=True)
+        return None
+
+
 def default_jobs():
     """The deployment's JobStore, with an explicit process-durable fallback."""
     try:
@@ -179,7 +203,16 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
     # The cache is what makes a kernel invocation equivalent to the route's, and therefore
     # what makes deleting the route's orchestration a refactor rather than a regression:
     # without it every cache hit becomes a fresh SCF.
-    ca = cache if cache is not None else (default_cache() if with_cache else None)
+    if cache is not None:
+        ca = cache
+    elif with_cache:
+        import cache_results
+        specialised = default_cache()
+        generic = default_result_cache(st, dsn)
+        repositories = [c for c in (specialised, generic) if c is not None]
+        ca = cache_results.CompositeCache(*repositories) if repositories else None
+    else:
+        ca = None
     js = job_store if job_store is not None else default_jobs()
     # A ThreadExecutor still executes sync calls inline, while also making descriptor
     # default_mode=job truthful for /v2/jobs submissions.
@@ -188,7 +221,7 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
                                       toolkit_versions=toolkit_versions())
     svc.store_kind = kind                    # type: ignore[attr-defined]
     svc.cache_kind = ('injected' if cache is not None
-                      else ('field_cube' if ca is not None else 'none'))  # type: ignore[attr-defined]
+                      else ('composite' if ca is not None else 'none'))  # type: ignore[attr-defined]
     svc.job_store_kind = getattr(js, 'kind', 'injected')  # type: ignore[attr-defined]
     svc.job_durability = getattr(js, 'durability', 'unknown')  # type: ignore[attr-defined]
     svc.executor_kind = getattr(ex, 'kind', 'injected')  # type: ignore[attr-defined]

@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0.0",
+  "relations": [
+    "derived_from", "generated_by", "used", "measured_in", "predicted_by",
+    "belongs_to", "member_of", "supports", "contradicts", "supersedes",
+    "tests", "explains", "selected_from", "rejected_because",
+    "promoted_because", "part_of", "caused_by"
+  ]
+}

@@ -31,6 +31,7 @@ import json
 import pathlib
 import subprocess
 import sys
+import os
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 TESTS = ROOT / 'backend' / 'tests'
@@ -54,8 +55,12 @@ PROBE = (
 def probe(path: pathlib.Path) -> tuple[bool, str]:
     """Can a clean interpreter import this suite? Returns (ok, first blocker)."""
     code = PROBE.format(backend=str(ROOT / 'backend'), path=str(path))
+    # Several historical suites execute their tests at import time. Tell any suite
+    # modernised for this probe not to turn an import-coupling measurement into a live
+    # daemon integration test (whose result otherwise changes with sandbox/network state).
+    env = dict(os.environ, DIRAC_IMPORT_PROBE='1')
     r = subprocess.run([sys.executable, '-c', code], capture_output=True,
-                       text=True, timeout=300)
+                       text=True, timeout=300, env=env)
     if r.returncode == 0:
         return True, ''
     err = (r.stderr or '').strip().splitlines()

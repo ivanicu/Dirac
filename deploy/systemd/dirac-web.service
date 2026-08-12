@@ -31,7 +31,10 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/home/ivan/dirac
-ExecStart=/home/ivan/dirac/node_modules/.bin/http-server build/dirac -p 1360 -g -c-1 -a 0.0.0.0
+# Unresolved AppShell routes fall back to index.html through http-server's documented
+# self-proxy form. The trailing ? is load-bearing: without it a browser refresh on
+# /runs/active or /p/current/structures/complex returns 404 and destroys deep links.
+ExecStart=/home/ivan/dirac/node_modules/.bin/http-server build/dirac -p 1360 -g -c-1 -a 0.0.0.0 -P http://127.0.0.1:1360?
 Restart=always
 RestartSec=2
 

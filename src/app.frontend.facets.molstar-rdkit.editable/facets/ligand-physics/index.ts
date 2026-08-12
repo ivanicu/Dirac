@@ -1,10 +1,9 @@
 /**
  * Ligand physics facet — the two quantities that change a synthesis decision.
  *
- * Both were already computed by `backend/physics` (:8902) and had ZERO
- * consumers: a grep for `8902`, `/surface/mep` and `/torsion/strain` across
- * `src/` returned nothing but coincidental digit matches in vendored example
- * data. A clean-context medicinal chemist ranked them 9/10 and 9/10 — the only
+ * Both originated in `backend/physics` and had no consumers. They now execute through
+ * the unified semantic command and durable Job surface on :8901. A clean-context
+ * medicinal chemist ranked them 9/10 and 9/10 — the only
  * two numbers in this repo that would change what goes into a synthesis queue
  * tomorrow — while the six volumetric fields that DO have a UI were ranked
  * 2/10 to 7/10. The useful half was built and never wired up.
@@ -16,16 +15,17 @@
  *            observed conformer marked on its own curve.
  *            Answers: is this docked pose fiction?
  *
- * Separate daemon from the fields backend on purpose (see backend/physics/
- * server.py). This facet is a pure consumer and says so when the daemon is
- * down rather than pretending.
+ * This facet owns no physics or transport semantics; it consumes DiracClient commands
+ * and says so when the unified service is down rather than pretending.
  */
 
 import { PluginContext } from '../../../mol-plugin/context';
+import { DiracClient } from '../../../app/services/dirac-client';
+import { scientificContext } from '../../../app/context/scientific-context-store';
 import { torsionPanel, type TorsionRow } from './plot';
 
 /**
- * Where the physics daemon lives, which depends on where the PAGE came from.
+ * Where the unified Dirac application service lives, based on where the page came from.
  *
  * Served from this machine — 127.0.0.1:8101, or 192.168.1.3:8101 over the LAN — the
  * daemon is on that same host, so the page's own hostname is right.
@@ -46,10 +46,11 @@ const PHYSICS = (() => {
     const isLocalOrLan = host === 'localhost' || host === '127.0.0.1'
         || /^10\./.test(host) || /^192\.168\./.test(host)
         || /^172\.(1[6-9]|2\d|3[01])\./.test(host);
-    return `http://${isLocalOrLan ? host : '127.0.0.1'}:8902`;
+    return `http://${isLocalOrLan ? host : '127.0.0.1'}:8901`;
 })();
+const dirac = new DiracClient({ baseUrl: PHYSICS });
 
-/** The physics daemon's own budget, sent explicitly so the two cannot
+/** The method budget, sent explicitly so client and service cannot
  * disagree — the failure that held 22 cores for 36 minutes. */
 const BUDGET_SECONDS = 90;
 const clientTimeoutMs = (budget: number) => (budget * 2 + 20) * 1000;
@@ -98,6 +99,7 @@ let plugin: PluginContext | null = null;
 let molfile: string | null = null;
 let ligandLabel: string | null = null;
 let inFlight: AbortController | null = null;
+let inFlightJobId: string | null = null;
 let busy = false;
 /**
  * Monotonic ligand generation. A multi-second SCF that lands after the user
@@ -113,9 +115,8 @@ let busy = false;
  * SCF-reaching path is bounded AND its result is checked before it lands —
  * instead of two, only one of which is currently enforced.
  */
-let ligandGeneration = 0;
 export function isCurrentLigandGeneration(g: number): boolean {
-    return g === ligandGeneration;
+    return scientificContext.isCurrent(g);
 }
 /**
  * The extrema markers currently in the scene, so a re-run replaces them
@@ -174,16 +175,30 @@ async function post(path: string, body: Record<string, unknown>, budget: number)
     inFlight = controller;
     const timer = setTimeout(() => controller.abort(), clientTimeoutMs(budget));
     try {
-        const resp = await fetch(`${PHYSICS}${path}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...body, max_seconds: budget }),
-            signal: controller.signal,
-        });
-        return await resp.json();
+        const method = path === '/surface/mep'
+            ? 'structure.surface.compute' : 'structure.torsion.analyze';
+        const accepted = await dirac.execute(method, {
+            molecule: { kind: 'molfile', content: body.molfile, dimensionality: 3 },
+            parameters: method === 'structure.surface.compute'
+                ? { basis: body.basis, max_seconds: budget } : {},
+            budget_seconds: budget,
+        }, { signal: controller.signal });
+        inFlightJobId = String(accepted.meta?.job_id || '') || null;
+        const env = await dirac.waitForCommandResult(
+            accepted, budget * 2 + 20, controller.signal);
+        if (!env.ok) return { ok: false, error: env.error?.message || env.error?.code };
+        if (method === 'structure.surface.compute') {
+            const summary = (env.data?.summary || {}) as Record<string, any>;
+            return { ok: true, extrema: summary.extrema || [], meta: summary.meta || {} };
+        }
+        const ref = (env.artifacts || []).find(a => a.role === 'torsion.profile');
+        if (!ref) return { ok: false, error: 'torsion job returned no profile artifact' };
+        const profile = JSON.parse((await dirac.fetchArtifact(ref, controller.signal)).text());
+        return { ok: true, ...profile };
     } finally {
         clearTimeout(timer);
         if (inFlight === controller) inFlight = null;
+        inFlightJobId = null;
     }
 }
 
@@ -377,7 +392,7 @@ async function runSurface() {
     setStatus('phys-surface-status',
         `Solving surface electrostatics on ${ligandLabel ?? 'ligand'} in ${basis}… `
         + `(gives up at ${budget} s · Cancel to stop now)`, 'busy');
-    const generation = ligandGeneration;
+    const generation = scientificContext.generation();
     try {
         const out = await post('/surface/mep', { molfile, basis, max_seconds: budget }, budget);
         if (!isCurrentLigandGeneration(generation)) {
@@ -404,7 +419,7 @@ async function runSurface() {
         const aborted = e instanceof Error && e.name === 'AbortError';
         setStatus('phys-surface-status', aborted
             ? 'Cancelled.'
-            : `Physics daemon unreachable — backend/env/bin/python backend/physics/server.py`,
+            : 'Dirac service unreachable on port 8901',
         aborted ? 'idle' : 'error');
     } finally {
         setBusy(false);
@@ -417,7 +432,7 @@ async function runTorsion() {
     if (!molfile || busy) return;
     setBusy(true);
     setStatus('phys-torsion-status', `Scanning rotatable bonds on ${ligandLabel ?? 'ligand'}…`, 'busy');
-    const generation = ligandGeneration;
+    const generation = scientificContext.generation();
     try {
         const out = await post('/torsion/strain', { molfile }, BUDGET_SECONDS);
         if (!isCurrentLigandGeneration(generation)) {
@@ -442,7 +457,7 @@ async function runTorsion() {
         const aborted = e instanceof Error && e.name === 'AbortError';
         setStatus('phys-torsion-status', aborted
             ? 'Cancelled.'
-            : 'Physics daemon unreachable — backend/env/bin/python backend/physics/server.py',
+            : 'Dirac service unreachable on port 8901',
         aborted ? 'idle' : 'error');
     } finally {
         setBusy(false);
@@ -457,13 +472,13 @@ async function checkHealth() {
     try {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 1500);
-        const resp = await fetch(`${PHYSICS}/health`, { signal: ctrl.signal });
+        const resp = await dirac.execute('system.health', {}, { signal: ctrl.signal });
         clearTimeout(timer);
-        const h = await resp.json();
-        el.textContent = `physics online · rdkit ${h.rdkit} · pyscf ${h.pyscf}`;
+        if (!resp.ok) throw new Error(resp.error?.message || 'health refused');
+        el.textContent = 'physics online · unified command/job kernel';
         el.dataset.online = 'true';
     } catch {
-        el.textContent = 'physics offline — backend/env/bin/python backend/physics/server.py';
+        el.textContent = 'physics offline — systemctl --user restart dirac-fields';
         el.dataset.online = 'false';
     }
 }
@@ -473,10 +488,15 @@ export function initLigandPhysicsPanel(p: PluginContext) {
     byId('phys-run-surface')?.addEventListener('click', () => void runSurface());
     byId('phys-run-torsion')?.addEventListener('click', () => void runTorsion());
     byId('phys-cancel')?.addEventListener('click', () => {
+        if (inFlightJobId) {
+            void dirac.execute('job.cancel', {
+                job_ref: { kind: 'job', id: inFlightJobId },
+            });
+        }
         inFlight?.abort();
         inFlight = null;
         setBusy(false);
-        setStatus('phys-surface-status', 'Cancelled. The daemon stops at its own deadline.', 'idle');
+        setStatus('phys-surface-status', 'Cancellation requested; running native work stops only at cooperative checkpoints.', 'idle');
     });
     setBusy(false);
     void checkHealth();
@@ -494,7 +514,6 @@ export function updateLigandPhysics(nextMolfile: string | null, label: string | 
     const summary = byId('phys-summary');
     if (summary) summary.textContent = molfile ? (label ?? 'Ligand') : 'No ligand loaded';
     if (changed) {
-        ligandGeneration++;   // invalidates every in-flight result
         inFlight?.abort();
         inFlight = null;
         for (const id of ['phys-surface-body', 'phys-torsion-body']) {

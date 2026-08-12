@@ -36,7 +36,7 @@ import {
 import { ScreeningEngine, type ScreeningVerdict } from './screening';
 import { syncDesignerShape } from './shape';
 import { installDesignerDrag } from './drag';
-import { RequestGeneration } from '../../../app/services/ligand-store';
+import { ligandStore } from '../../../app/services/ligand-store';
 
 /** 2D highlight colors — the Ligand tab's established atom-channel hues. */
 const Depiction2DColor: Record<DesignerFeatureKind, string> = {
@@ -67,15 +67,7 @@ class PharmacophoreDesigner {
     private selectedHitId: string | null = null;
     private screeningToken = 0;
     private hasLigand = false;
-    /**
-     * Guards `update()`'s one unguarded await (`computePharmacophoreFeatures`,
-     * `docs/FRONTEND_STATE_AUDIT.md` §3 path #8). Not `ligandStore` itself
-     * (adoption is incremental — the lab does not write through the store
-     * yet, so its generation never moves) and not a bespoke
-     * `structureId !== requestId` compare (that shape already has three
-     * independent copies in this repo) — see `RequestGeneration`'s docstring.
-     */
-    private readonly requestGen = new RequestGeneration();
+    /** `update()` uses LigandStore's app-wide ScientificContext clock. */
     /** True while a fresh (non-dirty) seed computation is in flight — the
      *  in-flight state `renderSummary`/`renderFeatureList` paint so the panel
      *  never keeps showing the PREVIOUS ligand's model under nothing. */
@@ -118,7 +110,7 @@ class PharmacophoreDesigner {
      * bug class `docs/FRONTEND_STATE_AUDIT.md` §3 path #8 names.
      */
     async update(structure: Structure | null, options: LigandFocusOptions, source: { structureId: string | null; ligandLabel: string | null }): Promise<void> {
-        const generation = this.requestGen.next();
+        const generation = ligandStore.generation();
 
         if (!structure || !source.ligandLabel) {
             this.hasLigand = false;
@@ -150,7 +142,7 @@ class PharmacophoreDesigner {
         this.renderFeatureList();
         try {
             const features = await computePharmacophoreFeatures(structure, options);
-            if (!this.requestGen.isCurrent(generation)) return; // superseded — a newer update() already owns the panel
+            if (!ligandStore.isCurrent(generation)) return; // focused scientific context moved
             // Cleared BEFORE seedFromLigand: seeding's own onChange listener
             // renders synchronously inside that call, and it must see the
             // real data coming, not the in-flight placeholder it just replaced.
@@ -162,7 +154,7 @@ class PharmacophoreDesigner {
             // still-running newer call's spinner. Also covers
             // `computePharmacophoreFeatures` throwing: the panel must not
             // spin forever on a failed perception call.
-            if (this.requestGen.isCurrent(generation)) this.seeding = false;
+            if (ligandStore.isCurrent(generation)) this.seeding = false;
         }
     }
 

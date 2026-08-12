@@ -82,12 +82,17 @@ import { PresetStructureRepresentations } from '../mol-plugin-state/builder/stru
 import { StateTransforms } from '../mol-plugin-state/transforms';
 import { Loci } from '../mol-model/loci';
 import { ligandStore } from '../app/services/ligand-store';
+import { appShell } from '../app/shell/app-shell';
+import { sceneService } from '../app/shell/scene-service';
+import { availableViews, WORKSPACES, type WorkspaceId } from '../app/shell/registries';
+import { DiracClient } from '../app/services/dirac-client';
 // A READ-ONLY handle on the store, for driving the real code from a test rather
 // than reasoning about it. Not a second code path: it exposes the same singleton
 // the facets read. The store's generation advancing on a ligand change is the
 // property that did NOT hold until index.ts wrote through it, and a property that
 // cannot be observed from outside is a property nobody will notice losing.
 (window as unknown as Record<string, unknown>).__diracStore = ligandStore;
+(window as unknown as Record<string, unknown>).__diracShell = appShell;
 import { QueryContext, Structure, StructureElement, StructureSelection, Unit } from '../mol-model/structure';
 import { ShapeGroup } from '../mol-model/shape';
 import { OrderedSet } from '../mol-data/int';
@@ -366,6 +371,72 @@ function byId<T extends HTMLElement>(id: string): T {
     return element as T;
 }
 
+const applicationClient = new DiracClient({
+    baseUrl: `http://${window.location.hostname || '127.0.0.1'}:8901`,
+});
+
+async function refreshRuns(): Promise<void> {
+    const list = document.getElementById('run-job-list');
+    const summary = document.getElementById('run-job-summary');
+    if (!list || !summary) return;
+    summary.textContent = 'Loading durable jobs…';
+    try {
+        const env = await applicationClient.execute('job.list', { limit: 50 });
+        if (!env.ok) throw new Error(env.error?.user_message || env.error?.message || 'job.list refused');
+        const jobs = (env.data?.jobs || []) as Array<Record<string, any>>;
+        list.replaceChildren();
+        summary.textContent = `${jobs.length} recent jobs · Mission / Run / Job remain distinct`;
+        if (!jobs.length) {
+            const empty = document.createElement('p');
+            empty.className = 'ledger-empty'; empty.textContent = 'No durable jobs yet.';
+            list.appendChild(empty); return;
+        }
+        for (const job of jobs) {
+            const row = document.createElement('article'); row.className = 'run-job-row';
+            const title = document.createElement('strong');
+            title.textContent = `${job.method_id || 'method'} · ${job.state}`;
+            const detail = document.createElement('span');
+            detail.textContent = `${String(job.id).slice(0, 12)} · ${job.seconds ?? '—'}s · ${job.durability || 'unknown durability'}`;
+            row.append(title, detail); list.appendChild(row);
+        }
+    } catch (error) {
+        summary.textContent = error instanceof Error ? error.message : String(error);
+    }
+}
+
+function initShellNavigation(): void {
+    const host = document.getElementById('workspace-nav');
+    if (!host) return;
+    const jumpForView: Record<string, string> = {
+        'design.builder': 'ligand', 'design.objectives': 'designer',
+        'structures.complex': 'focus', 'structures.site': 'fields',
+        'structures.dynamics': 'physics', 'runs.active': 'runs',
+        'runs.history': 'runs',
+    };
+    const render = (active: WorkspaceId) => {
+        host.innerHTML = '';
+        for (const workspace of WORKSPACES.filter(w => availableViews(w.id).length)) {
+            const button = document.createElement('button');
+            button.type = 'button'; button.textContent = workspace.label;
+            button.setAttribute('aria-selected', String(workspace.id === active));
+            button.addEventListener('click', () => {
+                const next = availableViews(workspace.id)[0];
+                appShell.navigate({ workspace: workspace.id, view: next.id,
+                    programId: 'current' });
+                document.querySelector<HTMLButtonElement>(
+                    `.master-tab[data-jump="${jumpForView[next.id] || 'focus'}"]`)?.click();
+                if (workspace.id === 'runs') void refreshRuns();
+                render(workspace.id);
+            });
+            host.appendChild(button);
+        }
+    };
+    const restored = appShell.restore();
+    render(restored.workspace);
+    document.getElementById('run-job-refresh')?.addEventListener('click', () => void refreshRuns());
+    if (restored.workspace === 'runs') void refreshRuns();
+}
+
 class MolecularVfxLab {
     private workbench?: Awaited<ReturnType<typeof createChemWorkbench>>;
     private baseline?: MolstarVisualSnapshot;
@@ -397,6 +468,9 @@ class MolecularVfxLab {
 
     async init() {
         this.workbench = await createChemWorkbench({ target: byId('viewport') });
+        // Scene ownership sits above every View. AppShell navigation may project this
+        // host elsewhere, but it never constructs or disposes the plugin instance.
+        sceneService.attach(this.workbench.plugin, byId('viewport'));
         this.workbench.plugin.selectionMode = true;
         this.workbench.plugin.managers.interactivity.setProps({ granularity: 'residue' });
         this.workbench.plugin.managers.structure.selection.events.changed.subscribe(() => {
@@ -423,6 +497,7 @@ class MolecularVfxLab {
         // — and the field colours were still chosen for the colour that lost.
         await this.workbench.setBackground(Color(sceneBackgroundColor()));
         this.createControls();
+        initShellNavigation();
         await this.loadMolecule(this.currentMolecule);
         this.baseline = captureMolstarVisualState(this.workbench.plugin);
         await this.applyRepresentationAndVisuals();
@@ -1232,12 +1307,8 @@ class MolecularVfxLab {
 
     private fanOutLigand(molfile: string, label: string | null, structure?: Structure,
                          origin: 'loci' | 'import' = 'loci') {
-        // ── the store's WRITE side, and its absence was the whole problem ──
-        // `ligandStore` shipped with a generation token so a late async result
-        // could be discarded (isCurrent). Nothing ever WROTE to it, so the
-        // generation never advanced, so any guard built on it was a check that
-        // could not fire — which is why two facets had to grow a second clock
-        // (`RequestGeneration`) just to have a token that moves.
+        // The write enters ScientificContextStore here, so every facet observes the
+        // same generation token and late async results are rejected centrally.
         //
         // It goes HERE and nowhere else because fanOutLigand is already the one
         // home for "a new active molecule exists": every entry path funnels
@@ -1613,14 +1684,22 @@ class MolecularVfxLab {
         };
         setImportStatus('Embedding 3D structure (ETKDG + MMFF)…', 'idle');
         byId('status').textContent = 'Embedding molecule…';
-        let payload: { ok: boolean, molfile?: string, error?: string, meta?: { smiles_canonical: string, inchikey: string, natoms_heavy: number, mmff_optimized: boolean } };
+        let payload: { ok: boolean; molfile?: string; error?: string;
+            meta?: { smiles_canonical: string; inchikey: string; natoms_heavy: number; mmff_optimized: boolean } };
         try {
-            const resp = await fetch(`http://${window.location.hostname || '127.0.0.1'}:8901/embed`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ smiles }),
-            });
-            payload = await resp.json();
+            const env = await applicationClient.execute('conformer.generate', { smiles });
+            const molecule = env.data?.molecule as Record<string, unknown> | undefined;
+            const provenance = (env.meta?.provenance || {}) as Record<string, unknown>;
+            payload = env.ok && molecule?.content ? {
+                ok: true,
+                molfile: String(molecule.content),
+                meta: {
+                    smiles_canonical: String(provenance.smiles_canonical || smiles),
+                    inchikey: String(provenance.inchikey || 'unknown'),
+                    natoms_heavy: Number(provenance.n_atoms_heavy || 0),
+                    mmff_optimized: true,
+                },
+            } : { ok: false, error: env.error?.user_message || env.error?.message || 'conformer.generate refused' };
         } catch (e) {
             setImportStatus(`Backend unreachable — start it with: backend/env/bin/python backend/field_server.py (${e instanceof Error ? e.message : e})`, 'error');
             byId('status').textContent = 'Import failed';

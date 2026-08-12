@@ -71,8 +71,10 @@ def via_core(molfile: str) -> dict:
     # on both legs and turned this field into agreement-by-mutual-absence.
     import field_server as FS
     import method_registry as MR
-    versions = {mid: MR.unit_version(FS, u['fns'], u['consts'])[0]
-                for mid, u in MR.UNITS.items()}
+    # plan() resolves each unit's declared source module. Physics methods live in
+    # physics.* rather than field_server, so hashing every name against FS would make
+    # this acceptance harness drift from the registry it claims to exercise.
+    versions = {row['method_id']: row['version'] for row in MR.plan(FS)}
     cat = cat.bind_versions(versions)
     svc = invocation.InvocationService(cat, store=artifacts.MemoryArtifactStore())
     t0 = time.time()
@@ -310,31 +312,52 @@ def via_mcp(molfile: str) -> dict:
         {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {}},
         {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list', 'params': {}},
         {'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call', 'params': {
-            'name': METHOD.replace('.', '_'),
+            'name': 'structure_field_compute',
             'arguments': {'molecule': {'kind': 'molfile', 'content': molfile,
                                        'dimensionality': 3},
+                          'field_kind': 'homo',
                           'parameters': {'basis': BASIS}}}},
     ]
     out = io.StringIO()
     t0 = time.time()
-    DiracMCP().serve(stdin=io.StringIO('\n'.join(json.dumps(r) for r in reqs)),
-                     stdout=out)
+    mcp = DiracMCP()
+    mcp.serve(stdin=io.StringIO('\n'.join(json.dumps(r) for r in reqs)), stdout=out)
     resps = {r.get('id'): r for r in
              (json.loads(l) for l in out.getvalue().splitlines() if l.strip())}
     call = (resps.get(3) or {}).get('result') or {}
     text = (call.get('content') or [{}])[0].get('text', '{}')
-    payload = json.loads(text)
+    accepted = json.loads(text)
+    job_id = accepted.get('job_id') or ((accepted.get('data') or {}).get('job') or {}).get('id')
+    if not job_id:
+        return {'ok': False, 'error': {'code': 'INTERNAL'}, '_mcp_payload': accepted,
+                '_n_tools': len(((resps.get(2) or {}).get('result') or {}).get('tools') or [])}
+
+    waited_out = io.StringIO()
+    wait_req = {'jsonrpc': '2.0', 'id': 4, 'method': 'tools/call', 'params': {
+        'name': 'job_wait',
+        'arguments': {'job_ref': {'kind': 'job', 'id': job_id}, 'timeout': 300}}}
+    mcp.serve(stdin=io.StringIO(json.dumps(wait_req) + '\n'), stdout=waited_out)
+    waited_response = json.loads(waited_out.getvalue().strip())
+    waited_call = waited_response.get('result') or {}
+    waited_text = (waited_call.get('content') or [{}])[0].get('text', '{}')
+    waited = json.loads(waited_text)
+    job = waited.get('data') or {}
+    summary = job.get('result_summary') or {}
+    artifacts = [{
+        'id': a.get('id'), 'sha256': a.get('sha256'), 'role': a.get('role'),
+        'media_type': a.get('media_type'), 'size_bytes': a.get('size_bytes'),
+    } for a in job.get('artifacts') or []]
     # Reshaped into an envelope so the SAME normaliser judges it. An MCP-specific
     # reducer would be a third opinion about what the result means.
-    env = {'ok': not call.get('isError', True),
-           'data': payload.get('data') or {},
-           'artifacts': payload.get('artifacts') or [],
-           'meta': {'version': payload.get('version'),
-                    'cache': payload.get('cache'),
-                    'provenance': (payload.get('data') or {}).get('_provenance') or {}},
+    env = {'ok': not waited_call.get('isError', True) and job.get('state') == 'done',
+           'data': summary.get('data') or {},
+           'artifacts': artifacts,
+           'meta': {'version': job.get('method_version'),
+                    'cache': summary.get('cache'),
+                    'provenance': summary.get('provenance') or {}},
            '_wall': round(time.time() - t0, 2),
-           '_tool_result_chars': len(text),
-           '_contains_base64': 'inline_base64' in text,
+           '_tool_result_chars': len(text) + len(waited_text),
+           '_contains_base64': 'inline_base64' in text or 'inline_base64' in waited_text,
            '_n_tools': len(((resps.get(2) or {}).get('result') or {}).get('tools') or [])}
     return env
 

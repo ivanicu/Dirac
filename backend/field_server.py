@@ -281,6 +281,7 @@ def _db(): return psycopg.connect(DB_DSN, autocommit=True)
 _kernel_singleton = None
 _kernel_lock = threading.Lock()
 _kernel_error: str | None = None
+_dispatcher_singleton = None
 
 
 def _kernel():
@@ -294,6 +295,14 @@ def _kernel():
             print(f'[v2] kernel ready · store={getattr(_kernel_singleton, "store_kind", "?")}'
                   f' · {len(_kernel_singleton.catalog)} methods', flush=True)
     return _kernel_singleton
+
+
+def _dispatcher():
+    global _dispatcher_singleton
+    if _dispatcher_singleton is None:
+        from dirac_app import CommandDispatcher
+        _dispatcher_singleton = CommandDispatcher(_kernel())
+    return _dispatcher_singleton
 
 
 def _v2_error(code: str, message: str, **details) -> tuple[int, dict]:
@@ -323,6 +332,32 @@ def handle_v2(method: str, path: str, body: dict | None) -> tuple[int, dict] | N
                                   'supported_envelopes': [2],
                                   'capabilities': svc.capabilities()},
                          'meta': {'envelope': 2}}
+
+        if method == 'GET' and path == '/v2/commands':
+            return 200, {'ok': True,
+                         'data': {'commands': _dispatcher().registry.list()},
+                         'meta': {'envelope': 2}}
+
+        if method == 'GET' and path.startswith('/v2/commands/'):
+            command_id = urllib.parse.unquote(
+                path[len('/v2/commands/'):]).strip('/')
+            return 200, {'ok': True,
+                         'data': _dispatcher().registry.describe(command_id),
+                         'meta': {'envelope': 2}}
+
+        if method == 'POST' and path == '/v2/execute':
+            body = body or {}
+            command_id = body.get('command')
+            if not command_id:
+                return _v2_error('PARSE', 'command is required',
+                                 got_keys=sorted(body))
+            env = _dispatcher().execute(
+                command_id, body.get('input') or {}, actor=body.get('actor'),
+                request_id=body.get('request_id'))
+            if env.get('ok'):
+                return (202 if env.get('meta', {}).get('job_id') else 200), env
+            code = (env.get('error') or {}).get('code', 'INTERNAL')
+            return failures._CATALOG.get(code, {}).get('http', 200), env
 
         if method == 'GET' and path == '/v2/jobs':
             svc = _kernel()

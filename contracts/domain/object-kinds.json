@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "object_ref": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["kind", "id"],
+    "properties": {
+      "kind": { "type": "string" },
+      "id": { "type": "string", "minLength": 1 }
+    }
+  },
+  "kinds": [
+    "program", "target", "molecule", "compound", "series",
+    "protein", "protein_structure", "complex", "pose", "conformer",
+    "field", "prediction", "campaign", "synthesis_route", "reaction",
+    "building_block", "assay", "experiment", "measurement", "hypothesis",
+    "claim", "evidence", "decision", "dataset", "model", "artifact",
+    "mission", "run", "job", "literature_reference"
+  ]
+}

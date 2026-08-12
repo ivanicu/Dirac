@@ -15,6 +15,10 @@ import jobs
 PASS, FAIL = [], []
 
 
+def _add(a, b):
+    return a + b
+
+
 def check(name, fn):
     try:
         fn()
@@ -80,10 +84,23 @@ def test_executors_share_execute_and_thread_submission_is_bounded():
     threaded.shutdown()
 
 
-for name, fn in list(globals().items()):
-    if name.startswith('test_') and callable(fn):
-        check(name, fn)
+def test_process_and_remote_executors_share_the_same_boundary():
+    process = execution.ProcessExecutor(max_workers=1)
+    assert process.execute(_add, 2, 4) == 6
+    assert process.submit(_add, 5, 7).result(timeout=3) == 12
+    process.shutdown()
 
-print('─' * 100)
-print(f'{len(PASS)} passed · {len(FAIL)} failed')
-sys.exit(1 if FAIL else 0)
+    backing = execution.ThreadExecutor(max_workers=1)
+    remote = execution.RemoteExecutor(backing.submit)
+    assert remote.execute(_add, 8, 9) == 17
+    backing.shutdown()
+
+
+if __name__ != 'probe':
+    for name, fn in list(globals().items()):
+        if name.startswith('test_') and callable(fn):
+            check(name, fn)
+
+    print('─' * 100)
+    print(f'{len(PASS)} passed · {len(FAIL)} failed')
+    sys.exit(1 if FAIL else 0)

@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="en">
 <head>
+    <!-- AppShell uses path routes; keep scripts, structures, fields and WASM rooted at
+         the application origin when a deep link is refreshed. -->
+    <base href="/">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="data:,">
@@ -74,6 +77,16 @@
             text-transform: uppercase;
         }
         .topbar-tail { display: flex; gap: 10px; align-items: center; }
+        .workspace-nav { grid-column: 1 / -1; display: flex; gap: 4px; padding: 5px 10px;
+            border-bottom: 1px solid var(--border); background: var(--surface-2); }
+        .workspace-nav button { border: 0; border-radius: 6px; padding: 5px 9px;
+            background: transparent; color: var(--text-3); font-size: 10px; font-weight: 700; }
+        .workspace-nav button[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); }
+        .run-job-list { display: grid; gap: 6px; }
+        .run-job-row { display: grid; gap: 3px; border: 1px solid var(--line); border-radius: 7px;
+            padding: 8px; background: var(--surface-2); }
+        .run-job-row strong { font-size: 10px; color: var(--text); }
+        .run-job-row span { font-size: 9px; color: var(--text-3); }
 
         /* === Form controls === */
         select, input[type="text"] {
@@ -1307,6 +1320,7 @@
         </header>
 
         <aside class="sidebar">
+            <nav id="workspace-nav" class="workspace-nav" aria-label="Dirac workspaces"></nav>
             <nav class="master-nav" role="tablist" aria-label="Workspace sections">
                 <button type="button" class="master-tab" data-jump="focus">Focus</button>
                 <button type="button" class="master-tab" data-jump="semantic" aria-selected="true">Semantics</button>
@@ -1317,6 +1331,7 @@
                 <button type="button" class="master-tab" data-jump="designer">Designer</button>
                 <button type="button" class="master-tab" data-jump="vfx">VFX</button>
                 <button type="button" class="master-tab" data-jump="ledger">Ledger</button>
+                <button type="button" class="master-tab" data-jump="runs">Runs</button>
             </nav>
 
             <div class="scene-summary">
@@ -1405,6 +1420,19 @@
                             <p class="ledger-empty">The ledger and 3D contact geometry share the same computed records.</p>
                         </div>
                     </section>
+                </section>
+
+                <section class="panel" data-section="runs">
+                    <div class="panel-heading">
+                        <h2>Runs</h2>
+                        <span class="panel-index">MISSION · RUN · JOB</span>
+                    </div>
+                    <div class="contact-ledger-heading">
+                        <strong>Durable execution ledger</strong>
+                        <button id="run-job-refresh" type="button" class="btn-ghost">Refresh</button>
+                    </div>
+                    <p id="run-job-summary" class="ledger-empty">Open Runs to load durable jobs.</p>
+                    <div id="run-job-list" class="run-job-list" aria-live="polite"></div>
                 </section>
 
                 <section class="panel" data-section="properties">

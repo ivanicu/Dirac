@@ -80,6 +80,65 @@ def _params(a: argparse.Namespace) -> dict:
 
 
 # ── commands ──────────────────────────────────────────────────────────────────
+def _emit_command(env: dict, json_mode: bool) -> int:
+    if json_mode:
+        _emit_json(env)
+    elif env.get('ok'):
+        print(json.dumps(env.get('data') or {}, indent=2, sort_keys=True))
+    else:
+        error = env.get('error') or {}
+        print(f'dirac: {error.get("code", "INTERNAL")}: '
+              f'{error.get("user_message") or error.get("message")}', file=sys.stderr)
+    return EXIT_OK if env.get('ok') else EXIT_REFUSED
+
+
+def cmd_health(a: argparse.Namespace) -> int:
+    return _emit_command(_client(a).health(), a.json)
+
+
+def cmd_commands(a: argparse.Namespace) -> int:
+    commands = _client(a).commands()
+    if a.json:
+        _emit_json({'commands': commands})
+    else:
+        for c in commands:
+            print(f'{c["id"]:<34} {c["mutability"]:<8} '
+                  f'{c["execution_class"]:<11} job={c["job_policy"]}')
+    return EXIT_OK
+
+
+def cmd_jobs(a: argparse.Namespace) -> int:
+    return _emit_command(_client(a).jobs(state=a.state, limit=a.limit), a.json)
+
+
+def cmd_job(a: argparse.Namespace) -> int:
+    client = _client(a)
+    if a.job_action == 'get':
+        env = client.job_get(a.job_id)
+    elif a.job_action == 'wait':
+        env = client.job_wait(a.job_id, timeout=a.wait_timeout)
+    else:
+        env = client.job_cancel(a.job_id)
+    return _emit_command(env, a.json)
+
+
+def cmd_molecule_describe(a: argparse.Namespace) -> int:
+    molecule = {'smiles': a.smiles} if a.smiles else _molecule(a)
+    return _emit_command(_client(a).molecule_describe(molecule), a.json)
+
+
+def cmd_field_compute(a: argparse.Namespace) -> int:
+    client = _client(a)
+    env = client.field_compute(
+        molecule=_molecule(a), field_kind=a.kind,
+        parameters=_params(a) or None, budget_seconds=a.max_seconds)
+    if env.get('ok') and a.wait:
+        job_id = (env.get('meta') or {}).get('job_id')
+        if job_id:
+            env = client.job_wait(job_id, timeout=a.wait_timeout)
+    return _emit_command(env, a.json)
+
+
 def cmd_methods(a: argparse.Namespace) -> int:
     ms = _client(a).methods()
     if a.json:
@@ -280,7 +339,46 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest='cmd', required=True)
 
     m = sub.add_parser('methods', parents=[G], help='list what this system can compute')
+    m.add_argument('methods_action', nargs='?', choices=('list',), default='list')
     m.set_defaults(fn=cmd_methods)
+
+    health = sub.add_parser('health', parents=[G], help='application and stores health')
+    health.set_defaults(fn=cmd_health)
+
+    commands = sub.add_parser('commands', parents=[G], help='semantic command catalog')
+    commands.set_defaults(fn=cmd_commands)
+
+    jobs = sub.add_parser('jobs', parents=[G], help='list durable jobs')
+    jobs.add_argument('jobs_action', nargs='?', choices=('list',), default='list')
+    jobs.add_argument('--state')
+    jobs.add_argument('--limit', type=int, default=100)
+    jobs.set_defaults(fn=cmd_jobs)
+
+    job = sub.add_parser('job', parents=[G], help='get, wait for, or cancel a job')
+    job.add_argument('job_action', choices=('get', 'wait', 'cancel'))
+    job.add_argument('job_id')
+    job.add_argument('--wait-timeout', type=float, default=300)
+    job.set_defaults(fn=cmd_job)
+
+    molecule = sub.add_parser('molecule', parents=[G], help='molecule commands')
+    molecule.add_argument('molecule_action', choices=('describe',))
+    source = molecule.add_mutually_exclusive_group(required=True)
+    source.add_argument('--smiles')
+    source.add_argument('--molfile')
+    molecule.set_defaults(fn=cmd_molecule_describe)
+
+    field = sub.add_parser('field', parents=[G], help='semantic field computation')
+    field.add_argument('field_action', choices=('compute',))
+    field.add_argument('--molfile', required=True)
+    field.add_argument('--kind', required=True,
+                       choices=('mep', 'mlp', 'homo', 'lumo', 'density', 'mep_qm'))
+    field.add_argument('--basis')
+    field.add_argument('--spin', type=int)
+    field.add_argument('--param', action='append')
+    field.add_argument('--max-seconds', type=float)
+    field.add_argument('--wait', action='store_true')
+    field.add_argument('--wait-timeout', type=float, default=300)
+    field.set_defaults(fn=cmd_field_compute)
 
     d = sub.add_parser('describe', parents=[G], help='the full contract for one method')
     d.add_argument('method_id')

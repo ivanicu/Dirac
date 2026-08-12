@@ -21,10 +21,12 @@ would disagree about what is legal, and the SDK would be wrong.
 from .client import DiracClient, Result
 from .errors import CODES, DiracDigestMismatch, DiracError, exception_for
 from .transport import HttpTransport, LocalTransport
+from .generated_contracts import COMMAND_IDS, OBJECT_KINDS, RELATION_KINDS, ObjectRef
 
 __version__ = '0.1.0'
 __all__ = ['DiracClient', 'Result', 'DiracError', 'DiracDigestMismatch',
-           'exception_for', 'CODES', 'LocalTransport', 'HttpTransport']
+           'exception_for', 'CODES', 'LocalTransport', 'HttpTransport',
+           'ObjectRef', 'OBJECT_KINDS', 'RELATION_KINDS', 'COMMAND_IDS']
 
 # Every declared error code also gets a class, generated in errors.py from
 # contracts/errors.json. Re-exported so `except dirac.DiracUnsupported` works without

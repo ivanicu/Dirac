@@ -36,6 +36,9 @@ from typing import Any, Protocol
 
 
 class Transport(Protocol):
+    def execute(self, command_id: str, payload: dict, **kw) -> dict: ...
+    def list_commands(self) -> list[dict]: ...
+    def describe_command(self, command_id: str) -> dict: ...
     def invoke(self, method_id: str, payload: dict, **kw) -> dict: ...
     def list_methods(self) -> list[dict]: ...
     def describe(self, method_id: str) -> dict: ...
@@ -110,6 +113,22 @@ class LocalTransport:
     # ── the surface ───────────────────────────────────────────────────────────
     def invoke(self, method_id: str, payload: dict, **kw) -> dict:
         return self._kernel().invoke(method_id, payload, **kw)
+
+    def _dispatcher(self):
+        self._ensure_path()
+        from dirac_app import CommandDispatcher
+        if not hasattr(self, '_command_dispatcher'):
+            self._command_dispatcher = CommandDispatcher(self._kernel())
+        return self._command_dispatcher
+
+    def execute(self, command_id: str, payload: dict, **kw) -> dict:
+        return self._dispatcher().execute(command_id, payload, **kw)
+
+    def list_commands(self) -> list[dict]:
+        return self._dispatcher().registry.list()
+
+    def describe_command(self, command_id: str) -> dict:
+        return self._dispatcher().registry.describe(command_id)
 
     def list_methods(self) -> list[dict]:
         # Answered from the descriptors, so this works with no science stack at all.
@@ -188,6 +207,22 @@ class HttpTransport:
         env = json.loads(raw or b'{}')
         env.setdefault('meta', {})['transport'] = 'http:/v2/invoke'
         return env
+
+    def execute(self, command_id: str, payload: dict, **kw) -> dict:
+        _status, _headers, raw = self._request(
+            'POST', '/v2/execute', {'command': command_id, 'input': payload, **kw})
+        env = json.loads(raw or b'{}')
+        env.setdefault('meta', {})['transport'] = 'http:/v2/execute'
+        return env
+
+    def list_commands(self) -> list[dict]:
+        _status, _headers, raw = self._request('GET', '/v2/commands')
+        return (json.loads(raw or b'{}').get('data') or {}).get('commands', [])
+
+    def describe_command(self, command_id: str) -> dict:
+        _status, _headers, raw = self._request(
+            'GET', f'/v2/commands/{urllib.parse.quote(command_id)}')
+        return json.loads(raw or b'{}').get('data') or {}
 
     def _invoke_via_v1(self, method_id: str, payload: dict, **kw) -> dict:
         """Translate to the legacy /field route and shape its answer as an envelope.

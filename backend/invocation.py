@@ -350,8 +350,14 @@ class InvocationService:
                                      inline_max=inline_max, request_id=request_id,
                                      job_id=job_id)
                 if job_id is not None and self.ledger is not None:
-                    self.ledger.done(job_id, seconds=round(time.time() - t0, 3),
-                                     result_summary={'ok': True, 'cache': 'db'})
+                    self.ledger.done(
+                        job_id, seconds=round(time.time() - t0, 3),
+                        result_summary={'ok': True, 'cache': 'db',
+                                        'data': hit.result,
+                                        'warnings': hit.warnings,
+                                        'provenance': hit.provenance,
+                                        'result_keys': sorted(hit.result),
+                                        'artifact_roles': [r['role'] for r in env['artifacts']]})
                 return env
 
             if self.ledger is not None and job_id is None:
@@ -373,23 +379,30 @@ class InvocationService:
             # validated, so a handler could quietly return a shape no client was told to
             # expect — and the only symptom was a renderer showing `undefined`.
             self.catalog.validate_output(method_id, out.result)
-            # Persistence follows validation and never gates a valid scientific result.
-            # The collaborator owns whether the write is queued or synchronous.
+            env = self._envelope(spec, out, t0, cache=out.cache,
+                                 inline_max=inline_max, request_id=request_id,
+                                 job_id=job_id)
+            # Cache only after ArtifactStore has minted stable references. Generic caches
+            # persist those references; specialised field caches may still use the bytes in
+            # HandlerResult. Either way persistence follows validation and cannot turn a
+            # valid scientific result into a failed invocation.
             if spec.cacheable and self.cache is not None and hasattr(self.cache, 'store'):
                 try:
                     self.cache.store(method_id, payload, out,
-                                     seconds=round(time.time() - t0, 3), job_id=job_id)
+                                     seconds=round(time.time() - t0, 3), job_id=job_id,
+                                     envelope=env)
                 except Exception as e:                              # noqa: BLE001
                     print(f'[invoke] cache write unavailable ({type(e).__name__}: {e}) — '
                           f'the result is valid but was not persisted', file=sys.stderr,
                           flush=True)
-            env = self._envelope(spec, out, t0, cache=out.cache,
-                                 inline_max=inline_max, request_id=request_id,
-                                 job_id=job_id)
             if job_id is not None and self.ledger is not None:
                 self.ledger.done(
                     job_id, seconds=round(time.time() - t0, 3),
                     result_summary={'ok': True,
+                                    'cache': out.cache,
+                                    'data': out.result,
+                                    'warnings': out.warnings,
+                                    'provenance': out.provenance,
                                     'result_keys': sorted(out.result),
                                     'artifact_roles': [role for role, _ in out.artifacts]})
             return env

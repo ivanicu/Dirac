@@ -192,6 +192,91 @@ export class DiracClient {
         return this.invokeViaV1(methodId, input, opts);
     }
 
+    /** Semantic command surface used by GUI, CLI-equivalent clients and agents. */
+    async execute(
+        command: string, input: Record<string, unknown> = {},
+        opts: { actor?: { kind: 'human' | 'agent' | 'service'; id: string };
+            requestId?: string; signal?: AbortSignal } = {},
+    ): Promise<Envelope> {
+        const r = await this.request('POST', '/v2/execute', {
+            command, input, actor: opts.actor, request_id: opts.requestId,
+        }, opts.signal);
+        const env = JSON.parse(r.text || '{}') as Envelope;
+        env.meta = { ...(env.meta || {}), transport: 'http:/v2/execute' };
+        return env;
+    }
+
+    async commands(): Promise<Array<Record<string, unknown>>> {
+        const r = await this.request('GET', '/v2/commands');
+        const env = JSON.parse(r.text || '{}');
+        return (env.data?.commands || []) as Array<Record<string, unknown>>;
+    }
+
+    async jobGet(jobId: string): Promise<Envelope> {
+        return this.execute('job.get', { job_ref: { kind: 'job', id: jobId } });
+    }
+
+    async jobWait(jobId: string, timeout = 300, signal?: AbortSignal): Promise<Envelope> {
+        return this.execute('job.wait', {
+            job_ref: { kind: 'job', id: jobId }, timeout,
+        }, { signal });
+    }
+
+    async fieldCompute(input: {
+        molecule: Record<string, unknown>; fieldKind: string;
+        parameters?: Record<string, unknown>; budgetSeconds?: number;
+    }): Promise<Envelope> {
+        return this.execute('structure.field.compute', {
+            molecule: input.molecule, field_kind: input.fieldKind,
+            parameters: input.parameters, budget_seconds: input.budgetSeconds,
+        });
+    }
+
+    async fieldComputeAndWait(input: {
+        molecule: Record<string, unknown>; fieldKind: string;
+        parameters?: Record<string, unknown>; budgetSeconds?: number;
+        timeout?: number;
+    }): Promise<Envelope> {
+        const accepted = await this.fieldCompute(input);
+        return this.waitForCommandResult(accepted, input.timeout ?? 300);
+    }
+
+    async waitForCommandResult(
+        accepted: Envelope, timeout = 300, signal?: AbortSignal,
+    ): Promise<Envelope> {
+        if (!accepted.ok) return accepted;
+        const jobId = String(accepted.meta?.job_id || '');
+        if (!jobId) {
+            return { ok: false, error: { code: 'INTERNAL', message: 'command returned no job_id' } };
+        }
+        const waited = await this.jobWait(jobId, timeout, signal);
+        if (!waited.ok) return waited;
+        const job = waited.data as Record<string, any>;
+        if (job.state !== 'done') {
+            return {
+                ok: false,
+                error: { code: job.error_code || 'BUDGET',
+                    message: job.error_detail || `job ${jobId} ended as ${job.state}` },
+                meta: waited.meta,
+            };
+        }
+        const summary = job.result_summary || {};
+        const artifacts = (job.artifacts || []).map((a: Record<string, any>) => ({
+            id: a.id, sha256: a.sha256, role: a.role, media_type: a.media_type,
+            size_bytes: a.size_bytes, encoding: 'identity',
+            url: `/v2/artifacts/${a.id}`, metadata_url: `/v2/artifacts/${a.id}/meta`,
+            method_version: job.method_version,
+        }));
+        return {
+            ok: true, data: summary.data || {}, artifacts,
+            warnings: summary.warnings || [],
+            meta: { ...(waited.meta || {}), job_id: jobId,
+                method_id: job.method_id, version: job.method_version,
+                provenance: summary.provenance || {}, seconds: job.seconds,
+                command: accepted.meta?.command, command_version: accepted.meta?.command_version },
+        };
+    }
+
     /**
      * The v1 shim, isolated exactly as the Python SDK isolates it. Deleted when /v2 is
      * everywhere; the acceptance test is what proves the deletion changed nothing.
@@ -486,17 +571,15 @@ export async function fetchField(
             }
         }
     }
-    const env = await client.invoke(methodId, {
+    const env = await client.fieldComputeAndWait({
         molecule: { kind: 'molfile', content, dimensionality: 3 },
-        ...(args.basis || args.spin != null
-            ? {
-                parameters: {
-                    ...(args.basis ? { basis: args.basis } : {}),
-                    ...(args.spin != null ? { spin: args.spin } : {}),
-                },
-            }
-            : {}),
-    }, { budgetSeconds: args.maxSeconds, signal: args.signal });
+        fieldKind: kind,
+        parameters: (args.basis || args.spin != null) ? {
+            ...(args.basis ? { basis: args.basis } : {}),
+            ...(args.spin != null ? { spin: args.spin } : {}),
+        } : undefined,
+        budgetSeconds: args.maxSeconds,
+    });
 
     if (!env.ok) throw new DiracError(env.error!, env);
 

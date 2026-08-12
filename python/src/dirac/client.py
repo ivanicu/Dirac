@@ -147,6 +147,48 @@ class DiracClient:
         env.setdefault('meta', {}).setdefault('transport', self.transport.name)
         return env
 
+    def execute(self, command_id: str, input: dict | None = None, **kw) -> dict:
+        """Execute semantic application behavior, independent of transport routes."""
+        env = self.transport.execute(command_id, input or {}, **kw)
+        env.setdefault('meta', {}).setdefault('transport', self.transport.name)
+        return env
+
+    def commands(self) -> list[dict]:
+        return self.transport.list_commands()
+
+    def command(self, command_id: str) -> dict:
+        return self.transport.describe_command(command_id)
+
+    def health(self) -> dict:
+        return self.execute('system.health')
+
+    def job_get(self, job_id: str) -> dict:
+        return self.execute('job.get', {'job_ref': {'kind': 'job', 'id': job_id}})
+
+    def jobs(self, *, state: str | None = None, limit: int = 100) -> dict:
+        return self.execute('job.list', {
+            **({'state': state} if state else {}), 'limit': limit})
+
+    def job_wait(self, job_id: str, *, timeout: float = 300) -> dict:
+        return self.execute('job.wait', {
+            'job_ref': {'kind': 'job', 'id': job_id}, 'timeout': timeout})
+
+    def job_cancel(self, job_id: str) -> dict:
+        return self.execute('job.cancel', {
+            'job_ref': {'kind': 'job', 'id': job_id}})
+
+    def molecule_describe(self, molecule: dict) -> dict:
+        return self.execute('molecule.describe', {'molecule': molecule})
+
+    def field_compute(self, *, molecule: dict, field_kind: str,
+                      parameters: dict | None = None,
+                      budget_seconds: float | None = None) -> dict:
+        return self.execute('structure.field.compute', {
+            'molecule': molecule, 'field_kind': field_kind,
+            **({'parameters': parameters} if parameters else {}),
+            **({'budget_seconds': budget_seconds}
+               if budget_seconds is not None else {})})
+
     def methods(self) -> list[dict]:
         return self.transport.list_methods()
 

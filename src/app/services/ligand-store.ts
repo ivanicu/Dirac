@@ -29,11 +29,12 @@
  *      consumers that need real geometry must narrow — the compiler asks the
  *      question, rather than a comment asking the reader.
  *
- * NOT WIRED YET, deliberately: index.ts is being edited by other sessions
- * right now, and this file is the seam it will import. It is standalone,
- * typechecked, and tested; adoption is a separate commit that deletes the
- * three fields.
+ * The application singleton is wired to ScientificContextStore, so all facets now
+ * share this one generation clock. Tests may inject an isolated context explicitly.
  */
+
+import { ScientificContextStore, scientificContext } from '../context/scientific-context-store';
+import { objectRef } from '../domain/object-ref';
 
 /** Where the coordinates came from, and therefore what they may be used for. */
 export type CoordSpace = '2d' | 'scene';
@@ -145,18 +146,18 @@ export function heavyAtomsFromMolfile(molfile: string): number {
 
 export class LigandStore {
     private ligand: Ligand | null = null;
-    private gen = 0;
     private listeners = new Set<LigandListener>();
     /** Where a subscriber's exception goes. Injectable so a test can assert
      *  isolation without polluting the console. */
     private readonly onListenerError: (e: unknown) => void;
 
-    constructor(onListenerError?: (e: unknown) => void) {
+    constructor(onListenerError?: (e: unknown) => void,
+                private readonly context = new ScientificContextStore()) {
         this.onListenerError = onListenerError ?? (e => console.error('[ligand-store] subscriber threw', e));
     }
 
     current(): Ligand | null { return this.ligand; }
-    generation(): number { return this.gen; }
+    generation(): number { return this.context.generation(); }
 
     /**
      * Subscribe and receive the CURRENT value immediately. Late-mounting
@@ -214,7 +215,7 @@ export class LigandStore {
     clear(): void {
         if (this.ligand === null) return;   // idempotent: no spurious generation bump
         this.ligand = null;
-        this.gen++;
+        this.context.clearFocus('selection');
         this.emitAll();
     }
 
@@ -226,7 +227,7 @@ export class LigandStore {
      *     const result = await slowThing();
      *     if (!store.isCurrent(g)) return;   // discard, do not render
      */
-    isCurrent(generation: number): boolean { return generation === this.gen; }
+    isCurrent(generation: number): boolean { return this.context.isCurrent(generation); }
 
     private commit(next: Ligand): void {
         // Identical molfile AND kind is not a change: re-emitting would clear
@@ -236,7 +237,9 @@ export class LigandStore {
             return;
         }
         this.ligand = next;
-        this.gen++;
+        const identity = next.inchikey || stableMoleculeId(next.molfile);
+        this.context.focus(objectRef('molecule', identity),
+                           next.kind === 'import' ? 'import' : 'selection');
         this.emitAll();
     }
 
@@ -249,44 +252,26 @@ export class LigandStore {
         // One subscriber's exception must not stop the others. A facet that
         // throws in onLigand used to abort the whole cascade, so the facets
         // that came after it silently kept the previous molecule's state.
-        try { fn(this.ligand, this.gen); } catch (e) { this.onListenerError(e); }
+        try { fn(this.ligand, this.context.generation()); } catch (e) { this.onListenerError(e); }
     }
 }
 
 /** The app-wide instance. One home, module-scoped so a facet cannot make a second. */
-export const ligandStore = new LigandStore();
+export const ligandStore = new LigandStore(undefined, scientificContext);
 
-/**
- * A per-call generation clock — the SAME contract as `LigandStore.generation()`/
- * `.isCurrent()`, for a consumer that still receives its ligand as a direct
- * call argument from the lab rather than through `ligandStore.subscribe(...)`.
- *
- * WHY THIS EXISTS INSTEAD OF JUST USING `ligandStore` DIRECTLY: adoption of
- * the store is deliberately incremental (see the module docstring) —
- * `index.ts` does not call `setFromLoci`/`setFromImport`/`setFromSketch2d`
- * yet, so `ligandStore.generation()` never advances when the lab switches
- * ligand. A guard built on a value that never changes is a check that cannot
- * fail — the exact bug class `docs/CHECKS_AUDIT.md` hunts, and worse than no
- * check at all, because it *reads* as protection. Until the write side is
- * wired (the expensive item in `docs/FRONTEND_STATE_AUDIT.md`'s remediation
- * list, §6 — touches `index.ts` and all six facets in one pass), a consumer
- * still needs a token that actually moves.
- *
- * WHY NOT A BESPOKE `value !== capturedValue` COMPARE INSTEAD: that shape
- * already has three independent, disagreeing implementations in this repo
- * (`docs/FRONTEND_STATE_AUDIT.md` §4.3 — field-wells' string identity,
- * chemistry-cache's own counter, this store's counter). A fourth,
- * differently-shaped one is exactly how that count grows to four. This is
- * the ONE additional shape, added to the one file whose job is "stale-async
- * solved once, here" — same two method names as the store's own, so the day
- * a facet's caller adopts `ligandStore` for real, swapping
- * `new RequestGeneration()` + `.next()`/`.isCurrent(g)` for
- * `ligandStore.generation()`/`ligandStore.isCurrent(g)` changes the source of
- * the number, not the shape of the call site.
- */
+function stableMoleculeId(text: string): string {
+    // FNV-1a is an identity key for session context, not scientific provenance.
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) {
+        hash ^= text.charCodeAt(i);
+        hash = Math.imul(hash, 0x01000193);
+    }
+    return `mol_${(hash >>> 0).toString(16).padStart(8, '0')}`;
+}
+
+/** @deprecated Use scientificContext.generation()/isCurrent().
+ * Kept only as a source-compatible facade; it owns no clock of its own. */
 export class RequestGeneration {
-    private gen = 0;
-    /** Call at the top of the async entry point, before starting any work. */
-    next(): number { return ++this.gen; }
-    isCurrent(g: number): boolean { return g === this.gen; }
+    next(): number { return scientificContext.patch({ origin: 'command' }); }
+    isCurrent(generation: number): boolean { return scientificContext.isCurrent(generation); }
 }

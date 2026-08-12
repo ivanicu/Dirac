@@ -11,7 +11,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import cache_fields
 import catalog
-import field_server
 import invocation
 
 
@@ -93,6 +92,7 @@ def test_explicit_spin_bypasses_both_directions():
 
 
 def test_writer_only_helpers_are_not_persisted_in_classical_meta():
+    import field_server
     persisted = field_server.cacheable_meta({
         'kind': 'mep', 'charges': 'gasteiger', 'basis': 'none', 'natoms': 7,
         'single_signed': True, 'dims': [2, 2, 2], 'cache': 'computed',
@@ -103,6 +103,7 @@ def test_writer_only_helpers_are_not_persisted_in_classical_meta():
 
 
 def test_cache_read_prefers_full_precision_json_and_hides_internal_v1_facts():
+    import field_server
     row = (
         CUBE.encode(), -74.958608271, True, 3, 7, -10.3962, 15.2807, 1.2,
         'RHF', datetime.now(timezone.utc),
@@ -141,10 +142,11 @@ def test_cache_read_prefers_full_precision_json_and_hides_internal_v1_facts():
     assert internal['_n_atoms'] == 3
 
 
-for name, fn in list(globals().items()):
-    if name.startswith('test_') and callable(fn):
-        check(name, fn)
+if __name__ != 'probe':
+    for name, fn in list(globals().items()):
+        if name.startswith('test_') and callable(fn):
+            check(name, fn)
 
-print('─' * 100)
-print(f'{len(PASS)} passed · {len(FAIL)} failed')
-sys.exit(1 if FAIL else 0)
+    print('─' * 100)
+    print(f'{len(PASS)} passed · {len(FAIL)} failed')
+    sys.exit(1 if FAIL else 0)

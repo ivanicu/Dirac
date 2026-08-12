@@ -14,20 +14,13 @@
  */
 
 import { computeLigandDescriptors, type DescriptorReport } from '../../../chemistry.backend.perception.rdkit-wasm.editable/descriptors';
-import { RequestGeneration } from '../../../app/services/ligand-store';
+import { ligandStore } from '../../../app/services/ligand-store';
 
 function byId<T extends HTMLElement>(id: string): T | null {
     return document.getElementById(id) as T | null;
 }
 
-/**
- * Stale-async guard for `renderPropertiesPanel`'s one await. See
- * `RequestGeneration`'s own docstring for why this is not `ligandStore`
- * itself (adoption is incremental; the lab does not write through the store
- * yet) and not a bespoke `molfile !== requestMolfile` compare either (that
- * shape already has three independent copies in this repo).
- */
-const requestGen = new RequestGeneration();
+/** Stale async work is guarded by the app-wide ScientificContext clock via LigandStore. */
 
 function fmt(n: number, digits = 1): string {
     if (!Number.isFinite(n)) return '—';
@@ -130,7 +123,7 @@ export function renderPropertiesHtml(report: DescriptorReport): string {
  * clear-selection call also correctly supersedes an in-flight compute.
  */
 export async function renderPropertiesPanel(molfile: string | null, ligandLabel: string | null): Promise<void> {
-    const generation = requestGen.next();
+    const generation = ligandStore.generation();
     const content = byId<HTMLElement>('properties-content');
     const summary = byId<HTMLElement>('properties-summary');
     const summaryStats = byId<HTMLElement>('properties-summary-stats');
@@ -152,7 +145,7 @@ export async function renderPropertiesPanel(molfile: string | null, ligandLabel:
     content.innerHTML = '';
 
     const report = await computeLigandDescriptors(molfile);
-    if (!requestGen.isCurrent(generation)) return; // superseded — a newer call already owns the DOM
+    if (!ligandStore.isCurrent(generation)) return; // focused scientific context moved
 
     if (!report) {
         content.innerHTML = '<p class="ledger-empty">RDKit descriptor computation unavailable for this ligand.</p>';
