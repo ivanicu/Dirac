@@ -1,22 +1,30 @@
-33
+0
 # Commits in the FULL history that name the tooling or link a private session.
-# Measured 2026-08-11 by two independent implementations that agree: the bash gate
-# and a python cross-check, 33 of 161.
+#
+# Was 33 of 161. Ivan authorised the rewrite (「把那些都去掉吧」) and it landed
+# 2026-08-11: git filter-repo stripped exactly two trailer lines
+# (Co-Authored-By: Claude… and Claude-Session:…) from every message that had
+# them. The Claude-Session line was the reason it could not wait — a live
+# pointer from a PUBLIC repository to a private transcript.
+#
+# Verified three ways, and the third is the one that matters:
+#   trailers   33 -> 0
+#   commits    163 -> 163            (nothing dropped, nothing squashed)
+#   TREE HASHES IDENTICAL, all 163   (a message rewrite that moves one byte of
+#                                     content is not a message rewrite; this is
+#                                     the assertion that separates "stripped two
+#                                     lines" from "silently altered 161 commits")
 #
 # NOT a target and NOT an acceptance: a RATCHET. The gate fails when this number
-# GROWS. It does not fail on the existing 33, because cleaning them needs a history
-# rewrite and a force push — that destroys every other clone and is Ivan's
-# decision, not a gate's.
+# GROWS. At 0 it now protects a clean history instead of freezing a dirty one —
+# left at 33 it would have silently tolerated 33 future leaks, which is worse
+# than having no gate at all.
 #
-# WHAT THE 33 ARE: the harness's default commit convention appends
-# `Co-Authored-By: Claude <model>` and `Claude-Session: https://claude.ai/code/...`
-# to every commit unless something stops it. Nothing stopped it. The standing rule
-# — no tooling names in public history — lived in memory, and a rule in memory
-# competes with a default that fires automatically.
-#
-# WHY FULL HISTORY AND NOT A WINDOW: with a fixed depth, clean commits push old
-# dirty ones out of the window and the count falls on its own, so the ratchet would
-# report "the leak shrank" for a history that never changed.
-#
-# When history is cleaned, set this to the new count. The gate says so explicitly
-# when it sees the number fall.
+# The rewrite was attempted TWICE. The first attempt succeeded locally and was
+# then undone by dirac-sync.timer, which force-aligns the shared worktree to
+# origin/main every 60 s and whose divergence branch is "remote wins": it saved
+# the rewritten head to backup/diverged-20260811-173859, stashed, and reset main
+# back to the pre-rewrite commit. Three writers on one ref — two agents and a
+# systemd timer that leaves a log and no message. The second attempt ran in an
+# isolated clone with the timer stopped. Restart it when the dust settles:
+#   systemctl --user start dirac-sync.timer
