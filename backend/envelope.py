@@ -360,6 +360,18 @@ _V1_REASON_FOR_CODE: dict[str, str] = {
 assert set(_V1_REASON_FOR_CODE) == set(CODES), (
     'the v1 reason bucket table has drifted from the vocabulary it buckets')
 
+def v1_reason_for(code: str) -> str:
+    """The v1 `reason` for a v2 code — ONE mapping, exported.
+
+    It existed as a private table used only by to_v1(), while the live route computed
+    the same thing independently with `'unsupported' if isinstance(e, ValueError) else
+    'internal'`. Two ways of answering one question, and the route's way could not see
+    the difference between a missing basis and a bug. Exporting the table is what lets
+    the route stop guessing without changing a single byte of the v1 surface.
+    """
+    return _V1_REASON_FOR_CODE.get(code, 'internal')
+
+
 _V2_ONLY_META_KEYS = ('envelope', 'request_id', 'producer')
 
 

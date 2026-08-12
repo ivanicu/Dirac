@@ -46,6 +46,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 # route 404 — indistinguishable from "no such route", which is the fallback-
 # hides-the-primary's-death shape. So a failed import is REMEMBERED and served
 # as a 503 that names the exception, while /field keeps working.
+import envelope
+import failures
 import jobs
 from envelope import normalize_meta
 
@@ -800,11 +802,13 @@ def field_mep(mol: Chem.Mol, spacing=0.4, pad=4.0):
     bad = ~np.isfinite(charges)
     if bad.any():
         bad_syms = sorted({syms[i] for i in np.where(bad)[0]})
-        raise ValueError(
+        raise failures.DiracUnparameterized(
             f'Gasteiger cannot parameterize {"/".join(bad_syms)} — no classical '
-            'MEP for this molecule. The QM potential (mep_qm) handles it.')
+            'MEP for this molecule. The QM potential (mep_qm) handles it.',
+            details={'unparameterized_elements': bad_syms, 'charge_model': 'gasteiger'},
+            hint={'method': 'fields.qm.mep_qm'})
     if float(np.abs(charges).max()) < 1e-6:
-        raise ValueError('all Gasteiger charges are zero — classical MEP would '
+        raise failures.DiracUnparameterized('all Gasteiger charges are zero — classical MEP would '
                          'be an empty picture; use mep_qm')
 
     iso = FIXED_ISO['mep'] * ISO_SLIDER_FLOOR
@@ -996,8 +1000,20 @@ def basis_covers(syms: list[str], basis: str) -> list[str]:
     return missing
 
 
-class FieldBudgetExceeded(Exception):
+class FieldBudgetExceeded(failures.DiracBudgetExceeded):
     """Raised from inside the SCF loop when the wall-clock budget runs out.
+
+    NOW A DiracFailure, and the NAME is kept deliberately: every existing raise site
+    and every `except FieldBudgetExceeded` in this file and in the tests keeps
+    working, while the object gains a code, a caller action and a retryable flag. A
+    rename would have been a bigger diff with no behavioural gain — and the tests
+    that guard the deadline are the last thing to churn while changing error
+    plumbing.
+    """
+    def __init__(self, message: str, **kw):
+        super().__init__(message, **kw)
+
+    """Original note, kept: raised from inside the SCF loop when the budget runs out.
 
     Its own class, not ValueError: the HTTP layer reports it with the elapsed
     time and the budget, and a caller can tell 'too expensive' apart from
@@ -1056,18 +1072,30 @@ def run_scf(mol: Chem.Mol, basis: str, max_seconds: float = DEFAULT_MAX_SECONDS,
     # HTTP layer reported as reason='internal' plus a traceback.
     uncovered = basis_covers(syms, basis)
     if uncovered:
-        raise ValueError(
+        # TYPED: the elements and the working alternative travel as DATA, not only
+        # inside a sentence a client would have to regex. The message is unchanged so
+        # the v1 golden does not move.
+        raise failures.DiracUnsupported(
             f'basis {basis} does not cover {"/".join(uncovered)} — '
-            'def2-svp is the only whitelisted basis with iodine')
+            'def2-svp is the only whitelisted basis with iodine',
+            details={'basis': basis, 'unsupported_elements': sorted(uncovered),
+                     'supported_alternatives': ['def2-svp']},
+            hint={'parameters': {'basis': 'def2-svp'}})
     if len(syms) > MAX_QM_ATOMS:
-        raise ValueError(
-            f'{len(syms)} atoms (with H) exceeds the interactive QM cap of {MAX_QM_ATOMS}'
-        )
+        raise failures.DiracTooLarge(
+            f'{len(syms)} atoms (with H) exceeds the interactive QM cap of {MAX_QM_ATOMS}',
+            details={'atoms_with_h': len(syms), 'cap': MAX_QM_ATOMS})
     charge = sum(a.GetFormalCharge() for a in mol.GetAtoms())
     default_spin, open_shell_reason = required_spin(syms, charge)
     if spin is None:
         if open_shell_reason:
-            raise ValueError(open_shell_reason)
+            # A QUESTION, not a dead end: the fix is one parameter. As a ValueError
+            # this arrived at the client as reason='unsupported', which reads as
+            # "give up" — the exact collapse errors.json added this code to undo.
+            raise failures.DiracOpenShellSpinRequired(
+                open_shell_reason,
+                details={'infer_from_parity_refused': True},
+                hint={'parameters': {'spin': 'an explicit integer'}})
         spin = default_spin
     elif (spin % 2) != (default_spin % 2):
         raise ValueError(
@@ -1961,6 +1989,15 @@ class Handler(BaseHTTPRequestHandler):
             cacheable = (kind in ('mep', 'mep_qm', 'homo', 'lumo', 'density')
                          and spin is None)
 
+            # ORDERING, and it is a decision rather than an accident: the cache
+            # is consulted BEFORE any budget consideration. So `max_seconds: 0` —
+            # documented everywhere as "refuse before doing any work, tell me the
+            # cost" — returns a RESULT when the answer is already cached. That is
+            # correct: no work is done, so there is no budget to refuse against, and
+            # refusing would mean withholding a free answer. It is written down here
+            # because the two sentences look contradictory in a log, and a reader who
+            # meets it in the golden file deserves to find the reason rather than
+            # reconstruct it.
             hit = db_get_cube(molfile_sha, kind, basis_key) if cacheable else None
             if hit is not None:
                 cube, meta = hit
@@ -2143,18 +2180,30 @@ class Handler(BaseHTTPRequestHandler):
                              seconds=time.time() - t_job)
             self._send(200, {'ok': False, 'error': str(e), 'reason': 'budget'})
         except Exception as e:
-            traceback.print_exc()
-            reason = 'unsupported' if isinstance(e, ValueError) else 'internal'
+            # THE LINE THIS REPLACES: `reason = 'unsupported' if isinstance(e,
+            # ValueError) else 'internal'` — a classification decided from a Python
+            # type that does not know the answer. A DiracFailure now carries its own
+            # code; anything else is adapted by failures.from_exception, which marks
+            # the guess as a guess in `details.guessed_from_type` instead of laundering
+            # it. v1's `reason` still comes from envelope's code→reason mapping, so
+            # the compatibility surface does not move — verified against the golden.
+            failure = failures.from_exception(e)
+            if failure.code == 'INTERNAL':
+                traceback.print_exc()
+            reason = envelope.v1_reason_for(failure.code)
             if _jobs is not None:
                 # ValueError is this service's chemistry refusal (an element with
                 # no basis, an unparameterised atom), which is UNSUPPORTED — not
                 # INTERNAL. Recording every failure as INTERNAL would make the
                 # ledger's error_code column useless for the one question it is
                 # for: was it us or the molecule?
-                _jobs.failed(job_id,
-                             code='UNSUPPORTED' if reason == 'unsupported' else 'INTERNAL',
-                             detail=str(e), seconds=time.time() - t_job)
-            self._send(200, {'ok': False, 'error': str(e), 'reason': reason})
+                # The ledger gets the REAL code now, not a two-way guess. Before
+                # this, every chemistry refusal was recorded as UNSUPPORTED or
+                # INTERNAL, so app.job's error_code column could not distinguish a
+                # missing basis from an unparameterized atom from a size cap.
+                _jobs.failed(job_id, code=failure.code, detail=failure.message,
+                             seconds=time.time() - t_job)
+            self._send(200, {'ok': False, 'error': failure.message, 'reason': reason})
 
     def log_message(self, *args):
         pass

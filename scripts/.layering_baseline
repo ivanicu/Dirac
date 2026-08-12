@@ -4,3 +4,4 @@
 # consolidate the seams" and a figure that makes the intention falsifiable.
 HTTP handlers do not call scientific functions directly = 6
 facets do not call fetch() on scientific routes = 8
+scientific refusals are typed, not ValueError = 19

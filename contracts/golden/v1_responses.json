@@ -44,7 +44,7 @@
   "homo_water": {
     "body": {
       "cube_len": 6746023,
-      "cube_sha256": "b4fe72ae80b3d46034d8be8afd2b7ed6c88f3e66e6816b10284870d70ba11bf8",
+      "cube_sha256": "100f06cbd22f85b38d11506a67c389e07b8232f77d24fbb120d5f62850ca4180",
       "meta_keys": [
         "basis",
         "cache",
@@ -71,19 +71,18 @@
       ],
       "meta_values": {
         "basis": "sto-3g",
-        "charge": null,
+        "charge": 0,
         "converged": true,
-        "ecp": null,
-        "frontier_caveat": null,
+        "frontier_caveat": "minimal basis: no polarisation or diffuse functions. HOMO is 1.4-2.7 eV off experimental IP and its ORDERING inverts within a substituted-benzene series; the LUMO is not a bound state and moves ~12 eV to def2-SVP. Not quotable \u2014 switch to def2-SVP for a number, or read these as shapes only.",
         "homo_ev": -10.3962,
         "kind": "homo",
         "lumo_ev": 15.2807,
         "method": "RHF",
         "natoms": 3,
         "nbasis": 7,
-        "scf_cycles": null,
+        "scf_cycles": 7,
         "scf_energy_ha": -74.9586082709,
-        "spin": null,
+        "spin": 0,
         "units": "amp"
       },
       "ok": true
@@ -95,7 +94,7 @@
   "homo_water__second_request": {
     "body": {
       "cube_len": 6746023,
-      "cube_sha256": "b4fe72ae80b3d46034d8be8afd2b7ed6c88f3e66e6816b10284870d70ba11bf8",
+      "cube_sha256": "100f06cbd22f85b38d11506a67c389e07b8232f77d24fbb120d5f62850ca4180",
       "meta_keys": [
         "basis",
         "cache",
@@ -122,19 +121,18 @@
       ],
       "meta_values": {
         "basis": "sto-3g",
-        "charge": null,
+        "charge": 0,
         "converged": true,
-        "ecp": null,
-        "frontier_caveat": null,
+        "frontier_caveat": "minimal basis: no polarisation or diffuse functions. HOMO is 1.4-2.7 eV off experimental IP and its ORDERING inverts within a substituted-benzene series; the LUMO is not a bound state and moves ~12 eV to def2-SVP. Not quotable \u2014 switch to def2-SVP for a number, or read these as shapes only.",
         "homo_ev": -10.3962,
         "kind": "homo",
         "lumo_ev": 15.2807,
         "method": "RHF",
         "natoms": 3,
         "nbasis": 7,
-        "scf_cycles": null,
+        "scf_cycles": 7,
         "scf_energy_ha": -74.9586082709,
-        "spin": null,
+        "spin": 0,
         "units": "amp"
       },
       "ok": true
@@ -145,103 +143,11 @@
   },
   "homo_zero_budget_refusal": {
     "body": {
-      "cube_len": 6746563,
-      "cube_sha256": "d3a314b9d5cd355d29cc54c5aa0e44a4b7bf1d8923ec13d195070ef3dbfb3790",
-      "meta_keys": [
-        "basis",
-        "cache",
-        "charge",
-        "computed_at",
-        "converged",
-        "cube_predicted_seconds",
-        "cube_seconds",
-        "ecp",
-        "frontier_caveat",
-        "homo_ev",
-        "kind",
-        "lumo_ev",
-        "method",
-        "natoms",
-        "nbasis",
-        "scf_cycles",
-        "scf_energy_ha",
-        "scf_seconds",
-        "spin",
-        "stored",
-        "total_seconds",
-        "units"
-      ],
-      "meta_values": {
-        "basis": "sto-3g",
-        "charge": null,
-        "converged": true,
-        "ecp": null,
-        "frontier_caveat": null,
-        "homo_ev": -6.729,
-        "kind": "homo",
-        "lumo_ev": 7.378,
-        "method": "RHF",
-        "natoms": 13,
-        "nbasis": 41,
-        "scf_cycles": null,
-        "scf_energy_ha": -301.7088685655,
-        "spin": null,
-        "units": "amp"
-      },
-      "ok": true
+      "error_head": "estimated 0.1 s of SCF for 41 basis functions (sto-3g, 13 atoms) against a 0 s b",
+      "ok": false,
+      "reason": "budget"
     },
-    "cache": "db",
-    "http": 200,
-    "path": "/field"
-  },
-  "homo_zero_budget_refusal__second_request": {
-    "body": {
-      "cube_len": 6746563,
-      "cube_sha256": "d3a314b9d5cd355d29cc54c5aa0e44a4b7bf1d8923ec13d195070ef3dbfb3790",
-      "meta_keys": [
-        "basis",
-        "cache",
-        "charge",
-        "computed_at",
-        "converged",
-        "cube_predicted_seconds",
-        "cube_seconds",
-        "ecp",
-        "frontier_caveat",
-        "homo_ev",
-        "kind",
-        "lumo_ev",
-        "method",
-        "natoms",
-        "nbasis",
-        "scf_cycles",
-        "scf_energy_ha",
-        "scf_seconds",
-        "spin",
-        "stored",
-        "total_seconds",
-        "units"
-      ],
-      "meta_values": {
-        "basis": "sto-3g",
-        "charge": null,
-        "converged": true,
-        "ecp": null,
-        "frontier_caveat": null,
-        "homo_ev": -6.729,
-        "kind": "homo",
-        "lumo_ev": 7.378,
-        "method": "RHF",
-        "natoms": 13,
-        "nbasis": 41,
-        "scf_cycles": null,
-        "scf_energy_ha": -301.7088685655,
-        "spin": null,
-        "units": "amp"
-      },
-      "ok": true
-    },
-    "cache": "db",
+    "cache": null,
     "http": 200,
     "path": "/field"
   },

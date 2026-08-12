@@ -137,6 +137,18 @@ def evaluate() -> list[dict]:
     out.append(law('facets do not call fetch() on scientific routes',
                    'RATCHET', f'{fetches} fetch( call(s) across facets', fetches))
 
+    # ── RATCHET: scientific refusals that are still untyped ──────────────────
+    # `raise ValueError` inside a science function forces whoever catches it to
+    # GUESS whether it meant UNSUPPORTED or INTERNAL. failures.from_exception now
+    # makes that guess visible (`guessed_from_type: true`) instead of silent, and
+    # this number is how many sites still need it.
+    import re as _re
+    fs_src = (ROOT / 'backend' / 'field_server.py').read_text(encoding='utf-8')
+    n_untyped = len(_re.findall(r'raise ValueError\(', fs_src))
+    out.append(law('scientific refusals are typed, not ValueError',
+                   'RATCHET', f'{n_untyped} raise ValueError( site(s) in field_server',
+                   n_untyped))
+
     # ── N/A: laws whose subject does not exist yet ───────────────────────────
     for subject, path, text in (
             ('SDK imports no DOM/Mol*', ROOT / 'python' / 'src', 'python SDK'),
