@@ -17,7 +17,7 @@ const BASELINE = {
     app: { errors: 8, warnings: 406 },
     dirac: { errors: 187, warnings: 0 },
     chemistry: { errors: 92, warnings: 0 },
-    inherited: { errors: 723, warnings: 218 },
+    inherited: { errors: 547, warnings: 193 },
 };
 
 const protectedFiles = new Set([
@@ -39,6 +39,9 @@ const protectedViolations = [];
 
 for (const result of results) {
     const file = path.relative(ROOT, result.filePath).replaceAll(path.sep, '/');
+    // The developer workstation has a local Python environment that GitHub does not.
+    // Its vendored browser JavaScript is neither repository source nor stable across hosts.
+    if (file.startsWith('backend/env/')) continue;
     const group = counts[groupFor(file)];
     group.errors += result.errorCount;
     group.warnings += result.warningCount;

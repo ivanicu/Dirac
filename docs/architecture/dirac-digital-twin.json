@@ -1,9 +1,9 @@
 {
   "schema": "https://dirac.local/schemas/software-architecture-twin/v2",
   "title": "Dirac Architecture Optimization Twin",
-  "generated_at": "2026-08-12T18:32:52.071011+00:00",
-  "source_base_commit": "ba7cd9ac82eedb4fdb9a48019865e0a07227f434",
-  "source_fingerprint_sha256": "7e63cfff7a4143ca7ba6a3b06472d4068c384c22797718bd3425906859756780",
+  "generated_at": "2026-08-12T18:36:45.440867+00:00",
+  "source_base_commit": "ea76cd79de7ef258491fbac806db243a0218b80f",
+  "source_fingerprint_sha256": "933ff4c6f391dba6aab6b8f62d67e3bde5f9370cc30bedebda3d3420b1f89d26",
   "scope": {
     "included": [
       "all first-party Python, JavaScript, and Shell functions in backend, SDK, tooling, gates, and operations",
@@ -53,9 +53,9 @@
     "typescript_diagnostics": []
   },
   "runtime_snapshot": {
-    "captured_at": "2026-08-12T18:32:51.876060+00:00",
+    "captured_at": "2026-08-12T18:36:45.284758+00:00",
     "source": "best-effort live probes",
-    "git_commit": "ba7cd9ac82eedb4fdb9a48019865e0a07227f434",
+    "git_commit": "ea76cd79de7ef258491fbac806db243a0218b80f",
     "systemd": [
       "Id=dirac-fields.service",
       "ActiveState=active",
@@ -4421,7 +4421,7 @@
       "path": ".github/workflows/node.yml",
       "extension": ".yml",
       "bytes": 672,
-      "sha256": "53d5b150b4b71b9021e7086c02c6174b7a878a4b69df8a3f150cec4dcb3c7460",
+      "sha256": "3085327c922beff40e3522bdf11dd90df3cc6d75ddfb4a2e6af6339387ff7ed2",
       "generated": false,
       "id": "file:.github/workflows/node.yml",
       "type": "source-file",
@@ -6433,8 +6433,8 @@
       "layer": "tooling",
       "path": "scripts/check_lint_ratchet.mjs",
       "extension": ".mjs",
-      "bytes": 3022,
-      "sha256": "3536cfdf6e8a86aee1e6f3e050adc78d21c1240a2e7cef4b5ee124d1a44ac3f3",
+      "bytes": 3252,
+      "sha256": "867690f7be9532cd5cce207cadfa6742f6a671aaf9b86b3b946ae39f94768ba7",
       "generated": false,
       "id": "file:scripts/check_lint_ratchet.mjs",
       "type": "source-file",
@@ -27600,11 +27600,11 @@
       "exported": false,
       "path": "scripts/check_lint_ratchet.mjs",
       "layer": "tooling",
-      "line": 45,
+      "line": 48,
       "column": 61,
-      "end_line": 45,
+      "end_line": 48,
       "end_column": 94,
-      "id": "function:ts:scripts/check_lint_ratchet.mjs:45:61:<anonymous>",
+      "id": "function:ts:scripts/check_lint_ratchet.mjs:48:61:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -53561,7 +53561,7 @@
       "layer": "tooling",
       "line": 11,
       "column": 1,
-      "end_line": 76,
+      "end_line": 79,
       "end_column": 1,
       "id": "module:ts:scripts/check_lint_ratchet.mjs",
       "type": "module",
@@ -55143,9 +55143,9 @@
       "type": "service",
       "name": "dirac-fields.service :8901",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T18:32:51.876060+00:00",
+        "captured_at": "2026-08-12T18:36:45.284758+00:00",
         "source": "best-effort live probes",
-        "git_commit": "ba7cd9ac82eedb4fdb9a48019865e0a07227f434",
+        "git_commit": "ea76cd79de7ef258491fbac806db243a0218b80f",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -55391,9 +55391,9 @@
       "type": "service",
       "name": "dirac-digital-twin.service",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T18:32:51.876060+00:00",
+        "captured_at": "2026-08-12T18:36:45.284758+00:00",
         "source": "best-effort live probes",
-        "git_commit": "ba7cd9ac82eedb4fdb9a48019865e0a07227f434",
+        "git_commit": "ea76cd79de7ef258491fbac806db243a0218b80f",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -55639,9 +55639,9 @@
       "type": "service",
       "name": "dirac-web.service :1360",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T18:32:51.876060+00:00",
+        "captured_at": "2026-08-12T18:36:45.284758+00:00",
         "source": "best-effort live probes",
-        "git_commit": "ba7cd9ac82eedb4fdb9a48019865e0a07227f434",
+        "git_commit": "ea76cd79de7ef258491fbac806db243a0218b80f",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -55899,9 +55899,9 @@
       "type": "store",
       "name": "PostgreSQL · dirac",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T18:32:51.876060+00:00",
+        "captured_at": "2026-08-12T18:36:45.284758+00:00",
         "source": "best-effort live probes",
-        "git_commit": "ba7cd9ac82eedb4fdb9a48019865e0a07227f434",
+        "git_commit": "ea76cd79de7ef258491fbac806db243a0218b80f",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -56153,9 +56153,9 @@
       "type": "store",
       "name": "Architecture Twin JSON + HTML",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T18:32:51.876060+00:00",
+        "captured_at": "2026-08-12T18:36:45.284758+00:00",
         "source": "best-effort live probes",
-        "git_commit": "ba7cd9ac82eedb4fdb9a48019865e0a07227f434",
+        "git_commit": "ea76cd79de7ef258491fbac806db243a0218b80f",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -78040,7 +78040,7 @@
     },
     {
       "source": "module:ts:scripts/check_lint_ratchet.mjs",
-      "target": "function:ts:scripts/check_lint_ratchet.mjs:45:61:<anonymous>",
+      "target": "function:ts:scripts/check_lint_ratchet.mjs:48:61:<anonymous>",
       "relation": "contains"
     },
     {
