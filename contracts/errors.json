@@ -116,6 +116,46 @@
       "user_copy": "The database is unreachable \u2014 showing no data is not the same as there being none.",
       "points_at": null
     },
+    "AUTH_REQUIRED": {
+      "meaning": "A remote request has no valid authenticated principal.",
+      "caller_action": "Obtain a scoped Dirac bearer token and send it over the configured HTTPS endpoint.",
+      "retryable": false,
+      "http": 401,
+      "user_copy": "Authentication is required.",
+      "points_at": null
+    },
+    "FORBIDDEN": {
+      "meaning": "The authenticated actor does not hold the scope required by this route, command, method or artifact read.",
+      "caller_action": "Request the narrow missing scope; do not replace the token with a broader shared credential.",
+      "retryable": false,
+      "http": 403,
+      "user_copy": "This credential is not allowed to perform that action.",
+      "points_at": null
+    },
+    "RATE_LIMITED": {
+      "meaning": "The authenticated token exceeded its rolling request-rate ceiling.",
+      "caller_action": "Back off until the next rate window; repeated immediate retries extend load without changing authorization.",
+      "retryable": true,
+      "http": 429,
+      "user_copy": "Too many requests. Try again shortly.",
+      "points_at": null
+    },
+    "QUOTA_EXCEEDED": {
+      "meaning": "The actor exhausted a durable UTC-day request or compute-cost budget.",
+      "caller_action": "Wait for the next quota period or ask an administrator for an explicit budget change.",
+      "retryable": true,
+      "http": 429,
+      "user_copy": "The daily compute quota is exhausted.",
+      "points_at": null
+    },
+    "TLS_REQUIRED": {
+      "meaning": "A remote credential-bearing request did not arrive through the configured HTTPS reverse proxy.",
+      "caller_action": "Use the HTTPS endpoint. Never send a bearer token to the direct HTTP listener.",
+      "retryable": false,
+      "http": 426,
+      "user_copy": "HTTPS is required for remote access.",
+      "points_at": null
+    },
     "INVALID_PARAMETERS": {
       "meaning": "The request does not satisfy the method's declared input schema \u2014 a parameter is unknown, missing, or out of range. Distinct from PARSE, which is about the MOLECULE.",
       "retryable": false,
@@ -128,14 +168,13 @@
   "db_enum_note": [
     "app.job_error (migration 007) is a SUBSET, and the omissions are deliberate:",
     "INVALID_PARAMETERS \u2014 the input schema is checked BEFORE a job row is opened (invocation.py: validate, then _open_job), so no job can ever carry it. Adding it to the enum would declare a state the state machine cannot reach.",
-    "BAD_HOST (rejected before a job exists), OPEN_SHELL_SPIN_REQUIRED (added here",
-    "after 007 shipped), and the two ops codes NOT_FOUND / DB_UNAVAILABLE \u2014 neither",
+    "BAD_HOST, AUTH_REQUIRED, FORBIDDEN, RATE_LIMITED, QUOTA_EXCEEDED and TLS_REQUIRED are rejected by the remote transport boundary before a job exists;",
+    "OPEN_SHELL_SPIN_REQUIRED was added after 007 shipped; and the two ops codes NOT_FOUND / DB_UNAVAILABLE \u2014 neither",
     "of which can ever be a job's error, because a job that failed BECAUSE the",
     "database was unreachable has no row to record it in. That is not a gap; it is",
     "the one error class this ledger structurally cannot hold, and saying so here is",
     "cheaper than someone later 'fixing' the enum to match.",
     "backend/envelope.py asserts the subset relation at import time, and the test",
-    "asserts the reverse difference EXACTLY, so a fifth divergence cannot join the",
-    "four quietly."
+    "asserts the reverse difference EXACTLY, so another divergence cannot join quietly."
   ]
 }

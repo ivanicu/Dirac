@@ -17,8 +17,9 @@ Protocol (all JSON):
   GET  /health          → {ok, rdkit, pyscf}
   POST /field           → {molfile, kind, basis?} → {ok, cube, meta} | {ok: false, error}
 
-Run:  backend/env/bin/python backend/field_server.py   (binds 0.0.0.0:8901 —
-      LAN-reachable and unauthenticated; Host/Origin allowlist only)
+Run:  backend/env/bin/python backend/field_server.py   (local mode binds
+      0.0.0.0:8901 with Host/Origin checks; remote mode binds loopback behind
+      HTTPS and requires hashed-token authentication, scopes and quota)
 
 The quantum path is honest: convergence status, energies, basis and timing are
 reported in meta; a failed SCF returns an error instead of a decorative field.
@@ -56,6 +57,7 @@ import scratch as _scratch                                          # noqa: F401
 import envelope
 import failures
 import jobs
+import security
 from envelope import normalize_meta as _normalize_meta_raw
 
 
@@ -260,6 +262,51 @@ PRODUCER_NOTES = ('wall-clock deadline inside the SCF loop + measured cube-cost 
 def _db(): return psycopg.connect(DB_DSN, autocommit=True)
 
 
+_security_policy_singleton = None
+_security_audit_singleton = None
+_security_audit_failures = 0
+
+
+def _security_cost_units(method: str, path: str, body: dict | None) -> int:
+    """Price method work from its canonical descriptor, fail expensive on doubt."""
+    method_id = security.request_method_id(method, path, body)
+    if not method_id:
+        return security.request_cost_units(method, path, body)
+    try:
+        descriptor = _kernel().describe(method_id)
+        resource = (descriptor.get('execution') or {}).get('resource_class')
+    except Exception:                                               # unknown cannot be cheap
+        return 100
+    return {
+        'cpu-classical': 2,
+        'cpu-cheminformatics': 5,
+        'cpu-qm': 100,
+        'gpu': 250,
+        'remote': 250,
+    }.get(str(resource), 100)
+
+
+def _security_policy():
+    """Construct the boundary once; remote mode gets durable quota accounting."""
+    global _security_policy_singleton
+    if _security_policy_singleton is None:
+        usage = None
+        if os.environ.get('DIRAC_SECURITY_MODE', 'local').strip().lower() == 'remote':
+            from security_pg import PostgresUsageStore
+            usage = PostgresUsageStore(_db)
+        _security_policy_singleton = security.SecurityPolicy.from_env(
+            usage_store=usage, cost_resolver=_security_cost_units)
+    return _security_policy_singleton
+
+
+def _security_audit():
+    global _security_audit_singleton
+    if _security_audit_singleton is None:
+        from security_pg import PostgresAuditSink
+        _security_audit_singleton = PostgresAuditSink(_db)
+    return _security_audit_singleton
+
+
 # ── the v2 surface: ONE logical endpoint over the kernel (PR-06/07) ───────────
 #
 # THE POINT, and it is the audit's whole thesis in one paragraph: /field is 200 lines of
@@ -311,7 +358,8 @@ def _v2_error(code: str, message: str, **details) -> tuple[int, dict]:
         'ok': False, 'error': f.to_error_payload(), 'meta': {'envelope': 2}}
 
 
-def handle_v2(method: str, path: str, body: dict | None) -> tuple[int, dict] | None:
+def handle_v2(method: str, path: str, body: dict | None, *,
+              actor: dict[str, str] | None = None) -> tuple[int, dict] | None:
     """Returns (status, payload) for a path this surface owns, else None.
 
     One dispatch function rather than a branch per route in do_POST/do_GET, so the
@@ -352,7 +400,7 @@ def handle_v2(method: str, path: str, body: dict | None) -> tuple[int, dict] | N
                 return _v2_error('PARSE', 'command is required',
                                  got_keys=sorted(body))
             env = _dispatcher().execute(
-                command_id, body.get('input') or {}, actor=body.get('actor'),
+                command_id, body.get('input') or {}, actor=actor or body.get('actor'),
                 request_id=body.get('request_id'))
             if env.get('ok'):
                 return (202 if env.get('meta', {}).get('job_id') else 200), env
@@ -378,7 +426,7 @@ def handle_v2(method: str, path: str, body: dict | None) -> tuple[int, dict] | N
             kw = {k: body[k] for k in
                   ('inline_max', 'budget_seconds', 'request_id')
                   if body.get(k) is not None}
-            return 202, _kernel().submit(mid, body['input'], **kw)
+            return 202, _kernel().submit(mid, body['input'], actor=actor, **kw)
 
         if path.startswith('/v2/jobs/'):
             rest = urllib.parse.unquote(path[len('/v2/jobs/'):]).strip('/')
@@ -435,7 +483,7 @@ def handle_v2(method: str, path: str, body: dict | None) -> tuple[int, dict] | N
             for k in ('inline_max', 'budget_seconds', 'request_id'):
                 if body.get(k) is not None:
                     kw[k] = body[k]
-            env = _kernel().invoke(mid, body['input'], **kw)
+            env = _kernel().invoke(mid, body['input'], actor=actor, **kw)
             # A REFUSAL IS A RESULT and travels 200 by default, exactly as v1 does — the
             # error payload is the answer, and its `code` is what a client branches on. A
             # few codes carry their own HTTP status (413 TOO_LARGE, 404 NOT_FOUND) because
@@ -2129,6 +2177,77 @@ NON_RETRYABLE_JOB_ERRORS = frozenset({'PARSE', 'UNSUPPORTED', 'UNPARAMETERIZED',
 
 
 class Handler(BaseHTTPRequestHandler):
+    def setup(self):
+        super().setup()
+        self._request_started = time.monotonic()
+        self._principal: security.Principal | None = None
+        self._required_scopes: tuple[str, ...] = ()
+        self._request_bytes = 0
+        self._cost_units = 0
+        self._request_id = None
+        self._audited = False
+
+    def _token_fingerprint(self) -> str | None:
+        value = self.headers.get('Authorization', '')
+        scheme, _, token = value.partition(' ')
+        if scheme.lower() != 'bearer' or not token:
+            return None
+        return hashlib.sha256(token.encode()).hexdigest()[:16]
+
+    def _audit_response(self, status: int, response_bytes: int,
+                        error_code: str | None = None) -> None:
+        global _security_audit_failures
+        if self._audited or not _security_policy().remote:
+            return
+        self._audited = True
+        try:
+            _security_audit().write(
+                request_id=security.safe_request_id(
+                    self._request_id or self.headers.get('X-Request-Id')),
+                principal=self._principal, method=self.command,
+                path=security.safe_path(self.path),
+                required_scopes=self._required_scopes, status=status,
+                error_code=error_code, request_bytes=self._request_bytes,
+                response_bytes=response_bytes, cost_units=self._cost_units,
+                duration_ms=max(0, int((time.monotonic() - self._request_started) * 1000)),
+                token_fingerprint=self._token_fingerprint())
+        except Exception as error:                                  # noqa: BLE001
+            _security_audit_failures += 1
+            # Never print the exception text here: a driver error may repeat a DSN.
+            print(f'[security] audit write failed ({type(error).__name__}); '
+                  f'failures={_security_audit_failures}', flush=True)
+
+    def _authenticate(self) -> bool:
+        try:
+            self._principal = _security_policy().authenticate(dict(self.headers.items()))
+            return True
+        except security.SecurityRefusal as error:
+            self._send_security_refusal(error)
+            return False
+
+    def _authorize(self, body: dict | None = None, body_bytes: int = 0) -> bool:
+        assert self._principal is not None
+        self._request_bytes = body_bytes
+        self._required_scopes = security.required_scopes(
+            self.command, self.path, body)
+        if body and body.get('request_id'):
+            self._request_id = security.safe_request_id(body['request_id'])
+        try:
+            self._cost_units = _security_policy().authorize(
+                self._principal, self.command, self.path, body, body_bytes)
+            return True
+        except security.SecurityRefusal as error:
+            self._send_security_refusal(error)
+            return False
+
+    def _send_security_refusal(self, error: security.SecurityRefusal) -> None:
+        failure = failures.DiracFailure(error.code, error.message)
+        headers = ({'WWW-Authenticate': 'Bearer realm="dirac"'}
+                   if error.status == 401 else None)
+        self._send(error.status, {
+            'ok': False, 'error': failure.to_error_payload(),
+            'meta': {'envelope': 2}}, headers=headers)
+
     def _host_ok(self) -> bool:
         host = (self.headers.get('Host') or '').rsplit(':', 1)[0]
         ok = host in ALLOWED_HOSTS
@@ -2154,13 +2273,18 @@ class Handler(BaseHTTPRequestHandler):
             return None
         return origin if host in ALLOWED_HOSTS else None
 
-    def _send(self, code: int, payload: dict):
+    def _send(self, code: int, payload: dict, *, headers: dict | None = None):
         body = json.dumps(payload).encode()
+        error = payload.get('error')
+        error_code = error.get('code') if isinstance(error, dict) else None
+        self._audit_response(code, len(body), error_code)
         self.send_response(code)
         self.send_header('Content-Type', 'application/json')
         origin = self._cors_origin()
         if origin:
             self.send_header('Access-Control-Allow-Origin', origin)
+        for key, value in (headers or {}).items():
+            self.send_header(key, str(value))
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -2176,6 +2300,7 @@ class Handler(BaseHTTPRequestHandler):
         JSON encodings we used — which is the difference between an address and a
         label.
         """
+        self._audit_response(code, len(data))
         self.send_response(code)
         self.send_header('Content-Type', media_type)
         self.send_header('Content-Length', str(len(data)))
@@ -2259,25 +2384,31 @@ class Handler(BaseHTTPRequestHandler):
         alternative was a 501 on a request whose answer we already compute.
         """
         if not self._host_ok():
-            self.send_response(403)
-            self.end_headers()
+            self._send(403, {'ok': False, 'error': {
+                'code': 'BAD_HOST', 'message': 'unrecognized Host'}})
+            return
+        if not self._authenticate() or not self._authorize():
             return
         if not self._handle_artifact(self.path):
-            self.send_response(404)
-            self.end_headers()
+            self._send(404, {'ok': False, 'error': {
+                'code': 'NOT_FOUND', 'message': 'not found'}})
 
     def do_OPTIONS(self):
+        self._audit_response(204, 0)
         self.send_response(204)
         origin = self._cors_origin()
         if origin:
             self.send_header('Access-Control-Allow-Origin', origin)
         self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Headers',
+                         'Content-Type, Authorization, X-Request-Id')
         self.end_headers()
 
     def do_GET(self):
         if not self._host_ok():
             self._send(403, {'ok': False, 'error': 'unrecognized Host'})
+            return
+        if not self._authenticate() or not self._authorize():
             return
         # Ops surface. ONE dispatch line by design: handle_admin returns None
         # for a path it does not own, so this daemon's routing table stays
@@ -2295,7 +2426,8 @@ class Handler(BaseHTTPRequestHandler):
         # The v2 surface (PR-06/07): one logical endpoint over the kernel. Ordered AFTER
         # artifacts because /v2/artifacts/... is owned by the streaming path above — it
         # serves raw bytes, and handle_v2 only ever returns JSON.
-        v2 = handle_v2('GET', self.path, None)
+        v2 = handle_v2('GET', self.path, None,
+                       actor=self._principal.actor if self._principal else None)
         if v2 is not None:
             self._send(*v2)
             return
@@ -2319,6 +2451,8 @@ class Handler(BaseHTTPRequestHandler):
                              'jobs': jobs.counters(),
                              'qm_slots': MAX_CONCURRENT_QM,
                              'qm_waiting': dict(_qm_waiting),
+                             'security_mode': _security_policy().mode,
+                             'security_audit_failures': _security_audit_failures,
                              'rss_mb': rss_mb})
         else:
             self._send(404, {'ok': False, 'error': 'not found'})
@@ -2326,6 +2460,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._host_ok():
             self._send(403, {'ok': False, 'error': 'unrecognized Host'})
+            return
+        if not self._authenticate():
             return
         ctype = (self.headers.get('Content-Type') or '').split(';')[0].strip()
         if ctype != 'application/json':
@@ -2342,23 +2478,36 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith('/v2/'):
             try:
                 length = int(self.headers.get('Content-Length', '0'))
-                if length > MAX_BODY_BYTES:
-                    self._send(413, {'ok': False, 'error': {
-                        'code': 'TOO_LARGE',
-                        'message': f'request body is {length} bytes, over the '
-                                   f'{MAX_BODY_BYTES} limit'},
-                        'meta': {'envelope': 2}})
+                self._request_bytes = max(0, length)
+                actor_cap = self._principal.max_body_bytes if self._principal else MAX_BODY_BYTES
+                if length > min(MAX_BODY_BYTES, actor_cap):
+                    self._send_security_refusal(security.SecurityRefusal(
+                        'TOO_LARGE', 413,
+                        f'request body is {length} bytes, over the permitted limit'))
                     return
                 body = json.loads(self.rfile.read(length) or b'{}')
+                if body.get('request_id') is not None:
+                    body['request_id'] = security.safe_request_id(body['request_id'])
             except (ValueError, json.JSONDecodeError) as e:
                 self._send(400, {'ok': False, 'error': {
                     'code': 'PARSE', 'message': f'request body is not JSON: {e}',
                     'retryable': False}, 'meta': {'envelope': 2}})
                 return
-            v2 = handle_v2('POST', self.path, body)
+            if not self._authorize(body, length):
+                return
+            v2 = handle_v2(
+                'POST', self.path, body,
+                actor=_security_policy().trusted_actor(
+                    self._principal, body.get('actor')) if self._principal else None)
             if v2 is not None:
                 self._send(*v2)
                 return
+        try:
+            legacy_length = int(self.headers.get('Content-Length', '0'))
+        except ValueError:
+            legacy_length = 0
+        if not self._authorize(None, legacy_length):
+            return
         if self.path == '/field/region':
             try:
                 length = int(self.headers.get('Content-Length', '0'))
@@ -2697,8 +2846,18 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == '__main__':
     port = int(sys.argv[1]) if len(sys.argv) > 1 else PORT
     db_init()
-    # 0.0.0.0: the app is used from other machines on the LAN (Ivan's Mac);
-    # a loopback-only daemon reads as "backend offline" everywhere but here.
-    server = ThreadingHTTPServer(('0.0.0.0', port), Handler)
-    print(f'Dirac fields backend on 0.0.0.0:{port}', flush=True)
+    boundary = _security_policy()  # fail before bind if remote config is incomplete
+    # Keep the local default as a literal assignment so the documentation truth
+    # gate can derive it. Remote mode then narrows it before bind.
+    default_host = '0.0.0.0'
+    if boundary.remote:
+        default_host = '127.0.0.1'
+    bind_host = os.environ.get('DIRAC_BIND_HOST', default_host)
+    if boundary.remote and bind_host not in ('127.0.0.1', '::1', 'localhost'):
+        raise RuntimeError(
+            'remote mode must bind loopback behind the HTTPS reverse proxy; '
+            f'DIRAC_BIND_HOST={bind_host!r} would expose the bearer-token listener')
+    server = ThreadingHTTPServer((bind_host, port), Handler)
+    print(f'Dirac fields backend on {bind_host}:{port} '
+          f'(security={boundary.mode})', flush=True)
     server.serve_forever()

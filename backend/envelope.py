@@ -368,6 +368,11 @@ _V1_REASON_FOR_CODE: dict[str, str] = {
     'UNSUPPORTED': 'unsupported',
     'TOO_LARGE': 'unsupported',
     'BAD_HOST': 'internal',
+    'AUTH_REQUIRED': 'internal',
+    'FORBIDDEN': 'internal',
+    'RATE_LIMITED': 'internal',
+    'QUOTA_EXCEEDED': 'internal',
+    'TLS_REQUIRED': 'internal',
     'CANCELLED': 'internal',
     'INTERNAL': 'internal',
     # Ops codes (added with the admin router). v1's three-word reason vocabulary

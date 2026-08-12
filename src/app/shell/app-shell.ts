@@ -1,6 +1,7 @@
 import { scientificContext, type ScientificContextStore } from '../context/scientific-context-store';
 import { availableViews, VIEWS, WORKSPACES, type ViewDefinition, type WorkspaceId } from './registries';
 import { sceneService, type SceneService } from './scene-service';
+import { objectRef } from '../domain/object-ref';
 
 export interface ShellRoute { workspace: WorkspaceId; view: string; programId?: string; }
 
@@ -20,6 +21,10 @@ export class AppShell {
         const definition = VIEWS.find(v => v.id === next.view && v.workspace === next.workspace);
         if (!definition?.implemented) throw new Error(`view ${next.view} is not available`);
         this.route = next;
+        if (next.programId && next.programId !== 'current') {
+            this.context.patch({ programRef: objectRef('program', next.programId),
+                origin: 'navigation' });
+        }
         const path = this.pathFor(definition, next.programId);
         const query = this.context.toUrlParams().toString();
         const url = path + (query ? `?${query}` : '');
@@ -30,8 +35,17 @@ export class AppShell {
     restore(locationLike: Pick<Location, 'pathname' | 'search'> = location): ShellRoute {
         this.context.restore(new URLSearchParams(locationLike.search));
         const match = VIEWS.find(v => v.implemented && this.matches(v.route, locationLike.pathname));
-        if (match) this.route = { workspace: match.workspace, view: match.id,
-            programId: this.programId(match.route, locationLike.pathname) };
+        if (match) {
+            const programId = this.programId(match.route, locationLike.pathname);
+            this.route = { workspace: match.workspace, view: match.id, programId };
+            // The canonical program lives in the path. A missing or stale query value
+            // must not make the global context disagree with the route after reload.
+            if (programId && programId !== 'current'
+                && this.context.current().programRef?.id !== programId) {
+                this.context.patch({ programRef: objectRef('program', programId),
+                    origin: 'restore' });
+            }
+        }
         return this.route;
     }
 

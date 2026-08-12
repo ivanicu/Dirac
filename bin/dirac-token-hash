@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+"""Read a Dirac bearer token without echo and print only its SHA-256 digest."""
+from __future__ import annotations
+
+import getpass
+import hashlib
+
+
+first = getpass.getpass('New Dirac bearer token: ')
+second = getpass.getpass('Repeat token: ')
+if not first or first != second:
+    raise SystemExit('tokens are empty or do not match')
+print(hashlib.sha256(first.encode('utf-8')).hexdigest())

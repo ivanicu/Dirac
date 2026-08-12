@@ -58,6 +58,19 @@ def test_outcome_classes_separate_refusals_science_and_operations():
     assert jobs.job_outcome_class('running') is None
 
 
+def test_attention_is_derived_from_terminal_jobs_not_written_separately():
+    store = jobs.MemoryJobStore()
+    expected, _ = store.open(method_row_id='m', input_sha256=b'e' * 32, params={})
+    store.failed(expected, code='BUDGET', detail='expected refusal')
+    scientific, _ = store.open(method_row_id='m', input_sha256=b's' * 32, params={})
+    store.failed(scientific, code='UNCONVERGED', detail='review science')
+    operational, _ = store.open(method_row_id='m', input_sha256=b'o' * 32, params={})
+    store.failed(operational, code='INTERNAL', detail='repair system')
+    items = store.list_attention()
+    assert {item['object_id'] for item in items} == {scientific, operational}
+    assert {item['priority'] for item in items} == {'review', 'critical'}
+
+
 def test_memory_store_persists_invocation_identity_and_terminal_meaning():
     store = jobs.MemoryJobStore()
     jid, _ = store.open(

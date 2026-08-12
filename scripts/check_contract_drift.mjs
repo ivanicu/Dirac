@@ -545,7 +545,7 @@ if (process.argv.includes('--redproof')) {
             // wraps it, the replace matched nothing, and the resulting green
             // read as "the gate cannot convict". A mutation keyed on exact
             // layout is a mutation that silently stops mutating.
-            transform: t => t.replace(/,\s*'DB_UNAVAILABLE'\s*\]/, ']'),
+            transform: replacingOnce("'DB_UNAVAILABLE',", ''),
             expect: /ErrorCode is missing \["DB_UNAVAILABLE"\]/,
         },
         {

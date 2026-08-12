@@ -1,0 +1,8 @@
+# Install as a systemd user-unit drop-in named override.conf only on a remote host.
+# The token file contains SHA-256 digests, never raw bearer tokens.
+[Service]
+Environment=DIRAC_SECURITY_MODE=remote
+Environment=DIRAC_BIND_HOST=127.0.0.1
+Environment=DIRAC_TOKEN_FILE=/etc/dirac/tokens.json
+Environment=DIRAC_EXTRA_HOSTS=api.dirac.example.com
+Environment=DIRAC_REQUIRE_FORWARDED_HTTPS=1

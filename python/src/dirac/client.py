@@ -113,17 +113,18 @@ class DiracClient:
 
     def __init__(self, transport: str | Transport = 'auto', *,
                  base_url: str | None = None, timeout: float = 600.0,
-                 backend_path: str | None = None) -> None:
-        self.transport = self._pick(transport, base_url, timeout, backend_path)
+                 backend_path: str | None = None,
+                 token: str | None = None) -> None:
+        self.transport = self._pick(transport, base_url, timeout, backend_path, token)
 
     @staticmethod
     def _pick(spec: str | Transport, base_url: str | None, timeout: float,
-              backend_path: str | None) -> Transport:
+              backend_path: str | None, token: str | None) -> Transport:
         if not isinstance(spec, str):
             return spec
         url = base_url or os.environ.get('DIRAC_URL') or 'http://127.0.0.1:8901'
         if spec == 'http':
-            return HttpTransport(url, timeout=timeout)
+            return HttpTransport(url, timeout=timeout, token=token)
         if spec == 'local':
             return LocalTransport(backend_path)
         if spec != 'auto':
@@ -138,7 +139,7 @@ class DiracClient:
                 return local
         except Exception:                                          # noqa: BLE001
             pass
-        return HttpTransport(url, timeout=timeout)
+        return HttpTransport(url, timeout=timeout, token=token)
 
     # ── generic surface ───────────────────────────────────────────────────────
     def invoke(self, method_id: str, payload: dict, **kw) -> dict:

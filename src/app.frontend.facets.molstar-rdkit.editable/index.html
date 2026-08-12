@@ -82,6 +82,37 @@
         .workspace-nav button { border: 0; border-radius: 6px; padding: 5px 9px;
             background: transparent; color: var(--text-3); font-size: 10px; font-weight: 700; }
         .workspace-nav button[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); }
+        .view-nav { display: flex; gap: 4px; padding: 4px 10px; overflow-x: auto;
+            border-bottom: 1px solid var(--border); background: var(--surface); }
+        .view-nav button { border: 0; padding: 4px 7px; border-radius: 5px; white-space: nowrap;
+            background: transparent; color: var(--text-3); font-size: 9px; }
+        .view-nav button[aria-selected="true"] { color: var(--text); background: var(--surface-3); }
+        .global-context-bar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 5px; padding: 6px 10px; border-bottom: 1px solid var(--border);
+            background: color-mix(in srgb, var(--surface-2) 80%, transparent); }
+        .context-cell { min-width: 0; }
+        .context-cell span { display: block; color: var(--text-3); font-size: 8px;
+            letter-spacing: .08em; text-transform: uppercase; }
+        .context-cell strong { display: block; overflow: hidden; color: var(--text);
+            font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+        .context-actions { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; }
+        .context-actions button { border: 1px solid var(--border); border-radius: 5px;
+            padding: 4px 7px; background: var(--surface); color: var(--text-2); font-size: 9px; }
+        .attention-slot { margin-left: auto; color: var(--text-3); font-size: 9px; }
+        .attention-slot b { color: var(--warning); }
+        #command-palette { width: min(720px, 90vw); border: 1px solid var(--border-strong);
+            border-radius: 12px; padding: 14px; background: var(--surface); color: var(--text); }
+        #command-palette::backdrop { background: rgb(3 8 12 / 72%); }
+        .command-palette-grid { display: grid; grid-template-columns: 220px 1fr; gap: 10px; }
+        #command-palette-list { display: grid; gap: 3px; max-height: 300px; overflow: auto; }
+        #command-palette-list button { border: 0; border-radius: 5px; padding: 6px;
+            text-align: left; background: transparent; color: var(--text-2); }
+        #command-palette-list button[data-selected="true"] { background: var(--accent-soft); color: var(--accent); }
+        #command-palette textarea, #command-palette pre { box-sizing: border-box; width: 100%;
+            min-height: 100px; max-height: 240px; overflow: auto; border: 1px solid var(--border);
+            border-radius: 6px; padding: 8px; background: var(--surface-2); color: var(--text);
+            font: 10px/1.45 var(--mono); white-space: pre-wrap; }
+        .command-palette-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 8px; }
         .run-job-list { display: grid; gap: 6px; }
         .run-job-row { display: grid; gap: 3px; border: 1px solid var(--line); border-radius: 7px;
             padding: 8px; background: var(--surface-2); }
@@ -1321,6 +1352,17 @@
 
         <aside class="sidebar">
             <nav id="workspace-nav" class="workspace-nav" aria-label="Dirac workspaces"></nav>
+            <nav id="view-nav" class="view-nav" aria-label="Workspace views"></nav>
+            <section class="global-context-bar" aria-label="Global scientific context">
+                <div class="context-cell"><span>Program</span><strong id="context-program">unassigned</strong></div>
+                <div class="context-cell"><span>Complex</span><strong id="context-complex">none</strong></div>
+                <div class="context-cell"><span>Focus</span><strong id="context-focus">none</strong></div>
+                <div class="context-actions">
+                    <button id="command-palette-open" type="button">Commands · ⌘K</button>
+                    <span>Actor <strong id="agent-identity">human:local</strong></span>
+                    <span class="attention-slot">Attention <b id="attention-count">…</b></span>
+                </div>
+            </section>
             <nav class="master-nav" role="tablist" aria-label="Workspace sections">
                 <button type="button" class="master-tab" data-jump="focus">Focus</button>
                 <button type="button" class="master-tab" data-jump="semantic" aria-selected="true">Semantics</button>
@@ -1772,6 +1814,22 @@
             <div id="badge" class="badge">Mol* native · semantics preserved</div>
         </main>
     </div>
+
+    <dialog id="command-palette" aria-label="Semantic command palette">
+        <input id="command-palette-search" type="text" placeholder="Filter canonical commands…" autocomplete="off">
+        <div class="command-palette-grid">
+            <div id="command-palette-list" aria-label="Discovered commands"></div>
+            <div>
+                <label for="command-palette-input">JSON input</label>
+                <textarea id="command-palette-input" spellcheck="false">{}</textarea>
+                <pre id="command-palette-output" aria-live="polite">Select a command, provide its canonical input, then execute.</pre>
+            </div>
+        </div>
+        <div class="command-palette-actions">
+            <button id="command-palette-close" type="button" class="btn-ghost">Close</button>
+            <button id="command-palette-run" type="button" class="btn-primary">Execute</button>
+        </div>
+    </dialog>
 
     <script src="./assets/rdkit/RDKit_minimal.js"></script>
     <script src="./dirac.js"></script>

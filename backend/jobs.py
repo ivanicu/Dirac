@@ -303,6 +303,25 @@ class JobLedger:
             return self._query_jobs('WHERE j.state = %s', (state,), limit=limit)
         return self._query_jobs('', (), limit=limit)
 
+    def list_attention(self, *, limit: int = 100) -> list[dict]:
+        """Read the derived intervention queue; it has no independent write model."""
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    'SELECT kind::text, object_id, reason, priority, at, '
+                    'actor_kind::text, actor_id, command_id, detail '
+                    'FROM app.v_attention ORDER BY at DESC LIMIT %s',
+                    (max(1, min(int(limit), 500)),))
+                rows = cur.fetchall()
+        except Exception as e:                                      # noqa: BLE001
+            _bump('write_failed', f'{type(e).__name__}: {e}')
+            return []
+        keys = ('kind', 'object_id', 'reason', 'priority', 'at', 'actor_kind',
+                'actor_id', 'command_id', 'detail')
+        return [{**{k: _json_value(v) for k, v in zip(keys, row)},
+                 'ref': {'kind': str(row[0]), 'id': str(row[1])}}
+                for row in rows]
+
     def request_cancel(self, job_id: str) -> dict | None:
         """Cancel queued work; report running work as not interruptible.
 
@@ -592,6 +611,23 @@ class MemoryJobStore:
             rows = [r for r in self._rows.values() if state is None or r['state'] == state]
             rows.sort(key=lambda r: r['created_at'], reverse=True)
             return [_public_memory(r) for r in rows[:max(1, min(int(limit), 500))]]
+
+    def list_attention(self, *, limit: int = 100) -> list[dict]:
+        with self._lock:
+            rows = [r for r in self._rows.values()
+                    if r.get('outcome_class') in ('scientific_failure',
+                                                  'operational_failure')]
+            rows.sort(key=lambda r: r.get('finished_at') or r['created_at'], reverse=True)
+            return [{
+                'kind': 'job', 'object_id': row['id'],
+                'ref': {'kind': 'job', 'id': row['id']},
+                'reason': row['outcome_class'],
+                'priority': ('critical' if row['outcome_class'] == 'operational_failure'
+                             else 'review'),
+                'at': row.get('finished_at'), 'actor_kind': row.get('actor_kind'),
+                'actor_id': row.get('actor_id'), 'command_id': row.get('command_id'),
+                'detail': row.get('error_detail'),
+            } for row in rows[:max(1, min(int(limit), 500))]]
 
     def request_cancel(self, job_id: str) -> dict | None:
         with self._lock:

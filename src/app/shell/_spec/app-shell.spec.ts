@@ -25,8 +25,16 @@ describe('canonical AppShell architecture', () => {
             search: '?focus=molecule:mol-42&target=target:t-1',
         } as Location);
         expect(route).toEqual({ workspace: 'structures', view: 'structures.complex', programId: 'prog-7' });
+        expect(context.current().programRef).toEqual(objectRef('program', 'prog-7'));
         expect(context.current().focusedObject).toEqual(objectRef('molecule', 'mol-42'));
         expect(context.current().targetRef).toEqual(objectRef('target', 't-1'));
+    });
+
+    it('writes navigation program identity into the global scientific context', () => {
+        const context = new ScientificContextStore();
+        const shell = new AppShell(context, new SceneService());
+        shell.navigate({ workspace: 'design', view: 'design.builder', programId: 'KRAS-G12D' });
+        expect(context.current().programRef).toEqual(objectRef('program', 'KRAS-G12D'));
     });
 
     it('keeps one molstar instance across navigation and rejects replacement', () => {

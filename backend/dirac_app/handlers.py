@@ -60,6 +60,10 @@ def job_list(input: dict, ctx) -> dict:
         state=input.get('state'), limit=input.get('limit', 100))]}
 
 
+def attention_list(input: dict, ctx) -> dict:
+    return {'items': ctx.kernel.list_attention(limit=input.get('limit', 100))}
+
+
 def job_wait(input: dict, ctx) -> dict:
     return _job_ref(ctx.kernel.wait_job(
         input['job_ref']['id'], timeout=input.get('timeout', 300)))

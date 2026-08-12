@@ -5,6 +5,7 @@ export type ContextOrigin = 'navigation' | 'selection' | 'import' | 'command' | 
 
 export interface ScientificContext {
     readonly programRef?: ObjectRef<'program'>;
+    readonly complexRef?: ObjectRef<'complex'>;
     readonly focusedObject?: ObjectRef;
     readonly selectedObjects: readonly ObjectRef[];
     readonly targetRef?: ObjectRef<'target'>;
@@ -63,6 +64,7 @@ export class ScientificContextStore {
             if (ref) p.set(key, `${ref.kind}:${ref.id}`);
         };
         put('program', this.state.programRef);
+        put('complex', this.state.complexRef);
         put('focus', this.state.focusedObject);
         put('target', this.state.targetRef);
         put('campaign', this.state.campaignRef);
@@ -79,6 +81,7 @@ export class ScientificContextStore {
         };
         return this.commit({
             programRef: parse('program') as ObjectRef<'program'> | undefined,
+            complexRef: parse('complex') as ObjectRef<'complex'> | undefined,
             focusedObject: parse('focus'), targetRef: parse('target') as ObjectRef<'target'>,
             campaignRef: parse('campaign') as ObjectRef<'campaign'>,
             seriesRef: parse('series') as ObjectRef<'series'>, origin: 'restore',

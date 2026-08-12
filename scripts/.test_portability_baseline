@@ -1,5 +1,8 @@
-10
-# Suites that import on a clean interpreter (no RDKit/numpy/pyscf), out of 16.
+12
+# Suites that import on a clean interpreter (no RDKit/numpy/pyscf), out of 18.
+# 10 → 12 on 2026-08-12: remote-security policy and its PostgreSQL adapter remain
+# import-light; adding an infrastructure boundary did not couple the test suite to
+# the chemistry stack.
 # 9 → 10 on 2026-08-12: the field-cache suite no longer imports field_server at
 # module scope; daemon-only codec checks import it only when those tests execute.
 # 3 → 4 on 2026-08-11 when backend/failures.py landed: refusal SEMANTICS became

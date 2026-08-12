@@ -4,6 +4,8 @@ build/
 deploy/*
 !deploy/systemd/
 !deploy/README.md
+!deploy/Caddyfile.remote.example
+!deploy/dirac-tokens.example.json
 # ANCHORED to the repo root, and the missing slash was not cosmetic: `lib/`
 # matches at ANY depth, so it silently swallowed scripts/lib/ — a load-bearing
 # module a gate imports. The commit succeeded, the local tree looked complete,

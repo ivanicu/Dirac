@@ -4,7 +4,7 @@ from typing import Literal, TypedDict
 
 ObjectKind = Literal['program', 'target', 'molecule', 'compound', 'series', 'protein', 'protein_structure', 'complex', 'pose', 'conformer', 'field', 'prediction', 'campaign', 'synthesis_route', 'reaction', 'building_block', 'assay', 'experiment', 'measurement', 'hypothesis', 'claim', 'evidence', 'decision', 'dataset', 'model', 'artifact', 'mission', 'run', 'job', 'literature_reference']
 RelationKind = Literal['derived_from', 'generated_by', 'used', 'measured_in', 'predicted_by', 'belongs_to', 'member_of', 'supports', 'contradicts', 'supersedes', 'tests', 'explains', 'selected_from', 'rejected_because', 'promoted_because', 'part_of', 'caused_by']
-CommandId = Literal['system.health', 'system.capabilities', 'system.version', 'method.list', 'method.describe', 'method.estimate', 'job.get', 'job.list', 'job.wait', 'job.cancel', 'molecule.describe', 'molecule.properties', 'conformer.generate', 'structure.field.compute', 'structure.interactions', 'structure.surface.compute', 'structure.torsion.analyze']
+CommandId = Literal['system.health', 'system.capabilities', 'system.version', 'method.list', 'method.describe', 'method.estimate', 'job.get', 'job.list', 'job.wait', 'attention.list', 'job.cancel', 'molecule.describe', 'molecule.properties', 'conformer.generate', 'structure.field.compute', 'structure.interactions', 'structure.surface.compute', 'structure.torsion.analyze']
 
 class ObjectRef(TypedDict):
     kind: ObjectKind
@@ -12,4 +12,4 @@ class ObjectRef(TypedDict):
 
 OBJECT_KINDS = ['program', 'target', 'molecule', 'compound', 'series', 'protein', 'protein_structure', 'complex', 'pose', 'conformer', 'field', 'prediction', 'campaign', 'synthesis_route', 'reaction', 'building_block', 'assay', 'experiment', 'measurement', 'hypothesis', 'claim', 'evidence', 'decision', 'dataset', 'model', 'artifact', 'mission', 'run', 'job', 'literature_reference']
 RELATION_KINDS = ['derived_from', 'generated_by', 'used', 'measured_in', 'predicted_by', 'belongs_to', 'member_of', 'supports', 'contradicts', 'supersedes', 'tests', 'explains', 'selected_from', 'rejected_because', 'promoted_because', 'part_of', 'caused_by']
-COMMAND_IDS = ['system.health', 'system.capabilities', 'system.version', 'method.list', 'method.describe', 'method.estimate', 'job.get', 'job.list', 'job.wait', 'job.cancel', 'molecule.describe', 'molecule.properties', 'conformer.generate', 'structure.field.compute', 'structure.interactions', 'structure.surface.compute', 'structure.torsion.analyze']
+COMMAND_IDS = ['system.health', 'system.capabilities', 'system.version', 'method.list', 'method.describe', 'method.estimate', 'job.get', 'job.list', 'job.wait', 'attention.list', 'job.cancel', 'molecule.describe', 'molecule.properties', 'conformer.generate', 'structure.field.compute', 'structure.interactions', 'structure.surface.compute', 'structure.torsion.analyze']

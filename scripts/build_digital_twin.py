@@ -650,13 +650,14 @@ def runtime_snapshot(twin: Twin) -> dict:
         }
     expected_ports = {'1355', '1360', '8901'}
     actual_ports = set(snapshot['listening_ports'])
+    canonical_command_count = sum(node['type'] == 'command' for node in twin.nodes.values())
     snapshot['drift'] = {
         'missing_expected_ports': sorted(expected_ports - actual_ports),
         'unexpected_legacy_port_8902': '8902' in actual_ports,
-        'command_registry_matches_runtime': snapshot.get('http_v2_command_count') == 17,
+        'command_registry_matches_runtime': snapshot.get('http_v2_command_count') == canonical_command_count,
         'runtime_healthy': (not expected_ports - actual_ports
                             and '8902' not in actual_ports
-                            and snapshot.get('http_v2_command_count') == 17),
+                            and snapshot.get('http_v2_command_count') == canonical_command_count),
     }
     for node_id in ('service:fields', 'service:web', 'service:twin-watcher',
                     'store:postgres', 'store:twin-model'):
@@ -901,10 +902,15 @@ def validate(twin: Twin, ts_data: dict) -> dict:
         errors.append('AppShell must contain exactly 8 workspaces')
     if len(ts_data['registries']['views']) != 30:
         errors.append('AppShell must contain exactly 30 views')
-    if len(ts_data['registries']['modules']) != 10:
-        errors.append('AppShell must contain exactly 10 composable modules')
-    expected = {'command': 17, 'object-kind': 30, 'relation-kind': 17,
-                'scientific-method': 12, 'migration': 19}
+    if len(ts_data['registries']['modules']) < 10:
+        errors.append('AppShell must contain at least the 10 substrate modules')
+    expected = {
+        'command': len(json.loads((ROOT / 'contracts/commands/registry.json').read_text())['commands']),
+        'object-kind': len(json.loads((ROOT / 'contracts/domain/object-kinds.json').read_text())['kinds']),
+        'relation-kind': len(json.loads((ROOT / 'contracts/domain/relations.json').read_text())['relations']),
+        'scientific-method': len(list((ROOT / 'contracts/methods').glob('*.json'))),
+        'migration': len(list((ROOT / 'backend/db/migrations').glob('*.sql'))),
+    }
     counts = Counter(n['type'] for n in twin.nodes.values())
     for kind, wanted in expected.items():
         if counts[kind] != wanted:

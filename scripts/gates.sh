@@ -46,7 +46,7 @@ run_gate() {
 }
 
 # ---- gate selection -------------------------------------------------------
-ALL=(tsc build palette css migrations docs contracts physics commits portability layering golden parity twin)
+ALL=(tsc build palette css migrations docs contracts physics commits portability layering golden parity security twin)
 if [ "$#" -eq 0 ]; then
     WANT=("${ALL[@]}")
 else
@@ -161,6 +161,23 @@ fi
 
 if wanted portability; then
     run_gate 'gate-10-portability' python3 scripts/test_portability.py
+fi
+
+# Gate 15 · remote boundary. Its selftest first proves a token without
+# artifact:read is convicted; the full contract then covers TLS, auth, scopes,
+# actor binding, rate, durable-quota delegation, request caps and redaction.
+if wanted security; then
+    if backend/env/bin/python backend/tests/test_security.py --selftest >/dev/null 2>&1; then
+        run_gate 'gate-15-remote-security' backend/env/bin/python backend/tests/test_security.py
+    else
+        printf '%s\n' "${RED}FAIL${OFF} gate-15-remote-security — selftest did not convict a missing artifact scope"
+        FAILED+=('gate-15-remote-security-selftest')
+    fi
+    if psql "${DIRAC_DSN:-dbname=dirac}" -tAc 'SELECT 1' >/dev/null 2>&1; then
+        run_gate 'gate-15b-remote-security-pg' backend/env/bin/python backend/tests/test_security_pg.py
+    else
+        printf '%s\n' "${YEL:-}SKIP${OFF} gate-15b-remote-security-pg (no database reachable — UNVERIFIED, not clean)"
+    fi
 fi
 
 # Gate 14 · architecture twin freshness and coherence. The twin is an optimization

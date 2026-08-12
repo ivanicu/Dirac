@@ -5,9 +5,7 @@ export type FieldKind = 'mep' | 'mep_qm' | 'homo' | 'lumo' | 'density' | 'mlp';
 export type Basis = 'sto-3g' | '6-31g' | '6-31g*' | 'def2-svp';
 export type CacheSource = 'browser' | 'memory' | 'db' | 'computed';
 /** THE error vocabulary — mirrors contracts/iface.pyi's ErrorCode, both
- *  derived from contracts/errors.json (source of truth), same order (12
- *  codes as of NOT_FOUND/DB_UNAVAILABLE, added 2026-08-11 for the admin
- *  router — a vocabulary that could not say "the database is down").
+ *  derived from contracts/errors.json (source of truth), same order.
  *  scripts/check_contract_drift.mjs asserts errors.json, iface.pyi and this
  *  union all agree. (The generated per-code COPY lives at
  *  src/app/services/error-codes.ts via scripts/gen_error_codes.mjs; this
@@ -17,8 +15,9 @@ export type ErrorCode =
     | 'PARSE' | 'UNCONVERGED' | 'UNPARAMETERIZED' | 'BUDGET'
     | 'OPEN_SHELL_SPIN_REQUIRED' | 'UNSUPPORTED' | 'TOO_LARGE'
     | 'BAD_HOST' | 'CANCELLED' | 'INTERNAL' | 'NOT_FOUND'
-    | 'INVALID_PARAMETERS'
-    | 'DB_UNAVAILABLE';
+    | 'DB_UNAVAILABLE' | 'AUTH_REQUIRED' | 'FORBIDDEN'
+    | 'RATE_LIMITED' | 'QUOTA_EXCEEDED' | 'TLS_REQUIRED'
+    | 'INVALID_PARAMETERS';
 
 /** Discriminated union — a molfile alone is lossy (frontend review, blocker 3). */
 export type Ligand =

@@ -74,6 +74,14 @@
       "output_schema": {"type":"object"}
     },
     {
+      "id": "attention.list", "version": 1, "category": "attention",
+      "mutability": "query", "execution_class": "instant", "executors": ["service"],
+      "idempotency_policy": "safe", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": [], "output_object_kinds": ["job", "run"], "errors": ["INTERNAL"],
+      "handler": "handlers:attention_list", "input_schema": {"type":"object","additionalProperties":false,"properties":{"limit":{"type":"integer","minimum":1,"maximum":500}}},
+      "output_schema": {"type":"object","required":["items"]}
+    },
+    {
       "id": "job.cancel", "version": 1, "category": "job",
       "mutability": "mutation", "execution_class": "instant", "executors": ["service"],
       "idempotency_policy": "idempotent", "job_policy": "observes", "provenance_policy": "required",

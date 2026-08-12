@@ -7,15 +7,16 @@ FieldKind = Literal['mep', 'mep_qm', 'homo', 'lumo', 'density', 'mlp']
 Basis = Literal['sto-3g', '6-31g', '6-31g*', 'def2-svp']          # = ALLOWED_BASIS = DB CHECK minus 'none'
 CacheSource = Literal['browser', 'memory', 'db', 'computed']       # browser never appears server-side
 # THE error vocabulary. Derived from contracts/errors.json (source of truth) —
-# same codes, same order as errors.json's own `codes` object (12 as of
-# NOT_FOUND/DB_UNAVAILABLE, added 2026-08-11 for the admin router). Kept as a
+# same codes, same order as errors.json's own `codes` object. Kept as a
 # literal here (not generated) the same way backend/envelope.py hand-derives
 # its str-Enum from the same file; scripts/check_contract_drift.mjs asserts
 # this Literal, errors.json, and iface.d.ts's ErrorCode union all agree.
 ErrorCode = Literal['PARSE', 'UNCONVERGED', 'UNPARAMETERIZED', 'BUDGET',
                     'OPEN_SHELL_SPIN_REQUIRED', 'UNSUPPORTED', 'TOO_LARGE',
                     'BAD_HOST', 'CANCELLED', 'INTERNAL', 'NOT_FOUND',
-                    'INVALID_PARAMETERS', 'DB_UNAVAILABLE']
+                    'DB_UNAVAILABLE', 'AUTH_REQUIRED', 'FORBIDDEN',
+                    'RATE_LIMITED', 'QUOTA_EXCEEDED', 'TLS_REQUIRED',
+                    'INVALID_PARAMETERS']
 JobState = Literal['queued', 'running', 'done', 'failed', 'cancelled']  # seam: app.job (PLANNED)
 
 class EmbedMeta(TypedDict):

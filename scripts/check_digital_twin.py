@@ -90,8 +90,14 @@ def errors(document: dict, html: str) -> list[str]:
         findings.append(f'file discovery drifted: missing={sorted(current_files - twin_files)[:5]} '
                         f'extra={sorted(twin_files - current_files)[:5]}')
     counts = document.get('summary', {}).get('by_type', {})
-    for kind, wanted in {'command': 17, 'scientific-method': 12, 'workspace': 8,
-                         'view': 30, 'ui-module': 10, 'migration': 19}.items():
+    expected = {
+        'command': len(json.loads((ROOT / 'contracts/commands/registry.json').read_text())['commands']),
+        'scientific-method': len(list((ROOT / 'contracts/methods').glob('*.json'))),
+        'workspace': 8,
+        'view': 30,
+        'migration': len(list((ROOT / 'backend/db/migrations').glob('*.sql'))),
+    }
+    for kind, wanted in expected.items():
         if counts.get(kind) != wanted:
             findings.append(f'{kind} count is {counts.get(kind)}, expected {wanted}')
     analysis = document.get('analysis', {})

@@ -129,6 +129,8 @@ function b64ToBytes(b64: string): Uint8Array {
 export type ClientOptions = {
     baseUrl?: string;
     timeoutMs?: number;
+    /** Explicit, memory-only credential for a remote Dirac boundary. Never persisted. */
+    token?: string;
     /** Reported on every envelope so a caller can tell which surface answered. */
     label?: string;
 };
@@ -136,6 +138,7 @@ export type ClientOptions = {
 export class DiracClient {
     readonly baseUrl: string;
     readonly timeoutMs: number;
+    private readonly token?: string;
     /** Set once the server has been observed to answer /v2 — see invoke(). */
     private v2Available: boolean | null = null;
     readonly counters = {
@@ -146,14 +149,18 @@ export class DiracClient {
     constructor(opts: ClientOptions = {}) {
         this.baseUrl = (opts.baseUrl || '').replace(/\/+$/, '');
         this.timeoutMs = opts.timeoutMs ?? 600_000;
+        this.token = opts.token;
     }
 
     private async request(
         method: string, path: string, body?: unknown, signal?: AbortSignal,
     ): Promise<{ status: number; headers: Headers; text: string }> {
+        const headers: Record<string, string> = {};
+        if (body !== undefined) headers['Content-Type'] = 'application/json';
+        if (this.token) headers.Authorization = `Bearer ${this.token}`;
         const resp = await fetch(`${this.baseUrl}${path}`, {
             method,
-            headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+            headers,
             body: body === undefined ? undefined : JSON.stringify(body),
             signal,
         });
@@ -224,21 +231,21 @@ export class DiracClient {
 
     async fieldCompute(input: {
         molecule: Record<string, unknown>; fieldKind: string;
-        parameters?: Record<string, unknown>; budgetSeconds?: number;
+        parameters?: Record<string, unknown>; budgetSeconds?: number; signal?: AbortSignal;
     }): Promise<Envelope> {
         return this.execute('structure.field.compute', {
             molecule: input.molecule, field_kind: input.fieldKind,
             parameters: input.parameters, budget_seconds: input.budgetSeconds,
-        });
+        }, { signal: input.signal });
     }
 
     async fieldComputeAndWait(input: {
         molecule: Record<string, unknown>; fieldKind: string;
         parameters?: Record<string, unknown>; budgetSeconds?: number;
-        timeout?: number;
+        timeout?: number; signal?: AbortSignal;
     }): Promise<Envelope> {
         const accepted = await this.fieldCompute(input);
-        return this.waitForCommandResult(accepted, input.timeout ?? 300);
+        return this.waitForCommandResult(accepted, input.timeout ?? 300, input.signal);
     }
 
     async waitForCommandResult(
@@ -363,7 +370,9 @@ export class DiracClient {
         if (ref.inline_base64) {
             bytes = b64ToBytes(ref.inline_base64);
         } else {
-            const resp = await fetch(`${this.baseUrl}${ref.url}`, { signal });
+            const headers: Record<string, string> = {};
+            if (this.token) headers.Authorization = `Bearer ${this.token}`;
+            const resp = await fetch(`${this.baseUrl}${ref.url}`, { signal, headers });
             if (!resp.ok) {
                 throw new DiracError({
                     code: resp.status === 404 ? 'NOT_FOUND' : 'INTERNAL',

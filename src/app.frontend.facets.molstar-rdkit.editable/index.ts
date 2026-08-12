@@ -84,7 +84,10 @@ import { Loci } from '../mol-model/loci';
 import { ligandStore } from '../app/services/ligand-store';
 import { appShell } from '../app/shell/app-shell';
 import { sceneService } from '../app/shell/scene-service';
-import { availableViews, WORKSPACES, type WorkspaceId } from '../app/shell/registries';
+import { scientificContext } from '../app/context/scientific-context-store';
+import { ModuleHost, type ModuleAdapter } from '../app/shell/module-host';
+import { availableViews, MODULES, WORKSPACES, type ModuleDefinition,
+    type WorkspaceId } from '../app/shell/registries';
 import { DiracClient } from '../app/services/dirac-client';
 // A READ-ONLY handle on the store, for driving the real code from a test rather
 // than reasoning about it. Not a second code path: it exposes the same singleton
@@ -404,16 +407,124 @@ async function refreshRuns(): Promise<void> {
     }
 }
 
+function initGlobalContext(): void {
+    const set = (id: string, value: string) => {
+        const node = document.getElementById(id);
+        if (node) node.textContent = value;
+    };
+    scientificContext.subscribe(context => {
+        set('context-program', context.programRef?.id || 'unassigned');
+        set('context-complex', context.complexRef?.id || 'none');
+        set('context-focus', context.focusedObject
+            ? `${context.focusedObject.kind}:${context.focusedObject.id}` : 'none');
+    });
+}
+
+async function refreshAttention(): Promise<void> {
+    const count = document.getElementById('attention-count');
+    if (!count) return;
+    count.textContent = '…';
+    const env = await applicationClient.execute('attention.list', { limit: 100 });
+    if (!env.ok) {
+        count.textContent = '!';
+        count.title = env.error?.user_message || env.error?.message || 'attention unavailable';
+        return;
+    }
+    const items = (env.data?.items || []) as Array<Record<string, unknown>>;
+    count.textContent = String(items.length);
+    count.title = items.length ? items.map(item => `${item.priority}: ${item.reason}`).join('\n')
+        : 'No actionable failures or approval waits';
+    const actor = env.meta?.actor as { kind?: string; id?: string } | undefined;
+    if (actor?.kind && actor.id) {
+        const node = document.getElementById('agent-identity');
+        if (node) node.textContent = `${actor.kind}:${actor.id}`;
+    }
+}
+
+function initCommandPalette(): void {
+    const dialog = document.getElementById('command-palette') as HTMLDialogElement | null;
+    const open = document.getElementById('command-palette-open');
+    const search = document.getElementById('command-palette-search') as HTMLInputElement | null;
+    const list = document.getElementById('command-palette-list');
+    const input = document.getElementById('command-palette-input') as HTMLTextAreaElement | null;
+    const output = document.getElementById('command-palette-output');
+    if (!dialog || !open || !search || !list || !input || !output) return;
+    let commands: Array<Record<string, unknown>> = [];
+    let selected = '';
+    const render = () => {
+        const query = search.value.toLowerCase();
+        list.replaceChildren();
+        for (const command of commands.filter(c => String(c.id).includes(query))) {
+            const button = document.createElement('button');
+            button.type = 'button'; button.textContent = String(command.id);
+            button.dataset.selected = String(command.id === selected);
+            button.addEventListener('click', () => { selected = String(command.id); render(); });
+            list.appendChild(button);
+        }
+    };
+    const show = async () => {
+        dialog.showModal(); search.focus();
+        if (!commands.length) {
+            try { commands = await applicationClient.commands(); render(); }
+            catch (error) { output.textContent = String(error); }
+        }
+    };
+    open.addEventListener('click', () => void show());
+    search.addEventListener('input', render);
+    document.addEventListener('keydown', event => {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+            event.preventDefault(); void show();
+        }
+    });
+    document.getElementById('command-palette-close')?.addEventListener('click', () => dialog.close());
+    document.getElementById('command-palette-run')?.addEventListener('click', async () => {
+        if (!selected) { output.textContent = 'Select a semantic command.'; return; }
+        try {
+            const payload = JSON.parse(input.value || '{}') as Record<string, unknown>;
+            output.textContent = 'Executing…';
+            const env = await applicationClient.execute(selected, payload);
+            output.textContent = JSON.stringify(env, null, 2);
+            await refreshAttention();
+        } catch (error) { output.textContent = error instanceof Error ? error.message : String(error); }
+    });
+}
+
+function createDomModuleHost(): ModuleHost {
+    const mounted = new Set<string>();
+    const render = () => {
+        const surfaces = new Set(MODULES.filter(module => mounted.has(module.id))
+            .flatMap(module => module.surfaces));
+        document.querySelectorAll<HTMLElement>('.master-tab[data-jump]').forEach(tab => {
+            tab.hidden = !surfaces.has(tab.dataset.jump || '');
+        });
+        document.querySelectorAll<HTMLElement>('.detail-scroll > [data-section]').forEach(panel => {
+            if (!surfaces.has(panel.dataset.section || '')) panel.dataset.active = 'false';
+        });
+        const selected = document.querySelector<HTMLElement>('.master-tab[aria-selected="true"]');
+        if (!selected || selected.hidden) {
+            const preferred = MODULES.filter(module => mounted.has(module.id))
+                .sort((a, b) => b.priority - a.priority).flatMap(module => module.surfaces)
+                .find(surface => surfaces.has(surface));
+            document.querySelector<HTMLButtonElement>(`.master-tab[data-jump="${preferred}"]`)?.click();
+        }
+    };
+    const adapters = new Map<string, ModuleAdapter>(MODULES.map(definition => {
+        const adapter: ModuleAdapter = {
+            mount: (module: ModuleDefinition) => { mounted.add(module.id); render(); },
+            unmount: (module: ModuleDefinition) => { mounted.delete(module.id); render(); },
+            update: () => render(),
+        };
+        return [definition.id, adapter];
+    }));
+    return new ModuleHost(adapters);
+}
+
 function initShellNavigation(): void {
     const host = document.getElementById('workspace-nav');
-    if (!host) return;
-    const jumpForView: Record<string, string> = {
-        'design.builder': 'ligand', 'design.objectives': 'designer',
-        'structures.complex': 'focus', 'structures.site': 'fields',
-        'structures.dynamics': 'physics', 'runs.active': 'runs',
-        'runs.history': 'runs',
-    };
-    const render = (active: WorkspaceId) => {
+    const viewHost = document.getElementById('view-nav');
+    if (!host || !viewHost) return;
+    const moduleHost = createDomModuleHost();
+    const render = (active: WorkspaceId, activeView: string) => {
         host.innerHTML = '';
         for (const workspace of WORKSPACES.filter(w => availableViews(w.id).length)) {
             const button = document.createElement('button');
@@ -422,19 +533,30 @@ function initShellNavigation(): void {
             button.addEventListener('click', () => {
                 const next = availableViews(workspace.id)[0];
                 appShell.navigate({ workspace: workspace.id, view: next.id,
-                    programId: 'current' });
-                document.querySelector<HTMLButtonElement>(
-                    `.master-tab[data-jump="${jumpForView[next.id] || 'focus'}"]`)?.click();
-                if (workspace.id === 'runs') void refreshRuns();
-                render(workspace.id);
+                    programId: appShell.current().programId || 'current' });
             });
             host.appendChild(button);
         }
+        viewHost.replaceChildren();
+        for (const view of availableViews(active)) {
+            const button = document.createElement('button');
+            button.type = 'button'; button.textContent = view.label;
+            button.setAttribute('aria-selected', String(view.id === activeView));
+            button.addEventListener('click', () => appShell.navigate({ workspace: active,
+                view: view.id, programId: appShell.current().programId || 'current' }));
+            viewHost.appendChild(button);
+        }
     };
-    const restored = appShell.restore();
-    render(restored.workspace);
+    appShell.restore();
+    appShell.subscribe(route => {
+        render(route.workspace, route.view);
+        moduleHost.activate(route.view, scientificContext.current());
+        if (route.workspace === 'runs') void refreshRuns();
+    });
     document.getElementById('run-job-refresh')?.addEventListener('click', () => void refreshRuns());
-    if (restored.workspace === 'runs') void refreshRuns();
+    initGlobalContext();
+    initCommandPalette();
+    void refreshAttention();
 }
 
 class MolecularVfxLab {
@@ -1734,6 +1856,7 @@ class MolecularVfxLab {
         // today, so it waits — but a reader must not conclude that an /embed
         // import is a SMILES paste.
         this.setPastedMolecule(payload.molfile);
+        scientificContext.patch({ complexRef: undefined, origin: 'import' });
         this.currentMolecule = {
             id: meta.inchikey,
             label: `Imported · ${meta.smiles_canonical}`,
@@ -1766,8 +1889,14 @@ class MolecularVfxLab {
         // THE MISSING RESET. Without this a pasted molecule survives loading a
         // deposited structure and keeps winning the depiction branch.
         this.setPastedMolecule(null);
+        scientificContext.patch({ complexRef: { kind: 'complex', id: `pdb:${control.id}` },
+            origin: 'navigation' });
         byId('status').textContent = `Loading ${control.id}…`;
-        const response = await fetch(new URL(control.url, window.location.href));
+        // A route such as /p/KRAS-G12D/structures/complex must still resolve
+        // bundled structures from the application root. window.location.href
+        // incorrectly turns ./assets/x.cif into /p/.../assets/x.cif; document.baseURI
+        // honours the shell's <base href="/"> and makes reload truly deep-linkable.
+        const response = await fetch(new URL(control.url, document.baseURI));
         if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
         await this.workbench.loadStructureFromData(await response.text(), {
             format: 'mmcif',

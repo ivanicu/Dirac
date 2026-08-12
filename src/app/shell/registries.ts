@@ -17,7 +17,7 @@ export interface ViewDefinition {
 export interface ModuleDefinition {
     id: string; version: number; supportedViews: string[];
     requiresContext: ObjectKind[]; consumesObjects: ObjectKind[];
-    providesCommands: string[]; placement: Placement; priority: number;
+    providesCommands: string[]; surfaces: string[]; placement: Placement; priority: number;
 }
 
 export const WORKSPACES: readonly WorkspaceDefinition[] = [
@@ -79,20 +79,27 @@ export const VIEWS: readonly ViewDefinition[] = [
 ] as const;
 
 export const MODULES: readonly ModuleDefinition[] = [
-    { id: 'scene.viewport', version: 1, supportedViews: ['structures.complex', 'structures.site', 'structures.dynamics'], requiresContext: [], consumesObjects: ['complex', 'molecule'], providesCommands: [], placement: 'main', priority: 100 },
-    { id: 'structure.interaction-map', version: 1, supportedViews: ['structures.complex'], requiresContext: ['complex'], consumesObjects: ['complex'], providesCommands: ['structure.interactions'], placement: 'right', priority: 80 },
-    { id: 'structure.field-overlay', version: 1, supportedViews: ['structures.complex', 'structures.site'], requiresContext: ['molecule'], consumesObjects: ['field', 'artifact'], providesCommands: ['structure.field.compute', 'structure.surface.compute'], placement: 'right', priority: 90 },
-    { id: 'structure.torsion-strain', version: 1, supportedViews: ['structures.dynamics'], requiresContext: ['molecule'], consumesObjects: ['pose', 'conformer'], providesCommands: ['structure.torsion.analyze'], placement: 'right', priority: 70 },
-    { id: 'chem.builder', version: 1, supportedViews: ['design.builder'], requiresContext: [], consumesObjects: ['molecule'], providesCommands: ['conformer.generate'], placement: 'main', priority: 100 },
-    { id: 'chem.property-summary', version: 1, supportedViews: ['design.builder', 'design.objectives'], requiresContext: ['molecule'], consumesObjects: ['molecule', 'prediction'], providesCommands: ['molecule.properties'], placement: 'right', priority: 60 },
-    { id: 'design.pharmacophore', version: 1, supportedViews: ['design.objectives', 'structures.site'], requiresContext: ['molecule'], consumesObjects: ['molecule', 'complex'], providesCommands: [], placement: 'right', priority: 75 },
-    { id: 'run.job-status', version: 1, supportedViews: ['runs.active', 'runs.history'], requiresContext: [], consumesObjects: ['job', 'run'], providesCommands: ['job.list', 'job.get', 'job.cancel'], placement: 'main', priority: 100 },
-    { id: 'run.attention', version: 1, supportedViews: ['runs.active'], requiresContext: [], consumesObjects: ['mission', 'run', 'job'], providesCommands: [], placement: 'right', priority: 90 },
-    { id: 'evidence.provenance', version: 1, supportedViews: ['runs.history'], requiresContext: [], consumesObjects: ['artifact', 'job', 'evidence'], providesCommands: ['job.get'], placement: 'right', priority: 80 },
+    { id: 'scene.viewport', version: 1, supportedViews: ['structures.complex', 'structures.site', 'structures.dynamics'], requiresContext: [], consumesObjects: ['complex', 'molecule'], providesCommands: [], surfaces: ['focus', 'semantic', 'vfx'], placement: 'main', priority: 100 },
+    { id: 'structure.interaction-map', version: 1, supportedViews: ['structures.complex'], requiresContext: ['complex'], consumesObjects: ['complex'], providesCommands: ['structure.interactions'], surfaces: ['ledger'], placement: 'right', priority: 80 },
+    { id: 'structure.field-overlay', version: 1, supportedViews: ['structures.complex', 'structures.site'], requiresContext: ['molecule'], consumesObjects: ['field', 'artifact'], providesCommands: ['structure.field.compute', 'structure.surface.compute'], surfaces: ['fields'], placement: 'right', priority: 90 },
+    { id: 'structure.torsion-strain', version: 1, supportedViews: ['structures.dynamics'], requiresContext: ['molecule'], consumesObjects: ['pose', 'conformer'], providesCommands: ['structure.torsion.analyze'], surfaces: ['physics'], placement: 'right', priority: 70 },
+    { id: 'chem.builder', version: 1, supportedViews: ['design.builder'], requiresContext: [], consumesObjects: ['molecule'], providesCommands: ['conformer.generate'], surfaces: ['focus', 'ligand'], placement: 'main', priority: 100 },
+    { id: 'chem.property-summary', version: 1, supportedViews: ['design.builder', 'design.objectives'], requiresContext: ['molecule'], consumesObjects: ['molecule', 'prediction'], providesCommands: ['molecule.properties'], surfaces: ['properties'], placement: 'right', priority: 60 },
+    { id: 'design.pharmacophore', version: 1, supportedViews: ['design.objectives', 'structures.site'], requiresContext: ['molecule'], consumesObjects: ['molecule', 'complex'], providesCommands: [], surfaces: ['designer'], placement: 'right', priority: 75 },
+    { id: 'run.job-status', version: 1, supportedViews: ['runs.active', 'runs.history'], requiresContext: [], consumesObjects: ['job', 'run'], providesCommands: ['job.list', 'job.get', 'job.cancel'], surfaces: ['runs'], placement: 'main', priority: 100 },
+    { id: 'run.attention', version: 1, supportedViews: ['runs.active'], requiresContext: [], consumesObjects: ['mission', 'run', 'job'], providesCommands: ['attention.list'], surfaces: ['runs'], placement: 'right', priority: 90 },
+    { id: 'evidence.provenance', version: 1, supportedViews: ['runs.history'], requiresContext: [], consumesObjects: ['artifact', 'job', 'evidence'], providesCommands: ['job.get'], surfaces: ['ledger', 'runs'], placement: 'right', priority: 80 },
 ] as const;
 
 export function availableViews(workspace: WorkspaceId): readonly ViewDefinition[] {
     return VIEWS.filter(v => v.workspace === workspace && v.implemented);
+}
+
+export function modulesForView(viewId: string): readonly ModuleDefinition[] {
+    const definition = VIEWS.find(v => v.id === viewId && v.implemented);
+    if (!definition) return [];
+    return definition.modules.map(id => MODULES.find(module => module.id === id)!)
+        .sort((a, b) => b.priority - a.priority);
 }
 
 export function assertRegistryIntegrity(
@@ -115,6 +122,7 @@ export function assertRegistryIntegrity(
         for (const id of v.modules) if (!moduleIds.has(id)) throw new Error(`${v.id}: missing module ${id}`);
     }
     for (const module of modules) {
+        if (!module.surfaces.length) throw new Error(`${module.id}: no render surfaces`);
         for (const id of module.supportedViews) if (!viewIds.has(id)) throw new Error(`${module.id}: missing view ${id}`);
         for (const id of module.providesCommands) if (!commandIds.has(id)) throw new Error(`${module.id}: missing command ${id}`);
     }

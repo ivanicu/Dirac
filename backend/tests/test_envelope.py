@@ -35,8 +35,7 @@ GENERATOR = _REPO / 'scripts' / 'gen_error_codes.mjs'
 GENERATED_TS = _REPO / 'src' / 'app' / 'services' / 'error-codes.ts'
 EMBED_CONSUMER = (_REPO / 'src' / 'app.frontend.facets.molstar-rdkit.editable'
                   / 'index.ts')
-FIELD_CONSUMER = (_REPO / 'src' / 'app.frontend.facets.molstar-rdkit.editable'
-                  / 'facets' / 'field-wells' / 'index.ts')
+FIELD_CONSUMER = _REPO / 'src' / 'app' / 'services' / 'dirac-client.ts'
 
 # ── dual-mode plumbing (pytest is NOT installed in backend/env) ─────────────
 
@@ -126,21 +125,24 @@ def test_db_enum_is_a_subset_of_the_error_vocabulary():
         f'{sorted(missing_from_vocabulary)}')
 
 
-def test_the_reverse_does_not_hold_and_the_gap_is_exactly_four_named_codes():
+def test_the_reverse_does_not_hold_and_the_gap_is_exactly_named_codes():
     """The direction that must NOT hold, asserted exactly — not 'at least
     these two', but EXACTLY these two, so that the day a THIRD code appears
     in errors.json but not the enum, this test fails and someone has to look
     at it rather than let a silent third case join the two legitimate ones.
 
-    errors.json's own db_enum_note names the reason for each: BAD_HOST is
-    rejected before a job row can exist; OPEN_SHELL_SPIN_REQUIRED was added
-    after migration 007 shipped; and DB_UNAVAILABLE / NOT_FOUND are ops codes
-    that no job can carry — a failure caused by an unreachable database has,
-    by construction, nowhere in that database to be written down.
+    errors.json's own db_enum_note names the reason for each: transport security
+    codes are rejected before a job row can exist; OPEN_SHELL_SPIN_REQUIRED was
+    added after migration 007 shipped; and DB_UNAVAILABLE / NOT_FOUND are ops
+    codes that no job can carry — a failure caused by an unreachable database
+    has, by construction, nowhere in that database to be written down.
     """
     only_in_vocabulary = set(env.CODES) - env.JOB_ERROR_ENUM
     assert only_in_vocabulary == {
-        'BAD_HOST', 'OPEN_SHELL_SPIN_REQUIRED', 'NOT_FOUND', 'DB_UNAVAILABLE'}, (
+        'BAD_HOST', 'OPEN_SHELL_SPIN_REQUIRED', 'NOT_FOUND', 'DB_UNAVAILABLE',
+        'INVALID_PARAMETERS',
+        'AUTH_REQUIRED', 'FORBIDDEN', 'RATE_LIMITED', 'QUOTA_EXCEEDED',
+        'TLS_REQUIRED'}, (
         f'the errors.json-minus-enum set difference moved to '
         f'{sorted(only_in_vocabulary)} — re-read db_enum_note in errors.json '
         f'and update either the note, the enum, or this test, deliberately')
@@ -260,7 +262,9 @@ def test_units_always_present_including_the_quantum_kinds_that_omit_it_today():
 
 def _payload_keys_read_in(path: pathlib.Path) -> set[str]:
     assert path.exists(), f'{path} not found — did the consumer move?'
-    return set(re.findall(r'payload\.(\w+)', path.read_text(encoding='utf-8')))
+    source = path.read_text(encoding='utf-8')
+    variable = 'v1' if path == FIELD_CONSUMER else 'payload'
+    return set(re.findall(rf'{variable}\.(\w+)', source))
 
 
 def test_live_consumers_read_exactly_the_keys_this_test_assumes():

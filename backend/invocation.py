@@ -211,6 +211,11 @@ class InvocationService:
             return []
         return self.ledger.list(state=state, limit=limit)
 
+    def list_attention(self, *, limit: int = 100) -> list[dict]:
+        if self.ledger is None or not hasattr(self.ledger, 'list_attention'):
+            return []
+        return self.ledger.list_attention(limit=limit)
+
     def get_job(self, job_id: str) -> dict:
         row = self.ledger.get(job_id) if self.ledger is not None and \
             hasattr(self.ledger, 'get') else None

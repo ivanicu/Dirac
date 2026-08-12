@@ -22,6 +22,12 @@ export const ERROR_CODES = {
     INTERNAL: { user_copy: "Something failed on our side.", retryable: true, points_at: null },
     NOT_FOUND: { user_copy: "Not found.", retryable: false, points_at: null },
     DB_UNAVAILABLE: { user_copy: "The database is unreachable — showing no data is not the same as there being none.", retryable: true, points_at: null },
+    AUTH_REQUIRED: { user_copy: "Authentication is required.", retryable: false, points_at: null },
+    FORBIDDEN: { user_copy: "This credential is not allowed to perform that action.", retryable: false, points_at: null },
+    RATE_LIMITED: { user_copy: "Too many requests. Try again shortly.", retryable: true, points_at: null },
+    QUOTA_EXCEEDED: { user_copy: "The daily compute quota is exhausted.", retryable: true, points_at: null },
+    TLS_REQUIRED: { user_copy: "HTTPS is required for remote access.", retryable: false, points_at: null },
+    INVALID_PARAMETERS: { user_copy: "That request is not valid for this method.", retryable: false, points_at: null },
 } as const;
 
 /** The full, and only, error vocabulary — derived from the object above so

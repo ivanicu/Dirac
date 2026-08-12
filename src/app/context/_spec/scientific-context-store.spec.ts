@@ -28,10 +28,12 @@ describe('ScientificContextStore', () => {
     it('round-trips meaningful URL context', () => {
         const store = new ScientificContextStore();
         store.patch({ programRef: { kind: 'program', id: 'P1' },
+            complexRef: { kind: 'complex', id: 'CX9' },
             focusedObject: { kind: 'compound', id: 'C7' }, origin: 'navigation' });
         const restored = new ScientificContextStore();
         restored.restore(store.toUrlParams());
         expect(restored.current().programRef?.id).toBe('P1');
+        expect(restored.current().complexRef?.id).toBe('CX9');
         expect(restored.current().focusedObject).toEqual({ kind: 'compound', id: 'C7' });
     });
 });

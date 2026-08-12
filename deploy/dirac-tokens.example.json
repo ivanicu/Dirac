@@ -1,0 +1,29 @@
+{
+  "tokens": [
+    {
+      "token_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "actor": { "kind": "agent", "id": "replace-with-stable-actor-id" },
+      "scopes": [
+        "system:read",
+        "command:discover",
+        "command:system.version:execute",
+        "command:attention.list:execute",
+        "command:job.list:execute",
+        "command:job.get:execute",
+        "command:job.wait:execute",
+        "command:structure.field.compute:execute",
+        "method:discover",
+        "method:estimate",
+        "method:fields.*:read",
+        "method:fields.*:invoke",
+        "job:read",
+        "job:submit",
+        "artifact:read"
+      ],
+      "rate_per_minute": 60,
+      "daily_requests": 2000,
+      "daily_cost_units": 10000,
+      "max_body_bytes": 8388608
+    }
+  ]
+}
