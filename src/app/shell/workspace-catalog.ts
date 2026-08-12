@@ -47,7 +47,8 @@ export const VIEW_EXPERIENCES: Readonly<Record<string, ViewExperience>> = {
         'A single reading surface for the current state of a drug program.',
         'What are we trying to achieve, and what matters now?', [
             m('Target summary', 'Identity, mechanism, structural coverage, and unresolved target risks.', 'foundation'),
-            m('Program objectives', 'The measurable potency, selectivity, ADME, and delivery goals.', 'foundation'),
+            m('Target / Candidate Product Profile', 'Indication, patient population, modality, route, dose frequency, exposure margin, competitive standard, stage gates, and nomination criteria.', 'foundation'),
+            m('Program objectives', 'Conditioned activity, DMPK, safety, PK, synthesis, IP, and delivery goals with units and thresholds.', 'foundation'),
             m('Current bottlenecks', 'The few constraints presently limiting program progress.'),
             m('Candidate & series summary', 'The active chemical series and their promotion state.'),
             m('Recent evidence', 'The newest observations that changed confidence.', 'foundation'),
@@ -112,11 +113,12 @@ export const VIEW_EXPERIENCES: Readonly<Record<string, ViewExperience>> = {
         ], 'Persist program-scoped objectives and evaluate molecules against them.'),
 
     'structures.complex': view(
-        'The operational source of truth for a protein–ligand complex.',
-        'What is physically happening in this complex?', [
+        'A source-qualified structural model of a protein–ligand complex.',
+        'What interactions does this structural model support, and how strong is that evidence?', [
             m('Persistent 3D scene', 'One Mol* scene shared across structural Views.', 'available'),
             m('Interaction map', 'Residue and atom-level contacts around the ligand.', 'available'),
             m('Field overlay', 'Computed fields and surfaces with provenance.', 'available'),
+            m('Structure quality', 'Resolution, R/Rfree, density support, occupancy, alternate conformations, construct, and pose origin.', 'foundation'),
             m('Structure annotations', 'Actor-attributed structural observations.', 'foundation'),
         ], 'Add durable annotations and structure comparison selections.'),
     'structures.site': view(
@@ -138,8 +140,8 @@ export const VIEW_EXPERIENCES: Readonly<Record<string, ViewExperience>> = {
         ], 'Add a comparison-set context object and two-structure scene projection.',
         'structures.complex'),
     'structures.dynamics': view(
-        'The operational entry point for conformational and torsional behavior.',
-        'How does this molecular system move?', [
+        'The entry point for the currently connected conformational and torsional evidence.',
+        'What motion is supported by the available ensemble or trajectory evidence?', [
             m('Persistent 3D scene', 'Shared structural context for motion.', 'available'),
             m('Torsion strain', 'Durable torsion scan through the Job system.', 'available'),
             m('Conformer ensemble', 'Rank and compare conformational alternatives.', 'foundation'),
@@ -158,11 +160,11 @@ export const VIEW_EXPERIENCES: Readonly<Record<string, ViewExperience>> = {
     'campaigns.sar': view(
         'Connect chemical transformations to measured and predicted property changes.',
         'What structure–activity relationships are supported by the evidence?', [
-            m('Series matrix', 'Compounds organized by scaffold and substitution pattern.'),
-            m('Matched molecular pairs', 'Comparable transformations and effect sizes.'),
-            m('Property selectors', 'Choose endpoint, assay, method, and confidence.'),
+            m('Series matrix', 'Compounds and released samples organized by scaffold and substitution pattern.'),
+            m('Matched molecular pairs', 'Comparable transformations with pair definition, sample count, interval, and assay context.'),
+            m('Property selectors', 'Choose endpoint, assay, protocol version, units, qualifier, replicate policy, and confidence.'),
             m('SAR annotations', 'Capture interpretable claims and exceptions.'),
-        ], 'Define measurement objects and series membership before computing SAR summaries.',
+        ], 'Connect Compound → Form → Batch → Released Sample → contextual Measurement before computing SAR summaries.',
         'campaigns.compounds'),
     'campaigns.landscape': view(
         'A multi-property map of chemical space and campaign coverage.',
@@ -206,7 +208,8 @@ export const VIEW_EXPERIENCES: Readonly<Record<string, ViewExperience>> = {
         'What should be made next, by whom, and for what decision?', [
             m('Make queue', 'Priority, owner, route, amount, and requested date.'),
             m('Approval state', 'Scientific and operational approvals.'),
-            m('Progress', 'Ordered, in progress, blocked, completed, or cancelled.'),
+            m('Progress', 'Ordered, in progress, blocked, analytical review, released, or cancelled.'),
+            m('Batch release', 'Identity, purity, stereochemistry, actual yield, deviations, and analytical package.'),
             m('Decision linkage', 'The hypothesis or decision each compound serves.'),
         ], 'Model make requests as Missions with synthesis-specific state and approvals.',
         'runs.missions'),
@@ -240,7 +243,7 @@ export const VIEW_EXPERIENCES: Readonly<Record<string, ViewExperience>> = {
     'experiments.results': view(
         'Interpret measurement results with units, uncertainty, and provenance intact.',
         'What did the experiment show, and how much should we trust it?', [
-            m('Result table', 'Measurements with units, censoring, and replicate structure.'),
+            m('Result table', 'Measurements linked to released samples, assay and protocol, with units, censoring, and replicate structure.'),
             m('Quality assessment', 'Control validity and exclusion rationale.'),
             m('Visualization', 'Endpoint-appropriate plots with uncertainty.'),
             m('Evidence promotion', 'Turn reviewed results into linked Evidence objects.', 'foundation'),

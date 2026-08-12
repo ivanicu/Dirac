@@ -14,7 +14,7 @@ const watched = new Map();
 let timer;
 let running = false;
 let rerun = false;
-let changed = new Set();
+const changed = new Set();
 
 function normalized(value) {
     return value.replaceAll(path.sep, '/').replace(/^\.\//, '');
@@ -119,6 +119,8 @@ if (process.argv.includes('--once')) {
     build('one-shot synchronization');
 } else {
     build();
+    const runtimeTimer = setInterval(() => build('periodic runtime refresh'), 60_000);
+    runtimeTimer.unref();
     for (const root of roots) watchDirectory(path.join(ROOT, root));
     for (const entry of fs.readdirSync(ROOT, { withFileTypes: true })) {
         if (!entry.isDirectory()) continue;
@@ -143,5 +145,5 @@ if (process.argv.includes('--once')) {
         }
         if (rootFiles.has(name) || inScope(name)) observed(ROOT, filename);
     });
-    process.stdout.write(`watching ${roots.length} first-party roots · debounce 900 ms\n`);
+    process.stdout.write(`watching ${roots.length} first-party roots · debounce 900 ms · runtime refresh 60 s\n`);
 }

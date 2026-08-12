@@ -22,6 +22,9 @@ const svg = <K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string,
 export interface WorkspaceVisualOptions {
     actionLabel?: string;
     onAction?: () => void;
+    relatedLabel?: string;
+    onRelated?: () => void;
+    selectedSource?: string;
 }
 
 function emptyMessage(label = 'No records yet'): HTMLElement {
@@ -30,32 +33,6 @@ function emptyMessage(label = 'No records yet'): HTMLElement {
         html('strong', '', label),
         html('small', '', 'No scientific marks are drawn until a provenance-bearing source is selected'));
     return empty;
-}
-
-function flow(spec: WorkspaceVisualSpec): HTMLElement {
-    const body = html('div', 'workspace-flow');
-    spec.primary.forEach((label, index) => {
-        const stage = html('div', 'workspace-flow-stage');
-        stage.append(html('span', '', String(index + 1).padStart(2, '0')), html('strong', '', label), html('small', '', 'Awaiting source'));
-        body.append(stage);
-        if (index < spec.primary.length - 1) body.append(html('i', 'workspace-flow-arrow', '→'));
-    });
-    return body;
-}
-
-function timeline(spec: WorkspaceVisualSpec): HTMLElement {
-    const body = html('div', 'workspace-timeline');
-    body.setAttribute('role', 'img');
-    body.setAttribute('aria-label', `${spec.title}: expected event types; not a time scale`);
-    const track = html('div', 'workspace-timeline-track');
-    spec.primary.forEach((label, index) => {
-        const event = html('div', 'workspace-timeline-event');
-        event.style.setProperty('--position', `${(index / Math.max(spec.primary.length - 1, 1)) * 100}%`);
-        event.append(html('i'), html('strong', '', label), html('small', '', 'Expected event type'));
-        track.append(event);
-    });
-    body.append(track);
-    return body;
 }
 
 function matrix(spec: WorkspaceVisualSpec): HTMLElement {
@@ -99,32 +76,6 @@ function axes(spec: WorkspaceVisualSpec, kind: 'scatter' | 'curve'): HTMLElement
     empty.textContent = 'AWAITING CONNECTED OBSERVATIONS';
     chart.append(xLabel, yLabel, empty);
     wrap.append(chart);
-    return wrap;
-}
-
-function network(spec: WorkspaceVisualSpec): HTMLElement {
-    const wrap = html('div', 'workspace-network');
-    const graph = svg('svg', {
-        viewBox: '0 0 720 300',
-        role: 'img',
-        'aria-label': `${spec.title}: expected entity types; relationships are not loaded`,
-    });
-    const primary = spec.primary;
-    const secondary = spec.secondary || [];
-    const positions = [
-        [150, 84], [360, 54], [570, 84], [230, 222], [490, 222], [360, 154],
-    ];
-    const labels = [...primary, ...secondary].slice(0, positions.length);
-    labels.forEach((label, index) => {
-        const [x, y] = positions[index];
-        const group = svg('g', { class: index === 0 ? 'node node--primary' : 'node' });
-        group.append(svg('rect', { x: String(x - 74), y: String(y - 22), width: '148', height: '44', rx: '3' }));
-        const text = svg('text', { x: String(x), y: String(y + 4), 'text-anchor': 'middle' });
-        text.textContent = label;
-        group.append(text);
-        graph.append(group);
-    });
-    wrap.append(graph);
     return wrap;
 }
 
@@ -189,15 +140,14 @@ function table(spec: WorkspaceVisualSpec): HTMLElement {
     return body;
 }
 
-function lineage(spec: WorkspaceVisualSpec): HTMLElement {
-    const body = html('div', 'workspace-lineage');
-    const sources = html('div', 'workspace-lineage-column');
-    for (const label of spec.secondary || ['Source A', 'Source B']) sources.append(html('div', '', label));
-    const center = html('div', 'workspace-lineage-center');
-    center.append(html('i', '', '→'), html('strong', '', spec.primary[1] || 'Versioned object'), html('i', '', '→'));
-    const consumers = html('div', 'workspace-lineage-column');
-    consumers.append(html('div', '', spec.primary[0]), html('div', '', spec.primary[2] || 'Consumers'));
-    body.append(sources, center, consumers);
+function schemaList(spec: WorkspaceVisualSpec): HTMLElement {
+    const body = html('div', 'workspace-schema-list');
+    body.setAttribute('role', 'group');
+    body.setAttribute('aria-label', `${spec.title}: schema only; no topology, timing, or direction is asserted`);
+    body.append(html('strong', '', 'Expected fields or entity types'));
+    const list = html('ul');
+    for (const label of [...spec.primary, ...(spec.secondary || [])]) list.append(html('li', '', label));
+    body.append(list, html('small', '', 'Schema preview · relationships and order are unknown until data is connected'));
     return body;
 }
 
@@ -217,16 +167,14 @@ function compare(spec: WorkspaceVisualSpec): HTMLElement {
 }
 
 function visualBody(spec: WorkspaceVisualSpec): HTMLElement {
-    if (spec.kind === 'flow') return flow(spec);
-    if (spec.kind === 'timeline') return timeline(spec);
+    if (spec.kind === 'flow' || spec.kind === 'timeline' || spec.kind === 'network'
+        || spec.kind === 'lineage') return schemaList(spec);
     if (spec.kind === 'matrix') return matrix(spec);
     if (spec.kind === 'scatter' || spec.kind === 'curve') return axes(spec, spec.kind);
-    if (spec.kind === 'network') return network(spec);
     if (spec.kind === 'funnel') return funnel(spec);
     if (spec.kind === 'kanban') return kanban(spec);
     if (spec.kind === 'plate') return plate(spec);
     if (spec.kind === 'table') return table(spec);
-    if (spec.kind === 'lineage') return lineage(spec);
     return compare(spec);
 }
 
@@ -247,19 +195,30 @@ export function renderWorkspaceVisual(definition: ViewDefinition, experience: Vi
     stage.append(visualBody(spec));
     const rail = html('aside', 'workspace-visual-rail');
     rail.append(html('span', 'workspace-visual-guide-label', 'Start here'),
-        html('h3', '', 'Choose a connected source'),
-        html('p', '', 'This View stays empty until an object or read model provides traceable observations.'));
+        html('h3', '', options.selectedSource ? 'Source object selected' : 'Select a source object'),
+        html('p', '', options.selectedSource
+            ? `${options.selectedSource} is in context. Traceable observations still require a connected read model.`
+            : 'Select a canonical object first. This does not claim that a read model or dataset is connected.'));
     if (options.actionLabel && options.onAction) {
         const action = html('button', 'workspace-visual-action', options.actionLabel);
         action.type = 'button';
         action.addEventListener('click', options.onAction);
         rail.append(action);
     }
+    if (options.relatedLabel && options.onRelated) {
+        const related = html('button', 'workspace-visual-related', options.relatedLabel);
+        related.type = 'button';
+        related.addEventListener('click', options.onRelated);
+        rail.append(related);
+    }
     const boundary = html('div', 'workspace-visual-boundary');
     boundary.append(html('span', '', 'Evidence boundary'), html('p', '',
         'Axes and stages describe the reading contract only. No trend, relationship, target region, or event timing is inferred.'));
     rail.append(boundary);
-    body.append(stage, rail);
+    // The source rail precedes the chart contract in reading order. Desktop CSS
+    // still places the chart first visually; mobile keeps the real reading order
+    // so the first actionable control is not buried below a decorative schema.
+    body.append(rail, stage);
     section.append(heading, body);
     return section;
 }

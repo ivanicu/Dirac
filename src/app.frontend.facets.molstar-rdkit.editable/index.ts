@@ -379,21 +379,44 @@ const applicationClient = new DiracClient({
     baseUrl: `http://${window.location.hostname || '127.0.0.1'}:8901`,
 });
 
+function setWorkspaceStateDimension(dimension: 'runtime' | 'evidence', value: string): void {
+    const label = dimension === 'runtime' ? 'Runtime' : 'Evidence';
+    for (const term of document.querySelectorAll<HTMLElement>('.workspace-state-strip dt')) {
+        if (term.textContent !== label) continue;
+        const group = term.parentElement;
+        const description = group?.querySelector('dd');
+        if (!group || !description) continue;
+        group.dataset.state = value;
+        description.textContent = value.replace('-', ' ');
+    }
+}
+
 async function refreshRuns(): Promise<void> {
-    const list = document.getElementById('run-job-list');
-    const summary = document.getElementById('run-job-summary');
-    if (!list || !summary) return;
-    summary.textContent = 'Loading durable jobs…';
+    const lists = [...document.querySelectorAll<HTMLElement>('#run-job-list, [data-run-list]')];
+    const summaries = [...document.querySelectorAll<HTMLElement>('#run-job-summary, [data-run-summary]')];
+    if (!lists.length || !summaries.length) return;
+    for (const summary of summaries) {
+        summary.textContent = 'Loading durable jobs…';
+        summary.dataset.runtime = 'loading';
+    }
+    setWorkspaceStateDimension('runtime', 'loading');
     try {
         const env = await applicationClient.execute('job.list', { limit: 50 });
         if (!env.ok) throw new Error(env.error?.user_message || env.error?.message || 'job.list refused');
         const jobs = (env.data?.jobs || []) as Array<Record<string, any>>;
-        list.replaceChildren();
-        summary.textContent = `${jobs.length} recent jobs · Mission / Run / Job remain distinct`;
+        for (const list of lists) list.replaceChildren();
+        const stamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        for (const summary of summaries) {
+            summary.textContent = `${jobs.length} recent jobs · updated ${stamp} · Mission / Run / Job remain distinct`;
+            summary.dataset.runtime = jobs.length ? 'ready' : 'empty';
+        }
+        setWorkspaceStateDimension('runtime', jobs.length ? 'ready' : 'empty');
+        setWorkspaceStateDimension('evidence', jobs.length ? 'provenance-backed' : 'none');
         if (!jobs.length) {
             const empty = document.createElement('p');
             empty.className = 'ledger-empty'; empty.textContent = 'No durable jobs yet.';
-            list.appendChild(empty); return;
+            for (const list of lists) list.appendChild(empty.cloneNode(true));
+            return;
         }
         for (const job of jobs) {
             const row = document.createElement('article'); row.className = 'run-job-row';
@@ -401,10 +424,16 @@ async function refreshRuns(): Promise<void> {
             title.textContent = `${job.method_id || 'method'} · ${job.state}`;
             const detail = document.createElement('span');
             detail.textContent = `${String(job.id).slice(0, 12)} · ${job.seconds ?? '—'}s · ${job.durability || 'unknown durability'}`;
-            row.append(title, detail); list.appendChild(row);
+            row.append(title, detail);
+            for (const list of lists) list.appendChild(row.cloneNode(true));
         }
     } catch (error) {
-        summary.textContent = error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error ? error.message : String(error);
+        for (const summary of summaries) {
+            summary.textContent = `Could not refresh jobs · ${message}`;
+            summary.dataset.runtime = 'error';
+        }
+        setWorkspaceStateDimension('runtime', 'error');
     }
 }
 
@@ -459,6 +488,8 @@ function initCommandPalette(): void {
             const button = document.createElement('button');
             button.type = 'button'; button.textContent = String(command.id);
             button.dataset.selected = String(command.id === selected);
+            button.setAttribute('role', 'option');
+            button.setAttribute('aria-selected', String(command.id === selected));
             button.addEventListener('click', () => { selected = String(command.id); render(); });
             list.appendChild(button);
         }
@@ -502,12 +533,16 @@ function createDomModuleHost(): ModuleHost {
         document.querySelectorAll<HTMLElement>('.detail-scroll > [data-section]').forEach(panel => {
             if (!surfaces.has(panel.dataset.section || '')) panel.dataset.active = 'false';
         });
-        const selected = document.querySelector<HTMLElement>('.master-tab[aria-selected="true"]');
+        const selected = document.querySelector<HTMLElement>('.master-tab[aria-pressed="true"]');
         if (!selected || selected.hidden) {
             const preferred = MODULES.filter(module => mounted.has(module.id))
                 .sort((a, b) => b.priority - a.priority).flatMap(module => module.surfaces)
                 .find(surface => surfaces.has(surface));
-            document.querySelector<HTMLButtonElement>(`.master-tab[data-jump="${preferred}"]`)?.click();
+            document.querySelectorAll<HTMLElement>('.master-tab').forEach(tab =>
+                tab.setAttribute('aria-pressed', String(tab.dataset.jump === preferred)));
+            document.querySelectorAll<HTMLElement>('.detail-scroll > [data-section]').forEach(panel => {
+                panel.dataset.active = String(panel.dataset.section === preferred);
+            });
         }
     };
     const adapters = new Map<string, ModuleAdapter>(MODULES.map(definition => {
@@ -534,46 +569,99 @@ function initShellNavigation(): void {
         appShell.navigate(route);
         // Preview Workspaces boot without WebGL. Entering a connected scientific
         // View performs one deliberate reload so the Mol* capability can attach.
-        if (target?.implemented && !sceneService.current()) location.reload();
+        if (target?.requiresScene && !sceneService.current()) location.reload();
     };
     const workspaceCanvas = new WorkspaceCanvas(canvasHost, outlineHost, breadcrumb,
         navigate);
     const render = (active: WorkspaceId, activeView: string) => {
         host.replaceChildren();
+        const workspaceSwitcher = document.createElement('label');
+        workspaceSwitcher.className = 'workspace-switcher';
+        const workspaceSwitcherLabel = document.createElement('span');
+        workspaceSwitcherLabel.textContent = 'Workspace';
+        const workspaceSelect = document.createElement('select');
+        workspaceSelect.setAttribute('aria-label', 'Switch Workspace');
         for (const workspace of WORKSPACES.filter(w => w.shellReady)) {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.textContent = `${workspace.icon} ${workspace.label}`;
+            workspaceSelect.add(new Option(workspace.label, workspace.id, false, workspace.id === active));
+        }
+        workspaceSelect.addEventListener('change', () => {
+            const workspace = WORKSPACES.find(item => item.id === workspaceSelect.value as WorkspaceId);
+            const next = workspace && VIEWS.find(view => view.id === workspace.defaultView);
+            if (workspace && next) navigate({ workspace: workspace.id, view: next.id,
+                programId: appShell.current().programId || 'current' });
+        });
+        workspaceSwitcher.append(workspaceSwitcherLabel, workspaceSelect);
+        host.append(workspaceSwitcher);
+        for (const workspace of WORKSPACES.filter(w => w.shellReady)) {
+            const button = document.createElement('a');
+            const next = VIEWS.find(view => view.id === workspace.defaultView)!;
+            const route = { workspace: workspace.id, view: next.id,
+                programId: appShell.current().programId || 'current' };
+            button.href = appShell.urlFor(route);
+            const icon = document.createElement('span');
+            icon.textContent = workspace.icon; icon.setAttribute('aria-hidden', 'true');
+            button.append(icon, document.createTextNode(` ${workspace.label}`));
             button.dataset.capability = workspace.availability;
-            button.setAttribute('aria-selected', String(workspace.id === active));
-            button.addEventListener('click', () => {
-                const next = VIEWS.find(view => view.id === workspace.defaultView)!;
-                navigate({ workspace: workspace.id, view: next.id,
-                    programId: appShell.current().programId || 'current' });
+            if (workspace.id === active) button.setAttribute('aria-current', 'page');
+            button.addEventListener('click', event => {
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault(); navigate(route);
             });
             host.appendChild(button);
         }
         viewHost.replaceChildren();
+        const viewSwitcher = document.createElement('label');
+        viewSwitcher.className = 'view-switcher';
+        const viewSwitcherLabel = document.createElement('span');
+        viewSwitcherLabel.textContent = 'View';
+        const viewSelect = document.createElement('select');
+        viewSelect.setAttribute('aria-label', 'Switch View');
         for (const view of navigableViews(active)) {
-            const button = document.createElement('button');
-            button.type = 'button'; button.textContent = view.label;
+            viewSelect.add(new Option(view.label, view.id, false, view.id === activeView));
+        }
+        viewSelect.addEventListener('change', () => navigate({ workspace: active,
+            view: viewSelect.value, programId: appShell.current().programId || 'current' }));
+        viewSwitcher.append(viewSwitcherLabel, viewSelect);
+        viewHost.append(viewSwitcher);
+        for (const view of navigableViews(active)) {
+            const button = document.createElement('a');
+            const route = { workspace: active, view: view.id,
+                programId: appShell.current().programId || 'current' };
+            button.href = appShell.urlFor(route); button.textContent = view.label;
             button.dataset.capability = view.implemented ? 'implemented' : 'shell';
-            button.setAttribute('aria-selected', String(view.id === activeView));
-            button.addEventListener('click', () => navigate({ workspace: active,
-                view: view.id, programId: appShell.current().programId || 'current' }));
+            if (view.id === activeView) button.setAttribute('aria-current', 'page');
+            button.addEventListener('click', event => {
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault(); navigate(route);
+            });
             viewHost.appendChild(button);
         }
     };
+    let projectedView = '';
     const project = (route: ReturnType<typeof appShell.current>) => {
         render(route.workspace, route.view);
         moduleHost.activate(route.view, scientificContext.current());
         workspaceCanvas.render(route);
         if (route.workspace === 'runs') void refreshRuns();
+        const definition = VIEWS.find(view => view.id === route.view);
+        document.title = definition ? `${definition.label} · Dirac` : 'Dirac';
+        const announcer = document.getElementById('route-announcer');
+        if (announcer && definition) announcer.textContent = `${definition.label} view loaded`;
+        if (projectedView && projectedView !== route.view) {
+            requestAnimationFrame(() => {
+                const focusTarget = document.getElementById('workspace-view-title')
+                    ?? document.getElementById('current-content');
+                focusTarget?.focus();
+            });
+        }
+        projectedView = route.view;
     };
     appShell.restore();
     appShell.subscribe(project);
+    scientificContext.subscribe(() => moduleHost.activate(appShell.current().view, scientificContext.current()));
     window.addEventListener('popstate', () => project(appShell.restore()));
     document.getElementById('run-job-refresh')?.addEventListener('click', () => void refreshRuns());
+    document.addEventListener('dirac:refresh-runs', () => void refreshRuns());
     initGlobalContext();
     initCommandPalette();
     void refreshAttention();
@@ -614,8 +702,22 @@ class MolecularVfxLab {
         // for Programs, Campaigns, Experiments, Knowledge, or Runs.
         initShellNavigation();
         const initialView = VIEWS.find(view => view.id === appShell.current().view);
-        if (!initialView?.implemented) {
-            byId('status').textContent = 'Workspace ready';
+        if (!initialView?.requiresScene) {
+            byId('status').textContent = initialView?.delivery === 'connected'
+                ? 'Connected · loading runtime data' : 'Shell available · no data selected';
+            return;
+        }
+        const restored = scientificContext.current().complexRef;
+        if (restored) {
+            const id = restored.id.replace(/^pdb:/i, '').toUpperCase();
+            const control = MolecularControls.find(item => item.id.toUpperCase() === id);
+            if (!control) {
+                this.renderSceneSourceRequired(`The requested complex "${restored.id}" is not available in this local catalog.`);
+                return;
+            }
+            this.currentMolecule = control;
+        } else {
+            this.renderSceneSourceRequired('No complex is selected. Dirac will not substitute a demo structure.');
             return;
         }
         this.workbench = await createChemWorkbench({ target: byId('viewport') });
@@ -653,6 +755,28 @@ class MolecularVfxLab {
         await this.applyRepresentationAndVisuals();
         this.refreshMetrics();
         byId('status').textContent = 'Ready';
+    }
+
+    private renderSceneSourceRequired(message: string): void {
+        const viewport = byId('viewport');
+        const card = document.createElement('section');
+        card.className = 'scene-source-required';
+        card.setAttribute('role', 'status');
+        const title = document.createElement('h2');
+        title.textContent = 'Select a structure source';
+        const copy = document.createElement('p');
+        copy.textContent = message;
+        const example = document.createElement('button');
+        example.type = 'button'; example.className = 'btn-primary';
+        example.textContent = 'Open explicit example · PDB 1CBS';
+        example.addEventListener('click', () => {
+            scientificContext.patch({ complexRef: { kind: 'complex', id: 'pdb:1CBS' },
+                origin: 'selection' });
+            location.href = appShell.urlFor(appShell.current());
+        });
+        card.append(title, copy, example);
+        viewport.replaceChildren(card);
+        byId('status').textContent = 'Needs structure source';
     }
 
     private createControls() {
@@ -805,6 +929,8 @@ class MolecularVfxLab {
             tab.dataset.layerScope = scope;
             tab.setAttribute('role', 'tab');
             tab.setAttribute('aria-selected', String(groupIndex === 0));
+            tab.tabIndex = groupIndex === 0 ? 0 : -1;
+            tab.id = `${tabsId}-tab-${groupIndex}`;
             const tabLabel = document.createElement('span');
             tabLabel.textContent = group.label;
             const tabCount = document.createElement('small');
@@ -818,6 +944,9 @@ class MolecularVfxLab {
             panel.dataset.layerScope = scope;
             panel.hidden = groupIndex !== 0;
             panel.setAttribute('role', 'tabpanel');
+            panel.id = `${upgradesId}-panel-${groupIndex}`;
+            panel.setAttribute('aria-labelledby', tab.id);
+            tab.setAttribute('aria-controls', panel.id);
             const panelHeader = document.createElement('header');
             const panelTitle = document.createElement('h3');
             panelTitle.textContent = group.label;
@@ -905,11 +1034,31 @@ class MolecularVfxLab {
             const cost = document.createElement('em');
             cost.className = available ? `cost cost-${upgrade.cost}` : 'cost cost-unavailable';
             cost.textContent = available ? upgrade.cost : 'not realtime';
-            row.append(checkbox, copy, cost);
+            const expand = document.createElement('button');
+            expand.type = 'button';
+            expand.className = 'upgrade-expand';
+            expand.textContent = 'Details';
+            expand.setAttribute('aria-expanded', 'false');
+            expand.addEventListener('click', () => {
+                const expanded = row.classList.toggle('expanded');
+                expand.setAttribute('aria-expanded', String(expanded));
+                expand.textContent = expanded ? 'Hide details' : 'Details';
+            });
+            row.append(checkbox, copy, cost, expand);
             panel.appendChild(row);
             }
 
             tab.addEventListener('click', () => this.selectUpgradeGroup(group.id, scope));
+            tab.addEventListener('keydown', event => {
+                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                event.preventDefault();
+                const tabs = [...document.querySelectorAll<HTMLButtonElement>(
+                    `[data-layer-scope="${scope}"][data-group]`)];
+                const current = tabs.indexOf(tab);
+                const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+                    : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+                tabs[next].click(); tabs[next].focus();
+            });
             upgrades.appendChild(panel);
         }
     }
@@ -918,6 +1067,7 @@ class MolecularVfxLab {
         document.querySelectorAll<HTMLButtonElement>(`[data-layer-scope="${scope}"][data-group]`).forEach(tab => {
             const active = tab.dataset.group === group;
             tab.setAttribute('aria-selected', String(active));
+            tab.tabIndex = active ? 0 : -1;
         });
         document.querySelectorAll<HTMLElement>(`[data-layer-scope="${scope}"][data-group-panel]`).forEach(panel => {
             panel.hidden = panel.dataset.groupPanel !== group;
@@ -2166,6 +2316,13 @@ class MolecularVfxLab {
         byId('backend').textContent = 'Mol* WebGL';
         byId('badge').textContent = `${this.currentMolecule.id} · ${this.currentMolecule.category}`;
         byId('note').textContent = `Native ${this.currentRepresentation} + independent layers. Active: ${selected.map(upgrade => upgrade.label).join(' · ')}`;
+        byId('viewport-accessible-summary').textContent = [
+            `Structure ${this.currentMolecule.id}: ${this.currentMolecule.category}.`,
+            `${structure?.elementCount.toLocaleString() ?? 'Unknown'} atoms and ${structure?.polymerResidueCount.toLocaleString() ?? 'unknown'} polymer residues.`,
+            `${this.workbench.plugin.managers.structure.selection.elementCount().toLocaleString()} selected elements.`,
+            `Representation ${[...representationTypes].join(' plus ') || 'none'}.`,
+            'Use the synchronized ligand, contact ledger, properties, fields, and semantic layer controls for text and keyboard-accessible inspection.',
+        ].join(' ');
     }
 }
 
@@ -2182,5 +2339,29 @@ void lab.init().catch(error => {
     const message = error instanceof Error ? error.message : String(error);
     const status = byId('status');
     status.textContent = message;
+    status.setAttribute('role', 'alert');
     status.title = message; // the pill ellipsizes; the full error must stay reachable
+    const viewport = document.getElementById('viewport');
+    if (viewport && !viewport.hidden) {
+        const boundary = document.createElement('section');
+        boundary.className = 'scene-source-required';
+        boundary.setAttribute('role', 'alert');
+        const heading = document.createElement('h2');
+        heading.textContent = '3D workbench could not start';
+        const explanation = document.createElement('p');
+        explanation.textContent = `${message}. Your selected source remains in the URL and scientific context.`;
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.textContent = 'Retry 3D workbench';
+        retry.addEventListener('click', () => window.location.reload());
+        const continueLink = document.createElement('a');
+        continueLink.href = appShell.urlFor({
+            workspace: 'runs',
+            view: 'runs.active',
+            programId: appShell.current().programId,
+        });
+        continueLink.textContent = 'Continue in Compute & Automation';
+        boundary.append(heading, explanation, retry, continueLink);
+        viewport.replaceChildren(boundary);
+    }
 });

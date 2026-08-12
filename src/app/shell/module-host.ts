@@ -8,8 +8,11 @@ export interface ModuleAdapter {
     update?(definition: ModuleDefinition, context: ScientificContext): void;
 }
 
+export type ModuleRuntimeState = 'needs-context' | 'ready';
+
 export class ModuleHost {
     private active = new Map<string, ModuleDefinition>();
+    private states = new Map<string, ModuleRuntimeState>();
 
     constructor(private readonly adapters: ReadonlyMap<string, ModuleAdapter>) {}
 
@@ -18,6 +21,12 @@ export class ModuleHost {
             throw new Error(`view ${viewId} has no product shell`);
         }
         const desired = modulesForView(viewId);
+        const contextKinds = new Set([
+            context.programRef?.kind, context.complexRef?.kind, context.focusedObject?.kind,
+            context.targetRef?.kind, context.campaignRef?.kind, context.seriesRef?.kind,
+            ...context.selectedObjects.map(ref => ref.kind),
+            ...context.activeHypotheses.map(ref => ref.kind),
+        ].filter((kind): kind is NonNullable<typeof kind> => !!kind));
         const ids = new Set(desired.map(module => module.id));
         for (const [id, definition] of [...this.active]) {
             if (!ids.has(id)) {
@@ -26,6 +35,15 @@ export class ModuleHost {
             }
         }
         for (const definition of desired) {
+            const compatible = definition.requiresContext.every(kind => contextKinds.has(kind));
+            this.states.set(definition.id, compatible ? 'ready' : 'needs-context');
+            if (!compatible) {
+                if (this.active.has(definition.id)) {
+                    this.adapter(definition.id).unmount(definition);
+                    this.active.delete(definition.id);
+                }
+                continue;
+            }
             if (this.active.has(definition.id)) {
                 this.adapter(definition.id).update?.(definition, context);
             } else {
@@ -37,6 +55,7 @@ export class ModuleHost {
     }
 
     activeModules(): readonly string[] { return [...this.active.keys()]; }
+    runtimeStates(): ReadonlyMap<string, ModuleRuntimeState> { return new Map(this.states); }
 
     private adapter(id: string): ModuleAdapter {
         const adapter = this.adapters.get(id);

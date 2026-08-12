@@ -5,6 +5,7 @@ import { assertRegistryIntegrity, availableViews, MODULES, navigableViews, VIEWS
 import { SceneService } from '../scene-service';
 import { assertExperienceCatalog, VIEW_EXPERIENCES } from '../workspace-catalog';
 import { assertWorkspaceVisualCatalog, WORKSPACE_VISUALS } from '../workspace-visual-catalog';
+import { assertViewPlans, VIEW_PLANS } from '../workspace-plans';
 
 describe('canonical AppShell architecture', () => {
     it('defines a navigable shell for all eight workspaces and thirty views', () => {
@@ -18,6 +19,8 @@ describe('canonical AppShell architecture', () => {
         expect(() => assertExperienceCatalog(VIEWS.map(v => v.id))).not.toThrow();
         expect(Object.keys(WORKSPACE_VISUALS)).toHaveLength(30);
         expect(() => assertWorkspaceVisualCatalog(VIEWS.map(v => v.id))).not.toThrow();
+        expect(Object.keys(VIEW_PLANS)).toHaveLength(30);
+        expect(() => assertViewPlans(VIEWS.map(v => v.id))).not.toThrow();
     });
 
     it('convicts a module that names an unknown command', () => {
@@ -36,6 +39,39 @@ describe('canonical AppShell architecture', () => {
         expect(context.current().programRef).toEqual(objectRef('program', 'prog-7'));
         expect(context.current().focusedObject).toEqual(objectRef('molecule', 'mol-42'));
         expect(context.current().targetRef).toEqual(objectRef('target', 't-1'));
+    });
+
+    it('rejects mismatched URL object kinds instead of casting them into context', () => {
+        const context = new ScientificContextStore();
+        const shell = new AppShell(context, new SceneService());
+        shell.restore({
+            pathname: '/p/prog-7/structures/complex',
+            search: '?complex=molecule:not-a-complex&target=bogus:t-1',
+        } as Location);
+        expect(context.current().complexRef).toBeUndefined();
+        expect(context.current().targetRef).toBeUndefined();
+    });
+
+    it('round-trips selected objects and active hypotheses through the URL', () => {
+        const context = new ScientificContextStore();
+        context.patch({
+            selectedObjects: [objectRef('compound', 'cmp-1'), objectRef('sample', 'sample-2')],
+            activeHypotheses: [objectRef('hypothesis', 'h-3')],
+            origin: 'selection',
+        });
+        const restored = new ScientificContextStore();
+        restored.restore(context.toUrlParams());
+        expect(restored.current().selectedObjects).toEqual([
+            objectRef('compound', 'cmp-1'), objectRef('sample', 'sample-2'),
+        ]);
+        expect(restored.current().activeHypotheses).toEqual([objectRef('hypothesis', 'h-3')]);
+    });
+
+    it('requires a scene only for molecular views, never for Runs', () => {
+        expect(VIEWS.find(view => view.id === 'structures.complex')?.requiresScene).toBe(true);
+        expect(VIEWS.find(view => view.id === 'design.builder')?.requiresScene).toBe(true);
+        expect(VIEWS.find(view => view.id === 'runs.active')?.requiresScene).toBe(false);
+        expect(VIEWS.find(view => view.id === 'runs.history')?.requiresScene).toBe(false);
     });
 
     it('restores every shell-ready View route', () => {

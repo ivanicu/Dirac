@@ -10,10 +10,11 @@
     }
   },
   "kinds": [
-    "program", "target", "molecule", "compound", "series",
+    "program", "target", "molecule", "compound", "compound_form", "series",
     "protein", "protein_structure", "complex", "pose", "conformer",
     "field", "prediction", "campaign", "synthesis_route", "reaction",
-    "building_block", "assay", "experiment", "measurement", "hypothesis",
+    "building_block", "batch", "sample", "formulation", "quality_release",
+    "assay", "protocol", "experiment", "measurement", "hypothesis",
     "claim", "evidence", "decision", "dataset", "model", "artifact",
     "mission", "run", "job", "literature_reference"
   ]

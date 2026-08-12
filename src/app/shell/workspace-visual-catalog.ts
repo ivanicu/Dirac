@@ -54,7 +54,8 @@ export const WORKSPACE_VISUALS: Readonly<Record<string, WorkspaceVisualSpec>> = 
     },
     'design.objectives': {
         kind: 'matrix', title: 'Objective and constraint matrix', caption: 'Hard bounds and soft preferences remain distinguishable.',
-        primary: ['Potency', 'Selectivity', 'ADME', 'Synthesis'], secondary: ['Hard bound', 'Soft preference', 'Unknown'],
+        primary: ['Biochemical / cellular activity', 'Selectivity / off-target safety', 'Solubility / permeability / efflux', 'Clearance / PPB / CYP', 'hERG / reactive metabolite / genotox', 'PK exposure / efficacy margin', 'Synthetic feasibility', 'IP novelty / FTO'],
+        secondary: ['Assay + species + condition', 'Value + unit + threshold', 'Evidence / calibration', 'Missingness'],
     },
 
     'structures.complex': {
@@ -80,17 +81,18 @@ export const WORKSPACE_VISUALS: Readonly<Record<string, WorkspaceVisualSpec>> = 
         primary: ['Compound', 'Series', 'Evidence', 'Owner', 'State'],
     },
     'campaigns.sar': {
-        kind: 'matrix', title: 'SAR criterion matrix',
-        caption: 'Compound × endpoint cells distinguish pass, exceeded bound, and not measured.',
-        primary: ['Series member', 'R-group', 'Transformation'], secondary: ['Potency', 'Selectivity', 'Solubility', 'Stability'],
+        kind: 'matrix', title: 'Assay-contextual SAR matrix',
+        caption: 'Released sample × assay endpoint cells preserve protocol, units, qualifiers, replicates, QC, and measured-versus-predicted status.',
+        primary: ['Compound / released sample', 'Parent series / scaffold', 'R-group assignment'],
+        secondary: ['Assay + protocol', 'Value + unit + qualifier', 'Replicates + QC', 'Measured / predicted'],
     },
     'campaigns.landscape': {
         kind: 'scatter', title: 'Chemical-space landscape', caption: 'Series coverage and unexplored regions share an explicit embedding method.',
         primary: ['Series', 'Candidates', 'Coverage gaps'], xLabel: 'Embedding dimension 1', yLabel: 'Embedding dimension 2',
     },
     'campaigns.optimize': {
-        kind: 'scatter', title: 'Multi-objective frontier', caption: 'Trade-offs stay visible; uncertainty is not collapsed into one opaque score.',
-        primary: ['Candidates', 'Pareto frontier', 'Uncertainty'], xLabel: 'Benefit objective', yLabel: 'Cost / risk objective',
+        kind: 'scatter', title: 'Multi-objective frontier', caption: 'Activity, DMPK, safety, PK, synthesis, IP, uncertainty, applicability domain, and missing-evidence penalties remain inspectable.',
+        primary: ['Candidates', 'Pareto frontier', 'Uncertainty', 'Missing evidence'], xLabel: 'Benefit objective', yLabel: 'Cost / risk objective',
     },
 
     'synthesis.routes': {
@@ -115,8 +117,8 @@ export const WORKSPACE_VISUALS: Readonly<Record<string, WorkspaceVisualSpec>> = 
         primary: ['Assay', 'Endpoint', 'Protocol', 'Units', 'Quality'],
     },
     'experiments.runs': {
-        kind: 'plate', title: 'Experiment execution board', caption: 'Plate position, sample lineage, controls, and incidents remain linked.',
-        primary: ['Samples', 'Controls', 'Replicates'], secondary: ['Queued', 'Running', 'Incident'],
+        kind: 'table', title: 'Experiment execution board', caption: 'Execution grammar follows experiment type: plate, cohort, time course, analytical trace, or sample tree.',
+        primary: ['Execution type', 'Released samples', 'Controls / cohort', 'Protocol', 'Runtime state', 'Incident'],
     },
     'experiments.results': {
         kind: 'curve', title: 'Measurement response', caption: 'Replicates, fit, uncertainty, censoring, and exclusions share one evidence surface.',

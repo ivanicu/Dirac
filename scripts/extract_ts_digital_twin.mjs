@@ -179,7 +179,7 @@ function literal(node) {
     return undefined;
 }
 
-const registries = { workspaces: [], views: [], modules: [] };
+const registries = { workspaces: [], views: [], modules: [], plans: {} };
 const registryFile = program.getSourceFiles().find(sf => rel(sf.fileName) === 'src/app/shell/registries.ts');
 if (registryFile) {
     for (const statement of registryFile.statements) {
@@ -197,9 +197,25 @@ if (registryFile) {
                     const primary = a[6] || [];
                     return { id: a[0], workspace: a[1], label: a[2], route: a[3],
                         implemented: a[4] ?? false, shellReady: true,
+                        delivery: a[4] ? 'connected' : 'shell',
+                        requiresScene: ['design.builder', 'design.objectives', 'structures.complex',
+                            'structures.site', 'structures.dynamics'].includes(a[0]),
                         modules: a[5] || [], primaryObjectKinds: primary,
                         actions: a[7] || [], acceptedContext: primary };
                 });
+            }
+        }
+    }
+}
+
+const plansFile = program.getSourceFiles().find(
+    sf => rel(sf.fileName) === 'src/app/shell/workspace-plans.ts');
+if (plansFile) {
+    for (const statement of plansFile.statements) {
+        if (!ts.isVariableStatement(statement)) continue;
+        for (const declaration of statement.declarationList.declarations) {
+            if (declaration.name.getText() === 'VIEW_PLANS') {
+                registries.plans = literal(declaration.initializer) || {};
             }
         }
     }

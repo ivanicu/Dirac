@@ -58,7 +58,7 @@
             text-transform: uppercase;
             white-space: nowrap;
         }
-        .brand h1 { margin: 2px 0 0; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+        .brand .brand-name { margin: 2px 0 0; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
         .topbar-scene {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -79,14 +79,15 @@
         .topbar-tail { display: flex; gap: 10px; align-items: center; }
         .workspace-nav { grid-column: 1 / -1; display: flex; gap: 4px; padding: 5px 10px;
             border-bottom: 1px solid var(--border); background: var(--surface-2); }
-        .workspace-nav button { border: 0; border-radius: 6px; padding: 5px 9px;
-            background: transparent; color: var(--text-3); font-size: 10px; font-weight: 700; }
-        .workspace-nav button[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); }
+        .workspace-nav a { border: 0; border-radius: 6px; padding: 5px 9px;
+            background: transparent; color: var(--text-3); font-size: 10px; font-weight: 700;
+            text-decoration: none; }
+        .workspace-nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
         .view-nav { display: flex; gap: 4px; padding: 4px 10px; overflow-x: auto;
             border-bottom: 1px solid var(--border); background: var(--surface); }
-        .view-nav button { border: 0; padding: 4px 7px; border-radius: 5px; white-space: nowrap;
-            background: transparent; color: var(--text-3); font-size: 9px; }
-        .view-nav button[aria-selected="true"] { color: var(--text); background: var(--surface-3); }
+        .view-nav a { border: 0; padding: 4px 7px; border-radius: 5px; white-space: nowrap;
+            background: transparent; color: var(--text-3); font-size: 9px; text-decoration: none; }
+        .view-nav a[aria-current="page"] { color: var(--text); background: var(--surface-3); }
         .global-context-bar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 5px; padding: 6px 10px; border-bottom: 1px solid var(--border);
             background: color-mix(in srgb, var(--surface-2) 80%, transparent); }
@@ -194,8 +195,8 @@
             border-radius: 0;
         }
         .master-tab:hover { color: var(--text-2); }
-        .master-tab[aria-selected="true"] { color: var(--accent); }
-        .master-tab[aria-selected="true"]::after {
+        .master-tab[aria-pressed="true"] { color: var(--accent); }
+        .master-tab[aria-pressed="true"]::after {
             content: '';
             position: absolute;
             left: 8px; right: 8px; bottom: -1px;
@@ -1327,11 +1328,13 @@
     <link rel="stylesheet" href="./addons.css">
 </head>
 <body>
+    <a class="skip-link" href="#current-content">Skip to current Workspace content</a>
+    <div id="route-announcer" class="sr-only" role="status" aria-live="polite"></div>
     <div id="app">
         <header class="topbar">
             <div class="brand">
                 <p class="eyebrow">Open-source Schrödinger</p>
-                <h1>Dirac</h1>
+                <p class="brand-name">Dirac</p>
             </div>
             <div id="shell-breadcrumb" class="shell-breadcrumb" hidden></div>
             <div class="topbar-scene">
@@ -1346,7 +1349,7 @@
                 </select></label>
             </div>
             <div class="topbar-tail">
-                <span id="status" class="status-pill">Starting…</span>
+                <span id="status" class="status-pill" role="status" aria-live="polite">Starting…</span>
                 <button id="clear-selection" type="button" class="btn-ghost">Clear selection</button>
             </div>
         </header>
@@ -1365,17 +1368,17 @@
                 </div>
             </section>
             <section id="workspace-outline" class="workspace-outline" aria-label="Workspace implementation map" hidden></section>
-            <nav class="master-nav" role="tablist" aria-label="Workspace sections">
-                <button type="button" class="master-tab" data-jump="focus">Focus</button>
-                <button type="button" class="master-tab" data-jump="semantic" aria-selected="true">Semantics</button>
-                <button type="button" class="master-tab" data-jump="ligand">Ligand</button>
-                <button type="button" class="master-tab" data-jump="properties">Properties</button>
-                <button type="button" class="master-tab" data-jump="fields">Fields</button>
-                <button type="button" class="master-tab" data-jump="physics">Physics</button>
-                <button type="button" class="master-tab" data-jump="designer">Designer</button>
-                <button type="button" class="master-tab" data-jump="vfx">VFX</button>
-                <button type="button" class="master-tab" data-jump="ledger">Ledger</button>
-                <button type="button" class="master-tab" data-jump="runs">Runs</button>
+            <nav class="master-nav" aria-label="Scientific workbench sections">
+                <button type="button" class="master-tab" data-jump="focus" aria-pressed="false">Focus</button>
+                <button type="button" class="master-tab" data-jump="semantic" aria-pressed="true">Semantics</button>
+                <button type="button" class="master-tab" data-jump="ligand" aria-pressed="false">Ligand</button>
+                <button type="button" class="master-tab" data-jump="properties" aria-pressed="false">Properties</button>
+                <button type="button" class="master-tab" data-jump="fields" aria-pressed="false">Fields</button>
+                <button type="button" class="master-tab" data-jump="physics" aria-pressed="false">Physics</button>
+                <button type="button" class="master-tab" data-jump="designer" aria-pressed="false">Designer</button>
+                <button type="button" class="master-tab" data-jump="vfx" aria-pressed="false">VFX</button>
+                <button type="button" class="master-tab" data-jump="ledger" aria-pressed="false">Ledger</button>
+                <button type="button" class="master-tab" data-jump="runs" aria-pressed="false">Runs</button>
             </nav>
 
             <div class="scene-summary">
@@ -1811,17 +1814,19 @@
             </footer>
         </aside>
 
-        <main>
-            <div id="viewport"></div>
+        <main id="current-content" tabindex="-1">
+            <div id="viewport" role="region" aria-label="Molecular structure viewport" aria-describedby="viewport-accessible-summary"></div>
+            <p id="viewport-accessible-summary" class="sr-only" aria-live="polite">No structure loaded.</p>
             <div id="badge" class="badge">Mol* native · semantics preserved</div>
             <section id="workspace-canvas" class="workspace-canvas" aria-label="Workspace view" hidden></section>
         </main>
     </div>
 
     <dialog id="command-palette" aria-label="Semantic command palette">
+        <label class="sr-only" for="command-palette-search">Filter canonical commands</label>
         <input id="command-palette-search" type="text" placeholder="Filter canonical commands…" autocomplete="off">
         <div class="command-palette-grid">
-            <div id="command-palette-list" aria-label="Discovered commands"></div>
+            <div id="command-palette-list" role="listbox" aria-label="Discovered commands"></div>
             <div>
                 <label for="command-palette-input">JSON input</label>
                 <textarea id="command-palette-input" spellcheck="false">{}</textarea>
@@ -1850,19 +1855,12 @@
             if (!tab) return;
             const target = tab.dataset.jump;
             document.querySelectorAll('.master-tab').forEach(t =>
-                t.setAttribute('aria-selected', String(t === tab)));
+                t.setAttribute('aria-pressed', String(t === tab)));
             document.querySelectorAll('.detail-scroll > [data-section]').forEach(s => {
                 s.dataset.active = String(s.dataset.section === target);
             });
         });
 
-        // upgrade row click-to-expand (delegated; works for dynamically-added rows)
-        document.addEventListener('click', e => {
-            const upgrade = e.target.closest('.upgrade');
-            if (!upgrade) return;
-            if (e.target.closest('.upgrade-toggle, .semantic-debug')) return;
-            upgrade.classList.toggle('expanded');
-        });
     </script>
 </body>
 </html>

@@ -12,6 +12,7 @@ export interface WorkspaceDefinition {
 export interface ViewDefinition {
     id: string; workspace: WorkspaceId; label: string; route: string;
     implemented: boolean; shellReady: boolean; acceptedContext: ObjectKind[];
+    delivery: 'shell' | 'connected'; requiresScene: boolean;
     modules: string[]; primaryObjectKinds: ObjectKind[]; actions: string[];
 }
 export interface ModuleDefinition {
@@ -28,12 +29,18 @@ export const WORKSPACES: readonly WorkspaceDefinition[] = [
     { id: 'synthesis', label: 'Synthesis', icon: '⇝', defaultView: 'synthesis.routes', availability: 'gated', shellReady: true },
     { id: 'experiments', label: 'Experiments', icon: '◫', defaultView: 'experiments.design', availability: 'gated', shellReady: true },
     { id: 'knowledge', label: 'Knowledge', icon: '▦', defaultView: 'knowledge.search', availability: 'gated', shellReady: true },
-    { id: 'runs', label: 'Runs', icon: '▷', defaultView: 'runs.active', availability: 'implemented', shellReady: true },
+    { id: 'runs', label: 'Compute & Automation', icon: '▷', defaultView: 'runs.active', availability: 'implemented', shellReady: true },
 ] as const;
+
+const SCENE_VIEWS = new Set([
+    'design.builder', 'design.objectives', 'structures.complex',
+    'structures.site', 'structures.dynamics',
+]);
 
 const view = (id: string, workspace: WorkspaceId, label: string, route: string,
     implemented = false, modules: string[] = [], primaryObjectKinds: ObjectKind[] = [],
     actions: string[] = []): ViewDefinition => ({ id, workspace, label, route, implemented,
+    delivery: implemented ? 'connected' : 'shell', requiresScene: SCENE_VIEWS.has(id),
     shellReady: true, modules, primaryObjectKinds, actions, acceptedContext: primaryObjectKinds });
 
 export const VIEWS: readonly ViewDefinition[] = [
@@ -64,7 +71,7 @@ export const VIEWS: readonly ViewDefinition[] = [
     view('synthesis.make', 'synthesis', 'Make Queue', '/p/:programId/synthesis/make'),
     view('experiments.design', 'experiments', 'Design', '/p/:programId/experiments/design'),
     view('experiments.assays', 'experiments', 'Assays', '/p/:programId/experiments/assays'),
-    view('experiments.runs', 'experiments', 'Runs', '/p/:programId/experiments/runs'),
+    view('experiments.runs', 'experiments', 'Execution', '/p/:programId/experiments/runs'),
     view('experiments.results', 'experiments', 'Results', '/p/:programId/experiments/results'),
     view('knowledge.search', 'knowledge', 'Search', '/knowledge/search'),
     view('knowledge.entities', 'knowledge', 'Entities', '/knowledge/entities'),

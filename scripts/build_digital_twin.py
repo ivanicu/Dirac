@@ -411,6 +411,10 @@ def add_app_shell(twin: Twin, registries: dict) -> None:
         wid = twin.node(f'workspace:{workspace["id"]}', 'workspace', workspace['label'],
                         layer='experience', **workspace)
         twin.edge(shell, wid, 'contains')
+    # Create all View nodes before their dependency edges; plans may point
+    # forward to a View declared later in the registry.
+    for view in registries['views']:
+        twin.node(f'view:{view["id"]}', 'view', view['label'], layer='experience', **view)
     for view in registries['views']:
         vid = twin.node(f'view:{view["id"]}', 'view', view['label'], layer='experience', **view)
         twin.edge(f'workspace:{view["workspace"]}', vid, 'contains')
@@ -418,6 +422,31 @@ def add_app_shell(twin: Twin, registries: dict) -> None:
             twin.edge(vid, f'command:{command}', 'offers')
         for kind in view.get('primaryObjectKinds', []):
             twin.edge(vid, f'object-kind:{kind}', 'projects')
+        plan = registries.get('plans', {}).get(view['id'], {})
+        twin.nodes[vid]['plan_contract'] = plan
+        for kind in plan.get('plannedInputs', []):
+            twin.edge(f'object-kind:{kind}', vid, 'planned-input', state='planned',
+                      declared_in='src/app/shell/workspace-plans.ts')
+        for name in plan.get('plannedReadModels', []):
+            rid = twin.node(f'planned-read-model:{name}', 'planned-read-model', name,
+                            layer='experience', state='planned',
+                            path='src/app/shell/workspace-plans.ts')
+            twin.edge(vid, rid, 'plans-read-model', state='planned')
+        for name in plan.get('plannedCommands', []):
+            existing = f'command:{name}'
+            cid = existing if existing in twin.nodes else twin.node(
+                f'planned-command:{name}', 'planned-command', name, layer='commands',
+                state='planned', path='src/app/shell/workspace-plans.ts')
+            twin.edge(vid, cid, 'plans-command', state='planned')
+        for kind in plan.get('emitsSelection', []):
+            twin.edge(vid, f'object-kind:{kind}', 'plans-selection', state='planned')
+        for target in plan.get('dependsOnViews', []):
+            twin.edge(vid, f'view:{target}', 'plans-dependency', state='planned')
+        for requirement in plan.get('requiredProvenance', []):
+            key = re.sub(r'[^a-z0-9]+', '-', requirement.lower()).strip('-')
+            pid = twin.node(f'provenance-requirement:{key}', 'provenance-requirement',
+                            requirement, layer='evidence', state='planned')
+            twin.edge(vid, pid, 'requires-provenance', state='planned')
     for module in registries['modules']:
         module_data = dict(module)
         name = module_data.pop('id')
@@ -505,8 +534,10 @@ def add_system_and_flows(twin: Twin) -> None:
     twin.edge('store:jobs', 'store:postgres', 'persists-in')
     twin.edge('store:result-cache', 'store:postgres', 'persists-in')
     twin.edge('store:artifacts', 'store:postgres', 'indexes-in')
-    twin.edge('system:app-shell', 'system:scientific-context', 'projects')
-    twin.edge('system:app-shell', 'system:scene', 'owns')
+    twin.edge('system:app-shell', 'system:scientific-context', 'projects',
+              basis='declared', declared_in='src/app/shell/app-shell.ts')
+    twin.edge('system:app-shell', 'system:scene', 'coordinates-without-owning',
+              basis='declared', declared_in='src/app/shell/app-shell.ts')
     twin.edge('system:scene', 'external:molstar', 'hosts')
     twin.edge('service:web', 'surface:gui', 'serves')
     twin.edge('service:fields', 'transport:http-v2', 'serves')
@@ -549,7 +580,9 @@ def add_system_and_flows(twin: Twin) -> None:
 
 def runtime_snapshot(twin: Twin) -> dict:
     snapshot: dict[str, Any] = {'captured_at': dt.datetime.now(dt.timezone.utc).isoformat(),
-                                'source': 'best-effort live probes'}
+                                'source': 'best-effort live probes',
+                                'refresh_policy_seconds': 60,
+                                'freshness_state': 'fresh-at-generation'}
     ok, sha = run(['git', 'rev-parse', 'HEAD'])
     snapshot['git_commit'] = sha if ok else None
     ok, status = run(['systemctl', '--user', 'show', 'dirac-fields.service', 'dirac-web.service',
@@ -725,8 +758,19 @@ def architecture_analysis(twin: Twin, ts_data: dict, runtime: dict) -> dict:
 
     workspaces = ts_data['registries']['workspaces']
     views = ts_data['registries']['views']
+    platform_commands = {e['source'] for e in twin.edges.values() if e['relation'] == 'handled-by'}
+    platform_methods = {e['source'] for e in twin.edges.values() if e['relation'] == 'implemented-by'}
+    platform_complete = (len(platform_commands) == sum(n['type'] == 'command' for n in twin.nodes.values())
+                         and len(platform_methods) == sum(n['type'] == 'scientific-method'
+                                                         for n in twin.nodes.values())
+                         and not module_import_cycles(twin))
     product = {
-        'platform_substrate': 'complete',
+        'platform_substrate': 'complete' if platform_complete else 'partial',
+        'platform_substrate_evidence': {
+            'handled_commands': len(platform_commands),
+            'implemented_methods': len(platform_methods),
+            'import_cycles': len(module_import_cycles(twin)),
+        },
         'product_shell': 'complete',
         'product_implementation': 'partial',
         'workspaces_total': len(workspaces),
@@ -833,14 +877,24 @@ def architecture_analysis(twin: Twin, ts_data: dict, runtime: dict) -> dict:
          'action': 'Keep shell-ready, capability-connected and observed usage as three independent dimensions.',
          'nodes': ['system:app-shell']},
     ]
+    source_sync = bool(runtime.get('twin_watcher_active'))
+    runtime_sync = command_traces > 0 and isinstance(operational, dict) and not operational.get('available') is False
+    maturity_level = 'L3' if source_sync and runtime_sync else 'L2'
     return {
         'maturity': {
-            'level': 'L3', 'name': 'Observed architecture optimization twin',
-            'is_continuously_synchronized': True,
-            'synchronization': ('event-driven recursive source synchronization; runtime observations refresh '
-                                'on each regeneration rather than streaming continuously'),
+            'level': maturity_level,
+            'name': ('Observed architecture optimization twin' if maturity_level == 'L3'
+                     else 'Source-synchronized architecture twin'),
+            'assessment': {
+                'source_watcher_observed_active': source_sync,
+                'durable_command_traces_present': command_traces > 0,
+                'runtime_metrics_available': runtime_sync,
+            },
+            'is_continuously_synchronized': source_sync,
+            'synchronization': ('recursive source events plus periodic runtime refresh; source and telemetry '
+                                'freshness are reported separately'),
             'source_sync': 'continuous while dirac-digital-twin.service is active',
-            'runtime_sync': 'snapshot refreshed on source-triggered or manual regeneration',
+            'runtime_sync': 'periodic snapshot every 60 seconds while the watcher is active',
             'can_do': ['explain architecture', 'detect declared/observed drift', 'rank static hotspots',
                        'simulate dependency-radius change impact', 'preserve function-level traceability',
                        'calibrate command latency and outcomes from observed traffic'],

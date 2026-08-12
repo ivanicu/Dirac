@@ -20,16 +20,16 @@ export class AppShell {
     navigate(next: ShellRoute, replace = false): void {
         const definition = VIEWS.find(v => v.id === next.view && v.workspace === next.workspace);
         if (!definition?.shellReady) throw new Error(`view ${next.view} has no product shell`);
-        this.route = next;
-        if (next.programId && next.programId !== 'current') {
-            this.context.patch({ programRef: objectRef('program', next.programId),
+        const programId = next.programId && next.programId !== 'current'
+            ? next.programId : this.context.current().programRef?.id || next.programId;
+        this.route = { ...next, programId };
+        if (programId && programId !== 'current') {
+            this.context.patch({ programRef: objectRef('program', programId),
                 origin: 'navigation' });
         }
-        const path = this.pathFor(definition, next.programId);
-        const query = this.context.toUrlParams().toString();
-        const url = path + (query ? `?${query}` : '');
+        const url = this.urlFor({ ...next, programId });
         if (typeof history !== 'undefined') history[replace ? 'replaceState' : 'pushState'](next, '', url);
-        for (const listener of [...this.listeners]) listener(next);
+        for (const listener of [...this.listeners]) listener(this.route);
     }
 
     restore(locationLike: Pick<Location, 'pathname' | 'search'> = location): ShellRoute {
@@ -52,6 +52,16 @@ export class AppShell {
     subscribe(listener: (route: ShellRoute) => void): () => void {
         this.listeners.add(listener); listener(this.route);
         return () => this.listeners.delete(listener);
+    }
+
+    urlFor(route: ShellRoute): string {
+        const definition = VIEWS.find(v => v.id === route.view && v.workspace === route.workspace);
+        if (!definition?.shellReady) throw new Error(`view ${route.view} has no product shell`);
+        const programId = route.programId && route.programId !== 'current'
+            ? route.programId : this.context.current().programRef?.id || route.programId;
+        const path = this.pathFor(definition, programId);
+        const query = this.context.toUrlParams().toString();
+        return path + (query ? `?${query}` : '');
     }
 
     private pathFor(view: ViewDefinition, programId?: string): string {

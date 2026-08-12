@@ -4,6 +4,8 @@
     "derived_from", "generated_by", "used", "measured_in", "predicted_by",
     "belongs_to", "member_of", "supports", "contradicts", "supersedes",
     "tests", "explains", "selected_from", "rejected_because",
-    "promoted_because", "part_of", "caused_by"
+    "promoted_because", "part_of", "caused_by", "has_form", "produced_as",
+    "sampled_from", "formulated_as", "released_by", "assayed_under",
+    "has_measurement"
   ]
 }

@@ -112,8 +112,25 @@ def errors(document: dict, html: str) -> list[str]:
         findings.append('not every Workspace has a navigable product shell')
     if product.get('views_shell_ready') != product.get('views_total'):
         findings.append('not every View has a navigable product shell')
-    if analysis.get('maturity', {}).get('level') != 'L3':
-        findings.append('twin maturity must be explicit and currently L3')
+    maturity = analysis.get('maturity', {})
+    assessment = maturity.get('assessment', {})
+    expected_level = ('L3' if assessment.get('source_watcher_observed_active')
+                      and assessment.get('durable_command_traces_present')
+                      and assessment.get('runtime_metrics_available') else 'L2')
+    if maturity.get('level') != expected_level:
+        findings.append(f'twin maturity is not evidence-derived: expected {expected_level}')
+    plans = [node for node in document.get('nodes', [])
+             if node.get('type') == 'view' and node.get('plan_contract')]
+    if len(plans) != 30:
+        findings.append(f'planned View contracts are incomplete: {len(plans)}/30')
+    if any(not node.get('plan_contract', {}).get('plannedInputs') for node in plans):
+        findings.append('a View plan has no declared input')
+    ownership = [edge for edge in document.get('edges', [])
+                 if edge.get('source') == 'system:app-shell'
+                 and edge.get('target') == 'system:scene'
+                 and edge.get('relation') == 'owns']
+    if ownership:
+        findings.append('AppShell falsely claims ownership of SceneService')
     commands = [node for node in document.get('nodes', []) if node.get('type') == 'command']
     handled = {edge.get('source') for edge in document.get('edges', [])
                if edge.get('relation') == 'handled-by'}
@@ -139,6 +156,11 @@ def errors(document: dict, html: str) -> list[str]:
     if cycles := module_cycles(document):
         findings.append(f'module import cycle exceeds zero-cycle ratchet: {cycles[0]}')
     metrics = document.get('runtime_snapshot', {}).get('operational_metrics', {})
+    runtime = document.get('runtime_snapshot', {})
+    if runtime.get('refresh_policy_seconds') != 60:
+        findings.append('runtime refresh policy is missing or drifted')
+    if runtime.get('freshness_state') != 'fresh-at-generation':
+        findings.append('runtime snapshot does not declare freshness boundary')
     if int(metrics.get('command_traces', 0) or 0) < 1:
         findings.append('L3 twin has no durable command trace evidence')
     if not any(node.get('runtime_observation') for node in commands):

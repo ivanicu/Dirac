@@ -1,0 +1,66 @@
+import type { ObjectKind } from '../generated/commands';
+import { VIEWS } from './registries';
+
+export interface ViewPlan {
+    plannedInputs: readonly ObjectKind[];
+    plannedReadModels: readonly string[];
+    plannedCommands: readonly string[];
+    emitsSelection: readonly ObjectKind[];
+    requiredProvenance: readonly string[];
+    dependsOnViews: readonly string[];
+    sourceLabel: string;
+}
+
+/**
+ * Typed future-state contracts. Every edge remains explicitly planned until a
+ * registered command/read model and runtime observation resolve it.
+ */
+export const VIEW_PLANS: Readonly<Record<string, ViewPlan>> = {
+    'programs.overview': { plannedInputs: ['program', 'target', 'series', 'evidence', 'decision'], plannedReadModels: ['program-overview'], plannedCommands: ['program.select'], emitsSelection: ['program', 'series'], requiredProvenance: ['evidence freshness', 'decision actor'], dependsOnViews: ['programs.hypotheses', 'programs.progress'], sourceLabel: 'Select program' },
+    'programs.hypotheses': { plannedInputs: ['program', 'hypothesis', 'evidence'], plannedReadModels: ['hypothesis-evidence-balance'], plannedCommands: ['hypothesis.create', 'hypothesis.link-evidence'], emitsSelection: ['hypothesis', 'evidence'], requiredProvenance: ['claim source', 'support or contradiction'], dependsOnViews: ['experiments.design', 'knowledge.evidence'], sourceLabel: 'Select hypothesis or program' },
+    'programs.progress': { plannedInputs: ['program', 'decision', 'evidence', 'run'], plannedReadModels: ['program-event-ledger'], plannedCommands: ['decision.record'], emitsSelection: ['decision', 'evidence'], requiredProvenance: ['event actor', 'event time', 'linked evidence'], dependsOnViews: ['runs.history'], sourceLabel: 'Select program' },
+
+    'design.builder': { plannedInputs: ['program', 'molecule', 'compound'], plannedReadModels: ['molecule-design-context'], plannedCommands: ['molecule.save', 'conformer.generate'], emitsSelection: ['molecule', 'compound'], requiredProvenance: ['parent design', 'transformation intent'], dependsOnViews: ['design.objectives'], sourceLabel: 'Select molecule or compound' },
+    'design.analogs': { plannedInputs: ['molecule', 'compound', 'series'], plannedReadModels: ['analog-neighborhood'], plannedCommands: ['analog.enumerate', 'transformation.apply'], emitsSelection: ['molecule', 'compound'], requiredProvenance: ['parent molecule', 'transformation'], dependsOnViews: ['design.builder', 'campaigns.sar'], sourceLabel: 'Select lead or series' },
+    'design.generate': { plannedInputs: ['program', 'series', 'model'], plannedReadModels: ['governed-proposal-stream'], plannedCommands: ['proposal.generate', 'proposal.review'], emitsSelection: ['molecule'], requiredProvenance: ['model version', 'objective version', 'review actor'], dependsOnViews: ['design.objectives'], sourceLabel: 'Select objective and series' },
+    'design.objectives': { plannedInputs: ['program', 'target', 'molecule'], plannedReadModels: ['program-objective-scorecard'], plannedCommands: ['objective.save', 'molecule.evaluate'], emitsSelection: ['molecule'], requiredProvenance: ['objective version', 'unit and condition'], dependsOnViews: ['programs.overview'], sourceLabel: 'Select program or molecule' },
+
+    'structures.complex': { plannedInputs: ['complex', 'protein_structure', 'compound'], plannedReadModels: ['complex-quality-context'], plannedCommands: ['structure.interactions'], emitsSelection: ['complex', 'compound'], requiredProvenance: ['structure source', 'resolution or model confidence', 'pose origin'], dependsOnViews: ['structures.site'], sourceLabel: 'Select complex' },
+    'structures.site': { plannedInputs: ['complex', 'protein_structure', 'compound'], plannedReadModels: ['binding-site-opportunity'], plannedCommands: ['structure.field.compute'], emitsSelection: ['complex', 'field'], requiredProvenance: ['structure quality', 'field method version'], dependsOnViews: ['structures.complex'], sourceLabel: 'Select complex' },
+    'structures.compare': { plannedInputs: ['complex', 'pose', 'conformer'], plannedReadModels: ['structure-comparison'], plannedCommands: ['structure.compare'], emitsSelection: ['complex', 'pose'], requiredProvenance: ['alignment definition', 'source quality'], dependsOnViews: ['structures.complex'], sourceLabel: 'Select two structures or poses' },
+    'structures.dynamics': { plannedInputs: ['complex', 'conformer', 'pose', 'artifact'], plannedReadModels: ['ensemble-observables'], plannedCommands: ['structure.torsion.analyze', 'trajectory.analyze'], emitsSelection: ['conformer', 'pose'], requiredProvenance: ['simulation method', 'trajectory artifact'], dependsOnViews: ['structures.complex'], sourceLabel: 'Select ensemble or trajectory' },
+
+    'campaigns.compounds': { plannedInputs: ['program', 'campaign', 'compound', 'series'], plannedReadModels: ['campaign-compound-portfolio'], plannedCommands: ['campaign.assign', 'compound.promote'], emitsSelection: ['compound', 'series'], requiredProvenance: ['identity', 'latest evidence time'], dependsOnViews: ['campaigns.sar'], sourceLabel: 'Select campaign or compound set' },
+    'campaigns.sar': { plannedInputs: ['series', 'compound', 'sample', 'assay', 'protocol', 'measurement'], plannedReadModels: ['assay-contextual-sar'], plannedCommands: ['sar.annotate', 'matched-pair.compute'], emitsSelection: ['compound', 'sample', 'measurement'], requiredProvenance: ['batch and sample lineage', 'assay and protocol', 'units qualifiers replicates QC'], dependsOnViews: ['campaigns.compounds', 'experiments.results'], sourceLabel: 'Select series and assay dataset' },
+    'campaigns.landscape': { plannedInputs: ['campaign', 'compound', 'series', 'dataset', 'model'], plannedReadModels: ['versioned-chemical-space'], plannedCommands: ['embedding.compute'], emitsSelection: ['compound', 'series'], requiredProvenance: ['embedding method', 'dataset version'], dependsOnViews: ['campaigns.compounds'], sourceLabel: 'Select campaign dataset' },
+    'campaigns.optimize': { plannedInputs: ['campaign', 'compound', 'measurement', 'prediction', 'decision'], plannedReadModels: ['uncertainty-aware-pareto'], plannedCommands: ['campaign.rank', 'compound.promote'], emitsSelection: ['compound', 'decision'], requiredProvenance: ['objective version', 'assay context', 'prediction calibration', 'missing-evidence penalty'], dependsOnViews: ['design.objectives', 'campaigns.sar'], sourceLabel: 'Select campaign candidates' },
+
+    'synthesis.routes': { plannedInputs: ['compound', 'compound_form', 'synthesis_route', 'reaction'], plannedReadModels: ['route-options'], plannedCommands: ['route.request', 'route.review'], emitsSelection: ['synthesis_route', 'reaction'], requiredProvenance: ['precedent', 'provider and model version', 'chemist review'], dependsOnViews: ['design.builder'], sourceLabel: 'Select compound form' },
+    'synthesis.building-blocks': { plannedInputs: ['synthesis_route', 'building_block', 'dataset'], plannedReadModels: ['material-coverage'], plannedCommands: ['inventory.reserve'], emitsSelection: ['building_block'], requiredProvenance: ['inventory observation time', 'supplier source'], dependsOnViews: ['synthesis.routes'], sourceLabel: 'Select route' },
+    'synthesis.make': { plannedInputs: ['compound_form', 'synthesis_route', 'mission', 'batch', 'quality_release'], plannedReadModels: ['make-and-release-queue'], plannedCommands: ['make.request', 'batch.release'], emitsSelection: ['batch', 'sample'], requiredProvenance: ['route', 'actual yield', 'identity purity stereochemistry', 'release actor'], dependsOnViews: ['synthesis.routes', 'runs.missions'], sourceLabel: 'Select approved compound form' },
+
+    'experiments.design': { plannedInputs: ['hypothesis', 'assay', 'protocol', 'sample'], plannedReadModels: ['experiment-design'], plannedCommands: ['experiment.design', 'sample.allocate'], emitsSelection: ['experiment', 'protocol'], requiredProvenance: ['hypothesis', 'controls', 'replicate and acceptance plan'], dependsOnViews: ['programs.hypotheses', 'experiments.assays'], sourceLabel: 'Select hypothesis' },
+    'experiments.assays': { plannedInputs: ['assay', 'protocol', 'dataset'], plannedReadModels: ['assay-registry'], plannedCommands: ['assay.register', 'protocol.version'], emitsSelection: ['assay', 'protocol'], requiredProvenance: ['biological system', 'endpoint semantics', 'quality history'], dependsOnViews: ['knowledge.datasets'], sourceLabel: 'Select assay or protocol' },
+    'experiments.runs': { plannedInputs: ['experiment', 'protocol', 'sample', 'run'], plannedReadModels: ['experiment-execution'], plannedCommands: ['experiment.start', 'incident.record'], emitsSelection: ['run', 'sample'], requiredProvenance: ['released sample', 'protocol version', 'execution type'], dependsOnViews: ['experiments.design'], sourceLabel: 'Select experiment' },
+    'experiments.results': { plannedInputs: ['experiment', 'sample', 'assay', 'protocol', 'measurement'], plannedReadModels: ['measurement-review'], plannedCommands: ['result.ingest', 'evidence.promote'], emitsSelection: ['measurement', 'evidence'], requiredProvenance: ['batch and sample', 'units qualifier replicates QC', 'artifact'], dependsOnViews: ['experiments.runs', 'campaigns.sar'], sourceLabel: 'Select experiment results' },
+
+    'knowledge.search': { plannedInputs: ['program', 'dataset', 'claim', 'evidence', 'artifact'], plannedReadModels: ['cross-kind-search'], plannedCommands: ['investigation.save'], emitsSelection: ['dataset', 'claim', 'evidence'], requiredProvenance: ['match reason', 'source scope'], dependsOnViews: ['knowledge.entities'], sourceLabel: 'Select program scope or all programs' },
+    'knowledge.entities': { plannedInputs: ['program', 'dataset', 'artifact'], plannedReadModels: ['canonical-object-graph'], plannedCommands: ['entity.inspect'], emitsSelection: ['dataset', 'artifact'], requiredProvenance: ['object origin', 'relation assertion source'], dependsOnViews: ['knowledge.search'], sourceLabel: 'Select canonical entity' },
+    'knowledge.evidence': { plannedInputs: ['hypothesis', 'claim', 'evidence', 'measurement'], plannedReadModels: ['claim-evidence-graph'], plannedCommands: ['evidence.link', 'claim.supersede'], emitsSelection: ['claim', 'evidence'], requiredProvenance: ['method', 'artifact', 'confidence actor'], dependsOnViews: ['programs.hypotheses'], sourceLabel: 'Select claim or hypothesis' },
+    'knowledge.datasets': { plannedInputs: ['dataset', 'artifact', 'measurement'], plannedReadModels: ['dataset-lineage'], plannedCommands: ['dataset.register'], emitsSelection: ['dataset', 'artifact'], requiredProvenance: ['source observations', 'transform version', 'quality profile'], dependsOnViews: ['experiments.results'], sourceLabel: 'Select dataset' },
+
+    'runs.missions': { plannedInputs: ['mission', 'run', 'job'], plannedReadModels: ['mission-control'], plannedCommands: ['mission.create', 'mission.review'], emitsSelection: ['mission', 'run'], requiredProvenance: ['request actor', 'decision purpose'], dependsOnViews: ['runs.active'], sourceLabel: 'Select or create mission' },
+    'runs.active': { plannedInputs: ['mission', 'run', 'job', 'artifact'], plannedReadModels: ['active-jobs'], plannedCommands: ['job.list', 'job.cancel'], emitsSelection: ['job', 'artifact'], requiredProvenance: ['invocation', 'method version', 'runtime state'], dependsOnViews: ['runs.missions'], sourceLabel: 'Select mission or job' },
+    'runs.review': { plannedInputs: ['run', 'job', 'artifact', 'evidence'], plannedReadModels: ['scientific-review-queue'], plannedCommands: ['review.record'], emitsSelection: ['artifact', 'evidence'], requiredProvenance: ['method', 'caveat', 'review actor'], dependsOnViews: ['runs.active'], sourceLabel: 'Select review item' },
+    'runs.history': { plannedInputs: ['mission', 'run', 'job', 'artifact'], plannedReadModels: ['execution-history'], plannedCommands: ['job.list', 'job.get'], emitsSelection: ['run', 'job', 'artifact'], requiredProvenance: ['canonical input', 'method version', 'artifact hash'], dependsOnViews: ['runs.active'], sourceLabel: 'Select run or job' },
+};
+
+export function assertViewPlans(viewIds: readonly string[] = VIEWS.map(view => view.id)): void {
+    const missing = viewIds.filter(id => !VIEW_PLANS[id]);
+    const extra = Object.keys(VIEW_PLANS).filter(id => !viewIds.includes(id));
+    if (missing.length || extra.length) {
+        throw new Error(`Workspace plan mismatch: missing=${missing.join(',')} extra=${extra.join(',')}`);
+    }
+}
+
+assertViewPlans();

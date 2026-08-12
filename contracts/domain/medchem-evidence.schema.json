@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/medchem-evidence.schema.json",
+  "title": "Dirac medicinal chemistry identity and measurement evidence",
+  "description": "A designed molecule is not an assayed sample. This contract preserves the identity and quality chain from chemical form through released batch and sample to a contextual measurement.",
+  "oneOf": [
+    { "$ref": "#/$defs/compoundForm" },
+    { "$ref": "#/$defs/batch" },
+    { "$ref": "#/$defs/sample" },
+    { "$ref": "#/$defs/measurement" }
+  ],
+  "$defs": {
+    "ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "type": "string" },
+        "id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "compoundForm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id", "compound_ref", "stereochemistry", "form"],
+      "properties": {
+        "kind": { "const": "compound_form" },
+        "id": { "type": "string", "minLength": 1 },
+        "compound_ref": { "$ref": "#/$defs/ref" },
+        "stereochemistry": { "enum": ["assigned", "racemate", "mixture", "unknown"] },
+        "form": { "enum": ["free", "salt", "solvate", "co_crystal", "unknown"] },
+        "form_description": { "type": "string" }
+      }
+    },
+    "batch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id", "compound_form_ref", "actual_yield", "analytical_status"],
+      "properties": {
+        "kind": { "const": "batch" },
+        "id": { "type": "string", "minLength": 1 },
+        "compound_form_ref": { "$ref": "#/$defs/ref" },
+        "route_ref": { "$ref": "#/$defs/ref" },
+        "actual_yield": {
+          "type": "object",
+          "required": ["value", "unit"],
+          "properties": {
+            "value": { "type": "number", "minimum": 0 },
+            "unit": { "enum": ["mg", "g", "kg", "percent"] }
+          }
+        },
+        "identity_confirmed": { "type": "boolean" },
+        "purity_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "stereochemistry_confirmed": { "type": "boolean" },
+        "analytical_status": { "enum": ["pending", "passed", "failed", "deviation"] }
+      }
+    },
+    "sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id", "batch_ref", "release_ref"],
+      "properties": {
+        "kind": { "const": "sample" },
+        "id": { "type": "string", "minLength": 1 },
+        "batch_ref": { "$ref": "#/$defs/ref" },
+        "release_ref": { "$ref": "#/$defs/ref" },
+        "formulation_ref": { "$ref": "#/$defs/ref" },
+        "concentration": {
+          "type": "object",
+          "required": ["value", "unit"],
+          "properties": {
+            "value": { "type": "number", "exclusiveMinimum": 0 },
+            "unit": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id", "sample_ref", "assay_ref", "protocol_ref", "value", "unit", "qualifier", "qc_state", "observed_at"],
+      "properties": {
+        "kind": { "const": "measurement" },
+        "id": { "type": "string", "minLength": 1 },
+        "sample_ref": { "$ref": "#/$defs/ref" },
+        "assay_ref": { "$ref": "#/$defs/ref" },
+        "protocol_ref": { "$ref": "#/$defs/ref" },
+        "value": { "type": ["number", "null"] },
+        "unit": { "type": "string", "minLength": 1 },
+        "qualifier": { "enum": ["equal", "less_than", "greater_than", "not_detected", "not_tested"] },
+        "replicate_group": { "type": "string" },
+        "qc_state": { "enum": ["passed", "failed", "excluded", "pending"] },
+        "exclusion_reason": { "type": "string" },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "provenance_artifact_ref": { "$ref": "#/$defs/ref" }
+      }
+    }
+  }
+}

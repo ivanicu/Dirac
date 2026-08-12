@@ -1,3 +1,4 @@
+import { OBJECT_KINDS, type ObjectKind } from '../generated/commands';
 import type { ObjectRef } from '../domain/object-ref';
 import { sameObject } from '../domain/object-ref';
 
@@ -69,22 +70,34 @@ export class ScientificContextStore {
         put('target', this.state.targetRef);
         put('campaign', this.state.campaignRef);
         put('series', this.state.seriesRef);
+        for (const ref of this.state.selectedObjects) p.append('selected', `${ref.kind}:${ref.id}`);
+        for (const ref of this.state.activeHypotheses) p.append('hypothesis', `${ref.kind}:${ref.id}`);
         return p;
     }
 
     restore(params: URLSearchParams): number {
-        const parse = (key: string): ObjectRef | undefined => {
-            const value = params.get(key);
+        const knownKinds = new Set<string>(OBJECT_KINDS);
+        const parseValue = (value: string | null, expected?: ObjectKind): ObjectRef | undefined => {
             if (!value || !value.includes(':')) return undefined;
             const [kind, ...id] = value.split(':');
-            return { kind: kind as ObjectRef['kind'], id: id.join(':') };
+            const objectId = id.join(':');
+            if (!knownKinds.has(kind) || !objectId || (expected && kind !== expected)) return undefined;
+            return { kind: kind as ObjectRef['kind'], id: objectId };
         };
+        const parse = (key: string, expected?: ObjectKind) => parseValue(params.get(key), expected);
+        const selectedObjects = params.getAll('selected')
+            .map(value => parseValue(value)).filter((value): value is ObjectRef => !!value);
+        const activeHypotheses = params.getAll('hypothesis')
+            .map(value => parseValue(value, 'hypothesis'))
+            .filter((value): value is ObjectRef<'hypothesis'> => !!value);
         return this.commit({
-            programRef: parse('program') as ObjectRef<'program'> | undefined,
-            complexRef: parse('complex') as ObjectRef<'complex'> | undefined,
-            focusedObject: parse('focus'), targetRef: parse('target') as ObjectRef<'target'>,
-            campaignRef: parse('campaign') as ObjectRef<'campaign'>,
-            seriesRef: parse('series') as ObjectRef<'series'>, origin: 'restore',
+            programRef: parse('program', 'program') as ObjectRef<'program'> | undefined,
+            complexRef: parse('complex', 'complex') as ObjectRef<'complex'> | undefined,
+            focusedObject: parse('focus'),
+            targetRef: parse('target', 'target') as ObjectRef<'target'> | undefined,
+            campaignRef: parse('campaign', 'campaign') as ObjectRef<'campaign'> | undefined,
+            seriesRef: parse('series', 'series') as ObjectRef<'series'> | undefined,
+            selectedObjects, activeHypotheses, origin: 'restore',
         });
     }
 
