@@ -1,0 +1,99 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Dirac · V2 host</title>
+<link rel="stylesheet" href="./design/tokens.css">
+<style>
+/* Deliberately token-driven: this page must not invent a second palette. Where a
+   token is missing the fallback is stated inline rather than silently defaulting,
+   so a missing token shows up as an obviously wrong colour instead of as a
+   slightly-off one nobody notices. */
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg,#0a0e14);color:var(--text,#e8edf5);
+  font:13px/1.55 ui-monospace,'SF Mono',Menlo,monospace;padding:26px 30px 60px}
+h1{font-size:16px;letter-spacing:.16em;text-transform:uppercase;margin:0 0 3px}
+h2{font-size:12px;letter-spacing:.14em;text-transform:uppercase;margin:30px 0 9px;
+  color:var(--text-2,#9aa5b8);border-bottom:1px solid var(--border,#232c3a);
+  padding-bottom:6px}
+.sub{color:var(--text-3,#6b7689);font-size:11.5px;margin:0 0 4px}
+.gen{display:inline-flex;align-items:baseline;gap:9px;margin:14px 0 2px}
+.genbig{font-size:34px;letter-spacing:.06em;color:var(--accent,#7dd3c0);
+  text-shadow:0 0 18px color-mix(in oklab,var(--accent,#7dd3c0) 40%,transparent)}
+.genwhy{color:var(--text-3,#6b7689);font-size:11.5px;max-width:74ch}
+table{border-collapse:collapse;width:100%;font-size:11.5px}
+th{text-align:left;font-weight:400;color:var(--text-3,#6b7689);padding:4px 10px 4px 0;
+  letter-spacing:.06em}
+td{padding:3px 10px 3px 0;vertical-align:top;border-top:1px solid var(--border,#232c3a)}
+td.k{color:var(--text-2,#9aa5b8);white-space:nowrap}
+td.v{color:var(--text,#e8edf5)}
+td.n{color:var(--text-3,#6b7689)}
+.up{color:var(--ok,#7dc9aa)}
+.down{color:var(--danger,#e1a18e)}
+.wait{color:var(--warn,#d4a574)}
+a{color:var(--accent,#7dd3c0);text-decoration:none;border-bottom:1px solid transparent}
+a:hover{border-bottom-color:currentColor}
+code{color:var(--text-2,#9aa5b8)}
+.cap{display:grid;grid-template-columns:15px 1fr;gap:2px 8px;font-size:11.5px;
+  margin:2px 0 0}
+.cap b{font-weight:400;color:var(--text,#e8edf5)}
+.cap i{font-style:normal}
+.cap .p{color:var(--text-3,#6b7689)}
+.delta td:first-child{color:var(--danger,#e1a18e)}
+.delta td:nth-child(2){color:var(--ok,#7dc9aa)}
+footer{margin-top:34px;color:var(--text-3,#6b7689);font-size:11px;max-width:92ch}
+</style>
+
+<h1>Dirac · host</h1>
+<p class="sub">This box. The half of the architecture a static site cannot run.</p>
+
+<div class="gen"><span class="genbig" id="gen">…</span>
+  <span class="genwhy" id="genwhy">reading capabilities from the service…</span></div>
+<div class="cap" id="caps"></div>
+
+<h2>Services</h2>
+<table id="svc"><tbody></tbody></table>
+
+<h2>Right now</h2>
+<table id="live"><tbody></tbody></table>
+
+<h2>Reach it</h2>
+<table id="urls"><tbody></tbody></table>
+
+<h2>Why V2 and not V1</h2>
+<table class="delta"><thead><tr><th>V1 — what it did</th><th>V2 — what it does</th><th>the evidence that forced the change</th></tr></thead>
+<tbody>
+<tr><td>a long compute was invisible until it returned</td>
+    <td>every compute is a row in <code>app.job</code>, queued → running → terminal, with the state machine enforced by CHECK constraints</td>
+    <td>the table shipped in migration 007 and had <b>0 rows</b> for months; a seam with no writer reads as finished</td></tr>
+<tr><td>two identical requests both computed</td>
+    <td>the second WAITS on <code>job_one_inflight</code> and reads the winner's result</td>
+    <td>measured: A 2.85 s <i>computed</i>, B 2.62 s <i>db</i> after waiting 2.563 s — <b>one SCF instead of two</b></td></tr>
+<tr><td>unbounded concurrency: five distinct SCFs all started</td>
+    <td>2 slots, derived from pyscf's 4000 MB per-SCF planning budget against the 8 GB the unit reserves; classical fields stay ungated at ~0.1 s</td>
+    <td>six fired together → gate peak 6, <b>running_peak 2</b>, all succeeded, wall 2.0 s in three waves</td></tr>
+<tr><td>cache keyed on the PRODUCER — the whole file's hash</td>
+    <td>keyed on METHOD currency, per compute unit, and the unit hashes the CONSTANTS its functions read</td>
+    <td>1 of 19 rows servable while <code>/health</code> honestly said the cache was on; then 22 more served with stale GEOMETRY because a tuned constant moved no version</td></tr>
+<tr><td>a restart left rows <i>running</i> forever</td>
+    <td>reaped on two independent criteria: the worker's pid is gone, OR the row passed a 1800 s ceiling</td>
+    <td>a HOMO row sat <b>running for 10809 s</b> while <code>v_job_live</code> reported it as live work</td></tr>
+<tr><td>meta shrank on a cache hit; rows vanished</td>
+    <td>both response paths go through <code>normalize_meta</code> — identical key SETS, values differ</td>
+    <td>"Net charge" and "Compute time" disappeared when the answer came from the database, so the faster path looked like the poorer one</td></tr>
+<tr><td>a refusal was free text; three vocabularies disagreed</td>
+    <td>one <code>contracts/errors.json</code> → Python, generated TS, and the DB enum, with the subset relation asserted at import</td>
+    <td>the ops router could not express 404/503 and hand-rolled its own envelope — that is how three vocabularies happened the first time</td></tr>
+<tr><td>hand-started processes, PPID 1, no supervision</td>
+    <td><code>systemctl --user</code> with linger; restart proven by <code>kill -9</code> → new pid in 8 s</td>
+    <td>"backend offline" in the UI was the only symptom of any of them dying</td></tr>
+<tr><td>nothing could see the cache but psql</td>
+    <td>a read-only <code>/admin/snapshot</code> and this console</td>
+    <td>the cold cache was knowable in principle for a full day and nobody looked</td></tr>
+</tbody></table>
+
+<footer id="foot">
+No authentication: shell access to this box is the boundary. A <code>Host</code>/<code>Origin</code>
+allowlist blocks DNS rebinding, but anyone who can reach this LAN can submit compute — stated,
+not discovered.
+</footer>
+
+<script src="./host.js"></script>
