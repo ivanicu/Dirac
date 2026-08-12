@@ -86,7 +86,12 @@ printf '%s\n\n' "${DIM}python $(python3 --version 2>&1 || echo 'MISSING')${OFF}"
 # 1. types: the whole library compiles.
 wanted tsc     && run_gate 'gate-1-typecheck'  node_modules/.bin/tsc --noEmit -p tsconfig.json
 # 2. build: the dirac app actually bundles in production mode.
-wanted build   && run_gate 'gate-2-build'      node ./scripts/build.mjs -a dirac --prd
+# BUILDS EVERYTHING, not just the app that ships. Measured 2026-08-11: `-a dirac` is
+# 0.79 s and `-a -e` is 5.34 s, and that 4.5 s bought the discovery that `npm run build`
+# had been failing for THIRTY HOURS — a vendored demo's directory was renamed and this
+# list still pointed at the old path. A gate named `build` that cannot see a broken build
+# is scoped narrower than its name, and the scope was invisible from the gate's own output.
+wanted build   && run_gate 'gate-2-build'      node ./scripts/build.mjs -a -e --prd
 # 3. palette: Ivan's mid-saturation ruling, enforced as OKLCH chroma.
 wanted palette && run_gate 'gate-3-palette'    python3 design/check_palette.py
 # 4. css: brace balance in the lab's inline <style> (the a93c175 incident).

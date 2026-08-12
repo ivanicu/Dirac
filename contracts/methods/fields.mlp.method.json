@@ -168,8 +168,60 @@
                 }
               }
             },
-            "contour_closes_in_box": {
-              "type": "boolean"
+            "box": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "How the SERVER chose the box, which is a decision a client must be able to read rather than infer. These were undeclared until now and the frontend consumed them anyway, out of a flat `meta` dict that no schema governed \u2014 so a renderer depended on facts the contract did not promise, which is the drift this whole chain exists to remove.",
+              "properties": {
+                "iso_fixed": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "The isovalue actually drawn."
+                },
+                "iso_sized_for": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "The isovalue the box was GROWN to close. Separate from iso_fixed because they can disagree: a box sized to close a contour at one level is not evidence about another, and conflating them is how a clipped surface reads as a physical boundary."
+                },
+                "contour_closes_in_box": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "Whether the drawn isosurface is closed inside the grid. False means the surface is CLIPPED by the box, and a clipped lobe looks exactly like a small one."
+                },
+                "pad_angstrom": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "capped": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "The grid hit its point ceiling and was coarsened."
+                },
+                "wall_seconds": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Wall time the grid evaluation took."
+                }
+              }
+            },
+            "single_signed": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "True when every value has the same sign, so no opposite-sign lobe exists. A renderer needs it to pick a one-sided colour ramp \u2014 a diverging ramp on a single-signed field spends half its range on values that cannot occur, and the map reads as though the missing half were merely small."
             }
           }
         },
@@ -181,6 +233,43 @@
         },
         "single_signed": {
           "type": "boolean"
+        },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "WHICH MODEL produced the numbers, in machine-readable form. A caveat in prose travels as a warning; the model IDENTITY travels here, because a client comparing two fields must be able to establish they came from the same model without parsing English.",
+          "properties": {
+            "charge_model": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "logp_model": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "net_charge": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "total_logp": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "sigma_hole_representable": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          }
         }
       }
     },

@@ -88,7 +88,7 @@
             },
             "dimensionality": {
               "const": 3,
-              "description": "3 ONLY. A 2D structure must not reach a 3D physics method; molecule.embed is the explicit step that produces 3D, and an implicit SMILES→3D would report one method having run when two did."
+              "description": "3 ONLY. A 2D structure must not reach a 3D physics method; molecule.embed is the explicit step that produces 3D, and an implicit SMILES\u21923D would report one method having run when two did."
             },
             "coordinate_space": {
               "enum": [
@@ -188,5 +188,17 @@
     "sdk": true,
     "cli": true,
     "mcp": "curated"
+  },
+  "invocation": {
+    "handler": "handlers:embed_handler",
+    "estimate": "handlers:embed_estimate",
+    "artifacts": [
+      {
+        "role": "molecule.molfile",
+        "media_type": "chemical/x-mdl-molfile",
+        "required": true,
+        "typical_bytes": 2600
+      }
+    ]
   }
 }

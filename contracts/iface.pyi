@@ -15,7 +15,7 @@ CacheSource = Literal['browser', 'memory', 'db', 'computed']       # browser nev
 ErrorCode = Literal['PARSE', 'UNCONVERGED', 'UNPARAMETERIZED', 'BUDGET',
                     'OPEN_SHELL_SPIN_REQUIRED', 'UNSUPPORTED', 'TOO_LARGE',
                     'BAD_HOST', 'CANCELLED', 'INTERNAL', 'NOT_FOUND',
-                    'DB_UNAVAILABLE']
+                    'INVALID_PARAMETERS', 'DB_UNAVAILABLE']
 JobState = Literal['queued', 'running', 'done', 'failed', 'cancelled']  # seam: app.job (PLANNED)
 
 class EmbedMeta(TypedDict):

@@ -283,7 +283,11 @@ class MethodCatalog:
         if errors:
             first = errors[0]
             pointer = '/' + '/'.join(str(p) for p in first.absolute_path)
-            raise failures.DiracParseFailure(
+            # INVALID_PARAMETERS, not PARSE. The molecule may be perfectly readable and
+            # one named field wrong — which is a different remedy and, until the browser
+            # showed a chemist "This molecule could not be parsed" for an unexpected
+            # `basis`, a distinction this vocabulary did not make.
+            raise failures.DiracInvalidParameters(
                 f'{method_id}: {pointer if first.absolute_path else "(root)"} '
                 f'{first.message}',
                 details={'method_id': method_id,
@@ -296,6 +300,48 @@ class MethodCatalog:
                          'violation_count': len(errors)},
                 hint={'input_schema_url': f'/v2/methods/{method_id}'})
         return payload
+
+    def validate_output(self, method_id: str, result: dict) -> None:
+        """Check what a HANDLER produced against the declared output schema.
+
+        THE ASYMMETRY THIS REMOVES: inputs have been validated since PR-02 and outputs
+        never were, so "the descriptor is the authority" was half a claim. A handler could
+        return an undeclared key, or omit a required one, and the only thing that noticed
+        was a frontend rendering `undefined` — which looks like a field with no extrema
+        rather than a contract violation.
+
+        RAISES DiracInternal, deliberately: an output that does not match the contract is
+        OUR fault, never the caller's, and the one direction that must never happen is
+        reporting our defect as a problem with their molecule. The message names the
+        pointer, so the fix is a line number rather than a search.
+
+        Note this runs on the SUCCESS path of every invocation. Cost measured on the
+        largest current output: ~0.4 ms. A check that only runs in tests is a check that
+        does not constrain production.
+        """
+        schema = self.get(method_id).output_schema
+        if not schema:
+            return
+        try:
+            from jsonschema import Draft202012Validator
+        except ImportError:
+            raise failures.DiracInternal(
+                'jsonschema is not importable, so the output contract cannot be '
+                'enforced. Refusing rather than shipping an unvalidated result: an '
+                'unchecked payload that reports "ok" is the shape of a check that '
+                'cannot fail.')
+        errors = sorted(Draft202012Validator(schema).iter_errors(result),
+                        key=lambda e: list(e.absolute_path))
+        if errors:
+            first = errors[0]
+            pointer = '/' + '/'.join(str(p) for p in first.absolute_path)
+            raise failures.DiracInternal(
+                f'{method_id} produced output its own descriptor forbids: '
+                f'{pointer if first.absolute_path else "(root)"} {first.message}. '
+                f'Either the handler is wrong or the contract is out of date — and until '
+                f'one of them is fixed, a client planning from the descriptor is planning '
+                f'against something that does not exist. '
+                f'({len(errors)} violation(s) total)')
 
     # ── description, the thing an agent reads before it calls ────────────────
     def describe(self, method_id: str) -> dict:

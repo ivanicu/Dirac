@@ -63,6 +63,13 @@ class InvocationContext:
     version: str | None = None
     budget_seconds: float | None = None
     job_id: str | None = None
+    # THE CONTRACT ITSELF, handed to the handler. Not a convenience: without it a handler
+    # has to hard-code facts the descriptor already states — and the first version of
+    # field_handler did exactly that, carrying a `_UNITS` dict that disagreed with the
+    # `native_units` const in four of six descriptors. Nobody noticed until output
+    # validation landed, because six transports shared the one wrong dict and therefore
+    # agreed perfectly. A handler that READS the contract cannot drift from it.
+    spec: Any = None
     # A handler reports progress by calling this. Default is a sink, so a handler
     # never has to check whether anyone is listening.
     on_progress: Callable[[str, float], None] = lambda stage, frac: None
@@ -214,7 +221,7 @@ class InvocationService:
 
             ctx = InvocationContext(
                 method_id=method_id, version=spec.version, budget_seconds=budget,
-                job_id=job_id,
+                job_id=job_id, spec=spec,
                 deadline=(t0 + budget) if budget else None)
             out = handler(payload, ctx)
             if not isinstance(out, HandlerResult):
@@ -224,6 +231,10 @@ class InvocationService:
                     f'service guess which key is the result and which is provenance, '
                     f'and every transport would guess differently.')
             self._require_declared_artifacts(spec, out)
+            # THE CONTRACT, ENFORCED IN BOTH DIRECTIONS. Until now only inputs were
+            # validated, so a handler could quietly return a shape no client was told to
+            # expect — and the only symptom was a renderer showing `undefined`.
+            self.catalog.validate_output(method_id, out.result)
             env = self._envelope(spec, out, t0, cache=out.cache,
                                  inline_max=inline_max, request_id=request_id,
                                  job_id=job_id)

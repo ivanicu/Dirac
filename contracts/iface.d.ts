@@ -17,6 +17,7 @@ export type ErrorCode =
     | 'PARSE' | 'UNCONVERGED' | 'UNPARAMETERIZED' | 'BUDGET'
     | 'OPEN_SHELL_SPIN_REQUIRED' | 'UNSUPPORTED' | 'TOO_LARGE'
     | 'BAD_HOST' | 'CANCELLED' | 'INTERNAL' | 'NOT_FOUND'
+    | 'INVALID_PARAMETERS'
     | 'DB_UNAVAILABLE';
 
 /** Discriminated union — a molfile alone is lossy (frontend review, blocker 3). */

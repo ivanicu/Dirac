@@ -388,43 +388,57 @@ if (extraInPyi.length) {
         + 'extractor; check backend/field_server.py by hand before trusting either verdict');
 }
 
-// the frontend's FieldMeta interface (facets/field-wells/index.ts) — READ
-// ONLY. This script never edits src/, but the whole point of separating this
-// check is to attribute drift correctly, so it still has to look.
-const frontendPath = 'src/app.frontend.facets.molstar-rdkit.editable/facets/field-wells/index.ts';
-const frontendFieldMetaKeys = new Set();
-let frontendReadable = true;
-try {
-    const frontendText = fs.readFileSync(path.join(ROOT, frontendPath), 'utf8');
-    const feM = /interface FieldMeta\s*\{([\s\S]*?)\n\}/.exec(frontendText);
-    if (!feM) {
-        frontendReadable = false;
-        frontendFail(`${frontendPath}: could not locate \`interface FieldMeta { ... }\` `
-            + '— cannot check backend-vs-frontend drift at all');
-    } else {
-        for (const m of feM[1].matchAll(/^\s*(?:\/\*\*[\s\S]*?\*\/\s*)?(\w+)\??\s*:/gm)) {
-            frontendFieldMetaKeys.add(m[1]);
+// ── 3b · the frontend must not RE-GROW a hand-written mirror ─────────────────
+//
+// REPLACES a key-by-key comparison of a 26-field `FieldMeta` interface against the backend.
+// That interface is GONE: the facet reads the canonical output tree, typed by
+// contracts/generated/typescript/methods.ts, so there is ONE home and nothing left to
+// compare. The old check then reported "could not locate interface FieldMeta" and exited 2
+// — correct from its own point of view and useless, because its subject had been deleted on
+// purpose. A check whose subject is intentionally absent must be replaced, not silenced.
+//
+// PROXY LEDGER. PROPERTY: no file in src/ maintains a second, hand-written description of
+// the backend's output shape. PROXY: a declared type/interface in src/ whose body contains
+// three or more of the legacy flat key names. IMPLICATION: proxy ⇒ property FAILS is sound
+// (a hit IS a mirror); property ⇒ proxy does NOT hold — a mirror spelled with different key
+// names passes. SAFE SIDE: conviction only. A hit fails; a clean scan is reported as
+// UNVERIFIED-clean, because an absence cannot be established by grep.
+{
+    const LEGACY_KEYS = ['scf_energy_ha', 'iso_sized_for', 'frontier_caveat',
+        'sigma_hole_representable', 'grid_capped', 'pad_used_angstrom', 'wall_max',
+        'cube_predicted_seconds', 'n_sources_used', 'waters_excluded'];
+    const offenders = [];
+    const walk = (dir) => {
+        let entries;
+        try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+        for (const e of entries) {
+            const full = path.join(dir, e.name);
+            if (e.isDirectory()) { if (e.name !== 'node_modules') walk(full); continue; }
+            if (!e.name.endsWith('.ts')) continue;
+            let text;
+            try { text = fs.readFileSync(full, 'utf8'); } catch { continue; }
+            // Only inside a TYPE DECLARATION. Reading `view.data.field.box.wall_seconds`
+            // is a USE of the backend's shape and is fine; DECLARING that shape a second
+            // time is the defect.
+            for (const m of text.matchAll(/(?:interface|type)\s+\w+[^{]*\{([^}]*)\}/g)) {
+                const hits = LEGACY_KEYS.filter(k => m[1].includes(k));
+                if (hits.length >= 3) {
+                    offenders.push(`${path.relative(ROOT, full)} declares ${hits.length} `
+                        + `legacy flat keys (${hits.slice(0, 4).join(', ')}…)`);
+                }
+            }
         }
-    }
-} catch (e) {
-    frontendReadable = false;
-    frontendFail(`could not read ${frontendPath}: ${e.message}`);
-}
-
-if (frontendReadable) {
-    const missingFromFrontend = setDiff(backendFieldMetaKeys, frontendFieldMetaKeys);
-    if (missingFromFrontend.length) {
-        frontendFail('BACKEND-VS-FRONTEND DRIFT (reported; not owned by this gate — '
-            + `src/ is out of scope here) — ${frontendPath}'s FieldMeta interface is `
-            + `missing ${missingFromFrontend.length} key(s) the backend emits: `
-            + `${JSON.stringify(missingFromFrontend)}`);
+    };
+    walk(path.join(ROOT, 'src'));
+    if (offenders.length) {
+        frontendFail('a hand-written mirror of the backend output shape has re-grown in '
+            + 'src/: ' + offenders.join('; ') + '. The canonical types are generated into '
+            + 'contracts/generated/typescript/methods.ts — import them, or the drift this '
+            + 'gate used to police returns under a new name.');
     } else {
-        ok(`${frontendPath} FieldMeta carries every key backend/field_server.py emits`);
-    }
-    const extraInFrontend = setDiff(frontendFieldMetaKeys, backendFieldMetaKeys);
-    if (extraInFrontend.length) {
-        note(`${frontendPath} FieldMeta declares ${JSON.stringify(extraInFrontend)}, which the `
-            + 'backend extraction did not find — check by hand before trusting either side');
+        ok('no declared type in src/ mirrors the legacy flat meta shape — conviction-only: '
+            + 'a hit would be sound proof of a mirror, a clean scan is UNVERIFIED-clean '
+            + 'because an absence cannot be grepped for');
     }
 }
 
@@ -542,11 +556,26 @@ if (process.argv.includes('--redproof')) {
             expect: /FIELD_META_SCHEMA does not declare.*single_signed/s,
         },
         {
-            name: 'a key removed from the FRONTEND FieldMeta (exit 2 path)',
+            // REPLACES a case that mutated the frontend's `FieldMeta` interface. That
+            // interface was deleted when the facet moved onto the canonical tree, so the
+            // mutation matched nothing — and withMutation refused to return a verdict
+            // rather than testing an unmodified file and reporting its green as proof the
+            // check cannot convict. That refusal is the guard working; this is the case
+            // that replaces it, aimed at what the check now actually protects.
+            name: 'a hand-written mirror re-grown in src/ (exit 2 path)',
             file: path.join(tmp,
                 'src/app.frontend.facets.molstar-rdkit.editable/facets/field-wells/index.ts'),
-            transform: replacingOnce('    method?: string;', ''),
-            expect: /BACKEND-VS-FRONTEND DRIFT/,
+            transform: (text) => text + `
+// injected by the red proof: a second home for the backend's output shape, which is
+// exactly what check 3b exists to catch.
+interface ReGrownFieldMeta {
+    scf_energy_ha?: number;
+    iso_sized_for?: number;
+    frontier_caveat?: string;
+    grid_capped?: boolean;
+}
+`,
+            expect: /mirror of the backend output shape has re-grown/,
             code: 2,
         },
     ];

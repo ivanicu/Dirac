@@ -353,6 +353,14 @@ def err(code: str, message: str, *, hint: str | None = None,
 # the live client never had.
 _V1_REASON_FOR_CODE: dict[str, str] = {
     'PARSE': 'unsupported',
+    # INVALID_PARAMETERS, added 2026-08-11, buckets to 'unsupported' — and the loss is
+    # worth naming because it is the whole case for v2. On the v1 surface a chemist reads
+    # "unsupported" whether their molecule cannot be read, their basis does not cover
+    # iodine, or they sent one parameter this method does not have. Three different next
+    # actions, one word. This entry exists because envelope.py ASSERTS at import that every
+    # declared code has a bucket — and that assertion is what refused to let the daemon
+    # start when the code was added without one. Loud, at import, before a single request.
+    'INVALID_PARAMETERS': 'unsupported',
     'UNCONVERGED': 'unsupported',
     'UNPARAMETERIZED': 'unsupported',
     'BUDGET': 'budget',

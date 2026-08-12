@@ -132,7 +132,13 @@ def normalise_core(env: dict) -> dict:
         'scf_method': wf.get('method'),
         'basis': wf.get('basis'),
         'n_basis_functions': wf.get('n_basis_functions'),
-        'energy_hartree': r(wf.get('energy_hartree'), 9),
+        # The DECLARED name is scf_energy_hartree. `energy_hartree` is accepted as a
+        # fallback and reported distinctly, because a leg still using the old key means the
+        # RUNNING SERVICE predates this checkout — which is exactly what this test caught
+        # the first time it fired: the daemon had not been restarted, so v2 answered from
+        # an older handler and an older catalog while the in-process leg used the new one.
+        'energy_hartree': r(wf.get('scf_energy_hartree'), 9),
+        'energy_key_legacy': 'energy_hartree' in wf or None,
         'homo_ev': r(wf.get('homo_ev'), 9),
         'lumo_ev': r(wf.get('lumo_ev'), 9),
         'n_atoms': ((env.get('meta') or {}).get('provenance') or {}).get('n_atoms'),
@@ -166,6 +172,9 @@ def normalise_http(body: dict) -> dict:
         'scf_method': m.get('method'),
         'basis': m.get('basis'),
         'n_basis_functions': m.get('nbasis'),
+        # Set on BOTH reducers or the field itself becomes a difference — which it did the
+        # moment I added it to one of them, and the diff was right to say so.
+        'energy_key_legacy': None,
         'energy_hartree': round(m['scf_energy_ha'], 9) if m.get('scf_energy_ha') else None,
         'homo_ev': round(m['homo_ev'], 9) if m.get('homo_ev') is not None else None,
         'lumo_ev': round(m['lumo_ev'], 9) if m.get('lumo_ev') is not None else None,

@@ -138,6 +138,30 @@ def _qm_unit(kind: str, quantity: str, units: str) -> dict:
 
 
 UNITS.update({
+    # molecule.embed became EXECUTABLE on 2026-08-11, and an executable method whose
+    # version is null cannot answer "which source produced this conformer" — which is the
+    # whole question, because ETKDG with a different seed or a different MMFF pass gives a
+    # different geometry and therefore a different field. Found by composing the two
+    # methods and seeing `embed version None · field version 8422824f0c93`: half a
+    # provenance chain is not a provenance chain.
+    'molecule.embed': {
+        'fns': ['embed_molecule'],
+        # The seed is a PARAMETER, not a constant, so it is not listed. What is listed is
+        # nothing — embed_molecule holds its own numbers inline today, and stating that
+        # honestly beats listing a constant that does not exist.
+        'consts': [],
+        'exec_class': 'interactive',
+        'in_schema': {'type': 'object',
+                      'properties': {'smiles': {'type': 'string'},
+                                     'molfile': {'type': 'string'},
+                                     'seed': {'type': 'integer'}}},
+        'out_schema': {'type': 'object', 'required': ['molfile'],
+                       'properties': {'molfile': {'type': 'string',
+                                                  'format': 'mdl-molfile-3d'}}},
+        'capabilities': {'method': 'ETKDG + MMFF94',
+                         'refuses': ['unparseable_smiles', 'embedding_failed'],
+                         'deterministic_given_seed': True},
+    },
     'fields.qm.homo': _qm_unit('homo', 'homo_amplitude', 'amplitude'),
     'fields.qm.lumo': _qm_unit('lumo', 'lumo_amplitude', 'amplitude'),
     'fields.qm.density': _qm_unit('density', 'electron_density', 'e/Bohr^3'),

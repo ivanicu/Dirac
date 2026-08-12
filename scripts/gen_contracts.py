@@ -167,8 +167,97 @@ def render_python(descriptors: list[dict]) -> str:
     return '\n'.join(lines)
 
 
+def ts_type(schema: dict, indent: int = 0) -> str:
+    """A JSON Schema fragment as a TypeScript type. Enough of the spec, honestly bounded.
+
+    WHY GENERATE INSTEAD OF HAND-WRITING: the frontend carried a 26-field `FieldMeta`
+    interface that a gate had to police against the backend key by key, because the type
+    and the truth lived in two places. A generated type cannot drift — the drift check for
+    it is `--check`, which fails when the file is stale, and that is one comparison rather
+    than one per key.
+
+    WHAT IS NOT SUPPORTED, stated rather than silently mishandled: $ref, allOf/anyOf/oneOf
+    beyond a nullable type union, and pattern properties. None appear in these descriptors;
+    if one is added, this raises rather than emitting `any` — an `any` here would quietly
+    delete the type safety the generation exists to provide.
+    """
+    pad = '    ' * indent
+    for unsupported in ('$ref', 'allOf', 'oneOf'):
+        if unsupported in schema:
+            raise SystemExit(f'gen_contracts: {unsupported} in an output schema is not '
+                             f'supported by the TypeScript emitter. Emitting `any` would '
+                             f'silently remove the type safety this generation exists for '
+                             f'— extend the emitter instead.')
+    if 'const' in schema:
+        v = schema['const']
+        return repr(v).replace("'", "'") if isinstance(v, str) else str(v).lower()
+    if 'enum' in schema:
+        return ' | '.join(f"'{v}'" if isinstance(v, str) else str(v).lower()
+                          for v in schema['enum'])
+    t = schema.get('type')
+    if isinstance(t, list):
+        return ' | '.join(ts_type({**schema, 'type': one}, indent) for one in t)
+    if t == 'null':
+        return 'null'
+    if t in ('number', 'integer'):
+        return 'number'
+    if t == 'string':
+        return 'string'
+    if t == 'boolean':
+        return 'boolean'
+    if t == 'array':
+        return f'Array<{ts_type(schema.get("items") or {}, indent)}>'
+    if t == 'object':
+        props = schema.get('properties') or {}
+        if not props:
+            return 'Record<string, unknown>'
+        required = set(schema.get('required') or [])
+        out = ['{']
+        for k, v in props.items():
+            opt = '' if k in required else '?'
+            desc = (v.get('description') or '').strip().replace('*/', '* /')
+            if desc:
+                out.append(f'{pad}    /** {desc[:220]} */')
+            out.append(f'{pad}    {k}{opt}: {ts_type(v, indent + 1)};')
+        out.append(pad + '}')
+        return '\n'.join(out)
+    return 'unknown'
+
+
 def render_typescript(descriptors: list[dict]) -> str:
     lines = ['/** ' + BANNER + ' */', '']
+    lines.append('''/**
+ * The v2 envelope, generated alongside the per-method output types.
+ *
+ * Hand-writing this in the frontend is how a renderer ends up reading keys the contract
+ * does not promise: the previous flat `FieldMeta` carried 26 fields, a gate compared it to
+ * the backend key by key, and it still drifted twice in one day.
+ */
+export type DiracEnvelope<TData = unknown> = {
+    ok: boolean;
+    data?: TData;
+    artifacts?: Array<{
+        id: string | null; sha256: string; role: string; media_type: string;
+        size_bytes: number; encoding: string; url: string; metadata_url?: string;
+        inline?: boolean; inline_base64?: string; method_version?: string | null;
+        synthesised_by?: string;
+    }>;
+    warnings?: Array<{ code: string; message: string; affects?: string[] }>;
+    error?: {
+        code: string; message: string; user_message?: string; retryable?: boolean;
+        caller_action?: string; details?: Record<string, unknown>;
+        hint?: Record<string, unknown>;
+    };
+    meta?: {
+        envelope?: number; method_id?: string; version?: string | null; cache?: string;
+        seconds?: number; transport?: string; job_id?: string | null;
+        parameters_used?: Record<string, unknown>;
+        toolkits?: Record<string, string>;
+        provenance?: Record<string, unknown>;
+        [k: string]: unknown;
+    };
+};
+''')
     ids = [d['method_id'] for d in descriptors]
     lines.append('export type MethodId =\n'
                  + '\n'.join(f"    | '{i}'" for i in ids) + ';')
@@ -178,6 +267,12 @@ def render_typescript(descriptors: list[dict]) -> str:
         name = ''.join(p.capitalize() for p in mid.replace('.', ' ').split())
         params = ((d['input']['schema'].get('properties') or {})
                   .get('parameters', {}).get('properties') or {})
+        out_schema = (d.get('output') or {}).get('schema') or {}
+        if out_schema.get('properties'):
+            lines.append(f'/** {mid} output — generated from its declared output schema. '
+                         f'The renderer reads THIS, not a hand-kept mirror of it. */')
+            lines.append(f'export type {name}Output = ' + ts_type(out_schema) + ';')
+            lines.append('')
         lines.append(f'/** {mid} — {d["summary"]} */')
         if params:
             lines.append(f'export interface {name}Parameters {{')

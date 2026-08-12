@@ -161,14 +161,41 @@ def field_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
     grid = parse_cube_header(cube)
     vmin, vmax = cube_extrema(cube)
 
+    # EVERY DECLARED KEY, populated from what the science already computed. Written the
+    # other way round first — the handler returned four facts and the frontend read
+    # twenty-one out of an unschema'd `meta` dict — which meant a renderer depended on
+    # facts the contract never promised. The output schema now declares them and
+    # catalog.validate_output enforces it, so this block cannot silently shrink.
+    box = {k: v for k, v in (
+        ('iso_fixed', meta.get('iso_fixed')),
+        ('iso_sized_for', meta.get('iso_sized_for')),
+        ('contour_closes_in_box', meta.get('contour_closes_in_box')),
+        ('pad_angstrom', meta.get('pad_used_angstrom')),
+        ('capped', meta.get('grid_capped')),
+        ('wall_seconds', meta.get('wall_max')),
+    ) if v is not None}
+    model = {k: v for k, v in (
+        ('charge_model', meta.get('charges') if kind == 'mep' else None),
+        ('logp_model', meta.get('method') if kind == 'mlp' else None),
+        ('net_charge', meta.get('net_charge')),
+        ('total_logp', meta.get('total_logp')),
+        ('sigma_hole_representable', meta.get('sigma_hole_representable')),
+    ) if v is not None}
     result: dict[str, Any] = {
         'field': {
             'kind': kind,
-            'native_units': _UNITS[kind],
+            'native_units': declared_units(ctx, kind),
             'grid': {'dimensions': grid['dimensions'],
                      'spacing_angstrom': grid['spacing_angstrom']},
             'extrema': {'min': vmin, 'max': vmax},
-        }
+            # Derived from the extrema rather than read from meta: the classical paths
+            # report it and the quantum ones never did, and it is a one-line consequence
+            # of two numbers this function already holds. A fact computed where its
+            # inputs are is a fact that cannot be missing on one path.
+            'single_signed': bool(vmin >= 0 or vmax <= 0),
+            **({'box': box} if box else {}),
+        },
+        **({'model': model} if model else {}),
     }
     if kind in QUANTUM_KINDS:
         # `converged` is `const: true` in the output schema — an unconverged SCF is a
@@ -179,17 +206,23 @@ def field_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
             raise failures.DiracUnconverged(
                 f'SCF did not converge for {ctx.method_id}',
                 details={'basis': basis, 'energy_ha': meta.get('scf_energy_ha')})
-        result['wavefunction'] = {
+        # The KEY NAMES are the descriptor's, not mine. `energy_hartree` was rejected by
+        # output validation because the contract calls it `scf_energy_hartree` — and the
+        # contract is the name every client was told to read.
+        wf: dict[str, Any] = {
             'converged': True,
             'method': meta.get('method', ''),
             'basis': basis,
             'n_basis_functions': int(meta.get('nbasis') or 0),
-            'energy_hartree': meta.get('scf_energy_ha'),
-            'scf_cycles': meta.get('scf_cycles'),
         }
-        for key, out_key in (('homo_ev', 'homo_ev'), ('lumo_ev', 'lumo_ev')):
-            if meta.get(key) is not None:
-                result['wavefunction'][out_key] = meta[key]
+        for src, dst in (('scf_energy_ha', 'scf_energy_hartree'),
+                         ('scf_cycles', 'scf_cycles'),
+                         ('homo_ev', 'homo_ev'), ('lumo_ev', 'lumo_ev')):
+            if meta.get(src) is not None:
+                wf[dst] = meta[src]
+        if meta.get('ecp'):
+            wf['ecp_elements'] = list(meta['ecp'])
+        result['wavefunction'] = wf
 
     warnings = []
     if meta.get('frontier_caveat'):
@@ -221,9 +254,34 @@ def field_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
         cache='computed')
 
 
-_UNITS = {'mep': 'kcal_per_mol_per_e', 'mlp': 'dimensionless',
-          'homo': 'amplitude', 'lumo': 'amplitude',
-          'density': 'electrons_per_bohr3', 'mep_qm': 'hartree_per_e'}
+def declared_units(ctx: InvocationContext, kind: str) -> str:
+    """The unit string THE DESCRIPTOR declares. One home for it.
+
+    Replaces a hand-written `_UNITS` dict that disagreed with the contract in four of six
+    methods ('kcal_per_mol_per_e' vs the declared 'kcal/mol', 'dimensionless' vs
+    'MLP (Crippen/Fauchere)', and so on). Six transports read that dict and therefore
+    agreed with each other perfectly while all six were wrong — which is why parity across
+    transports is necessary and not sufficient, and why output validation is the check that
+    actually binds.
+
+    Falls back to the kind name only if the descriptor declares no const, and that
+    fallback is a stated last resort rather than a guess dressed as a default.
+    """
+    try:
+        units = (ctx.spec.output_schema['properties']['field']
+                 ['properties']['native_units'])
+        for key in ('const', 'default'):
+            if key in units:
+                return str(units[key])
+        if units.get('enum'):
+            return str(units['enum'][0])
+    except (AttributeError, KeyError, TypeError, IndexError):
+        pass
+    raise failures.DiracInternal(
+        f'{ctx.method_id} declares no native_units const in its output schema, so this '
+        f'handler has no authority to state the units of the field it just computed. '
+        f'Inventing a string here is how the previous _UNITS dict came to disagree with '
+        f'four descriptors.')
 
 
 def field_estimate(payload: dict) -> dict:
@@ -269,3 +327,92 @@ def field_estimate(payload: dict) -> dict:
         'confidence': 'scf term is a fit on this machine (R^2 ~0.97 over 4 decades); '
                       'the cube term scales with the box and is the weaker half',
     }
+
+
+def embed_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
+    """molecule.embed — SMILES or a 2D molfile to real 3D coordinates.
+
+    WHY THIS METHOD HAD TO BECOME EXECUTABLE, and it was found by dogfooding rather than
+    by reading: the frontend was sending a 2D molfile (`RDKit 2D` in the header) to a field
+    method. v1 accepted it, because prepare_mol quietly embeds when there are no 3D
+    coordinates — so ONE invocation was doing TWO methods' work, and the response reported
+    one method version for a result that had passed through two pieces of science. The
+    input contract already forbade it, in its own words: "A 2D structure must not reach a
+    3D physics method — the coordinate space is part of the type, and molecule.embed is the
+    explicit step that produces 3D."
+
+    So the fix is not to relax the contract. It is to make the step the contract names
+    actually callable, and let a client compose the two — two invocations, two versions,
+    two provenance records, and a conformer whose origin is stated rather than implied.
+
+    The output is EXACTLY the `molecule` object a field method takes as input. That
+    composition is designed into the descriptors, and it is why this handler returns a
+    molecule rather than a molfile string.
+    """
+    import field_server as FS
+
+    mol_in = payload.get('molecule') or {}
+    smiles = payload.get('smiles')
+    molblock = payload.get('molfile') or (mol_in.get('content') if mol_in else None)
+    if not smiles and not molblock:
+        raise failures.DiracParseFailure(
+            'molecule.embed needs either `smiles` or `molfile`; neither was given',
+            details={'got_keys': sorted(payload)})
+    params = dict(payload.get('parameters') or {})
+    seed = int(params.get('seed', 42))
+
+    # embed_molecule returns (molblock_text, meta) — READ from the function rather than
+    # guessed from its signature, which is how the first version of this handler came to
+    # pass a tuple to MolToMolBlock.
+    content, emeta = FS.embed_molecule(smiles, molblock, seed=seed)
+    # A 3D claim that is CHECKED rather than asserted: an embed that silently produced a
+    # flat conformer would hand a field method exactly the input this method exists to
+    # prevent, and `dimensionality: 3` in the output schema would then be a lie the
+    # contract itself cannot catch. Parsed back from the molblock, so the check is on the
+    # BYTES that will travel, not on an object that produced them.
+    # THE SAME BUG LIVED HERE and was found in the browser, in the TypeScript twin: reading
+    # "until the lines stop looking like atoms" walks straight into the BOND block, whose
+    # lines have four fields and whose third column is the bond order. That read 2 bonds as
+    # atoms and took bond orders for z. The counts line says how many atom lines there are;
+    # anything else is a heuristic wearing a parser's clothes.
+    lines = content.split('\n')
+    try:
+        n_atoms = int(lines[3].split()[0])
+    except (IndexError, ValueError):
+        raise failures.DiracInternal(
+            'the embedded molfile has no parseable counts line, so the number of atom rows '
+            'is unknown and a flatness check on it would be reading arbitrary text')
+    zs = []
+    for line in lines[4:4 + n_atoms]:
+        parts = line.split()
+        if len(parts) < 4:
+            break
+        try:
+            zs.append(float(parts[2]))
+        except ValueError:
+            break
+    if zs and max(zs) - min(zs) < 1e-6 and n_atoms > 2:
+        raise failures.DiracInternal(
+            f'the embedding produced a FLAT conformer (z range '
+            f'{max(zs) - min(zs):.2e} Å over {n_atoms} heavy atoms), so declaring it 3D '
+            f'would pass a 2D structure into a 3D physics method under a true-looking type')
+
+    return HandlerResult(
+        result={'molecule': {'kind': 'molfile', 'content': content,
+                             'format': 'mdl-v2000', 'dimensionality': 3,
+                             'coordinate_units': 'angstrom'}},
+        artifacts=[('molecule.molfile', content.encode())],
+        provenance={'n_atoms': emeta.get('natoms'), 'n_atoms_heavy': n_atoms,
+                    'seed': seed, 'source': 'smiles' if smiles else 'molfile',
+                    'inchikey': emeta.get('inchikey'),
+                    'smiles_canonical': emeta.get('smiles_canonical'),
+                    'z_range_angstrom': round(max(zs) - min(zs), 4) if zs else None},
+        parameters_used={'seed': seed, 'optimize': params.get('optimize', True)},
+        cache='computed')
+
+
+def embed_estimate(payload: dict) -> dict:
+    """Embedding is milliseconds and its cost is not worth predicting badly."""
+    return {'available': True, 'seconds': 0.2,
+            'confidence': 'ETKDG + MMFF on a drug-sized ligand is 0.05-0.5 s on this '
+                          'machine; the number is a ceiling, not a fit'}

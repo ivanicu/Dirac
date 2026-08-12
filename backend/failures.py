@@ -96,6 +96,20 @@ class DiracParseFailure(DiracFailure):
         super().__init__('PARSE', message, **kw)
 
 
+class DiracInvalidParameters(DiracFailure):
+    """The request does not satisfy the method's declared input schema.
+
+    Split out from PARSE on 2026-08-11 after the browser showed it: the frontend sent
+    `basis` to fields.mlp, a classical method with no basis, and the contract refused —
+    correctly — while the user read "This molecule could not be parsed." The molecule was
+    fine. PARSE means the structure is unreadable and there is nothing the caller can do
+    with those bytes; this means one named field is wrong and fixing it will work.
+    """
+
+    def __init__(self, message: str, **kw: Any) -> None:
+        super().__init__('INVALID_PARAMETERS', message, **kw)
+
+
 class DiracUnsupported(DiracFailure):
     """The request is well-formed and outside what this method can do.
 

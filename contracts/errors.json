@@ -1,7 +1,7 @@
 {
   "$comment": [
     "THE error vocabulary. One home, three consumers: the Python service, the",
-    "TypeScript client (generated — see scripts/gen_error_codes.mjs), and the",
+    "TypeScript client (generated \u2014 see scripts/gen_error_codes.mjs), and the",
     "app.job_error enum in migration 007.",
     "",
     "It exists because there were three vocabularies and none of them agreed:",
@@ -14,7 +14,7 @@
     "",
     "Every entry carries what the CALLER should do, not what the implementer",
     "saw. An error described from the implementer's point of view is not",
-    "documented. `points_at` is the working alternative when one exists — the",
+    "documented. `points_at` is the working alternative when one exists \u2014 the",
     "product's rule is that a refusal names the actor and the way forward.",
     "NOT_FOUND and DB_UNAVAILABLE were added 2026-08-11 after the admin router found that err() could not express either: every registered code mapped to http 200/403/413, so the router hand-rolled the envelope shape instead. A vocabulary that cannot say \"the database is down\" forces every caller to invent its own way of saying it, which is how three vocabularies happened."
   ],
@@ -33,7 +33,7 @@
       "caller_action": "Offer a larger budget or a different basis; never render a field from an unconverged wavefunction.",
       "retryable": true,
       "http": 200,
-      "user_copy": "The wavefunction did not converge — refusing to ship a decorative field.",
+      "user_copy": "The wavefunction did not converge \u2014 refusing to ship a decorative field.",
       "points_at": null
     },
     "UNPARAMETERIZED": {
@@ -54,7 +54,7 @@
     },
     "OPEN_SHELL_SPIN_REQUIRED": {
       "meaning": "A transition metal is present whose ground state is not the closed-shell singlet that electron parity implies.",
-      "caller_action": "Resend with an explicit spin. This is a question, not a dead end — the previous vocabulary collapsed it into UNSUPPORTED, which reads as 'give up'.",
+      "caller_action": "Resend with an explicit spin. This is a question, not a dead end \u2014 the previous vocabulary collapsed it into UNSUPPORTED, which reads as 'give up'.",
       "retryable": true,
       "http": 200,
       "user_copy": "This metal centre needs an explicit spin multiplicity.",
@@ -77,7 +77,7 @@
       "points_at": null
     },
     "BAD_HOST": {
-      "meaning": "The Host header is not one of this box's own names — the DNS-rebinding shape.",
+      "meaning": "The Host header is not one of this box's own names \u2014 the DNS-rebinding shape.",
       "caller_action": "Nothing. This is a security refusal, not a user error; do not surface it as a chemistry failure.",
       "retryable": false,
       "http": 403,
@@ -110,17 +110,26 @@
     },
     "DB_UNAVAILABLE": {
       "meaning": "The database could not be reached. This is DEGRADED, not empty and not offline.",
-      "caller_action": "Say degraded, keep the compute path usable, and never render this as \"there is no data\" — an unreachable database and an empty queue must be visually distinguishable.",
+      "caller_action": "Say degraded, keep the compute path usable, and never render this as \"there is no data\" \u2014 an unreachable database and an empty queue must be visually distinguishable.",
       "retryable": true,
       "http": 503,
-      "user_copy": "The database is unreachable — showing no data is not the same as there being none.",
+      "user_copy": "The database is unreachable \u2014 showing no data is not the same as there being none.",
       "points_at": null
+    },
+    "INVALID_PARAMETERS": {
+      "meaning": "The request does not satisfy the method's declared input schema \u2014 a parameter is unknown, missing, or out of range. Distinct from PARSE, which is about the MOLECULE.",
+      "retryable": false,
+      "http": 200,
+      "caller_action": "Fix the named parameter and call again. GET /v2/methods/{id} returns the schema, and `details.pointer` names the exact field.",
+      "user_copy": "That request is not valid for this method.",
+      "why_separate": "FOUND BY DOGFOODING, 2026-08-11: the frontend sent `basis` to fields.mlp, a classical method with no basis. The contract refused it correctly \u2014 and the user saw \"This molecule could not be parsed\", because schema violations were being reported as PARSE. The molecule was fine. One code was carrying two facts with opposite remedies: PARSE means the structure is unreadable and there is nothing to do; this means one named field is wrong and fixing it will work."
     }
   },
   "db_enum_note": [
     "app.job_error (migration 007) is a SUBSET, and the omissions are deliberate:",
+    "INVALID_PARAMETERS \u2014 the input schema is checked BEFORE a job row is opened (invocation.py: validate, then _open_job), so no job can ever carry it. Adding it to the enum would declare a state the state machine cannot reach.",
     "BAD_HOST (rejected before a job exists), OPEN_SHELL_SPIN_REQUIRED (added here",
-    "after 007 shipped), and the two ops codes NOT_FOUND / DB_UNAVAILABLE — neither",
+    "after 007 shipped), and the two ops codes NOT_FOUND / DB_UNAVAILABLE \u2014 neither",
     "of which can ever be a job's error, because a job that failed BECAUSE the",
     "database was unreachable has no row to record it in. That is not a gap; it is",
     "the one error class this ledger structurally cannot hold, and saying so here is",

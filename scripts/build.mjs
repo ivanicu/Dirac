@@ -12,21 +12,35 @@ import { sassPlugin } from 'esbuild-sass-plugin';
 import * as os from 'os';
 
 const Apps = [
+    // ⚠ ENTRY ROOTS, and why every vendored entry now carries one: on 2026-08-10 the
+    // vendored demo directories were renamed to `apps.reference.viewer-demos.
+    // vendored-readonly/` and `examples.reference.mini-demos.vendored-readonly/`, and this
+    // list still pointed at `./src/apps/<name>/`. So `npm run build` (which builds ALL
+    // apps, `-a -e`) had been failing for THIRTY HOURS on
+    // `Could not resolve "./src/apps/viewer/theme/dark.tsx"` — and nothing reported it,
+    // because the build GATE runs `-a dirac` and only builds the one app that ships.
+    //
+    // That is a gate scoped narrower than its name. The scope itself is defensible (this
+    // product is the dirac app), but a gate called `build` that cannot see a broken build
+    // is the shape this repo has a law about. The paths are repaired here rather than the
+    // entries deleted, because the sources still exist and `entryRoot` is the mechanism
+    // already in this file for an app living outside the default location — the dirac
+    // entry has used it since it was added.
     // Apps
-    { kind: 'app', name: 'viewer', themes: ['light', 'dark', 'blue'] },
-    { kind: 'app', name: 'docking-viewer' },
-    { kind: 'app', name: 'mesoscale-explorer' },
+    { kind: 'app', name: 'viewer', themes: ['light', 'dark', 'blue'], entryRoot: './src/apps.reference.viewer-demos.vendored-readonly/viewer' },
+    { kind: 'app', name: 'docking-viewer', entryRoot: './src/apps.reference.viewer-demos.vendored-readonly/docking-viewer' },
+    { kind: 'app', name: 'mesoscale-explorer', entryRoot: './src/apps.reference.viewer-demos.vendored-readonly/mesoscale-explorer' },
     { kind: 'app', name: 'dirac', filename: 'dirac.js', entryRoot: './src/app.frontend.facets.molstar-rdkit.editable', staticDirs: ['assets/rdkit'], staticFiles: ['theme-fascia.css','theme-fascia.js','addons.css','palette.js'] },
-    { kind: 'app', name: 'mvs-stories', globalName: 'mvsStories', filename: 'mvs-stories.js' },
+    { kind: 'app', name: 'mvs-stories', globalName: 'mvsStories', filename: 'mvs-stories.js', entryRoot: './src/apps.reference.viewer-demos.vendored-readonly/mvs-stories' },
 
     // Examples
-    { kind: 'example', name: 'proteopedia-wrapper' },
-    { kind: 'example', name: 'basic-wrapper' },
-    { kind: 'example', name: 'lighting' },
+    { kind: 'example', name: 'proteopedia-wrapper', entryRoot: './src/examples.reference.mini-demos.vendored-readonly/proteopedia-wrapper' },
+    { kind: 'example', name: 'basic-wrapper', entryRoot: './src/examples.reference.mini-demos.vendored-readonly/basic-wrapper' },
+    { kind: 'example', name: 'lighting', entryRoot: './src/examples.reference.mini-demos.vendored-readonly/lighting' },
     { kind: 'example', name: 'alpha-orbitals' },
-    { kind: 'example', name: 'alphafolddb-pae' },
+    { kind: 'example', name: 'alphafolddb-pae', entryRoot: './src/examples.reference.mini-demos.vendored-readonly/alphafolddb-pae' },
     { kind: 'example', name: 'mvs-stories' },
-    { kind: 'example', name: 'ihm-restraints' },
+    { kind: 'example', name: 'ihm-restraints', entryRoot: './src/examples.reference.mini-demos.vendored-readonly/ihm-restraints' },
     { kind: 'example', name: 'interactions' },
     { kind: 'example', name: 'ligand-editor' },
     { kind: 'example', name: 'volume-mask' },
@@ -203,11 +217,16 @@ async function createBundle(app) {
     if (!isProduction) await ctx.watch();
 }
 
-async function createTheme(appName, themeName) {
-    // const { prefix, entry, outfile } = getPaths(app);
+async function createTheme(appName, themeName, entryRoot) {
+    // entryRoot is threaded through for the same reason createBundle takes it: the theme
+    // entry lives beside the app's own entry, and hard-coding `./src/apps/<name>/` here was
+    // the SECOND place that assumption lived. Repairing only the app list left this one
+    // still pointing at a directory renamed thirty hours earlier — one fact, two homes, and
+    // the second is always the one that is forgotten.
+    const root = entryRoot ?? `./src/apps/${appName}`;
 
     const ctx = await esbuild.context({
-        entryPoints: [resolveEntryPath(`./src/apps/${appName}/theme/${themeName}.ts`)],
+        entryPoints: [resolveEntryPath(`${root}/theme/${themeName}.ts`)],
         tsconfig: './tsconfig.json',
         bundle: true,
         minify: isProduction,
@@ -331,7 +350,7 @@ async function main() {
         promises.push(createBundle(app));
         if (app.themes) {
             for (const theme of app.themes) {
-                promises.push(createTheme(app.name, theme));
+                promises.push(createTheme(app.name, theme, app.entryRoot));
             }
         }
     }
