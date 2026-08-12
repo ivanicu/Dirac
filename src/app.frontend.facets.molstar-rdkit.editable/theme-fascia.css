@@ -14,23 +14,26 @@
  * markup, and index.html is shared substrate several agents edit.
  */
 
+@import url('./fonts.css');
+@import url('./fascia-tokens.css');
+
 /* ─── palette: the app's own tokens, re-pointed ─────────────────────────── */
 :root{
     color-scheme: light;
 
-    --bg:#e9e7e2;            /* machined face */
-    --surface:#f2f1ec;       /* raised plate */
-    --surface-2:#f7f6f2;     /* display paper (fields) */
-    --surface-3:#e3e1dc;     /* pressed */
-    --border:#9b9a93;
-    --border-strong:#7f7e77;
+    --bg:var(--face);         /* machined face */
+    --surface:var(--plate);   /* raised plate */
+    --surface-2:var(--paper); /* display paper (fields) */
+    --surface-3:var(--pressed);
+    --border:var(--line);
+    --border-strong:var(--line-dot);
 
-    --text:#1d1d1a;
-    --text-2:#55554f;
-    --text-3:#55554f;        /* clears 4.5:1 across the machined gradient */
+    --text:var(--ink);
+    --text-2:var(--ink-2);
+    --text-3:var(--etch);
 
-    --accent:#d71921;        /* the one red */
-    --accent-soft:#fbe9ea;
+    --accent:var(--red);      /* the one red */
+    --accent-soft:var(--red-wash);
     /* SUCCESS is not the accent. The accent is a role — the interactive
        colour — and here that role is spent on a single deliberate red, so
        anything wired to it announced good news in alarm red the moment the
@@ -39,8 +42,8 @@
        the machined face. */
     --ok:#37734d;
     --warn:#8a6a2f;
-    --high:#d71921;
-    --unavail:#8f8a86;
+    --high:var(--red);
+    --unavail:var(--ink-off);
 
     /* theme-local */
     /* ── the 3D scene is part of the theme ──────────────────────────────────
@@ -49,7 +52,7 @@
        the field renderer measures its luminance to decide whether it is
        working on a dark or a light ground. A theme that only restyles the
        chrome leaves the one surface where colour carries physics untouched. */
-    --scene-bg:#f1f0eb;
+    --scene-bg:var(--well);
     --scene-badge-bg:rgba(241,240,235,.86);
 
     /* ── scientific field colours, re-derived for THIS ground ───────────────
@@ -71,12 +74,6 @@
     --viz-mlp-neg:#3b96a6;   /* hydrophilic / polar               */
     --viz-density:#ad814d;   /* electron density (single-signed)  */
 
-    --face:#e7e5e0;
-    --well:#f1f0eb;
-    --etch:#55554f;
-    --mono:'SFMono-Regular',Consolas,'Liberation Mono',ui-monospace,Menlo,monospace;
-    --doto:'Doto','IBM Plex Mono', ui-monospace, monospace;
-    --dots: radial-gradient(circle at 1.5px 1.5px, rgba(29,29,26,.075) 1px, transparent 1.45px);
 }
 
 body, #app { font-family: var(--mono); letter-spacing: .01em; }
@@ -153,10 +150,12 @@ html, body, #app {
     border-bottom: 1px solid var(--border);
     box-shadow: inset 0 1px 0 rgba(255,255,255,.8), 0 1px 2px rgba(29,29,26,.07);
 }
-.brand .eyebrow { font-size: 7.5px; letter-spacing: .26em; color: var(--etch); font-weight: 400; }
+.brand { display: flex; align-items: center; min-width: 196px; }
+.brand-copy { display: flex; min-width: 0; flex-direction: column; justify-content: center; }
+.brand .eyebrow { margin: 4px 0 0; font: 400 7.5px/1 var(--mono); letter-spacing: .24em; color: var(--etch); text-transform: uppercase; white-space: nowrap; }
 .brand .brand-name {
-    font-family: var(--doto); font-weight: 900; font-size: 26px;
-    letter-spacing: .05em; line-height: 1; color: var(--text);
+    margin: 0; font-family: var(--doto); font-weight: 900; font-size: 22px;
+    letter-spacing: .06em; line-height: 1; color: var(--text); text-transform: uppercase;
 }
 .topbar-scene label { font-family: var(--mono); font-size: 7.5px; letter-spacing: .2em; color: var(--etch); }
 

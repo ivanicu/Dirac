@@ -30,7 +30,7 @@ const Apps = [
     { kind: 'app', name: 'viewer', themes: ['light', 'dark', 'blue'], entryRoot: './src/apps.reference.viewer-demos.vendored-readonly/viewer' },
     { kind: 'app', name: 'docking-viewer', entryRoot: './src/apps.reference.viewer-demos.vendored-readonly/docking-viewer' },
     { kind: 'app', name: 'mesoscale-explorer', entryRoot: './src/apps.reference.viewer-demos.vendored-readonly/mesoscale-explorer' },
-    { kind: 'app', name: 'dirac', filename: 'dirac.js', entryRoot: './src/app.frontend.facets.molstar-rdkit.editable', staticDirs: ['assets/rdkit'], staticFiles: ['theme-fascia.css','theme-fascia.js','theme-dark.css','theme-toggle.js','workspace-shell.css','addons.css','palette.js'] },
+    { kind: 'app', name: 'dirac', filename: 'dirac.js', entryRoot: './src/app.frontend.facets.molstar-rdkit.editable', staticDirs: ['assets/rdkit', 'fonts'], staticFiles: ['fonts.css','fascia-tokens.css','theme-fascia.css','theme-fascia.js','workspace-shell.css','addons.css','palette.js'] },
     { kind: 'app', name: 'mvs-stories', globalName: 'mvsStories', filename: 'mvs-stories.js', entryRoot: './src/apps.reference.viewer-demos.vendored-readonly/mvs-stories' },
 
     // Examples

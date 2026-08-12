@@ -1,7 +1,8 @@
 import { ScientificContextStore } from '../../context/scientific-context-store';
 import { objectRef } from '../../domain/object-ref';
 import { AppShell } from '../app-shell';
-import { assertRegistryIntegrity, availableViews, MODULES, navigableViews, VIEWS, WORKSPACES } from '../registries';
+import { assertRegistryIntegrity, availableViews, MODULES, navigableViews, VIEWS,
+    WORKBENCH_SURFACES, WORKSPACES } from '../registries';
 import { SceneService } from '../scene-service';
 import { assertExperienceCatalog, VIEW_EXPERIENCES } from '../workspace-catalog';
 import { assertWorkspaceVisualCatalog, WORKSPACE_VISUALS } from '../workspace-visual-catalog';
@@ -26,6 +27,17 @@ describe('canonical AppShell architecture', () => {
     it('convicts a module that names an unknown command', () => {
         const broken = MODULES.map((m, i) => i === 0 ? { ...m, providesCommands: ['ghost.command'] } : m);
         expect(() => assertRegistryIntegrity(WORKSPACES, VIEWS, broken)).toThrow('missing command ghost.command');
+    });
+
+    it('keeps every original workbench surface absorbed by a Workspace module', () => {
+        const absorbed = new Set(MODULES.flatMap(module => module.surfaces));
+        expect(WORKBENCH_SURFACES.every(surface => absorbed.has(surface))).toBe(true);
+        const broken = MODULES.map(module => ({
+            ...module,
+            surfaces: module.surfaces.filter(surface => surface !== 'ligand'),
+        }));
+        expect(() => assertRegistryIntegrity(WORKSPACES, VIEWS, broken))
+            .toThrow('unabsorbed workbench surface ligand');
     });
 
     it('restores route and scientific context from one URL', () => {

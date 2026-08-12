@@ -8,17 +8,6 @@
  * not-yet-connected View is rendered as an honest, light-only instrument surface.
  */
 
-/* Connected 3D Views keep the original Dirac workbench intact. The complete
- * Workspace/View navigator belongs to scaffold pages; on a scientific scene it
- * previously consumed three rows above the existing Focus/Ligand/Properties
- * navigation and made an architecture layer look like a replacement product. */
-#app.scene-workbench .workspace-nav,
-#app.scene-workbench .view-nav,
-#app.scene-workbench .global-context-bar { display: none; }
-
-#app.scene-workbench .scene-workspace-entry { display: inline-flex; }
-#app.shell-scaffold .scene-workspace-entry { display: none; }
-
 #app.shell-scaffold {
     color-scheme: light;
 
@@ -31,13 +20,13 @@
     --paper: #f7f6f2;
     --white: #fbfaf6;
     --pressed: #dedcd7;
-    --line: #a6a59e;
+    --line: #c9c8c2;
     --line-soft: #d7d6d0;
     --line-dot: #bcbbb4;
     --ink: #1d1d1a;
-    --ink-2: #5f5e57;
-    --etch: #55554f;
-    --ink-off: #55554f;
+    --ink-2: #6d6c65;
+    --etch: #94938a;
+    --ink-off: #b3b2aa;
     --live: #2f2e2a;
     --sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
     --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
@@ -92,7 +81,6 @@
     color: var(--ink);
 }
 
-#app.shell-scaffold .topbar .brand,
 #app.shell-scaffold .shell-breadcrumb,
 #app.shell-scaffold .topbar-tail {
     align-self: stretch;
@@ -102,11 +90,15 @@
     padding: 0 20px;
 }
 
+#app.shell-scaffold .topbar .brand {
+    align-self: stretch;
+    padding: 0 20px;
+}
+
 #app.shell-scaffold .shell-breadcrumb,
 #app.shell-scaffold .topbar-tail { border-left: 1px dotted var(--line-dot); }
 
 #app.shell-scaffold .topbar .brand .eyebrow {
-    order: 2;
     margin-top: 4px;
     color: var(--etch);
     font: 400 7.5px/1 var(--mono);
@@ -114,7 +106,6 @@
 }
 
 #app.shell-scaffold .topbar .brand .brand-name {
-    order: 1;
     color: var(--ink);
     font: 900 22px/1 var(--doto);
     letter-spacing: .08em;

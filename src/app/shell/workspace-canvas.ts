@@ -58,10 +58,6 @@ export class WorkspaceCanvas {
         const app = document.getElementById('app');
         app?.classList.toggle('shell-scaffold', scaffold);
         app?.classList.toggle('shell-connected', scaffold && connected);
-        // A scene View is the established Dirac scientific workbench. Workspace
-        // routing may select its modules, but must not insert a second product
-        // shell above the workbench or restyle its chrome.
-        app?.classList.toggle('scene-workbench', !scaffold);
         if (app) app.dataset.workspace = route.workspace;
         this.breadcrumb.hidden = !scaffold;
         this.breadcrumb.textContent = scaffold ? `${workspace.label}  /  ${definition.label}` : '';

@@ -21,6 +21,16 @@ export interface ModuleDefinition {
     providesCommands: string[]; surfaces: string[]; placement: Placement; priority: number;
 }
 
+/**
+ * Every operational surface from the original molecular workbench must have a
+ * registry-owned home in the Workspace architecture. This list is the migration
+ * contract: removing a module cannot silently strand an old capability.
+ */
+export const WORKBENCH_SURFACES = [
+    'focus', 'semantic', 'ligand', 'properties', 'fields',
+    'physics', 'designer', 'vfx', 'ledger', 'runs',
+] as const;
+
 export const WORKSPACES: readonly WorkspaceDefinition[] = [
     { id: 'programs', label: 'Programs', icon: '◉', defaultView: 'programs.overview', availability: 'gated', shellReady: true },
     { id: 'design', label: 'Design', icon: '◇', defaultView: 'design.builder', availability: 'implemented', shellReady: true },
@@ -139,6 +149,10 @@ export function assertRegistryIntegrity(
         if (!module.surfaces.length) throw new Error(`${module.id}: no render surfaces`);
         for (const id of module.supportedViews) if (!viewIds.has(id)) throw new Error(`${module.id}: missing view ${id}`);
         for (const id of module.providesCommands) if (!commandIds.has(id)) throw new Error(`${module.id}: missing command ${id}`);
+    }
+    const absorbedSurfaces = new Set(modules.flatMap(module => module.surfaces));
+    for (const surface of WORKBENCH_SURFACES) {
+        if (!absorbedSurfaces.has(surface)) throw new Error(`unabsorbed workbench surface ${surface}`);
     }
 }
 

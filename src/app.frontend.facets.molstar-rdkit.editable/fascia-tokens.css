@@ -1,0 +1,80 @@
+/*
+ * FASCIA TOKENS — canonical visual source of truth.
+ * Synchronized from /home/ivan/dirac-sandbox/fascia/tokens.css.
+ */
+:root {
+    color-scheme: light;
+
+    --face: #e9e7e2;
+    --face-2: #e3e1dc;
+    --plate: #f2f1ec;
+    --plate-2: #e8e6e1;
+    --well: #f1f0eb;
+    --paper: #f7f6f2;
+    --white: #fbfaf6;
+    --pressed: #dedcd7;
+
+    --line: #c9c8c2;
+    --line-soft: #d7d6d0;
+    --line-dot: #bcbbb4;
+
+    --ink: #1d1d1a;
+    --ink-2: #6d6c65;
+    --etch: #94938a;
+    --ink-off: #b3b2aa;
+
+    --red: #c24842;
+    --red-wash: #f5e7e6;
+    --red-deep: #96352f;
+    --amber: #8a6a2f;
+    --live: #2f2e2a;
+
+    --sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+    --doto: 'Doto', 'IBM Plex Mono', ui-monospace, monospace;
+
+    --t-etch: 7.5px;
+    --ls-etch: .24em;
+    --t-tag: 8.5px;
+    --ls-tag: .20em;
+    --t-meta: 9.5px;
+    --ls-meta: .10em;
+    --t-body: 11.5px;
+    --ls-body: .01em;
+    --t-lead: 13px;
+    --ls-lead: .01em;
+    --t-h3: 12px;
+    --ls-h3: .18em;
+    --t-h2: 15px;
+    --ls-h2: .10em;
+    --t-h1: 22px;
+    --ls-h1: .06em;
+
+    --s1: 4px;
+    --s2: 8px;
+    --s3: 12px;
+    --s4: 16px;
+    --s5: 20px;
+    --s6: 24px;
+    --s8: 32px;
+    --s10: 40px;
+    --s12: 48px;
+    --r0: 0;
+    --r1: 3px;
+    --r2: 5px;
+    --r3: 8px;
+
+    --rise-1: inset 0 1px 0 rgba(255, 255, 255, .85), inset 0 -1px 0 rgba(0, 0, 0, .05), 0 1px 2px rgba(29, 29, 26, .12);
+    --rise-2: inset 0 1px 0 rgba(255, 255, 255, .85), inset 0 -1px 0 rgba(0, 0, 0, .05), 0 1px 2px rgba(29, 29, 26, .12), 0 8px 18px rgba(29, 29, 26, .06);
+    --rise-3: inset 0 1px 0 rgba(255, 255, 255, .9), 0 2px 4px rgba(29, 29, 26, .14), 0 18px 40px rgba(29, 29, 26, .14);
+    --sink-1: inset 0 2px 4px rgba(29, 29, 26, .10), 0 1px 0 rgba(255, 255, 255, .85);
+    --sink-2: inset 0 2px 6px rgba(29, 29, 26, .13), inset 0 1px 2px rgba(29, 29, 26, .14), 0 1px 0 rgba(255, 255, 255, .8);
+    --hold: inset 0 2px 3px rgba(29, 29, 26, .20);
+    --dots: radial-gradient(circle at 1.5px 1.5px, rgba(29, 29, 26, .075) 1px, transparent 1.45px);
+    --dots-fine: radial-gradient(circle at 1px 1px, rgba(29, 29, 26, .10) .7px, transparent 1.1px);
+
+    --scene-bg: #f1f0eb;
+    --scene-body: #8e8d87;
+    --scene-anno: #c24842;
+    --scene-anno-quiet: #6d6c65;
+}

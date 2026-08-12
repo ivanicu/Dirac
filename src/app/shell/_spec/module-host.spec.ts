@@ -1,4 +1,5 @@
 import type { ScientificContext } from '../../context/scientific-context-store';
+import { objectRef } from '../../domain/object-ref';
 import { ModuleHost, type ModuleAdapter } from '../module-host';
 import { MODULES } from '../registries';
 
@@ -11,8 +12,12 @@ describe('registry-driven ModuleHost', () => {
             update: () => events.push(`update:${module.id}`),
         }]));
         const host = new ModuleHost(adapters);
-        const context = { selectedObjects: [], activeHypotheses: [],
-            origin: 'navigation', generation: 0 } as ScientificContext;
+        const context = {
+            complexRef: objectRef('complex', 'complex-1'),
+            focusedObject: objectRef('molecule', 'ligand-1'),
+            selectedObjects: [], activeHypotheses: [],
+            origin: 'navigation', generation: 0,
+        } as ScientificContext;
         host.activate('structures.complex', context);
         events.length = 0;
         host.activate('structures.site', context);

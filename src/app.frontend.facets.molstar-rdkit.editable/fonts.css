@@ -1,0 +1,15 @@
+/* FASCIA — self-hosted fonts. No external font hosts. */
+@font-face { font-family: 'Doto'; font-style: normal; font-weight: 400; font-display: swap; src: url('fonts/doto-400.ttf') format('truetype'); }
+@font-face { font-family: 'Doto'; font-style: normal; font-weight: 500; font-display: swap; src: url('fonts/doto-500.ttf') format('truetype'); }
+@font-face { font-family: 'Doto'; font-style: normal; font-weight: 600; font-display: swap; src: url('fonts/doto-600.ttf') format('truetype'); }
+@font-face { font-family: 'Doto'; font-style: normal; font-weight: 700; font-display: swap; src: url('fonts/doto-700.ttf') format('truetype'); }
+@font-face { font-family: 'Doto'; font-style: normal; font-weight: 900; font-display: swap; src: url('fonts/doto-700.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 300; font-display: swap; src: url('fonts/plexmono-400.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('fonts/plexmono-400.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 500; font-display: swap; src: url('fonts/plexmono-500.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 600; font-display: swap; src: url('fonts/plexmono-600.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Mono'; font-style: normal; font-weight: 700; font-display: swap; src: url('fonts/plexmono-700.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 400; font-display: swap; src: url('fonts/plexsans-400.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 500; font-display: swap; src: url('fonts/plexsans-500.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 600; font-display: swap; src: url('fonts/plexsans-600.ttf') format('truetype'); }
+@font-face { font-family: 'IBM Plex Sans'; font-style: normal; font-weight: 700; font-display: swap; src: url('fonts/plexsans-700.ttf') format('truetype'); }
