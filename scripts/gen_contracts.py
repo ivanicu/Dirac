@@ -74,7 +74,7 @@ def validate(descriptors: list[dict]) -> list[str]:
         # mismatch on fields.qm.homo that was only ordering — the third time today
         # an instrument, not the data, was wrong. Order is not semantic here.
         impl = d.get('implementation') or {}
-        if impl.get('module') == 'backend.field_server':
+        if impl.get('module'):
             try:
                 import sys as _sys
                 _sys.path.insert(0, str(ROOT / 'backend'))
@@ -85,7 +85,16 @@ def validate(descriptors: list[dict]) -> list[str]:
                                 f'cross-check implementation ({exc}) — reported '
                                 f'rather than skipped')
                 unit = None
-            if unit is not None:
+            if unit is None:
+                problems.append(
+                    f'{mid}: implementation.module is declared but no runtime compute '
+                    'unit has that method_id')
+            else:
+                expected_module = 'backend.' + unit.get('module', 'field_server')
+                if impl.get('module') != expected_module:
+                    problems.append(
+                        f'{mid}: implementation.module {impl.get("module")!r} != '
+                        f'registry module {expected_module!r}')
                 if set(impl.get('functions', ())) != set(unit['fns']):
                     problems.append(
                         f'{mid}: implementation.functions '

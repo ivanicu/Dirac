@@ -41,6 +41,7 @@ ledger and gets a working invocation with honest provenance saying so.
 from __future__ import annotations
 
 import sys
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol
@@ -140,6 +141,8 @@ class InvocationService:
         self.cache = cache
         self.executor = executor or E.InlineExecutor()
         self.toolkit_versions = toolkit_versions or {}
+        self._futures: dict[str, Any] = {}
+        self._futures_lock = threading.Lock()
         self.counters = {'invoked': 0, 'cache_hit': 0, 'refused': 0, 'failed': 0,
                          'artifacts_registered': 0}
 
@@ -211,6 +214,10 @@ class InvocationService:
         return row
 
     def cancel_job(self, job_id: str) -> dict:
+        with self._futures_lock:
+            future = self._futures.get(job_id)
+        if future is not None and not future.running() and not future.done():
+            future.cancel()
         row = self.ledger.request_cancel(job_id) if self.ledger is not None and \
             hasattr(self.ledger, 'request_cancel') else None
         if row is None:
@@ -218,11 +225,85 @@ class InvocationService:
                 f'no job {job_id!r}', details={'job_id': job_id})
         return row
 
+    def wait_job(self, job_id: str, *, timeout: float = 300.0,
+                 poll: float = 0.1) -> dict:
+        """Wait for a handle without coupling the caller to executor internals."""
+        deadline = time.time() + max(0.0, float(timeout))
+        while True:
+            row = self.get_job(job_id)
+            if row.get('state') in ('done', 'failed', 'cancelled'):
+                return row
+            if time.time() >= deadline:
+                row['wait'] = {'timed_out': True, 'timeout_seconds': float(timeout)}
+                return row
+            time.sleep(max(0.01, float(poll)))
+
+    def submit(self, method_id: str, payload: dict, *,
+               inline_max: int | None = None,
+               budget_seconds: float | None = None,
+               request_id: str | None = None) -> dict:
+        """Create a reconnectable queued Job and execute it on the injected executor."""
+        spec = self.catalog.get(method_id)
+        self.catalog.validate(method_id, payload)
+        spec.handler()  # fail before minting a handle that can never run
+        if 'job' not in spec.execution.get('supported_modes', []):
+            raise failures.DiracUnsupported(
+                f'{method_id} does not declare job execution',
+                details={'method_id': method_id,
+                         'supported_modes': spec.execution.get('supported_modes', [])})
+        if self.ledger is None:
+            raise failures.DiracInternal(
+                'job submission requires a JobStore; this kernel has none')
+        if not getattr(self.executor, 'supports_submission', False):
+            raise failures.DiracInternal(
+                'job submission requires an executor with submit(); '
+                f'got {getattr(self.executor, "kind", type(self.executor).__name__)}')
+        budget = budget_seconds
+        if budget is None:
+            budget = float((payload.get('parameters') or {}).get('max_seconds')
+                           or spec.execution.get('default_budget_seconds') or 0.0) or None
+        job_id, conflicted = self._open_job(spec, payload, budget, queued=True)
+        if job_id is None:
+            raise failures.DiracInternal(
+                'the JobStore could not create or resolve a durable job handle')
+        if not conflicted:
+            future = self.executor.submit(
+                self._run_submitted, job_id, method_id, payload,
+                inline_max, budget, request_id)
+            with self._futures_lock:
+                self._futures[job_id] = future
+            future.add_done_callback(lambda _f, jid=job_id: self._forget_future(jid))
+        return {
+            'ok': True,
+            'data': {'job': self.get_job(job_id)},
+            'artifacts': [], 'warnings': [],
+            'meta': {'envelope': 2, 'method_id': method_id,
+                     'version': spec.version, 'job_id': job_id,
+                     'execution_mode': 'job', 'deduplicated': conflicted,
+                     'request_id': request_id},
+        }
+
+    def _run_submitted(self, job_id: str, method_id: str, payload: dict,
+                       inline_max: int | None, budget_seconds: float | None,
+                       request_id: str | None) -> None:
+        row = self.ledger.get(job_id)
+        if row is None or row.get('state') == 'cancelled':
+            return
+        self.ledger.start(job_id)
+        self.invoke(method_id, payload, inline_max=inline_max,
+                    budget_seconds=budget_seconds, request_id=request_id,
+                    _preopened_job_id=job_id)
+
+    def _forget_future(self, job_id: str) -> None:
+        with self._futures_lock:
+            self._futures.pop(job_id, None)
+
     # ── the write side ────────────────────────────────────────────────────────
     def invoke(self, method_id: str, payload: dict, *,
                inline_max: int | None = None,
                budget_seconds: float | None = None,
-               request_id: str | None = None) -> dict:
+               request_id: str | None = None,
+               _preopened_job_id: str | None = None) -> dict:
         """Run a method and return a v2 envelope. Never raises for a REFUSAL.
 
         A refusal is a RESULT — the molecule is too large, the basis does not cover
@@ -237,7 +318,7 @@ class InvocationService:
         """
         t0 = time.time()
         self.counters['invoked'] += 1
-        job_id = None
+        job_id = _preopened_job_id
         spec = None
         try:
             spec = self.catalog.get(method_id)
@@ -265,12 +346,16 @@ class InvocationService:
                 # the COMPUTED path while cache hits are the majority of responses. A rule
                 # that applies to the minority of answers is not a rule.
                 self.catalog.validate_output(method_id, hit.result)
-                return self._envelope(spec, hit, t0, cache='db',
-                                      inline_max=inline_max, request_id=request_id,
-                                      job_id=None)
+                env = self._envelope(spec, hit, t0, cache='db',
+                                     inline_max=inline_max, request_id=request_id,
+                                     job_id=job_id)
+                if job_id is not None and self.ledger is not None:
+                    self.ledger.done(job_id, seconds=round(time.time() - t0, 3),
+                                     result_summary={'ok': True, 'cache': 'db'})
+                return env
 
-            if self.ledger is not None:
-                job_id = self._open_job(spec, payload, budget)
+            if self.ledger is not None and job_id is None:
+                job_id, _ = self._open_job(spec, payload, budget)
 
             ctx = InvocationContext(
                 method_id=method_id, version=spec.version, budget_seconds=budget,
@@ -346,7 +431,7 @@ class InvocationService:
 
     # ── internals ─────────────────────────────────────────────────────────────
     def _open_job(self, spec: C.MethodSpec, payload: dict,
-                  budget: float | None) -> str | None:
+                  budget: float | None, *, queued: bool = False) -> tuple[str | None, bool]:
         """Open a ledger row, and never let the ledger break the invocation.
 
         A job row is OBSERVABILITY. If the database is down, the science must still
@@ -357,18 +442,18 @@ class InvocationService:
             import hashlib
             import json as _json
             canonical = _json.dumps(payload, sort_keys=True, separators=(',', ':'))
-            job_id, _conflict = self.ledger.open(
+            job_id, conflict = self.ledger.open(
                 method_row_id=getattr(self.ledger, 'method_row_for',
                                       lambda _m: None)(spec.method_id),
                 input_sha256=hashlib.sha256(canonical.encode()).digest(),
                 params=dict(payload.get('parameters') or {}),
-                budget_seconds=budget, queued=False)
-            return job_id
+                budget_seconds=budget, queued=queued)
+            return job_id, conflict
         except Exception as e:                                     # noqa: BLE001
             print(f'[invoke] ledger unavailable ({type(e).__name__}: {e}) — running '
                   f'anyway, and provenance will say job_id: null', file=sys.stderr,
                   flush=True)
-            return None
+            return None, False
 
     def _require_declared_artifacts(self, spec: C.MethodSpec,
                                     out: HandlerResult) -> None:

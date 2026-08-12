@@ -2,13 +2,25 @@
   "schema_version": "1.0.0",
   "method_id": "surface.mep",
   "summary": "Electrostatic potential on the molecular surface, from a QM density — the route that can answer a sigma-hole question.",
-  "description": "DECLARED HERE, NOT YET REGISTERED AT RUNTIME. This method lives in the physics daemon, which has no method registry: no method_id, no implementation version, no descriptor, and an in-process job queue that does not survive a restart. ADR-002 makes this manifest the authority, so declaring it is correct — and saying that it is unregistered is the difference between a plan and a claim.",
+  "description": "Canonical QM surface-potential method. It runs through the shared invocation kernel, durable JobStore and content-addressed ArtifactStore; the legacy physics route is a compatibility adapter, not a second implementation.",
   "implementation": {
-    "module": "backend.physics.server",
+    "module": "backend.physics.mep_surface",
     "functions": [
-      "compute_surface_mep"
+      "compute_surface_mep",
+      "_prepare",
+      "_ecp_for",
+      "_install_watchdog",
+      "clamp_budget",
+      "estimated_scf_seconds",
+      "nao_for"
     ],
-    "constants": []
+    "constants": [
+      "DEFAULT_BASIS",
+      "DEFAULT_ISOVALUE",
+      "MAX_QM_ATOMS",
+      "GPU_CROSSOVER_NAO",
+      "GPU_SPEEDUP"
+    ]
   },
   "input": {
     "schema": {
@@ -98,11 +110,54 @@
               ],
               "default": "sto-3g",
               "description": "METHOD-SPECIFIC, deliberately. The global Basis union was already false: the physics daemon accepts def2-tzvp and the fields daemon does not."
+            },
+            "isovalue": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 0.001
+            },
+            "points_per_atom": {
+              "type": "integer",
+              "minimum": 12,
+              "maximum": 1000,
+              "default": 120
+            },
+            "max_seconds": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 3600,
+              "default": 300
+            },
+            "xc": {
+              "type": ["string", "null"],
+              "default": null
+            },
+            "use_gpu": {
+              "type": "boolean",
+              "default": false
             }
           }
         }
       }
     }
+  },
+  "invocation": {
+    "handler": "handlers:surface_handler",
+    "estimate": "handlers:surface_estimate",
+    "artifacts": [
+      {
+        "role": "surface.points",
+        "media_type": "application/vnd.dirac.float32-xyz",
+        "required": true,
+        "typical_bytes": 400000
+      },
+      {
+        "role": "surface.values",
+        "media_type": "application/vnd.dirac.float32-scalar",
+        "required": true,
+        "typical_bytes": 140000
+      }
+    ]
   },
   "output": {
     "schema": {
@@ -120,6 +175,11 @@
         "role": "surface.points",
         "media_type": "application/vnd.dirac.float32-xyz",
         "typical_size_bytes": 400000
+      },
+      {
+        "role": "surface.values",
+        "media_type": "application/vnd.dirac.float32-scalar",
+        "typical_size_bytes": 140000
       }
     ]
   },

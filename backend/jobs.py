@@ -240,7 +240,7 @@ class JobLedger:
             _bump('write_failed', f'{type(e).__name__}: {e}')
 
     def failed(self, job_id: str | None, *, code: str, detail: str,
-               seconds: float | None = None) -> None:
+               seconds: float | None = None, retryable: bool | None = None) -> None:
         """Terminal-failed. `code` is mapped onto app.job_error, never raising.
 
         A CANCELLED code is stored as state='cancelled', because the schema's
@@ -533,7 +533,7 @@ class MemoryJobStore:
                            finished_at=_now(), result_summary=result_summary)
 
     def failed(self, job_id: str | None, *, code: str, detail: str,
-               seconds: float | None = None) -> None:
+               seconds: float | None = None, retryable: bool | None = None) -> None:
         with self._lock:
             row = self._rows.get(job_id or '')
             if row and row['state'] in ('queued', 'running'):

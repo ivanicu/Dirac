@@ -86,6 +86,11 @@ MOLECULEEMBED_WARNINGS = []
 # surface.mep — Electrostatic potential on the molecular surface, from a QM density — the route that can answer a sigma-hole question.
 class SurfaceMepParameters(TypedDict, total=False):
     basis: Literal["sto-3g", "6-31g", "6-31g*", "def2-svp", "def2-tzvp"]
+    isovalue: float
+    points_per_atom: int
+    max_seconds: float
+    xc: str | None
+    use_gpu: bool
 
 SURFACEMEP_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
 SURFACEMEP_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
@@ -94,6 +99,7 @@ SURFACEMEP_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
 # surface.mep_at — Potential evaluated at caller-supplied coordinates, so the client can colour its own surface mesh.
 class SurfaceMepAtParameters(TypedDict, total=False):
     basis: Literal["sto-3g", "6-31g", "6-31g*", "def2-svp", "def2-tzvp"]
+    max_seconds: float
 
 SURFACEMEPAT_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
 SURFACEMEPAT_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
@@ -101,7 +107,10 @@ SURFACEMEPAT_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
 
 # torsion.strain — Relaxed torsion scan around a rotatable bond: where the given pose sits on the rotor energy curve.
 class TorsionStrainParameters(TypedDict, total=False):
-    basis: Literal["sto-3g", "6-31g", "6-31g*", "def2-svp", "def2-tzvp"]
+    steps: int
+    relax_hydrogens: bool
+    max_torsions: int
+    variant: Literal["MMFF94", "MMFF94s"]
 
 TORSIONSTRAIN_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
 TORSIONSTRAIN_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']

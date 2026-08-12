@@ -2,21 +2,29 @@
   "schema_version": "1.0.0",
   "method_id": "surface.mep_at",
   "summary": "Potential evaluated at caller-supplied coordinates, so the client can colour its own surface mesh.",
-  "description": "DECLARED HERE, NOT YET REGISTERED AT RUNTIME. This method lives in the physics daemon, which has no method registry: no method_id, no implementation version, no descriptor, and an in-process job queue that does not survive a restart. ADR-002 makes this manifest the authority, so declaring it is correct — and saying that it is unregistered is the difference between a plan and a claim.",
+  "description": "Canonical point-sampled QM potential method. It runs through the shared invocation kernel, durable JobStore and content-addressed ArtifactStore.",
   "implementation": {
-    "module": "backend.physics.server",
+    "module": "backend.physics.mep_surface",
     "functions": [
-      "compute_surface_mep"
+      "mep_at_points",
+      "_prepare",
+      "_ecp_for",
+      "_install_watchdog",
+      "clamp_budget"
     ],
-    "constants": []
+    "constants": [
+      "DEFAULT_BASIS",
+      "MAX_QM_ATOMS"
+    ]
   },
   "input": {
     "schema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "molecule"
+    "required": [
+      "molecule",
+      "points"
       ],
       "properties": {
         "molecule": {
@@ -83,7 +91,17 @@
             }
           }
         },
-        "parameters": {
+      "points": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "number" }
+        }
+      },
+      "parameters": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
@@ -98,11 +116,29 @@
               ],
               "default": "sto-3g",
               "description": "METHOD-SPECIFIC, deliberately. The global Basis union was already false: the physics daemon accepts def2-tzvp and the fields daemon does not."
+            },
+            "max_seconds": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 3600,
+              "default": 300
             }
           }
         }
       }
     }
+  },
+  "invocation": {
+    "handler": "handlers:surface_handler",
+    "estimate": "handlers:surface_estimate",
+    "artifacts": [
+      {
+        "role": "surface.values",
+        "media_type": "application/vnd.dirac.float32-scalar",
+        "required": true,
+        "typical_bytes": 400000
+      }
+    ]
   },
   "output": {
     "schema": {
@@ -118,7 +154,7 @@
     "artifacts": [
       {
         "role": "surface.values",
-        "media_type": "application/vnd.dirac.float32-xyz",
+        "media_type": "application/vnd.dirac.float32-scalar",
         "typical_size_bytes": 400000
       }
     ]

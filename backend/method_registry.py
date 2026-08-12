@@ -32,6 +32,7 @@ Standalone (also the smoke test — prints what it would register):
 from __future__ import annotations
 
 import hashlib
+import importlib
 import inspect
 import json
 import sys
@@ -194,6 +195,47 @@ UNITS['fields.region.mlp'] = {
                      'charges': 'caller-supplied logp contributions'},
 }
 
+# Physics used to declare these methods while leaving them absent at runtime. Their source
+# lives in separate modules, so each unit names its module explicitly; plan() imports that
+# module only for hashing and registration, never for transport routing.
+UNITS.update({
+    'surface.mep': {
+        'module': 'physics.mep_surface',
+        'fns': ['compute_surface_mep', '_prepare', '_ecp_for', '_install_watchdog',
+                'clamp_budget', 'estimated_scf_seconds', 'nao_for'],
+        'consts': ['DEFAULT_BASIS', 'DEFAULT_ISOVALUE', 'MAX_QM_ATOMS',
+                   'GPU_CROSSOVER_NAO', 'GPU_SPEEDUP'],
+        'exec_class': 'job',
+        'in_schema': {'type': 'object', 'required': ['molecule']},
+        'out_schema': {'type': 'object', 'required': ['summary']},
+        'capabilities': {'refuses': ['unconverged', 'budget_exceeded',
+                                     'open_shell_metal_without_spin'],
+                         'artifacts': ['surface.points', 'surface.values']},
+    },
+    'surface.mep_at': {
+        'module': 'physics.mep_surface',
+        'fns': ['mep_at_points', '_prepare', '_ecp_for', '_install_watchdog',
+                'clamp_budget'],
+        'consts': ['DEFAULT_BASIS', 'MAX_QM_ATOMS'],
+        'exec_class': 'job',
+        'in_schema': {'type': 'object', 'required': ['molecule', 'points']},
+        'out_schema': {'type': 'object', 'required': ['summary']},
+        'capabilities': {'refuses': ['unconverged', 'budget_exceeded'],
+                         'artifacts': ['surface.values']},
+    },
+    'torsion.strain': {
+        'module': 'physics.torsion',
+        'fns': ['compute_torsion_strain', '_relaxed_scan', '_force_field',
+                '_relax_hydrogens', '_dihedral_atoms', '_verdict'],
+        'consts': ['FORCE_FIELDS', 'ROTATABLE_SMARTS'],
+        'exec_class': 'job',
+        'in_schema': {'type': 'object', 'required': ['molecule']},
+        'out_schema': {'type': 'object', 'required': ['summary']},
+        'capabilities': {'refuses': ['unparameterized', 'unparseable_molfile'],
+                         'artifacts': ['torsion.profile']},
+    },
+})
+
 
 # ── version = hash of the compute unit, machine-derived ─────────────────────
 
@@ -281,7 +323,9 @@ def plan(module) -> list[dict]:
     """What register_all would write. Pure; no DB. This is the smoke test."""
     out = []
     for method_id, spec in sorted(UNITS.items()):
-        version, digest = unit_version(module, spec['fns'],
+        source_module = (importlib.import_module(spec['module'])
+                         if spec.get('module') else module)
+        version, digest = unit_version(source_module, spec['fns'],
                                        spec.get('consts', ()))
         out.append({'method_id': method_id, 'version': version, 'sha256': digest,
                     'exec_class': spec['exec_class'], 'fns': sorted(spec['fns']),
@@ -290,7 +334,8 @@ def plan(module) -> list[dict]:
     return out
 
 
-def register_all(conn_factory: Callable, module, toolkit_id: str | None = None) -> dict[str, str]:
+def register_all(conn_factory: Callable, module,
+                 toolkit_ids: dict[str, str] | str | None = None) -> dict[str, str]:
     """Register every compute unit; return {method_id: method_row_id}.
 
     Idempotent by construction: meta.register_method returns the existing row
@@ -303,6 +348,13 @@ def register_all(conn_factory: Callable, module, toolkit_id: str | None = None) 
     rows = plan(module)
     with conn_factory() as conn, conn.cursor() as cur:
         for r in rows:
+            unit = UNITS[r['method_id']]
+            toolkit_name = unit.get(
+                'toolkit',
+                'pyscf' if (r['method_id'].startswith('fields.qm.')
+                            or r['method_id'].startswith('surface.')) else 'rdkit')
+            toolkit_id = (toolkit_ids.get(toolkit_name)
+                          if isinstance(toolkit_ids, dict) else toolkit_ids)
             cur.execute(
                 'SELECT meta.register_method(%s, %s, %s, %s, %s, %s, %s, %s, %s)',
                 (r['method_id'], r['version'], r['sha256'],
@@ -337,19 +389,16 @@ def main() -> int:
         print(f"  {r['method_id']:22s} v{r['version']}  {r['exec_class']:11s} "
               f"refuses={len(caps.get('refuses', []))}  fns={len(r['fns'])}")
 
-    # The invariant that keeps this table honest: every kind the service can
-    # serve must map to a registered method, and every registered method must
-    # be reachable from some kind.
+    # Field kinds are a legacy v1 transport mapping, not the authority for the
+    # application registry. Every legacy kind must resolve, while methods that
+    # are reachable through v2/commands are deliberately allowed to have no v1 kind.
     ids = {r['method_id'] for r in rows}
     missing = {k: m for k, m in KIND_TO_METHOD.items() if m not in ids}
-    orphan = ids - set(KIND_TO_METHOD.values())
     if missing:
         print(f'FAIL: kinds mapped to unregistered methods: {missing}')
         return 1
-    if orphan:
-        print(f'FAIL: registered methods no kind can reach: {orphan}')
-        return 1
-    print('OK: kind↔method mapping is total and has no orphans')
+    print('OK: every legacy field kind resolves; application-only methods are '
+          'reachable through the canonical catalog')
 
     if '--apply' in sys.argv:
         ids_written = register_all(fs._db, fs)

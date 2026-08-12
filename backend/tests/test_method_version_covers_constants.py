@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import os
 import sys
+import importlib
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -110,10 +111,11 @@ def test_the_registry_refuses_a_constant_that_does_not_exist():
 def test_every_declared_constant_exists_today():
     """The declarations must be true right now, not aspirational."""
     for method_id, spec in mr.UNITS.items():
+        module = importlib.import_module(spec['module']) if spec.get('module') else fs
         for const in spec.get('consts', ()):
-            assert hasattr(fs, const), (
+            assert hasattr(module, const), (
                 f'{method_id} declares the constant {const!r}, which is not in '
-                f'field_server today')
+                f'{module.__name__} today')
 
 
 for name, fn in list(globals().items()):

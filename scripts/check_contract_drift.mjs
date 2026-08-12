@@ -507,7 +507,7 @@ section('4 · emitted keys vs envelope.py FIELD_META_SCHEMA (runtime authority)'
 // ═════════════════════════════════════════════════════════════════════════
 
 if (process.argv.includes('--redproof')) {
-    const { execFileSync } = await import('node:child_process');
+    const { spawnSync } = await import('node:child_process');
     const os = await import('node:os');
     const { withMutation, replacingOnce } = await import('./lib/mutate.mjs');
 
@@ -522,13 +522,18 @@ if (process.argv.includes('--redproof')) {
     }
 
     const runGate = () => {
-        try {
-            execFileSync(process.execPath, [url.fileURLToPath(import.meta.url)],
-                { env: { ...process.env, DIRAC_CONTRACT_ROOT: tmp }, stdio: 'pipe' });
-            return { code: 0, out: '' };
-        } catch (e) {
-            return { code: e.status, out: String(e.stdout || '') };
-        }
+        const stdoutPath = path.join(tmp, '.redproof.stdout');
+        const stderrPath = path.join(tmp, '.redproof.stderr');
+        const stdoutFd = fs.openSync(stdoutPath, 'w');
+        const stderrFd = fs.openSync(stderrPath, 'w');
+        const result = spawnSync(process.execPath, [url.fileURLToPath(import.meta.url)],
+            { env: { ...process.env, DIRAC_CONTRACT_ROOT: tmp },
+                stdio: ['ignore', stdoutFd, stderrFd] });
+        fs.closeSync(stdoutFd);
+        fs.closeSync(stderrFd);
+        return { code: result.status ?? 1,
+            out: fs.readFileSync(stdoutPath, 'utf8')
+                + fs.readFileSync(stderrPath, 'utf8') };
     };
 
     const cases = [
@@ -600,6 +605,10 @@ interface ReGrownFieldMeta {
         const convicted = verdict.code === want && c.expect.test(verdict.out);
         console.log(`  ${convicted ? 'OK  ' : 'FAIL'}  ${c.name} → exit ${verdict.code}`
             + (convicted ? '' : ` (expected exit ${want} naming the mutated symbol)`));
+        if (!convicted && verdict.out) {
+            console.log(verdict.out.split('\n').filter(Boolean).slice(-8)
+                .map(line => `        ${line}`).join('\n'));
+        }
         if (!convicted) allOk = false;
     }
     fs.rmSync(tmp, { recursive: true, force: true });

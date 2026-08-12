@@ -2,13 +2,21 @@
   "schema_version": "1.0.0",
   "method_id": "torsion.strain",
   "summary": "Relaxed torsion scan around a rotatable bond: where the given pose sits on the rotor energy curve.",
-  "description": "DECLARED HERE, NOT YET REGISTERED AT RUNTIME. This method lives in the physics daemon, which has no method registry: no method_id, no implementation version, no descriptor, and an in-process job queue that does not survive a restart. ADR-002 makes this manifest the authority, so declaring it is correct — and saying that it is unregistered is the difference between a plan and a claim.",
+  "description": "Canonical relaxed torsion-strain method. It runs through the shared invocation kernel, durable JobStore and content-addressed ArtifactStore.",
   "implementation": {
-    "module": "backend.physics.server",
+    "module": "backend.physics.torsion",
     "functions": [
-      "torsion_profile"
+      "compute_torsion_strain",
+      "_relaxed_scan",
+      "_force_field",
+      "_relax_hydrogens",
+      "_dihedral_atoms",
+      "_verdict"
     ],
-    "constants": []
+    "constants": [
+      "FORCE_FIELDS",
+      "ROTATABLE_SMARTS"
+    ]
   },
   "input": {
     "schema": {
@@ -87,22 +95,43 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "basis": {
+            "steps": {
+              "type": "integer",
+              "minimum": 6,
+              "maximum": 360,
+              "default": 24
+            },
+            "relax_hydrogens": {
+              "type": "boolean",
+              "default": true
+            },
+            "max_torsions": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 12
+            },
+            "variant": {
               "type": "string",
-              "enum": [
-                "sto-3g",
-                "6-31g",
-                "6-31g*",
-                "def2-svp",
-                "def2-tzvp"
-              ],
-              "default": "sto-3g",
-              "description": "METHOD-SPECIFIC, deliberately. The global Basis union was already false: the physics daemon accepts def2-tzvp and the fields daemon does not."
+              "enum": ["MMFF94", "MMFF94s"],
+              "default": "MMFF94s"
             }
           }
         }
       }
     }
+  },
+  "invocation": {
+    "handler": "handlers:torsion_handler",
+    "estimate": "handlers:torsion_estimate",
+    "artifacts": [
+      {
+        "role": "torsion.profile",
+        "media_type": "application/vnd.dirac.torsion-profile+json",
+        "required": true,
+        "typical_bytes": 400000
+      }
+    ]
   },
   "output": {
     "schema": {

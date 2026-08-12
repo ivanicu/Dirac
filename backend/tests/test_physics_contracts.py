@@ -82,6 +82,7 @@ if str(_BACKEND) not in sys.path:
 
 import numpy as np                                        # noqa: E402
 import field_server as fs                                 # noqa: E402
+import failures                                           # noqa: E402
 
 MIGRATIONS = _REPO / 'backend' / 'db' / 'migrations'
 
@@ -336,15 +337,11 @@ def test_an_uncovered_element_is_refused_as_chemistry_not_as_an_internal_error()
     """CONTRACT: 'this basis does not describe this element' is a chemistry
     refusal (reason='unsupported'), never an internal error. Cheap — it fails
     while building the Mole, before any SCF runs."""
-    src, _ = _source_and_tree()
-    assert "'unsupported' if isinstance(e, ValueError) else 'internal'" in src, (
-        'the handler no longer types refusals by ValueError; re-derive this '
-        'test against the new mapping')
     mol = prepared('c1ccccc1I')
     try:
         fs.run_scf(mol, '6-31g', max_seconds=60.0)
     except Exception as e:                                      # noqa: BLE001
-        assert isinstance(e, ValueError), (
+        assert isinstance(e, failures.DiracUnsupported), (
             f'6-31g on iodobenzene raised {type(e).__name__} '
             f'({" -> ".join(c.__name__ for c in type(e).__mro__[:3])}), so the '
             f"HTTP layer reports reason='internal' for a chemistry problem: "
@@ -425,7 +422,7 @@ def _basis_literal_homes(tree: ast.Module) -> set[int]:
         if not isinstance(node, ast.Assign):
             continue
         names = {t.id for t in node.targets if isinstance(t, ast.Name)}
-        classifies = any(n.endswith('_BASES') for n in names)
+        classifies = any(n.endswith(('_BASIS', '_BASES')) for n in names)
         if names & set(_BASIS_CONSTANT_HOMES) or classifies:
             allowed.update(range(node.lineno, (node.end_lineno or node.lineno) + 1))
     return allowed
@@ -589,7 +586,7 @@ def test_pf6_classical_mep_refuses_and_names_the_elements():
     mol = prepared('F[P-](F)(F)(F)(F)F')
     try:
         cube, meta = fs.field_mep(mol)
-    except ValueError as e:
+    except failures.DiracUnparameterized as e:
         msg = str(e)
         assert 'P' in re.findall(r'[A-Z][a-z]?', msg), (
             f'the refusal does not name the offending element: {msg!r}')

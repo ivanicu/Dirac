@@ -27,6 +27,7 @@ learn the price.
 """
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import failures
@@ -551,3 +552,113 @@ def region_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
         warnings=warnings,
         parameters_used={'dielectric': dielectric, 'spacing': spacing},
         cache='computed')
+
+
+def surface_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
+    """Both QM surface methods through the canonical invocation kernel."""
+    import numpy as np
+    from physics import mep_surface as MS
+
+    molecule = payload['molecule']['content']
+    params = dict(payload.get('parameters') or {})
+    basis = params.get('basis', MS.DEFAULT_BASIS)
+    budget = ctx.budget_seconds or params.get('max_seconds') or MS.DEFAULT_MAX_SECONDS
+    try:
+        if ctx.method_id == 'surface.mep':
+            out = MS.compute_surface_mep(
+                molecule, basis=basis,
+                isovalue=float(params.get('isovalue', MS.DEFAULT_ISOVALUE)),
+                points_per_atom=int(params.get('points_per_atom', 120)),
+                max_seconds=float(budget), xc=params.get('xc'),
+                use_gpu=params.get('use_gpu', 'auto'))
+            points = np.ascontiguousarray(out['points'], dtype='<f4')
+            values = np.ascontiguousarray(out['values'], dtype='<f4')
+            meta = out['meta']
+            result = {'summary': {'n_points': int(len(values)),
+                                  'extrema': out['extrema'], 'meta': meta}}
+            artifacts = [('surface.points', points.tobytes()),
+                         ('surface.values', values.tobytes())]
+        elif ctx.method_id == 'surface.mep_at':
+            points = np.asarray(payload['points'], dtype=float)
+            values, meta = MS.mep_at_points(
+                molecule, points, basis=basis, max_seconds=float(budget))
+            values = np.ascontiguousarray(values, dtype='<f4')
+            result = {'summary': {'n_points': int(len(values)),
+                                  'min': float(values.min()),
+                                  'max': float(values.max()), 'meta': meta}}
+            artifacts = [('surface.values', values.tobytes())]
+        else:                                                       # pragma: no cover
+            raise failures.DiracInternal(f'unknown surface method {ctx.method_id}')
+    except Exception as exc:                                       # noqa: BLE001
+        _raise_physics_failure(exc)
+    return HandlerResult(
+        result=result, artifacts=artifacts,
+        provenance={'n_atoms': meta.get('n_atoms'),
+                    'charge': meta.get('charge'), 'spin': meta.get('spin'),
+                    'scf_seconds': meta.get('scf_seconds')},
+        parameters_used={'basis': basis, 'max_seconds': float(budget)},
+        cache='computed')
+
+
+def surface_estimate(payload: dict) -> dict:
+    from physics import mep_surface as MS
+    try:
+        basis = (payload.get('parameters') or {}).get('basis', MS.DEFAULT_BASIS)
+        nao = MS.nao_for(payload['molecule']['content'], basis)
+        seconds = MS.estimated_scf_seconds(nao)
+        return {'available': True, 'n_basis_functions_estimated': nao,
+                'seconds': round(seconds, 2),
+                'confidence': 'same fitted SCF cost model used by the runtime preflight'}
+    except Exception as exc:                                       # noqa: BLE001
+        return {'available': False, 'reason': f'{type(exc).__name__}: {exc}'}
+
+
+def torsion_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
+    from physics.torsion import compute_torsion_strain
+    params = dict(payload.get('parameters') or {})
+    try:
+        out = compute_torsion_strain(
+            payload['molecule']['content'], steps=int(params.get('steps', 24)),
+            relax_hydrogens=bool(params.get('relax_hydrogens', True)),
+            max_torsions=int(params.get('max_torsions', 12)),
+            variant=params.get('variant', 'MMFF94s'))
+    except Exception as exc:                                       # noqa: BLE001
+        _raise_physics_failure(exc)
+    profile = json.dumps(out, sort_keys=True, separators=(',', ':')).encode()
+    meta = out.get('meta') or {}
+    return HandlerResult(
+        result={'summary': {'total_strain_kcal': out['total_strain_kcal'],
+                            'total_verdict': out['total_verdict'],
+                            'n_scanned': meta.get('n_scanned'), 'meta': meta}},
+        artifacts=[('torsion.profile', profile)],
+        provenance={'n_atoms': None},
+        parameters_used={'steps': int(params.get('steps', 24)),
+                         'relax_hydrogens': bool(params.get('relax_hydrogens', True)),
+                         'max_torsions': int(params.get('max_torsions', 12)),
+                         'variant': params.get('variant', 'MMFF94s')},
+        cache='computed')
+
+
+def torsion_estimate(payload: dict) -> dict:
+    return {'available': False,
+            'reason': 'cost depends on the number of rotatable bonds and MMFF convergence'}
+
+
+def _raise_physics_failure(exc: Exception) -> None:
+    """Translate producer-native refusals once, at the science boundary."""
+    from physics.mep_surface import PhysicsBudgetExceeded
+    if isinstance(exc, failures.DiracFailure):
+        raise exc
+    message = str(exc)
+    lower = message.lower()
+    if isinstance(exc, PhysicsBudgetExceeded) or 'budget' in lower or 'predicted' in lower:
+        raise failures.DiracBudgetExceeded(message) from exc
+    if 'did not converge' in lower:
+        raise failures.DiracUnconverged(message) from exc
+    if 'parse' in lower or 'molfile' in lower and 'no 3d' not in lower:
+        raise failures.DiracParseFailure(message) from exc
+    if 'exceeds' in lower and 'atoms' in lower:
+        raise failures.DiracTooLarge(message) from exc
+    if 'type' in lower or 'force field' in lower:
+        raise failures.DiracUnparameterized(message) from exc
+    raise failures.DiracUnsupported(message) from exc

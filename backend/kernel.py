@@ -59,8 +59,7 @@ def source_versions() -> dict[str, str]:
     try:
         import field_server as FS
         import method_registry as MR
-        return {mid: MR.unit_version(FS, u['fns'], u['consts'])[0]
-                for mid, u in MR.UNITS.items()}
+        return {row['method_id']: row['version'] for row in MR.plan(FS)}
     except Exception as e:                                          # noqa: BLE001
         print(f'[kernel] source versions unavailable ({type(e).__name__}: {e}); '
               f'provenance will report version: null rather than a guess',
@@ -182,7 +181,9 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
     # without it every cache hit becomes a fresh SCF.
     ca = cache if cache is not None else (default_cache() if with_cache else None)
     js = job_store if job_store is not None else default_jobs()
-    ex = executor or execution.InlineExecutor()
+    # A ThreadExecutor still executes sync calls inline, while also making descriptor
+    # default_mode=job truthful for /v2/jobs submissions.
+    ex = executor or execution.ThreadExecutor(max_workers=2)
     svc = invocation.InvocationService(cat, store=st, cache=ca, ledger=js, executor=ex,
                                       toolkit_versions=toolkit_versions())
     svc.store_kind = kind                    # type: ignore[attr-defined]

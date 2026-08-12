@@ -129,6 +129,7 @@ PORT = 8901
 BOHR = 0.529177210859  # Å per Bohr
 MAX_QM_ATOMS = 120     # with hydrogens; STO-3G HF beyond this is not interactive
 DEFAULT_BASIS = 'sto-3g'
+IODINE_BASIS = 'def2-svp'
 
 # ── the wall-clock bound ────────────────────────────────────────────────────
 #
@@ -332,11 +333,29 @@ def handle_v2(method: str, path: str, body: dict | None) -> tuple[int, dict] | N
                          'meta': {'envelope': 2,
                                   'durability': getattr(svc, 'job_durability', None)}}
 
+        if method == 'POST' and path == '/v2/jobs':
+            body = body or {}
+            mid = body.get('method_id')
+            if not mid or 'input' not in body:
+                return _v2_error(
+                    'PARSE', 'job submission requires method_id and input',
+                    got_keys=sorted(body))
+            kw = {k: body[k] for k in
+                  ('inline_max', 'budget_seconds', 'request_id')
+                  if body.get(k) is not None}
+            return 202, _kernel().submit(mid, body['input'], **kw)
+
         if path.startswith('/v2/jobs/'):
             rest = urllib.parse.unquote(path[len('/v2/jobs/'):]).strip('/')
             if method == 'POST' and rest.endswith('/cancel'):
                 job_id = rest[:-len('/cancel')].strip('/')
                 return 200, {'ok': True, 'data': _kernel().cancel_job(job_id),
+                             'meta': {'envelope': 2}}
+            if method == 'GET' and rest.endswith('/wait'):
+                job_id = rest[:-len('/wait')].strip('/')
+                timeout = float((query.get('timeout') or ['300'])[0])
+                return 200, {'ok': True,
+                             'data': _kernel().wait_job(job_id, timeout=timeout),
                              'meta': {'envelope': 2}}
             if method == 'GET' and rest and '/' not in rest:
                 return 200, {'ok': True, 'data': _kernel().get_job(rest),
@@ -507,12 +526,11 @@ def db_init() -> bool:
         # that decides whether a cached SCF is still valid.
         try:
             import method_registry
-            _method_ids = method_registry.register_all(_db, sys.modules[__name__],
-                                                      _toolkit_ids.get('pyscf'))
+            _method_ids = method_registry.register_all(
+                _db, sys.modules[__name__], _toolkit_ids)
             _method_versions = {
-                mid: method_registry.unit_version(sys.modules[__name__],
-                                                  u['fns'], u['consts'])[0]
-                for mid, u in method_registry.UNITS.items()}
+                row['method_id']: row['version']
+                for row in method_registry.plan(sys.modules[__name__])}
             print(f'[db] {len(_method_ids)} compute units registered '
                   f'({len(_method_versions)} source digests)', file=sys.stderr, flush=True)
             global _jobs
@@ -1352,10 +1370,10 @@ def run_scf(mol: Chem.Mol, basis: str, max_seconds: float = DEFAULT_MAX_SECONDS,
         # the v1 golden does not move.
         raise failures.DiracUnsupported(
             f'basis {basis} does not cover {"/".join(uncovered)} — '
-            'def2-svp is the only whitelisted basis with iodine',
+            f'{IODINE_BASIS} is the only whitelisted basis with iodine',
             details={'basis': basis, 'unsupported_elements': sorted(uncovered),
-                     'supported_alternatives': ['def2-svp']},
-            hint={'parameters': {'basis': 'def2-svp'}})
+                     'supported_alternatives': [IODINE_BASIS]},
+            hint={'parameters': {'basis': IODINE_BASIS}})
     if len(syms) > MAX_QM_ATOMS:
         raise failures.DiracTooLarge(
             f'{len(syms)} atoms (with H) exceeds the interactive QM cap of {MAX_QM_ATOMS}',

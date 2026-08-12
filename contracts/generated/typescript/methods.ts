@@ -645,6 +645,11 @@ export type SurfaceMepOutput = {
 /** surface.mep — Electrostatic potential on the molecular surface, from a QM density — the route that can answer a sigma-hole question. */
 export interface SurfaceMepParameters {
     basis?: 'sto-3g' | '6-31g' | '6-31g*' | 'def2-svp' | 'def2-tzvp';
+    isovalue?: number;
+    points_per_atom?: number;
+    max_seconds?: number;
+    xc?: string | null;
+    use_gpu?: boolean;
 }
 
 export const SurfaceMepExecution = {
@@ -670,6 +675,7 @@ export type SurfaceMep_atOutput = {
 /** surface.mep_at — Potential evaluated at caller-supplied coordinates, so the client can colour its own surface mesh. */
 export interface SurfaceMep_atParameters {
     basis?: 'sto-3g' | '6-31g' | '6-31g*' | 'def2-svp' | 'def2-tzvp';
+    max_seconds?: number;
 }
 
 export const SurfaceMep_atExecution = {
@@ -694,7 +700,10 @@ export type TorsionStrainOutput = {
 
 /** torsion.strain — Relaxed torsion scan around a rotatable bond: where the given pose sits on the rotor energy curve. */
 export interface TorsionStrainParameters {
-    basis?: 'sto-3g' | '6-31g' | '6-31g*' | 'def2-svp' | 'def2-tzvp';
+    steps?: number;
+    relax_hydrogens?: boolean;
+    max_torsions?: number;
+    variant?: 'MMFF94' | 'MMFF94s';
 }
 
 export const TorsionStrainExecution = {
