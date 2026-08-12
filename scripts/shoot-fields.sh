@@ -47,6 +47,10 @@ FIELDS=${FIELDS:-"mep mlp mep_qm homo lumo density"}
 # only way to shoot fields while the loci→molblock builder is broken — and it
 # is also the cleaner subject: a bare ligand, no cartoon in front of the field.
 SMILES=${SMILES:-}
+# CHANNELS=shape,sign leaves exactly those overlay channels on. The whole point
+# of shipping them as switches is that a saturating channel can be ISOLATED
+# rather than guessed at; this makes that reachable from the harness.
+CHANNELS=${CHANNELS:-}
 
 mkdir -p "$OUT"
 rm -rf "$STAGE"; cp -r "$ROOT/build/dirac" "$STAGE"
@@ -56,6 +60,7 @@ cat > "$STAGE/index.html.driver" <<EOF
 <script>
 (function () {
   var FIELD = '$FIELD', MOLECULE = '$MOLECULE', SMILES = '$SMILES';
+  var CHANNELS = '$CHANNELS';
   var q = function (s) { return document.querySelector(s); };
   var txt = function (s) { var e = q(s); return e ? e.textContent.trim() : ''; };
   function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
@@ -127,6 +132,14 @@ cat > "$STAGE/index.html.driver" <<EOF
         }
       }
     }
+    if (CHANNELS) {
+      var want = CHANNELS.split(',');
+      document.querySelectorAll('.field-chan').forEach(function (b) {
+        var on = want.indexOf(b.dataset.chan) >= 0;
+        if ((b.getAttribute('aria-pressed') === 'true') !== on) b.click();
+      });
+      await wait(1500);
+    }
     await wait(2500);
     // Stamp the outcome INTO the page: a screenshot of a field that silently
     // failed is indistinguishable from one that worked, at a glance.
@@ -140,8 +153,22 @@ cat > "$STAGE/index.html.driver" <<EOF
     document.querySelectorAll('.field-btn[data-field]').forEach(function (b) {
       states.push(b.dataset.field + (b.disabled ? ':OFF' : ':on'));
     });
+    // Which RENDERER drew it. The overlay and the legacy shells produce
+    // different pictures, but a shot of a field that silently fell back looks
+    // like a shot of a field -- and the fallback is the quiet failure mode this
+    // whole bar exists to prevent.
+    var ov = window.__diracFieldOverlay;
+    var ovc = document.querySelector('canvas.dirac-field-overlay');
+    var chans = document.getElementById('field-channels');
+    var render = ov
+      ? ('overlay:' + (ov.active ? 'ON' : 'off')
+         + (ov.lastError ? '(' + ov.lastError + ')' : '')
+         + ' canvas:' + (ovc ? ovc.width + 'x' + ovc.height + '/' + (ovc.style.mixBlendMode || 'normal') : 'none')
+         + ' chans:' + (chans && !chans.hidden ? 'shown' : 'hidden'))
+      : 'overlay:NO-HANDLE';
     bar.textContent = FIELD + ' | ' + MOLECULE + ' | ' + txt('#fields-summary')
       + ' | ' + txt('#field-status')
+      + ' || ' + render
       + ' || ' + states.join(' ') + ' || ' + txt('#field-prefetch');
     document.body.appendChild(bar);
     document.title = 'SHOT_READY';

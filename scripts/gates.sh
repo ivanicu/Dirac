@@ -46,7 +46,7 @@ run_gate() {
 }
 
 # ---- gate selection -------------------------------------------------------
-ALL=(tsc build palette css migrations docs contracts physics commits portability layering golden)
+ALL=(tsc build palette css migrations docs contracts physics commits portability layering golden parity)
 if [ "$#" -eq 0 ]; then
     WANT=("${ALL[@]}")
 else
@@ -128,6 +128,25 @@ if wanted golden; then
         run_gate 'gate-12-v1-golden' backend/env/bin/python scripts/capture_v1_golden.py
     else
         printf '%s\n' "${YEL:-}SKIP${OFF} gate-12-v1-golden (no daemon on 8901 — UNVERIFIED, not clean)"
+    fi
+fi
+
+# Gate 13 · THE ACCEPTANCE TEST, as a gate rather than as a paragraph in a plan.
+# The external audit's first decisive criterion: the same fields.qm.homo invocation
+# through every transport must yield the same method version, the same science, the
+# same artifact SHA-256 and the same typed provenance. Two transports exist today
+# (core and the v1 route) and the others are reported ABSENT, never as passing.
+# It earns its place in the gate list because it has already found two real defects
+# no other check could see: a version stamped on one path and not the other, and
+# pyscf writing the wall clock into every cube so that no two transports could ever
+# agree on a digest.
+if wanted parity; then
+    if curl -s --max-time 3 http://127.0.0.1:8901/health >/dev/null 2>&1; then
+        run_gate 'gate-13-acceptance-parity' \
+            backend/env/bin/python scripts/acceptance_parity.py
+    else
+        printf '%s\n' "${YEL:-}SKIP${OFF} gate-13-acceptance-parity (no daemon on 8901 \
+— UNVERIFIED, not clean)"
     fi
 fi
 
