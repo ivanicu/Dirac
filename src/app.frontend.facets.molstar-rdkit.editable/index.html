@@ -385,6 +385,18 @@
             border-radius: 6px; background: var(--surface-2);
             font-size: 9.5px; line-height: 1.5; color: var(--text-3);
         }
+        .field-channels { display: flex; flex-wrap: wrap; gap: 4px; }
+        .field-chan {
+            font: inherit; font-size: 10px; letter-spacing: .04em;
+            padding: 4px 9px; cursor: pointer;
+            background: transparent; color: var(--text-2);
+            border: 1px solid var(--line); border-radius: 2px;
+        }
+        .field-chan:hover { border-color: var(--text-2); color: var(--text-1); }
+        .field-chan[aria-pressed="true"] {
+            background: var(--text-1); color: var(--panel-bg, #f1f0eb);
+            border-color: var(--text-1);
+        }
         .field-meta { display: grid; gap: 3px; }
         .field-meta-row {
             display: flex;
@@ -1435,6 +1447,20 @@
                                  previous molecule, which is the only moment the
                                  question "should I re-fit?" means anything. -->
                             <button type="button" class="field-cancel" id="field-refit" hidden>Re-fit scale</button>
+                            <!-- `Both` is the alignment instrument, not a
+                                 curiosity: the overlay raymarches off mol*'s
+                                 camera in its own context, and a placement
+                                 wrong by one convention draws a plausible
+                                 field in the wrong place. Drawn together the
+                                 two must agree, because they are the same
+                                 level set of the same volume. -->
+                            <label class="field-control">Renderer
+                                <select id="field-renderer">
+                                    <option value="composite" selected>Composite · light</option>
+                                    <option value="shells">Isosurface shells</option>
+                                    <option value="both">Both · check alignment</option>
+                                </select>
+                            </label>
                             <label class="field-control">Basis
                                 <select id="field-basis">
                                     <option value="sto-3g" selected>STO-3G · fast</option>
@@ -1443,6 +1469,12 @@
                                 </select>
                             </label>
                         </div>
+                        <!-- The four display channels, as switches rather than a
+                             style preset: each carries a DIFFERENT quantity, and
+                             the only way to see what a channel was contributing
+                             is to switch it off. -->
+                        <div id="field-channels" class="field-channels" hidden></div>
+                        <div id="field-overlay-note" class="field-caveat" hidden></div>
                         <div id="field-status" class="field-status" data-tone="idle">Load a structure with a ligand first.</div>
                         <div id="field-prefetch" class="field-status" data-tone="idle" hidden></div>
                         <!-- Why each unavailable field is unavailable, in the

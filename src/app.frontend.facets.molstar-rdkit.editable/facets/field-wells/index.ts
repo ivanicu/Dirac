@@ -21,6 +21,11 @@ import { Color } from '../../../mol-util/color';
 import { focusSphereKeepingSlab } from '../../camera-slab';
 import { buildSurroundingsRequest } from './surroundings';
 import { bakedField } from './baked';
+import { fieldOverlay } from './volume-overlay';
+
+// A renderer that fails silently is indistinguishable from one that works but
+// has nothing to draw. The handle costs nothing and every harness can read it.
+(globalThis as unknown as Record<string, unknown>).__diracFieldOverlay = fieldOverlay;
 
 // Follow the page's host: the daemon runs beside whatever served the app, so
 // a hardcoded 127.0.0.1 would point a Mac's browser at the Mac itself and
@@ -104,6 +109,106 @@ function tokenColor(name: string, fallback: number): number {
     return m ? parseInt(m[1], 16) : fallback;
 }
 const shellRef = (sign: 'pos' | 'neg', i: number) => `field-wells-repr-${sign}-${i}`;
+
+/** Non-null when the overlay could not run and the old shells drew instead.
+ *  Surfaced in the panel: a fallback that renders identically to the primary
+ *  is indistinguishable from the primary working. */
+let overlayFallback: string | null = null;
+
+/**
+ * Which renderer draws the field.
+ *
+ * `both` is not a debug toggle, it is THE ALIGNMENT INSTRUMENT. The overlay
+ * raymarches in its own WebGL context off mol*'s camera state, and a placement
+ * that is wrong by one convention — a transposed basis, a flipped handedness,
+ * an off-by-one on the texel centre — renders a plausible field in the wrong
+ * place. That is the worst failure available here, because it looks like
+ * chemistry and nothing in the picture contradicts it.
+ *
+ * Drawn together, the two renderers must agree: the overlay's rim traces the
+ * silhouette of mol*'s own isosurface at the same isovalue, because they are
+ * the same level set of the same volume. Any drift is visible immediately and
+ * needs no instrumentation. Keeping the legacy path reachable also means it
+ * stays alive rather than rotting as dead code behind a fallback nobody hits.
+ */
+export type FieldRenderer = 'composite' | 'shells' | 'both';
+let renderer: FieldRenderer = 'composite';
+export function setFieldRenderer(next: FieldRenderer) { renderer = next; }
+export function getFieldRenderer(): FieldRenderer { return renderer; }
+
+/** Value that saturates a display channel, in the cube's own units. The rim
+ *  sits at the isovalue, so the channels are scaled against a few times it —
+ *  a fixed constant here would be a per-molecule clamp by another name. */
+function isoScaleFor(kind: FieldKind): number {
+    return Math.abs(currentIso() * Kinds[kind].cubeScale) * 3 || 1;
+}
+
+/** The scene's ground decides additive vs subtractive, and the field colours
+ *  come from the theme, not from literals — same rule as the shells. */
+function syncOverlayTheme() {
+    if (!activeKind) return;
+    const spec = Kinds[activeKind];
+    const rgb = (n: number): [number, number, number] =>
+        [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+    fieldOverlay.setColors(rgb(tokenColor(spec.negToken, spec.negColor)),
+                           rgb(tokenColor(spec.posToken, spec.posColor)));
+    fieldOverlay.setSceneLuminance(hexLuminance(cssToken('--scene-bg')));
+}
+
+/**
+ * The four channels, as switches.
+ *
+ * They are switches and not a style preset because each one carries a DIFFERENT
+ * QUANTITY, and the only way to know what a channel was contributing is to turn
+ * it off. Shape states a boundary, steepness is |grad V| — where a partner feels
+ * a force, which is not where V is large — direction is the grain of grad V, and
+ * sign is the one the other three structurally cannot carry.
+ */
+const CHANNELS: { key: keyof import('./volume-overlay').OverlayChannels; label: string; hint: string }[] = [
+    { key: 'shape', label: 'Shape', hint: 'rim of the contour — the only channel that states a boundary' },
+    { key: 'steepness', label: 'Steepness', hint: '|∇V| outside the contour — where a partner feels a force' },
+    { key: 'direction', label: 'Direction', hint: 'grain along ∇V — which way it pulls' },
+    { key: 'sign', label: 'Sign', hint: 'donor vs acceptor — the channel the other three cannot carry' },
+];
+
+function renderOverlayControls() {
+    const sel = byId<HTMLSelectElement>('field-renderer');
+    if (sel && sel.value !== renderer) sel.value = renderer;
+    const host = byId('field-channels');
+    if (!host) return;
+    const on = fieldOverlay.active && !overlayFallback && renderer !== 'shells';
+    host.hidden = !on;
+    if (!on) {
+        const note = byId('field-overlay-note');
+        if (note) {
+            note.hidden = !overlayFallback;
+            note.textContent = overlayFallback
+                ? `Drawn with the legacy isosurface shells — ${overlayFallback}.`
+                : '';
+        }
+        return;
+    }
+    const note = byId('field-overlay-note');
+    if (note) {
+        const dsFrom = fieldOverlay.downsampledFrom;
+        note.hidden = !dsFrom;
+        note.textContent = dsFrom
+            ? `Volume downsampled from ${dsFrom.join('×')} for display; values are unchanged, resolution is not.`
+            : '';
+    }
+    const st = fieldOverlay.getChannels();
+    host.innerHTML = CHANNELS.map(c =>
+        `<button type="button" class="field-chan" data-chan="${c.key}" `
+        + `aria-pressed="${st[c.key]}" title="${escapeHtml(c.hint)}">${c.label}</button>`).join('');
+    for (const b of Array.from(host.querySelectorAll<HTMLButtonElement>('.field-chan'))) {
+        b.addEventListener('click', () => {
+            const k = b.dataset.chan as keyof import('./volume-overlay').OverlayChannels;
+            const next = b.getAttribute('aria-pressed') !== 'true';
+            b.setAttribute('aria-pressed', String(next));
+            fieldOverlay.setChannels({ [k]: next });
+        });
+    }
+}
 
 export type FieldKind = 'mep' | 'mep_qm' | 'homo' | 'lumo' | 'density' | 'mlp'
     /** The REVERSE field: the pocket as source, read in the ligand's box. */
@@ -758,6 +863,7 @@ function reprParams(kind: FieldKind, sign: 1 | -1, shell: number) {
 async function clearField() {
     activeKind = null;
     activeVolume = null;
+    fieldOverlay.clear();
     if (plugin && plugin.state.data.cells.has(REF_DATA)) {
         await plugin.build().delete(REF_DATA).commit();
     }
@@ -792,20 +898,50 @@ async function renderCube(cubeText: string, kind: FieldKind, meta?: FieldMeta) {
     activeVolume = (cell?.obj?.data as Volume) ?? null;
     if (!activeVolume) throw new Error('volume creation failed');
 
-    const reprs = plugin.build();
-    for (let i = 0; i < shells().length; i++) {
-        reprs.to(REF_VOLUME).apply(
-            StateTransforms.Representation.VolumeRepresentation3D,
-            reprParams(kind, 1, i), { ref: shellRef('pos', i) });
-        if (spec.diverging) {
+    // THE FIELD IS DRAWN AS LIGHT OVER THE SCENE, NOT AS SHELLS INSIDE IT.
+    // What used to happen here: two or three VolumeRepresentation3D isosurfaces
+    // per sign. They are the incumbent everywhere and they have one defect no
+    // tuning fixes — they OCCLUDE THE LIGAND, and the only escape is to lower
+    // alpha until the field stops being readable. The overlay is additive and
+    // non-occluding by construction, so it composites over the finished frame
+    // instead of competing for depth. See volume-overlay.ts for why that is the
+    // correct model here and would not be for a representation that occludes.
+    const wantOverlay = renderer !== 'shells';
+    const mounted = wantOverlay && (fieldOverlay.active || fieldOverlay.mount(plugin));
+    if (wantOverlay && !mounted) {
+        // A dead overlay must not silently render nothing. Fall back to the
+        // shells so the field still appears, and SAY which path drew it — a
+        // fallback that hides the primary's death is how two dead cycles went
+        // unnoticed the last time this repo built one.
+        overlayFallback = fieldOverlay.lastError ?? 'overlay unavailable';
+    } else {
+        overlayFallback = null;
+    }
+    if (mounted) {
+        syncOverlayTheme();
+        if (!fieldOverlay.setVolume(activeVolume, currentIsoCube(), isoScaleFor(kind))) {
+            overlayFallback = fieldOverlay.lastError ?? 'volume upload failed';
+        }
+    } else {
+        fieldOverlay.clear();
+    }
+    if (!mounted || overlayFallback || renderer === 'both') {
+        const reprs = plugin.build();
+        for (let i = 0; i < shells().length; i++) {
             reprs.to(REF_VOLUME).apply(
                 StateTransforms.Representation.VolumeRepresentation3D,
-                reprParams(kind, -1, i), { ref: shellRef('neg', i) });
+                reprParams(kind, 1, i), { ref: shellRef('pos', i) });
+            if (spec.diverging) {
+                reprs.to(REF_VOLUME).apply(
+                    StateTransforms.Representation.VolumeRepresentation3D,
+                    reprParams(kind, -1, i), { ref: shellRef('neg', i) });
+            }
         }
+        await reprs.commit();
     }
-    await reprs.commit();
     frameFieldOnce();
     updateIsoReadout();
+    renderOverlayControls();
 }
 
 /** The molecule the camera has already been taken to for a field. */
@@ -838,6 +974,13 @@ function frameFieldOnce() {
 
 async function updateIsoSurfaces() {
     if (!plugin || !activeKind || !activeVolume) return;
+    if (fieldOverlay.active && !overlayFallback) {
+        fieldOverlay.setIso(currentIsoCube(), isoScaleFor(activeKind));
+        // In `both` the shells must move WITH the overlay or the alignment
+        // instrument stops measuring alignment and starts measuring the lag
+        // between two isovalues — which would look exactly like misalignment.
+        if (renderer !== 'both') { updateIsoReadout(); return; }
+    }
     const update = plugin.build();
     for (let i = 0; i < shells().length; i++) {
         for (const sign of ['pos', 'neg'] as const) {
@@ -1053,6 +1196,13 @@ export function initFieldWellsPanel(p: PluginContext) {
         });
     });
     byId<HTMLInputElement>('field-iso')?.addEventListener('input', () => void updateIsoSurfaces());
+    byId<HTMLSelectElement>('field-renderer')?.addEventListener('change', (e) => {
+        renderer = (e.target as HTMLSelectElement).value as FieldRenderer;
+        // Re-render rather than mutate: switching renderer changes which state
+        // tree nodes must exist, and the cheapest correct way to get there is
+        // the path that already builds them.
+        if (activeKind) void requestField(activeKind);
+    });
     byId('field-clear')?.addEventListener('click', () => {
         void clearField();
         clearRetry();

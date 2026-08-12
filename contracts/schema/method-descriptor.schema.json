@@ -2,29 +2,55 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://dirac.ivan.icu/schema/method-descriptor.schema.json",
   "title": "Dirac method descriptor",
-  "description": "The API identity of one compute method: what it accepts, what it returns, what it refuses, how it executes, and where it is exposed. THIS FILE IS THE AUTHORITY, not the database. meta.method in PostgreSQL is a registered historical SNAPSHOT of a descriptor; the runtime catalog loads descriptors from git. Reasons the DB cannot be the root: it may be unreachable, SDK generation happens at build time, MCP tool discovery needs a stable snapshot, historical contracts belong in version control, and meta.register_method() returns an existing row when method_id+version match WITHOUT comparing schemas — so a descriptor change under an unchanged implementation digest would silently keep the old schema.",
+  "description": "The API identity of one compute method: what it accepts, what it returns, what it refuses, how it executes, and where it is exposed. THIS FILE IS THE AUTHORITY, not the database. meta.method in PostgreSQL is a registered historical SNAPSHOT of a descriptor; the runtime catalog loads descriptors from git. Reasons the DB cannot be the root: it may be unreachable, SDK generation happens at build time, MCP tool discovery needs a stable snapshot, historical contracts belong in version control, and meta.register_method() returns an existing row when method_id+version match WITHOUT comparing schemas \u2014 so a descriptor change under an unchanged implementation digest would silently keep the old schema.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "method_id", "summary", "input", "output", "execution", "exposure"],
+  "required": [
+    "schema_version",
+    "method_id",
+    "summary",
+    "input",
+    "output",
+    "execution",
+    "exposure"
+  ],
   "properties": {
-    "schema_version": { "const": "1.0.0" },
+    "schema_version": {
+      "const": "1.0.0"
+    },
     "method_id": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$",
       "description": "Dotted, stable, and part of the public API. Renaming one is a breaking change."
     },
-    "summary": { "type": "string", "minLength": 8, "maxLength": 200 },
-    "description": { "type": "string" },
+    "summary": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 200
+    },
+    "description": {
+      "type": "string"
+    },
     "implementation": {
       "type": "object",
       "additionalProperties": false,
       "description": "How the IMPLEMENTATION digest is computed. Deliberately separate from this descriptor's own digest: changing a summary or an MCP wording must not invalidate a cached cube, and changing a basis set or a grid constant must. Those are different questions and one hash cannot answer both.",
       "properties": {
-        "module": { "type": "string" },
-        "functions": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "module": {
+          "type": "string"
+        },
+        "functions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
         "constants": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Module-level constants the functions READ. Omitting these is how 22 cached cubes were served with stale geometry after a padding constant changed and no version moved."
         }
       }
@@ -32,33 +58,57 @@
     "input": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema"],
+      "required": [
+        "schema"
+      ],
       "properties": {
         "schema": {
           "$comment": "A JSON Schema. additionalProperties:false is required at the top level so a misspelled field fails at the boundary rather than being silently ignored.",
           "type": "object"
         },
-        "examples": { "type": "array", "items": { "type": "object" } }
+        "examples": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
       }
     },
     "output": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema"],
+      "required": [
+        "schema"
+      ],
       "properties": {
-        "schema": { "type": "object" },
+        "schema": {
+          "type": "object"
+        },
         "artifacts": {
           "type": "array",
           "description": "Artifact ROLES this method may produce. A large result is referenced, never inlined (ADR-003).",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["role", "media_type"],
+            "required": [
+              "role",
+              "media_type"
+            ],
             "properties": {
-              "role": { "type": "string" },
-              "media_type": { "type": "string" },
-              "optional": { "type": "boolean", "default": false },
-              "typical_size_bytes": { "type": "integer", "minimum": 0 }
+              "role": {
+                "type": "string"
+              },
+              "media_type": {
+                "type": "string"
+              },
+              "optional": {
+                "type": "boolean",
+                "default": false
+              },
+              "typical_size_bytes": {
+                "type": "integer",
+                "minimum": 0
+              }
             }
           }
         }
@@ -70,63 +120,187 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["code", "condition"],
+        "required": [
+          "code",
+          "condition"
+        ],
         "properties": {
-          "code": { "type": "string" },
-          "condition": { "type": "string" },
-          "points_at": { "type": ["string", "null"] },
-          "measured": { "type": "string", "description": "The measurement that justifies the refusal, where one exists." }
+          "code": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          },
+          "points_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "measured": {
+            "type": "string",
+            "description": "The measurement that justifies the refusal, where one exists."
+          }
         }
       }
     },
     "warnings": {
       "type": "array",
-      "description": "Scope limits this method may attach to a SUCCESSFUL result. Separate from refusals because the result exists — an agent must distinguish 'refused', 'returned but scope-limited' and 'fully supported'.",
+      "description": "Scope limits this method may attach to a SUCCESSFUL result. Separate from refusals because the result exists \u2014 an agent must distinguish 'refused', 'returned but scope-limited' and 'fully supported'.",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["code", "meaning"],
+        "required": [
+          "code",
+          "meaning"
+        ],
         "properties": {
-          "code": { "type": "string" },
-          "meaning": { "type": "string" },
-          "scope": { "type": "array", "items": { "type": "string" } },
-          "measured": { "type": "string" }
+          "code": {
+            "type": "string"
+          },
+          "meaning": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "measured": {
+            "type": "string"
+          }
         }
       }
     },
     "execution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["supported_modes", "default_mode"],
+      "required": [
+        "supported_modes",
+        "default_mode"
+      ],
       "description": "Replaces the binary exec_class: interactive|job, which could not describe a method whose cost spans a second to an hour on the same code path.",
       "properties": {
         "supported_modes": {
           "type": "array",
-          "items": { "enum": ["sync", "job"] },
+          "items": {
+            "enum": [
+              "sync",
+              "job"
+            ]
+          },
           "minItems": 1
         },
-        "default_mode": { "enum": ["sync", "job", "auto"] },
-        "inline_threshold_seconds": { "type": "number", "exclusiveMinimum": 0 },
-        "resource_class": { "type": "string" },
+        "default_mode": {
+          "enum": [
+            "sync",
+            "job",
+            "auto"
+          ]
+        },
+        "inline_threshold_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "resource_class": {
+          "type": "string"
+        },
         "concurrency_class": {
           "type": "string",
           "description": "Methods sharing a concurrency_class share an admission bound. 'scf' is bounded at 2 on this box, derived from pyscf's 4000 MB per-SCF planning budget against the 8 GB the unit reserves."
         },
-        "supports_cancellation": { "type": "boolean" },
-        "deterministic": { "type": "boolean" },
-        "cacheable": { "type": "boolean" },
-        "side_effects": { "enum": ["none", "writes_cache", "writes_registry"] }
+        "supports_cancellation": {
+          "type": "boolean"
+        },
+        "deterministic": {
+          "type": "boolean"
+        },
+        "cacheable": {
+          "type": "boolean"
+        },
+        "side_effects": {
+          "enum": [
+            "none",
+            "writes_cache",
+            "writes_registry"
+          ]
+        }
       }
     },
     "exposure": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sdk", "cli", "mcp"],
+      "required": [
+        "sdk",
+        "cli",
+        "mcp"
+      ],
       "description": "Not every method should become an agent tool. 400 MCP tools destroy tool selection, so MCP exposure is curated per method.",
       "properties": {
-        "sdk": { "type": "boolean" },
-        "cli": { "type": "boolean" },
-        "mcp": { "enum": ["hidden", "generic-only", "curated"] }
+        "sdk": {
+          "type": "boolean"
+        },
+        "cli": {
+          "type": "boolean"
+        },
+        "mcp": {
+          "enum": [
+            "hidden",
+            "generic-only",
+            "curated"
+          ]
+        }
+      }
+    },
+    "invocation": {
+      "type": "object",
+      "description": "What makes this descriptor EXECUTABLE rather than merely descriptive. Without it a catalog can list, validate and document a method and cannot run one \u2014 which is exactly the gap the external audit named 'agent-compatible, not agent-native'. The handler is a STRING, resolved lazily by importlib, so a CLI can list every method and estimate its cost without importing pyscf.",
+      "additionalProperties": false,
+      "required": [
+        "handler"
+      ],
+      "properties": {
+        "handler": {
+          "type": "string",
+          "pattern": "^[a-zA-Z_][a-zA-Z0-9_.]*:[a-zA-Z_][a-zA-Z0-9_]*$",
+          "description": "module:callable. Signature (params, ctx) -> HandlerResult."
+        },
+        "estimate": {
+          "type": "string",
+          "pattern": "^[a-zA-Z_][a-zA-Z0-9_.]*:[a-zA-Z_][a-zA-Z0-9_]*$",
+          "description": "module:callable returning a cost prediction BEFORE running. The reason a budget refusal can be issued in milliseconds instead of after ninety seconds of SCF."
+        },
+        "artifacts": {
+          "type": "array",
+          "description": "The roles this method produces. Declared so a client knows what references to expect before it calls, and so a missing artifact is a contract violation rather than an empty list.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "role",
+              "media_type"
+            ],
+            "properties": {
+              "role": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9_]*)*$"
+              },
+              "media_type": {
+                "type": "string"
+              },
+              "required": {
+                "type": "boolean",
+                "default": true
+              },
+              "typical_bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Measured, for the inline decision."
+              }
+            }
+          }
+        }
       }
     }
   }

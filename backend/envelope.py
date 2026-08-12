@@ -138,7 +138,19 @@ UNITS_BY_KIND: dict[str, str] = {
 #   · db_get_cube (field_server.py:225-262) — the cache-hit path, which sets
 #     a visibly SMALLER subset today. That gap is the bug normalize_meta()
 #     exists to close: filled with None, never silently absent.
-_COMMON = ('kind', 'units', 'method', 'cache', 'stored', 'computed_at', 'total_seconds')
+_COMMON = ('kind', 'units', 'method', 'method_version', 'cache', 'stored',
+           'computed_at', 'total_seconds',
+           # WHEN THE TOOLKIT WROTE THE BYTES, moved out of the bytes.
+           #
+           # pyscf stamps the wall clock into a cube's second comment line, which made
+           # the artifact's SHA-256 a function of the time of day: three identical runs
+           # produced three different digests, so content-addressed storage could never
+           # deduplicate a quantum field and the cross-transport parity test was
+           # impossible rather than merely failing. backend/cube.py canonicalises the
+           # line away, and the timestamp lands HERE instead — it is a real fact about
+           # the request, it simply cannot live in bytes that are supposed to be a
+           # function of the input alone.
+           'toolkit_wrote_at')
 _GRID = ('dims', 'spacing_requested', 'spacing', 'grid_capped', 'vmin', 'vmax',
          'iso_fixed', 'pad_used_angstrom', 'wall_max', 'contour_closes_in_box',
          # The isovalue the BOX was sized for, beside the isovalue actually

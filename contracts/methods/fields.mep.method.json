@@ -52,7 +52,7 @@
             },
             "dimensionality": {
               "const": 3,
-              "description": "3 ONLY. A 2D structure must not reach a 3D physics method; molecule.embed is the explicit step that produces 3D, and an implicit SMILES→3D would report one method having run when two did."
+              "description": "3 ONLY. A 2D structure must not reach a 3D physics method; molecule.embed is the explicit step that produces 3D, and an implicit SMILES\u21923D would report one method having run when two did."
             },
             "coordinate_space": {
               "enum": [
@@ -222,7 +222,7 @@
       "scope": [
         "output.field"
       ],
-      "measured": "bromobenzene at the cap: Gasteiger -6.2 kcal/mol vs the QM surface route +9.9 — opposite signs, ~16 kcal/mol apart"
+      "measured": "bromobenzene at the cap: Gasteiger -6.2 kcal/mol vs the QM surface route +9.9 \u2014 opposite signs, ~16 kcal/mol apart"
     },
     {
       "code": "CLASSICAL_MODEL_SCOPE",
@@ -250,5 +250,17 @@
     "sdk": true,
     "cli": true,
     "mcp": "curated"
+  },
+  "invocation": {
+    "handler": "handlers:field_handler",
+    "estimate": "handlers:field_estimate",
+    "artifacts": [
+      {
+        "role": "field.cube",
+        "media_type": "application/vnd.dirac.gaussian-cube",
+        "required": true,
+        "typical_bytes": 1994889
+      }
+    ]
   }
 }

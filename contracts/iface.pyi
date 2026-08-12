@@ -35,6 +35,11 @@ class FieldMeta(TypedDict, total=False):
     units: str                      # ALWAYS present (classical AND quantum)
     basis: Basis                    # quantum kinds only
     method: str                     # 'gasteiger'|'crippen'|'RHF'|'UHF'|'RHF+SOSCF'|'UHF+SOSCF'
+    method_version: str | None      # the running SOURCE digest, so two
+                                    # results can be compared across installs
+    toolkit_wrote_at: str | None    # pyscf stamps the wall clock INSIDE the
+                                    # cube; moved here so the bytes stay a
+                                    # function of the input (backend/cube.py)
     ecp: list[str]                  # element symbols carrying pseudopotentials
     scf_energy_ha: float            # [Hartree]
     homo_ev: float                  # [eV]

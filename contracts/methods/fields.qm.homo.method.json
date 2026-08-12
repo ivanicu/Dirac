@@ -55,7 +55,7 @@
             },
             "dimensionality": {
               "const": 3,
-              "description": "3 ONLY. A 2D structure must not reach a 3D physics method — the coordinate space is part of the type, and molecule.embed is the explicit step that produces 3D. An implicit SMILES→3D inside a field method would report one method having run when two did."
+              "description": "3 ONLY. A 2D structure must not reach a 3D physics method \u2014 the coordinate space is part of the type, and molecule.embed is the explicit step that produces 3D. An implicit SMILES\u21923D inside a field method would report one method having run when two did."
             },
             "coordinate_space": {
               "enum": [
@@ -115,7 +115,7 @@
                 "null"
               ],
               "default": null,
-              "description": "Unpaired electrons. null means 'infer from electron parity', which is REFUSED for a transition metal whose ground state is not the closed-shell singlet parity implies — see refusals."
+              "description": "Unpaired electrons. null means 'infer from electron parity', which is REFUSED for a transition metal whose ground state is not the closed-shell singlet parity implies \u2014 see refusals."
             }
           }
         }
@@ -214,7 +214,7 @@
           "properties": {
             "converged": {
               "const": true,
-              "description": "Only true is representable in a SUCCESS output. An unconverged SCF is a refusal, not a result with a flag — a caller that has to check a boolean will eventually not check it."
+              "description": "Only true is representable in a SUCCESS output. An unconverged SCF is a refusal, not a result with a flag \u2014 a caller that has to check a boolean will eventually not check it."
             },
             "method": {
               "type": "string"
@@ -329,5 +329,17 @@
     "sdk": true,
     "cli": true,
     "mcp": "curated"
+  },
+  "invocation": {
+    "handler": "handlers:field_handler",
+    "estimate": "handlers:field_estimate",
+    "artifacts": [
+      {
+        "role": "field.cube",
+        "media_type": "application/vnd.dirac.gaussian-cube",
+        "required": true,
+        "typical_bytes": 6746023
+      }
+    ]
   }
 }

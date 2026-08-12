@@ -54,7 +54,7 @@
             },
             "dimensionality": {
               "const": 3,
-              "description": "3 ONLY. A 2D structure must not reach a 3D physics method; molecule.embed is the explicit step that produces 3D, and an implicit SMILES→3D would report one method having run when two did."
+              "description": "3 ONLY. A 2D structure must not reach a 3D physics method; molecule.embed is the explicit step that produces 3D, and an implicit SMILES\u21923D would report one method having run when two did."
             },
             "coordinate_space": {
               "enum": [
@@ -201,7 +201,7 @@
           "properties": {
             "converged": {
               "const": true,
-              "description": "Only true is representable in a SUCCESS output. An unconverged SCF is a refusal, not a result with a flag — a caller who has to check a boolean will eventually not check it."
+              "description": "Only true is representable in a SUCCESS output. An unconverged SCF is a refusal, not a result with a flag \u2014 a caller who has to check a boolean will eventually not check it."
             },
             "method": {
               "type": "string"
@@ -316,5 +316,17 @@
     "sdk": true,
     "cli": true,
     "mcp": "curated"
+  },
+  "invocation": {
+    "handler": "handlers:field_handler",
+    "estimate": "handlers:field_estimate",
+    "artifacts": [
+      {
+        "role": "field.cube",
+        "media_type": "application/vnd.dirac.gaussian-cube",
+        "required": true,
+        "typical_bytes": 6746023
+      }
+    ]
   }
 }

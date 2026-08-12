@@ -47,10 +47,40 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 # route 404 — indistinguishable from "no such route", which is the fallback-
 # hides-the-primary's-death shape. So a failed import is REMEMBERED and served
 # as a 503 that names the exception, while /field keeps working.
+# FIRST, before anything can create a temp file or import pyscf: send scratch to disk.
+# /tmp here is a 30 GB tmpfs with a PER-USER quota, and hitting it does not look like a
+# disk error — it made every shell command in the session exit 1 while df still reported
+# 6 GB free, because df measures the filesystem and the limit is on the user. pyscf reads
+# TMPDIR at import time, so the order of these lines is load-bearing.
+import scratch as _scratch                                          # noqa: F401
 import envelope
 import failures
 import jobs
-from envelope import normalize_meta
+from envelope import normalize_meta as _normalize_meta_raw
+
+
+def normalize_meta(meta: dict, *, source: str) -> dict:
+    '''Normalise AND stamp the running source digest.
+
+    Wrapped rather than edited in envelope.py because the codec must not know about
+    this module registry — the dependency law says envelope imports no DB and no
+    science, and a version dict is a fact about THIS process source. The wrapper is
+    the one place both exits (a cache hit in db_get_cube, a compute in the route) pass
+    through, so a client can always answer "which code produced this" and the two
+    paths cannot disagree about it.
+
+    NULL when registration never ran (no database, or it failed): an absent version is
+    honest and a guessed one is quotable, and the whole reason this field exists is to
+    be quoted by an acceptance test comparing two transports.
+    '''
+    out = _normalize_meta_raw(meta, source=source)
+    kind = out.get('kind') or meta.get('kind')
+    if kind:
+        import method_registry as _mr
+        mid = _mr.KIND_TO_METHOD.get(kind)
+        if mid:
+            out['method_version'] = _method_versions.get(mid)
+    return out
 
 # `meta.stored: true` is set when the persist thread is STARTED, not when it
 # finishes — Ivan's 自动入库自动缓存 means the render must never wait on the
@@ -176,6 +206,15 @@ _producer_id: str | None = None
 # unit each (migration 007), which is why a comment edit no longer darkens
 # every cached SCF. Both are stamped during the transition window.
 _method_ids: dict[str, str] = {}
+# method_id -> the SHORT SOURCE DIGEST of the running implementation.
+#
+# Separate from _method_ids on purpose: a row id is this database's identity for a
+# method version, and a source digest is the identity two independent installs can
+# COMPARE. The acceptance test needs the second — it asks whether core and HTTP ran
+# the same code, and two different machines have different row uuids for identical
+# source. Populated beside the registration so the two cannot describe different
+# source.
+_method_versions: dict[str, str] = {}
 
 # Bump on ANY behaviour change. meta.register_producer RAISES at startup when
 # this version is re-registered with different source — a forgotten bump is a
@@ -285,7 +324,7 @@ def conformer_hash_for(mol_with_h: Chem.Mol) -> tuple[bytes, str]:
 
 
 def db_init() -> bool:
-    global _db_ok, _producer_id, _method_ids
+    global _db_ok, _producer_id, _method_ids, _method_versions
     if psycopg is None:
         print('[db] psycopg not importable — persistent cache OFF', flush=True)
         return False
@@ -320,7 +359,12 @@ def db_init() -> bool:
             import method_registry
             _method_ids = method_registry.register_all(_db, sys.modules[__name__],
                                                       _toolkit_ids.get('pyscf'))
-            print(f'[db] {len(_method_ids)} compute units registered', flush=True)
+            _method_versions = {
+                mid: method_registry.unit_version(sys.modules[__name__],
+                                                  u['fns'], u['consts'])[0]
+                for mid, u in method_registry.UNITS.items()}
+            print(f'[db] {len(_method_ids)} compute units registered '
+                  f'({len(_method_versions)} source digests)', flush=True)
             global _jobs
             _jobs = jobs.JobLedger(
                 _db, jobs.make_worker_name(os.getpid(), _producer_version()))
@@ -430,7 +474,15 @@ def db_get_cube(molfile_sha: bytes, kind: str, basis: str):
         # absent keys say nothing and the UI cannot tell the difference.
         # Strict here on purpose: a schema violation on this path costs a
         # recompute, and losing that is the correct price for a loud failure.
-        return cube, normalize_meta(meta, source='db')
+        # CANONICALISE ON THE WAY OUT TOO. The 200-odd rows written before
+        # backend/cube.py existed hold pyscf's wall-clock line, so a cache HIT and a
+        # fresh COMPUTE of the same field returned different digests — found by the v1
+        # golden, which showed homo_water's cube_sha256 unchanged while every fresh
+        # cube's had moved. Canonicalising here makes the two paths agree without
+        # rewriting 200 stored blobs, and it is idempotent, so rows written from now
+        # on pass through untouched.
+        import cube as _cube_mod
+        return _cube_mod.canonicalise(cube), normalize_meta(meta, source='db')
     except Exception as e:
         print(f'[db] read failed ({e}) — serving from compute', flush=True)
         return None
@@ -2279,6 +2331,18 @@ class Handler(BaseHTTPRequestHandler):
                         _qm_gate.release()
                     with _qm_lock:
                         _qm_waiting['now'] -= 1
+            # Same canonicalisation the core path applies, for the same measured
+            # reason (pyscf stamps the wall clock into cube line 1). It must happen on
+            # BOTH paths or the two transports address different bytes for identical
+            # science — which is exactly how the acceptance test caught it. Deliberately
+            # here rather than inside field_quantum: that function's source is hashed
+            # into the method version, and a comment line is not worth invalidating
+            # every cached quantum field for.
+            import cube as _cube_mod
+            _wrote_at = _cube_mod.timestamp_in(cube)
+            cube = _cube_mod.canonicalise(cube)
+            if _wrote_at:
+                meta['toolkit_wrote_at'] = _wrote_at
             meta['total_seconds'] = round(time.time() - t0, 2)
             meta['cache'] = 'computed'
             print(f"[field] kind={kind} atoms={mol.GetNumAtoms()} "
