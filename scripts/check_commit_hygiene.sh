@@ -31,10 +31,29 @@ cd "$(dirname "$0")/.."
 # body is deliberately NOT forbidden — a commit that explains a decision may need
 # to name the tool honestly, and a gate that forbids discussing the subject is a
 # gate people route around. Attribution trailers and private URLs are the target.
+# LINE-ANCHORED, and that is the whole correctness of this gate. A trailer is a
+# LINE; a commit body that DISCUSSES trailers is not a leak. Unanchored, this
+# counted a mention as a use — the rewrite commit that explains what was
+# stripped quotes both strings, so on a provably clean history (GitHub's own
+# API, line-anchored: 0) the gate reported 1 and failed against a baseline of 0.
+# A gate that convicts the commit documenting the fix is a gate people route
+# around, which is the failure this file's own header warns about.
+#
+# Trailers are never indented by convention, so ^ costs no real detection. The
+# selftest below is what proves that: it still convicts genuine trailers.
+#
+# The URL pattern requires the SCHEME and the session path, because what leaks
+# is a RESOLVABLE LINK — not the domain name appearing in a sentence. Anchoring
+# alone was not enough: a body explaining the rule wrapped so that
+# "claude.ai/code URL. It deliberately does NOT forbid..." began a line, and the
+# gate convicted the commit that documents the policy. Twice now this file has
+# counted a mention as a use, and both times the victim was the commit whose
+# whole subject is the leak — which is the strongest possible hint that the
+# property being matched was the wrong one.
 FORBIDDEN=(
-    'co-authored-by:[[:space:]]*claude'
-    'claude-session:'
-    'claude\.ai/code'
+    '^co-authored-by:[[:space:]]*claude'
+    '^claude-session:'
+    'https?://claude\.ai/code/session'   # the RESOLVABLE link, not the domain in prose
     'zhend'
 )
 
