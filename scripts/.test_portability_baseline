@@ -1,1 +1,27 @@
 6
+# Suites that import on a clean interpreter (no RDKit/numpy/pyscf), out of 13.
+# 3 → 4 on 2026-08-11 when backend/failures.py landed: refusal SEMANTICS became
+# testable without a chemistry toolkit, which is the first time this number moved
+# for the reason it was created to measure.
+# 4 → 6 on 2026-08-11 with PR-04: test_artifacts.py (digests, thresholds, range
+# arithmetic — 14 tests, zero science) and test_artifacts_pg.py (schema-level
+# guarantees; needs a DB, needs no chemistry). Both are import-light BY
+# CONSTRUCTION rather than by luck, because check_layering.py now enforces that
+# artifacts.py imports no HTTP, DB or science at all.
+# Measured 2026-08-11 by scripts/test_portability.py, which PROBES the import
+# rather than grepping for it — a grep estimate said 1 and was wrong, because
+# admin_queries/admin_routes do not reach field_server at module scope.
+#
+# This is a RATCHET on COUPLING, not a code-coverage number. A suite that tests
+# SQL text, a state machine or a codec has no business needing a chemistry
+# toolkit; today 7 of 13 still do, because they reach their subject through
+# field_server, which imports RDKit at module scope. That is the external audit's
+# thesis expressed as a cost, and every step of the invocation-kernel extraction
+# should move this number UP. The gate fails when it moves DOWN.
+#
+# ⚠ RESTORED 2026-08-11 after I overwrote this file with `echo 6 >`, destroying
+# all 14 lines of rationale in a commit whose stat line said "16 +-" on a file
+# that should only ever change by one digit. The stat check caught it; nothing
+# else would have. A ratchet whose WHY is gone becomes a magic number, and the
+# next person to see it fail lowers it — which is the one thing a ratchet exists
+# to prevent. Never `>` a file you have not read.
