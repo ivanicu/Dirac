@@ -368,7 +368,7 @@ def db_get_cube(molfile_sha: bytes, kind: str, basis: str):
                 'SELECT b.bytes, fc.scf_energy_ha, fc.converged, fc.n_atoms, '
                 '       fc.n_basis, fc.homo_ev, fc.lumo_ev, fc.seconds, '
                 '       app.scf_method_label(fc.scf_reference, fc.scf_converger), '
-                '       fc.computed_at '
+                '       fc.computed_at, fc.meta '
                 # Servable-on-METHOD, not on producer: an edit to a log line
                 # used to darken every cached SCF (measured: 1 of 19 rows
                 # readable, i.e. every request a forced recompute). 009.
@@ -381,7 +381,15 @@ def db_get_cube(molfile_sha: bytes, kind: str, basis: str):
         if row is None:
             return None
         cube = bytes(row[0]).decode()
-        meta = {'kind': kind, 'cache': 'db', 'computed_at': row[9].isoformat()}
+        # THE STORED META FIRST, then the row's typed columns on top. Order matters:
+        # the typed columns are the queried ones and therefore the authority on the
+        # SCF numbers, while the stored meta is the only source for the geometry and
+        # the caveats. A pre-011 row has meta NULL and still returns the honest
+        # nulls it always did — that is a row whose metadata is genuinely gone, and
+        # inventing it would be worse than reporting it.
+        meta = dict(row[10] or {})
+        meta.update({'kind': kind, 'cache': 'db',
+                     'computed_at': row[9].isoformat()})
         if row[8] != 'gasteiger':
             meta.update({
                 'basis': basis, 'method': row[8], 'converged': row[2],
@@ -406,6 +414,24 @@ def db_get_cube(molfile_sha: bytes, kind: str, basis: str):
     except Exception as e:
         print(f'[db] read failed ({e}) — serving from compute', flush=True)
         return None
+
+
+def cacheable_meta(meta: dict) -> dict:
+    """The part of a response's meta that describes the CUBE rather than the REQUEST.
+
+    Four keys are stripped, and each would be a lie on the next read:
+      cache          — a stored 'computed' would claim every later hit was computed
+      stored         — describes the persistence of THIS response
+      total_seconds  — how long THAT request took, not a property of the cube
+      computed_at    — the row already carries its own computed_at column
+    Everything else is what the golden capture showed a cache hit losing: the grid
+    dims, the isovalue the box was sized for, net_charge, vmin/vmax, wall_max, the
+    caveats. Twelve values that the computed path knew and the cached path replaced
+    with None, because the row had columns for the SCF numbers and none for the
+    geometry.
+    """
+    volatile = {'cache', 'stored', 'total_seconds', 'computed_at'}
+    return {k: v for k, v in meta.items() if k not in volatile}
 
 
 def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict,
@@ -459,9 +485,9 @@ def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict
                 '  (molfile_sha256, kind, basis, blob_sha256, scf_reference, '
                 '   scf_converger, scf_energy_ha, converged, n_atoms, n_basis, '
                 '   homo_ev, lumo_ev, seconds, toolkit_id, producer_id, '
-                '   compound_id, conformer_hash, method_row_id) '
+                '   compound_id, conformer_hash, method_row_id, meta) '
                 'SELECT %s, %s, %s, %s, p.scf_reference, p.scf_converger, '
-                '       %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s '
+                '       %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s '
                 'FROM app.parse_scf_method(%s) AS p '
                 'ON CONFLICT ON CONSTRAINT field_cube_exact_key DO NOTHING',
                 (molfile_sha, kind, basis, blob_sha,
@@ -470,7 +496,16 @@ def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict
                  meta.get('natoms'), meta.get('nbasis'),
                  meta.get('homo_ev'), meta.get('lumo_ev'),
                  meta.get('scf_seconds') if kind != 'mep' else meta.get('total_seconds'),
-                 toolkit, _producer_id, compound_id, conf_hash, method_row, label))
+                 toolkit, _producer_id, compound_id, conf_hash, method_row,
+                 # meta is the LAST SELECT placeholder; `label` is the argument to
+                 # parse_scf_method(%s), which appears after it in the SQL text. The
+                 # first version had these two swapped and PostgreSQL said so in the
+                 # clearest possible way — "$17 = 'gasteiger' … Token \"gasteiger\"
+                 # is invalid" for a json column — but only because the persist
+                 # counter surfaced last_error at /health. Without that, this was a
+                 # background thread failing silently while every response still said
+                 # stored:true.
+                 json.dumps(cacheable_meta(meta)), label))
         print(f'[db] cached kind={kind} basis={basis} coarse={"yes" if conf_hash else "no"}', flush=True)
         with _persist_lock:
             _persist['ok'] += 1
@@ -803,6 +838,13 @@ def field_mep(mol: Chem.Mol, spacing=0.4, pad=4.0):
                       'kind=mep units=kcal/mol charges=gasteiger')
     meta = {
         'kind': 'mep', 'units': 'kcal/mol', 'charges': 'gasteiger',
+        # The method declares its OWN label. It was absent here and derived on the
+        # cache path from app.scf_method_label(), so the same cube reported
+        # method=None when computed and 'gasteiger' when cached — the one value that
+        # still differed after 011/012, and in the direction where the CACHED answer
+        # was the better one. A method that does not name itself leaves the naming to
+        # whoever reads it next.
+        'method': 'gasteiger',
         'net_charge': int(round(charges.sum())),
         'dims': dims.tolist(), **grid_spacing_meta(lo, hi, dims, spacing),
         'vmin': float(v.min()), 'vmax': float(v.max()),

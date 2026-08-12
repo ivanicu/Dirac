@@ -120,6 +120,38 @@ CASES: list[tuple[str, str, dict]] = [
 ]
 
 
+def parity_probe() -> dict:
+    """A request guaranteed to be COLD, so the cache-parity claim has a witness that
+    this run created rather than inherited.
+
+    MEASURED FIRST, because the trick only works if it is true: the Gaussian cube
+    bytes are byte-identical regardless of the molfile's TITLE line (verified — the
+    same geometry with three different titles produced cube sha 96e0aca35c5f every
+    time, while the cache key changed and the request went from db to computed). So a
+    nonce in the title buys a cold key without changing the science.
+
+    Water, because the probe leaves a cache row behind on every run and water's cube
+    is tens of KB rather than the 2.5 MB an ethanol probe would accumulate.
+    """
+    import os
+    base = molfile('O', 3).split('\n')
+    base[0] = 'dirac-parity-probe-' + os.urandom(6).hex()
+    mf = '\n'.join(base)
+    first = post('/field', {'molfile': mf, 'kind': 'mep'})
+    import time as _t
+    _t.sleep(4.0)
+    second = post('/field', {'molfile': mf, 'kind': 'mep'})
+    return {
+        'parity_probe': {'path': '/field', 'http': first['http'],
+                         'body': reduce_body(first['body']),
+                         'cache': (first['body'].get('meta') or {}).get('cache')},
+        'parity_probe__second_request': {
+            'path': '/field', 'http': second['http'],
+            'body': reduce_body(second['body']),
+            'cache': (second['body'].get('meta') or {}).get('cache')},
+    }
+
+
 def run_cases() -> dict:
     """Each field case is captured TWICE, and both states are kept.
 
@@ -170,6 +202,13 @@ def main() -> int:
         return 2
 
     current = run_cases()
+    # The probe's molfile carries a fresh nonce each run, so its molfile_sha256 is
+    # not comparable across runs and is dropped from the golden; what it exists to
+    # prove is the computed→db transition and the value parity across it.
+    probe = parity_probe()
+    for rec in probe.values():
+        rec['body'].pop('molfile_sha256', None)
+    current.update(probe)
     if write:
         GOLDEN.parent.mkdir(parents=True, exist_ok=True)
         GOLDEN.write_text(json.dumps(current, indent=2, sort_keys=True) + '\n')
@@ -182,17 +221,46 @@ def main() -> int:
         return 2
     expected = json.loads(GOLDEN.read_text())
     drift = []
+    # `cache` is recorded for information and EXCLUDED from the diff: whether the
+    # first request of a pair computes or hits depends on whether the fixture is
+    # already in the cache, which is a property of the machine's history and not of
+    # the API. Comparing it made the file report a breaking change on its own second
+    # run — my golden, not the service.
+    COMPARE_SKIP = {'cache'}
     for name in sorted(set(expected) | set(current)):
         e, c = expected.get(name), current.get(name)
         if e is None:
             drift.append(f'{name}: NEW case not in the golden file')
         elif c is None:
             drift.append(f'{name}: case MISSING from this run')
-        elif e != c:
-            for key in sorted(set(e) | set(c)):
+        else:
+            for key in sorted((set(e) | set(c)) - COMPARE_SKIP):
                 if e.get(key) != c.get(key):
                     drift.append(f'{name}.{key}: golden {e.get(key)!r} → now '
                                  f'{c.get(key)!r}')
+
+    # And the parity claim needs a WITNESS, or excluding `cache` would turn this file
+    # into one that cannot fail on the thing it was written for: at least one pair
+    # must actually demonstrate computed → db, and their non-volatile values must be
+    # identical. Without this, a cache that never hits would pass silently — which is
+    # exactly what happened for one commit when a view stopped carrying a column.
+    witnessed = False
+    for name, rec in current.items():
+        if not name.endswith('__second_request'):
+            continue
+        first = current.get(name[: -len('__second_request')])
+        if not first:
+            continue
+        if first.get('cache') == 'computed' and rec.get('cache') == 'db':
+            witnessed = True
+            if first['body'].get('meta_values') != rec['body'].get('meta_values'):
+                drift.append(f'{name}: a cache hit returned DIFFERENT values from the '
+                             f'compute that produced it')
+    if not witnessed:
+        drift.append('no computed→db pair in this run: the cache-parity claim is '
+                     'UNVERIFIED. Either every fixture was already warm (re-run '
+                     'against a cold cache) or the cache is not being read at all — '
+                     'the second is what a dead read path looks like from here.')
     if drift:
         print(f'V1 DRIFT — {len(drift)} difference(s):', file=sys.stderr)
         for d in drift[:20]:
