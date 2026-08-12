@@ -118,7 +118,9 @@ def conformer_generate(input: dict, ctx) -> dict:
             'conformer.generate requires smiles or molecule.content')
     if input.get('parameters'):
         payload['parameters'] = input['parameters']
-    return ctx.kernel.invoke('molecule.embed', payload, request_id=ctx.request_id)
+    return ctx.kernel.invoke(
+        'molecule.embed', payload, request_id=ctx.request_id,
+        actor=ctx.actor, command_id=ctx.command_id)
 
 
 def structure_field_compute(input: dict, ctx) -> dict:
@@ -130,7 +132,8 @@ def structure_field_compute(input: dict, ctx) -> dict:
         payload['parameters'] = input['parameters']
     return ctx.kernel.submit(method_id, payload,
                              budget_seconds=input.get('budget_seconds'),
-                             request_id=ctx.request_id)
+                             request_id=ctx.request_id, actor=ctx.actor,
+                             command_id=ctx.command_id)
 
 
 def structure_surface_compute(input: dict, ctx) -> dict:
@@ -139,7 +142,8 @@ def structure_surface_compute(input: dict, ctx) -> dict:
         payload['parameters'] = input['parameters']
     return ctx.kernel.submit('surface.mep', payload,
                              budget_seconds=input.get('budget_seconds'),
-                             request_id=ctx.request_id)
+                             request_id=ctx.request_id, actor=ctx.actor,
+                             command_id=ctx.command_id)
 
 
 def structure_torsion_analyze(input: dict, ctx) -> dict:
@@ -147,4 +151,5 @@ def structure_torsion_analyze(input: dict, ctx) -> dict:
     if input.get('parameters'):
         payload['parameters'] = input['parameters']
     return ctx.kernel.submit('torsion.strain', payload,
-                             request_id=ctx.request_id)
+                             request_id=ctx.request_id, actor=ctx.actor,
+                             command_id=ctx.command_id)

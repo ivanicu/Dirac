@@ -14,13 +14,17 @@ from .registry import CommandRegistry
 class CommandContext:
     kernel: Any
     actor: dict[str, str]
+    command_id: str
     request_id: str | None = None
 
 
 class CommandDispatcher:
-    def __init__(self, kernel: Any, registry: CommandRegistry | None = None) -> None:
+    def __init__(self, kernel: Any, registry: CommandRegistry | None = None,
+                 trace_sink: Any | None = None) -> None:
         self.kernel = kernel
         self.registry = registry or CommandRegistry.load()
+        self.trace_sink = (trace_sink if trace_sink is not None
+                           else getattr(kernel, 'command_traces', None))
 
     def execute(self, command_id: str, input: dict | None = None, *,
                 actor: dict[str, str] | None = None,
@@ -36,6 +40,7 @@ class CommandDispatcher:
         ctx = CommandContext(
             kernel=self.kernel,
             actor=actor_ref,
+            command_id=definition.id,
             request_id=request_id)
         try:
             result = definition.handler()(payload, ctx)
@@ -57,12 +62,21 @@ class CommandDispatcher:
         except Exception as error:                                  # noqa: BLE001
             failure = failures.DiracInternal(error)
             envelope = {'ok': False, 'error': failure.to_error_payload(), 'meta': {}}
+        finished = time.time()
         envelope.setdefault('meta', {}).update({
             'envelope': 2,
             'command': definition.id,
             'command_version': definition.version,
-            'command_seconds': round(time.time() - started, 3),
+            'command_seconds': round(finished - started, 3),
             'actor': ctx.actor,
             'request_id': request_id,
         })
+        if self.trace_sink is not None:
+            try:
+                self.trace_sink.record(
+                    command_id=definition.id, command_version=definition.version,
+                    actor=ctx.actor, request_id=request_id, started_at=started,
+                    finished_at=finished, envelope=envelope)
+            except Exception:                                      # noqa: BLE001
+                pass  # observability cannot change the command result
         return envelope

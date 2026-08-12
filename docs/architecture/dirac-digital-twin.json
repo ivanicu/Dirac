@@ -1,9 +1,9 @@
 {
   "schema": "https://dirac.local/schemas/software-architecture-twin/v2",
   "title": "Dirac Architecture Optimization Twin",
-  "generated_at": "2026-08-12T14:11:46.950296+00:00",
-  "source_base_commit": "5830591fcf740b6c29228e6de1e3daa3c70eed65",
-  "source_fingerprint_sha256": "56376cc92497a06492cfdec9ddd63832e546d393fb01ffa983ae6b19b4b77e62",
+  "generated_at": "2026-08-12T14:44:10.776298+00:00",
+  "source_base_commit": "62a96285619e00c34f93458717a05a25ca99ef51",
+  "source_fingerprint_sha256": "2b481ede722ee8f82a50038a9d711c70d090d86a3ae726ca05e847143f1a4b0b",
   "scope": {
     "included": [
       "all first-party Python, JavaScript, and Shell functions in backend, SDK, tooling, gates, and operations",
@@ -14,34 +14,34 @@
     "function_definition": "AST-declared functions, async functions, constructors, accessors, methods, arrows, function expressions, and named Shell functions.",
     "discovery_policy": "scripts/digital_twin_scope.json",
     "automatic_discovery": true,
-    "discovered_files": 304
+    "discovered_files": 307
   },
   "summary": {
-    "nodes": 3247,
-    "edges": 5547,
+    "nodes": 3281,
+    "edges": 5594,
     "flows": 6,
-    "source_files": 305,
+    "source_files": 308,
     "by_type": {
       "actor": 2,
       "artifact-role": 5,
-      "class": 77,
+      "class": 80,
       "command": 17,
       "contract": 1,
-      "db-function": 10,
-      "db-table": 53,
-      "db-type": 34,
-      "db-view": 11,
+      "db-function": 11,
+      "db-table": 54,
+      "db-type": 35,
+      "db-view": 13,
       "external-system": 4,
-      "function": 1875,
-      "method": 502,
-      "migration": 17,
-      "module": 204,
+      "function": 1886,
+      "method": 511,
+      "migration": 19,
+      "module": 205,
       "object-kind": 30,
       "registry": 2,
       "relation-kind": 17,
       "scientific-method": 12,
       "service": 3,
-      "source-file": 304,
+      "source-file": 307,
       "store": 5,
       "surface": 5,
       "system": 8,
@@ -53,14 +53,14 @@
     "typescript_diagnostics": []
   },
   "runtime_snapshot": {
-    "captured_at": "2026-08-12T14:11:46.859892+00:00",
+    "captured_at": "2026-08-12T14:44:10.662213+00:00",
     "source": "best-effort live probes",
-    "git_commit": "5830591fcf740b6c29228e6de1e3daa3c70eed65",
+    "git_commit": "62a96285619e00c34f93458717a05a25ca99ef51",
     "systemd": [
       "Id=dirac-fields.service",
       "ActiveState=active",
       "SubState=running",
-      "MainPID=1662146",
+      "MainPID=1776717",
       "",
       "Id=dirac-web.service",
       "ActiveState=active",
@@ -81,28 +81,167 @@
     "http_v2_command_count": 17,
     "http_v2_reachable": true,
     "postgres": {
-      "tables": 53,
-      "views": 11,
+      "tables": 54,
+      "views": 13,
       "schemas": 6
     },
     "operational_metrics": {
-      "jobs_total": 834,
+      "jobs_total": 855,
       "job_states": {
-        "done": 565,
+        "done": 583,
         "cancelled": 29,
-        "failed": 240
+        "failed": 243
       },
       "failure_codes": {
-        "UNPARAMETERIZED": 37,
-        "UNSUPPORTED": 127,
+        "UNPARAMETERIZED": 38,
+        "UNSUPPORTED": 128,
         "INTERNAL": 34,
-        "BUDGET": 42
+        "BUDGET": 43
       },
-      "artifacts": 78,
-      "cached_results": 2,
+      "job_outcomes": {
+        "operational_failure": 34,
+        "cancelled": 29,
+        "expected_refusal": 209,
+        "success": 583
+      },
+      "artifacts": 79,
+      "cached_results": 3,
       "registered_method_rows": 49,
-      "attention_items": 240
+      "attention_items": 34,
+      "approval_waits": 0,
+      "command_traces": 41,
+      "observed_commands": 6
     },
+    "command_observations": [
+      {
+        "command_id": "job.wait",
+        "command_version": 1,
+        "invocation_count": 13,
+        "success_count": 13,
+        "expected_refusal_count": 0,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "job_count": 0,
+        "cache_hit_count": 0,
+        "mean_dispatch_seconds": 0.162551,
+        "p95_dispatch_seconds": 0.231566,
+        "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
+        "last_observed_at": "2026-08-12T07:43:48.039617-07:00"
+      },
+      {
+        "command_id": "structure.field.compute",
+        "command_version": 1,
+        "invocation_count": 21,
+        "success_count": 13,
+        "expected_refusal_count": 8,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "job_count": 13,
+        "cache_hit_count": 0,
+        "mean_dispatch_seconds": 0.007856,
+        "p95_dispatch_seconds": 0.015971,
+        "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
+        "last_observed_at": "2026-08-12T07:43:47.820575-07:00"
+      },
+      {
+        "command_id": "structure.interactions",
+        "command_version": 1,
+        "invocation_count": 1,
+        "success_count": 0,
+        "expected_refusal_count": 1,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "job_count": 0,
+        "cache_hit_count": 0,
+        "mean_dispatch_seconds": 9.4e-05,
+        "p95_dispatch_seconds": 9.4e-05,
+        "first_observed_at": "2026-08-12T07:28:55.808062-07:00",
+        "last_observed_at": "2026-08-12T07:28:55.808156-07:00"
+      },
+      {
+        "command_id": "structure.torsion.analyze",
+        "command_version": 1,
+        "invocation_count": 1,
+        "success_count": 1,
+        "expected_refusal_count": 0,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "job_count": 1,
+        "cache_hit_count": 0,
+        "mean_dispatch_seconds": 0.009878,
+        "p95_dispatch_seconds": 0.009878,
+        "first_observed_at": "2026-08-12T07:29:10.263693-07:00",
+        "last_observed_at": "2026-08-12T07:29:10.273571-07:00"
+      },
+      {
+        "command_id": "system.capabilities",
+        "command_version": 1,
+        "invocation_count": 1,
+        "success_count": 1,
+        "expected_refusal_count": 0,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "job_count": 0,
+        "cache_hit_count": 0,
+        "mean_dispatch_seconds": 0.016617,
+        "p95_dispatch_seconds": 0.016617,
+        "first_observed_at": "2026-08-12T07:28:47.754466-07:00",
+        "last_observed_at": "2026-08-12T07:28:47.771083-07:00"
+      },
+      {
+        "command_id": "system.health",
+        "command_version": 1,
+        "invocation_count": 4,
+        "success_count": 4,
+        "expected_refusal_count": 0,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "job_count": 0,
+        "cache_hit_count": 0,
+        "mean_dispatch_seconds": 9.9e-05,
+        "p95_dispatch_seconds": 0.000105,
+        "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
+        "last_observed_at": "2026-08-12T07:43:46.392223-07:00"
+      }
+    ],
+    "method_observations": [
+      {
+        "method_id": "fields.qm.density",
+        "invocation_count": 4,
+        "success_count": 4,
+        "expected_refusal_count": 0,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "mean_dispatch_seconds": 0.013276
+      },
+      {
+        "method_id": "fields.qm.homo",
+        "invocation_count": 5,
+        "success_count": 5,
+        "expected_refusal_count": 0,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "mean_dispatch_seconds": 0.011439
+      },
+      {
+        "method_id": "fields.qm.lumo",
+        "invocation_count": 4,
+        "success_count": 4,
+        "expected_refusal_count": 0,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "mean_dispatch_seconds": 0.013345
+      },
+      {
+        "method_id": "torsion.strain",
+        "invocation_count": 1,
+        "success_count": 1,
+        "expected_refusal_count": 0,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "mean_dispatch_seconds": 0.009878
+      }
+    ],
     "drift": {
       "missing_expected_ports": [],
       "unexpected_legacy_port_8902": false,
@@ -112,8 +251,8 @@
   },
   "analysis": {
     "maturity": {
-      "level": "L2",
-      "name": "Diagnostic software-architecture twin",
+      "level": "L3",
+      "name": "Observed architecture optimization twin",
       "is_continuously_synchronized": true,
       "synchronization": "event-driven recursive source synchronization; runtime observations refresh on each regeneration rather than streaming continuously",
       "source_sync": "continuous while dirac-digital-twin.service is active",
@@ -123,15 +262,15 @@
         "detect declared/observed drift",
         "rank static hotspots",
         "simulate dependency-radius change impact",
-        "preserve function-level traceability"
+        "preserve function-level traceability",
+        "calibrate command latency and outcomes from observed traffic"
       ],
       "cannot_yet_do": [
-        "predict latency or failure probability",
-        "replay real traces",
-        "calibrate impact from production traffic",
+        "predict latency or failure probability for unseen inputs",
+        "replay commands without separately retained inputs",
         "close the optimization loop automatically"
       ],
-      "next_level": "L3 requires node-keyed runtime traces and calibrated outcome models."
+      "next_level": "L4 requires validated predictive models and governed optimization actions."
     },
     "product_reality": {
       "platform_substrate": "complete",
@@ -642,7 +781,7 @@
         "id": "source-auto-sync",
         "status": "pass",
         "label": "Architecture source auto-sync",
-        "value": "304 files",
+        "value": "307 files",
         "why": "The watcher must be active and every discovered first-party file must have an inventory node."
       },
       {
@@ -654,28 +793,35 @@
       },
       {
         "id": "attention-quality",
-        "status": "warn",
+        "status": "pass",
         "label": "Attention signal quality",
-        "value": "240 items",
-        "why": "Attention currently treats every failed Job as actionable, including expected scientific refusals."
+        "value": "34 items",
+        "why": "Attention contains only operational/scientific failures and approval waits; expected refusals remain queryable without becoming incidents."
       },
       {
         "id": "dynamic-observation",
-        "status": "warn",
-        "label": "Observed execution coverage",
-        "value": "aggregate only",
-        "why": "The twin has runtime aggregates but no per-command trace-to-function telemetry yet."
+        "status": "pass",
+        "label": "Node-keyed execution telemetry",
+        "value": "41 traces · 6/17 commands observed",
+        "why": "Persistent traces bind real outcomes and latency to command and method nodes."
+      },
+      {
+        "id": "architecture-fitness",
+        "status": "pass",
+        "label": "Architecture fitness ratchets",
+        "value": "0 import cycles",
+        "why": "Gate 14 enforces command/method coverage, adapter boundaries, singleton state owners and a zero module-cycle ratchet."
       }
     ],
     "findings": [
       {
         "id": "attention-semantics",
-        "priority": "P0",
+        "priority": "DONE",
         "kind": "signal-quality",
-        "title": "Separate expected scientific refusals from operational failures",
-        "evidence": "The current local DB (including verification traffic) yields 240 Attention items; 206 are expected refusal codes and 34 are INTERNAL failures.",
-        "impact": "The view has no outcome class with which to suppress expected refusals; in real workflows this would create noise while genuine infrastructure failures remain unranked.",
-        "action": "Persist outcome_class, actor and command identity with Job/Run; derive Attention only from unexpected failures, approval waits and policy-selected scientific refusals.",
+        "title": "Attention now separates expected refusals from actionable failures",
+        "evidence": "209 historical expected refusals remain in the Job ledger while Attention contains 34 actionable items: 34 operational, 0 scientific and 0 approval waits.",
+        "impact": "Operators see a ranked intervention queue without losing scientific refusal history, and every new Job carries actor, command and request identity.",
+        "action": "Keep app.classify_job_outcome and app.v_attention under migration and contract gates.",
         "nodes": [
           "store:jobs",
           "db:view:app.v_attention",
@@ -684,12 +830,12 @@
       },
       {
         "id": "trace-fidelity",
-        "priority": "P1",
+        "priority": "DONE",
         "kind": "twin-fidelity",
-        "title": "Bind observed command traces back to architecture nodes",
-        "evidence": "Current runtime truth is service/port/DB aggregate state; call edges are static AST evidence.",
-        "impact": "The twin can estimate change impact but cannot calibrate it with actual traffic, latency or failure paths.",
-        "action": "Emit command_id, method_version, job_id, cache source, latency and terminal outcome as structured traces; ingest aggregates keyed by existing twin node IDs.",
+        "title": "Observed command traces are bound to architecture nodes",
+        "evidence": "41 durable traces currently cover 6/17 commands; linked Jobs resolve to their eventual terminal outcome.",
+        "impact": "Command and method inspectors now expose empirical traffic, latency, cache and failure-path data.",
+        "action": "Let coverage accumulate from real use; do not manufacture traffic merely to turn coverage green.",
         "nodes": [
           "system:dispatcher",
           "system:invocation",
@@ -698,12 +844,12 @@
       },
       {
         "id": "fitness-gates",
-        "priority": "P1",
+        "priority": "DONE",
         "kind": "architecture-control",
-        "title": "Turn twin invariants into CI architecture fitness functions",
-        "evidence": "17/17 commands and 12/12 methods are structurally linked today.",
-        "impact": "Without a gate, future adapters can silently bypass the dispatcher or add a second state clock/store.",
-        "action": "Fail CI on unhandled commands, unmapped methods, forbidden adapter→compute/store edges, duplicate context clocks, a second scene owner, and new module cycles above the ratchet.",
+        "title": "Twin invariants are enforced as architecture fitness functions",
+        "evidence": "Gate 14 verifies 17/17 handled commands, 12/12 implemented methods and 0 import cycles.",
+        "impact": "A future adapter bypass, duplicate owner or import cycle now fails the same gate that checks twin freshness.",
+        "action": "Keep each new invariant paired with a positive control that proves the checker can convict.",
         "nodes": [
           "registry:commands",
           "registry:methods",
@@ -1052,6 +1198,18 @@
         "change_risk_score": 42
       },
       {
+        "node": "function:py:backend/invocation.py:316:InvocationService.invoke",
+        "name": "InvocationService.invoke",
+        "path": "backend/invocation.py",
+        "line": 316,
+        "layer": "infrastructure",
+        "lines": 155,
+        "fan_in": 0,
+        "fan_out": 0,
+        "boundary_calls": 0,
+        "change_risk_score": 16
+      },
+      {
         "node": "function:py:backend/field_server.py:314:handle_v2",
         "name": "handle_v2",
         "path": "backend/field_server.py",
@@ -1062,18 +1220,6 @@
         "fan_out": 3,
         "boundary_calls": 0,
         "change_risk_score": 31
-      },
-      {
-        "node": "function:py:backend/invocation.py:302:InvocationService.invoke",
-        "name": "InvocationService.invoke",
-        "path": "backend/invocation.py",
-        "line": 302,
-        "layer": "infrastructure",
-        "lines": 142,
-        "fan_in": 0,
-        "fan_out": 0,
-        "boundary_calls": 0,
-        "change_risk_score": 14
       },
       {
         "node": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/facets/pharmacophore-designer/drag.ts:46:1:installDesignerDrag",
@@ -1332,10 +1478,10 @@
       {
         "path": "backend/jobs.py",
         "layer": "infrastructure",
-        "functions": 33,
-        "lines_in_functions": 495,
-        "fan_in": 1,
-        "fan_out": 1,
+        "functions": 34,
+        "lines_in_functions": 531,
+        "fan_in": 2,
+        "fan_out": 2,
         "boundary_calls": 0,
         "max_change_risk": 26
       },
@@ -1544,7 +1690,7 @@
       "language": "python",
       "path": "backend/dirac_app/dispatcher.py",
       "line": 14,
-      "end_line": 17,
+      "end_line": 18,
       "layer": "application",
       "qualified_name": "CommandContext",
       "bases": [],
@@ -1555,12 +1701,12 @@
     {
       "language": "python",
       "path": "backend/dirac_app/dispatcher.py",
-      "line": 20,
-      "end_line": 68,
+      "line": 21,
+      "end_line": 82,
       "layer": "application",
       "qualified_name": "CommandDispatcher",
       "bases": [],
-      "id": "class:py:backend/dirac_app/dispatcher.py:20:CommandDispatcher",
+      "id": "class:py:backend/dirac_app/dispatcher.py:21:CommandDispatcher",
       "type": "class",
       "name": "CommandDispatcher"
     },
@@ -1848,7 +1994,7 @@
       "language": "python",
       "path": "backend/invocation.py",
       "line": 121,
-      "end_line": 531,
+      "end_line": 574,
       "layer": "infrastructure",
       "qualified_name": "InvocationService",
       "bases": [],
@@ -1883,24 +2029,24 @@
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 104,
-      "end_line": 469,
+      "line": 129,
+      "end_line": 502,
       "layer": "infrastructure",
       "qualified_name": "JobLedger",
       "bases": [],
-      "id": "class:py:backend/jobs.py:104:JobLedger",
+      "id": "class:py:backend/jobs.py:129:JobLedger",
       "type": "class",
       "name": "JobLedger"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 475,
-      "end_line": 573,
+      "line": 508,
+      "end_line": 615,
       "layer": "infrastructure",
       "qualified_name": "MemoryJobStore",
       "bases": [],
-      "id": "class:py:backend/jobs.py:475:MemoryJobStore",
+      "id": "class:py:backend/jobs.py:508:MemoryJobStore",
       "type": "class",
       "name": "MemoryJobStore"
     },
@@ -2054,6 +2200,18 @@
     },
     {
       "language": "python",
+      "path": "backend/tests/test_job_store_contract.py",
+      "line": 77,
+      "end_line": 84,
+      "layer": "verification",
+      "qualified_name": "test_command_dispatcher_propagates_actor_command_and_request_to_kernel.Kernel",
+      "bases": [],
+      "id": "class:py:backend/tests/test_job_store_contract.py:77:test_command_dispatcher_propagates_actor_command_and_request_to_kernel.Kernel",
+      "type": "class",
+      "name": "Kernel"
+    },
+    {
+      "language": "python",
       "path": "backend/tests/test_persist_counters.py",
       "line": 66,
       "end_line": 67,
@@ -2079,6 +2237,30 @@
       "id": "class:py:backend/tests/test_physics_contracts.py:110:Skipped",
       "type": "class",
       "name": "Skipped"
+    },
+    {
+      "language": "python",
+      "path": "backend/traces.py",
+      "line": 101,
+      "end_line": 117,
+      "layer": "infrastructure",
+      "qualified_name": "MemoryCommandTraceStore",
+      "bases": [],
+      "id": "class:py:backend/traces.py:101:MemoryCommandTraceStore",
+      "type": "class",
+      "name": "MemoryCommandTraceStore"
+    },
+    {
+      "language": "python",
+      "path": "backend/traces.py",
+      "line": 69,
+      "end_line": 98,
+      "layer": "infrastructure",
+      "qualified_name": "PostgresCommandTraceStore",
+      "bases": [],
+      "id": "class:py:backend/traces.py:69:PostgresCommandTraceStore",
+      "type": "class",
+      "name": "PostgresCommandTraceStore"
     },
     {
       "language": "python",
@@ -2532,7 +2714,22 @@
       "availability": "available",
       "id": "command:job.wait",
       "type": "command",
-      "name": "job.wait"
+      "name": "job.wait",
+      "runtime_observation": {
+        "command_id": "job.wait",
+        "command_version": 1,
+        "invocation_count": 13,
+        "success_count": 13,
+        "expected_refusal_count": 0,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "job_count": 0,
+        "cache_hit_count": 0,
+        "mean_dispatch_seconds": 0.162551,
+        "p95_dispatch_seconds": 0.231566,
+        "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
+        "last_observed_at": "2026-08-12T07:43:48.039617-07:00"
+      }
     },
     {
       "layer": "commands",
@@ -2657,7 +2854,22 @@
       "availability": "available",
       "id": "command:structure.field.compute",
       "type": "command",
-      "name": "structure.field.compute"
+      "name": "structure.field.compute",
+      "runtime_observation": {
+        "command_id": "structure.field.compute",
+        "command_version": 1,
+        "invocation_count": 21,
+        "success_count": 13,
+        "expected_refusal_count": 8,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "job_count": 13,
+        "cache_hit_count": 0,
+        "mean_dispatch_seconds": 0.007856,
+        "p95_dispatch_seconds": 0.015971,
+        "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
+        "last_observed_at": "2026-08-12T07:43:47.820575-07:00"
+      }
     },
     {
       "layer": "commands",
@@ -2678,7 +2890,22 @@
       "availability": "available",
       "id": "command:structure.interactions",
       "type": "command",
-      "name": "structure.interactions"
+      "name": "structure.interactions",
+      "runtime_observation": {
+        "command_id": "structure.interactions",
+        "command_version": 1,
+        "invocation_count": 1,
+        "success_count": 0,
+        "expected_refusal_count": 1,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "job_count": 0,
+        "cache_hit_count": 0,
+        "mean_dispatch_seconds": 9.4e-05,
+        "p95_dispatch_seconds": 9.4e-05,
+        "first_observed_at": "2026-08-12T07:28:55.808062-07:00",
+        "last_observed_at": "2026-08-12T07:28:55.808156-07:00"
+      }
     },
     {
       "layer": "commands",
@@ -2724,7 +2951,22 @@
       "availability": "available",
       "id": "command:structure.torsion.analyze",
       "type": "command",
-      "name": "structure.torsion.analyze"
+      "name": "structure.torsion.analyze",
+      "runtime_observation": {
+        "command_id": "structure.torsion.analyze",
+        "command_version": 1,
+        "invocation_count": 1,
+        "success_count": 1,
+        "expected_refusal_count": 0,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "job_count": 1,
+        "cache_hit_count": 0,
+        "mean_dispatch_seconds": 0.009878,
+        "p95_dispatch_seconds": 0.009878,
+        "first_observed_at": "2026-08-12T07:29:10.263693-07:00",
+        "last_observed_at": "2026-08-12T07:29:10.273571-07:00"
+      }
     },
     {
       "layer": "commands",
@@ -2744,7 +2986,22 @@
       "availability": "available",
       "id": "command:system.capabilities",
       "type": "command",
-      "name": "system.capabilities"
+      "name": "system.capabilities",
+      "runtime_observation": {
+        "command_id": "system.capabilities",
+        "command_version": 1,
+        "invocation_count": 1,
+        "success_count": 1,
+        "expected_refusal_count": 0,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "job_count": 0,
+        "cache_hit_count": 0,
+        "mean_dispatch_seconds": 0.016617,
+        "p95_dispatch_seconds": 0.016617,
+        "first_observed_at": "2026-08-12T07:28:47.754466-07:00",
+        "last_observed_at": "2026-08-12T07:28:47.771083-07:00"
+      }
     },
     {
       "layer": "commands",
@@ -2764,7 +3021,22 @@
       "availability": "available",
       "id": "command:system.health",
       "type": "command",
-      "name": "system.health"
+      "name": "system.health",
+      "runtime_observation": {
+        "command_id": "system.health",
+        "command_version": 1,
+        "invocation_count": 4,
+        "success_count": 4,
+        "expected_refusal_count": 0,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "job_count": 0,
+        "cache_hit_count": 0,
+        "mean_dispatch_seconds": 9.9e-05,
+        "p95_dispatch_seconds": 0.000105,
+        "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
+        "last_observed_at": "2026-08-12T07:43:46.392223-07:00"
+      }
     },
     {
       "layer": "commands",
@@ -2793,6 +3065,15 @@
       "id": "contract:object-ref",
       "type": "contract",
       "name": "ObjectRef"
+    },
+    {
+      "layer": "persistence",
+      "path": "backend/db/migrations/017_job_outcome_identity.sql",
+      "line": 18,
+      "defined_by": "017_job_outcome_identity",
+      "id": "db:function:app.classify_job_outcome",
+      "type": "db-function",
+      "name": "app.classify_job_outcome"
     },
     {
       "layer": "persistence",
@@ -2901,6 +3182,15 @@
       "id": "db:table:app.blob",
       "type": "db-table",
       "name": "app.blob"
+    },
+    {
+      "layer": "persistence",
+      "path": "backend/db/migrations/018_command_observations.sql",
+      "line": 9,
+      "defined_by": "018_command_observations",
+      "id": "db:table:app.command_trace",
+      "type": "db-table",
+      "name": "app.command_trace"
     },
     {
       "layer": "persistence",
@@ -3390,6 +3680,15 @@
     },
     {
       "layer": "persistence",
+      "path": "backend/db/migrations/017_job_outcome_identity.sql",
+      "line": 10,
+      "defined_by": "017_job_outcome_identity",
+      "id": "db:type:app.job_outcome_class",
+      "type": "db-type",
+      "name": "app.job_outcome_class"
+    },
+    {
+      "layer": "persistence",
       "path": "backend/db/migrations/007_method_registry_and_job_ledger.sql",
       "line": 124,
       "defined_by": "007_method_registry_and_job_ledger",
@@ -3678,9 +3977,9 @@
     },
     {
       "layer": "persistence",
-      "path": "backend/db/migrations/015_domain_mission_run.sql",
-      "line": 141,
-      "defined_by": "015_domain_mission_run",
+      "path": "backend/db/migrations/017_job_outcome_identity.sql",
+      "line": 74,
+      "defined_by": "017_job_outcome_identity",
       "id": "db:view:app.v_attention",
       "type": "db-view",
       "name": "app.v_attention"
@@ -3702,6 +4001,24 @@
       "id": "db:view:app.v_cache_meta_coverage",
       "type": "db-view",
       "name": "app.v_cache_meta_coverage"
+    },
+    {
+      "layer": "persistence",
+      "path": "backend/db/migrations/018_command_observations.sql",
+      "line": 59,
+      "defined_by": "018_command_observations",
+      "id": "db:view:app.v_command_observation",
+      "type": "db-view",
+      "name": "app.v_command_observation"
+    },
+    {
+      "layer": "persistence",
+      "path": "backend/db/migrations/018_command_observations.sql",
+      "line": 37,
+      "defined_by": "018_command_observations",
+      "id": "db:view:app.v_command_trace",
+      "type": "db-view",
+      "name": "app.v_command_trace"
     },
     {
       "layer": "persistence",
@@ -3860,8 +4177,8 @@
       "layer": "runtime",
       "path": "ARCHITECTURE.md",
       "extension": ".md",
-      "bytes": 8431,
-      "sha256": "ba63867d5b44bdab3f51c76397b3ad267dfdbb59e82b2ab117dfda5580ddaf1c",
+      "bytes": 9010,
+      "sha256": "dc899586afb60e1fc77b1cac2862d672b1ffb5a5cb59c504131c347a8e2c5d3b",
       "generated": false,
       "id": "file:ARCHITECTURE.md",
       "type": "source-file",
@@ -4287,6 +4604,28 @@
     },
     {
       "layer": "infrastructure",
+      "path": "backend/db/migrations/017_job_outcome_identity.sql",
+      "extension": ".sql",
+      "bytes": 4457,
+      "sha256": "00cd169eed8a93064b8bb493cc6782999564ac49d6cbde6373a9a3774c0a9f93",
+      "generated": false,
+      "id": "file:backend/db/migrations/017_job_outcome_identity.sql",
+      "type": "source-file",
+      "name": "017_job_outcome_identity.sql"
+    },
+    {
+      "layer": "infrastructure",
+      "path": "backend/db/migrations/018_command_observations.sql",
+      "extension": ".sql",
+      "bytes": 3897,
+      "sha256": "64175f232069304578f9da43aa2ea9b3708e2aa98e65568bb7b26bede53514fc",
+      "generated": false,
+      "id": "file:backend/db/migrations/018_command_observations.sql",
+      "type": "source-file",
+      "name": "018_command_observations.sql"
+    },
+    {
+      "layer": "infrastructure",
       "path": "backend/db/stress_test.sh",
       "extension": ".sh",
       "bytes": 8933,
@@ -4311,8 +4650,8 @@
       "layer": "application",
       "path": "backend/dirac_app/dispatcher.py",
       "extension": ".py",
-      "bytes": 2825,
-      "sha256": "1288077f22e06e7aa1e180d12983a426fc6880ab0467f81054c5cf2be32c91d1",
+      "bytes": 3569,
+      "sha256": "b75ef681420f4d64c0dab14d56ecac6b4c7b01ed265675047dd6229293768ed6",
       "generated": false,
       "id": "file:backend/dirac_app/dispatcher.py",
       "type": "source-file",
@@ -4322,8 +4661,8 @@
       "layer": "application",
       "path": "backend/dirac_app/handlers.py",
       "extension": ".py",
-      "bytes": 5427,
-      "sha256": "fd404251ac371024fd219cc688b7bd4b457884f92b77820fcbb24362d838cbf5",
+      "bytes": 5707,
+      "sha256": "120dd6b7569352a4bd5a9f87f72c2e7f3ad2b5b219b10a9cc3a15fa1407f6bf2",
       "generated": false,
       "id": "file:backend/dirac_app/handlers.py",
       "type": "source-file",
@@ -4410,8 +4749,8 @@
       "layer": "infrastructure",
       "path": "backend/invocation.py",
       "extension": ".py",
-      "bytes": 27961,
-      "sha256": "067dc8216c90ffa3135116d1829f4ab4be6c2b79b4425d1f0ae118239ef44fb1",
+      "bytes": 30341,
+      "sha256": "c108f672ab490246def1bdeb9188403d94f77aa0b125a6411ee619e275069800",
       "generated": false,
       "id": "file:backend/invocation.py",
       "type": "source-file",
@@ -4421,8 +4760,8 @@
       "layer": "infrastructure",
       "path": "backend/jobs.py",
       "extension": ".py",
-      "bytes": 32849,
-      "sha256": "04e18f53e6587887f05d5f809bd65e0257bd2eed8070e79d656bbf793de448f5",
+      "bytes": 34750,
+      "sha256": "18b8cec1028656316d34450f86ad841ffa77481495c31bc19b1224276feeb142",
       "generated": false,
       "id": "file:backend/jobs.py",
       "type": "source-file",
@@ -4432,8 +4771,8 @@
       "layer": "infrastructure",
       "path": "backend/kernel.py",
       "extension": ".py",
-      "bytes": 11288,
-      "sha256": "e8fb5be60d2e8390b4104794a24ae85eb1131b76c77b05c7b35cfb6ec589f428",
+      "bytes": 12201,
+      "sha256": "27338f6be7535ecaff253d232d92905d5eae54e8cfc4acadf60a4abdf2eff9bb",
       "generated": false,
       "id": "file:backend/kernel.py",
       "type": "source-file",
@@ -4740,8 +5079,8 @@
       "layer": "verification",
       "path": "backend/tests/test_job_store_contract.py",
       "extension": ".py",
-      "bytes": 3449,
-      "sha256": "a90245d64a6c05b5199e6dc4a568ebe38b638df599f5a75ecfb74ab0cf7cc07b",
+      "bytes": 5884,
+      "sha256": "aa4ec0866b73aff5e34918d1e5f57b89df9e613727b98027877531ee00a9a777",
       "generated": false,
       "id": "file:backend/tests/test_job_store_contract.py",
       "type": "source-file",
@@ -4779,6 +5118,17 @@
       "id": "file:backend/tests/test_physics_contracts.py",
       "type": "source-file",
       "name": "test_physics_contracts.py"
+    },
+    {
+      "layer": "infrastructure",
+      "path": "backend/traces.py",
+      "extension": ".py",
+      "bytes": 4723,
+      "sha256": "ae96fc593aec671b077e85d09040d7babccf487e04cdde4353d61f000b1c1b55",
+      "generated": false,
+      "id": "file:backend/traces.py",
+      "type": "source-file",
+      "name": "traces.py"
     },
     {
       "layer": "runtime",
@@ -5609,8 +5959,8 @@
       "layer": "tooling",
       "path": "scripts/build_digital_twin.py",
       "extension": ".py",
-      "bytes": 49714,
-      "sha256": "382d3918c17058c7a2b91c6ecf7b75959b01a5d8d53aadcd9b9fa12c13ba2a05",
+      "bytes": 56394,
+      "sha256": "e73c2ba8d07eaacef3105c1773fd89c5ae7441c280ef188d855cdf8f2d0e1fd5",
       "generated": false,
       "id": "file:scripts/build_digital_twin.py",
       "type": "source-file",
@@ -5708,8 +6058,8 @@
       "layer": "tooling",
       "path": "scripts/check_digital_twin.py",
       "extension": ".py",
-      "bytes": 4923,
-      "sha256": "b881067bafe9580e582535a3b0372a9bf0c4fde6ba1fe0e3a18e16249388415f",
+      "bytes": 9263,
+      "sha256": "84eadb49a874a150d906372ecacf40260fd91b1de81fc59875cf286b3184191a",
       "generated": false,
       "id": "file:scripts/check_digital_twin.py",
       "type": "source-file",
@@ -5807,8 +6157,8 @@
       "layer": "tooling",
       "path": "scripts/digital_twin_template.html",
       "extension": ".html",
-      "bytes": 34227,
-      "sha256": "36b51d33f85291f0467ff14e6202cd091b75a625198e15610fb8e7a80af508b7",
+      "bytes": 34683,
+      "sha256": "9ef4c3e883d8f1e461c7416ed277d43d8d781079f52b7c267debead0ff0844cd",
       "generated": false,
       "id": "file:scripts/digital_twin_template.html",
       "type": "source-file",
@@ -8846,8 +9196,8 @@
     {
       "language": "python",
       "path": "backend/dirac_app/dispatcher.py",
-      "line": 21,
-      "end_line": 23,
+      "line": 22,
+      "end_line": 27,
       "layer": "application",
       "qualified_name": "CommandDispatcher.__init__",
       "owner": "CommandDispatcher",
@@ -8855,17 +9205,18 @@
       "parameters": [
         "self",
         "kernel",
-        "registry"
+        "registry",
+        "trace_sink"
       ],
-      "id": "function:py:backend/dirac_app/dispatcher.py:21:CommandDispatcher.__init__",
+      "id": "function:py:backend/dirac_app/dispatcher.py:22:CommandDispatcher.__init__",
       "type": "method",
       "name": "__init__"
     },
     {
       "language": "python",
       "path": "backend/dirac_app/dispatcher.py",
-      "line": 25,
-      "end_line": 68,
+      "line": 29,
+      "end_line": 82,
       "layer": "application",
       "qualified_name": "CommandDispatcher.execute",
       "owner": "CommandDispatcher",
@@ -8877,7 +9228,7 @@
         "actor",
         "request_id"
       ],
-      "id": "function:py:backend/dirac_app/dispatcher.py:25:CommandDispatcher.execute",
+      "id": "function:py:backend/dirac_app/dispatcher.py:29:CommandDispatcher.execute",
       "type": "method",
       "name": "execute"
     },
@@ -8885,7 +9236,7 @@
       "language": "python",
       "path": "backend/dirac_app/handlers.py",
       "line": 110,
-      "end_line": 121,
+      "end_line": 123,
       "layer": "application",
       "qualified_name": "conformer_generate",
       "owner": null,
@@ -8918,8 +9269,8 @@
     {
       "language": "python",
       "path": "backend/dirac_app/handlers.py",
-      "line": 124,
-      "end_line": 133,
+      "line": 126,
+      "end_line": 136,
       "layer": "application",
       "qualified_name": "structure_field_compute",
       "owner": null,
@@ -8928,15 +9279,15 @@
         "input",
         "ctx"
       ],
-      "id": "function:py:backend/dirac_app/handlers.py:124:structure_field_compute",
+      "id": "function:py:backend/dirac_app/handlers.py:126:structure_field_compute",
       "type": "function",
       "name": "structure_field_compute"
     },
     {
       "language": "python",
       "path": "backend/dirac_app/handlers.py",
-      "line": 136,
-      "end_line": 142,
+      "line": 139,
+      "end_line": 146,
       "layer": "application",
       "qualified_name": "structure_surface_compute",
       "owner": null,
@@ -8945,15 +9296,15 @@
         "input",
         "ctx"
       ],
-      "id": "function:py:backend/dirac_app/handlers.py:136:structure_surface_compute",
+      "id": "function:py:backend/dirac_app/handlers.py:139:structure_surface_compute",
       "type": "function",
       "name": "structure_surface_compute"
     },
     {
       "language": "python",
       "path": "backend/dirac_app/handlers.py",
-      "line": 145,
-      "end_line": 150,
+      "line": 149,
+      "end_line": 155,
       "layer": "application",
       "qualified_name": "structure_torsion_analyze",
       "owner": null,
@@ -8962,7 +9313,7 @@
         "input",
         "ctx"
       ],
-      "id": "function:py:backend/dirac_app/handlers.py:145:structure_torsion_analyze",
+      "id": "function:py:backend/dirac_app/handlers.py:149:structure_torsion_analyze",
       "type": "function",
       "name": "structure_torsion_analyze"
     },
@@ -11343,7 +11694,7 @@
       "language": "python",
       "path": "backend/invocation.py",
       "line": 132,
-      "end_line": 147,
+      "end_line": 149,
       "layer": "infrastructure",
       "qualified_name": "InvocationService.__init__",
       "owner": "InvocationService",
@@ -11355,6 +11706,7 @@
         "ledger",
         "cache",
         "executor",
+        "trace_store",
         "toolkit_versions"
       ],
       "id": "function:py:backend/invocation.py:132:InvocationService.__init__",
@@ -11364,8 +11716,8 @@
     {
       "language": "python",
       "path": "backend/invocation.py",
-      "line": 150,
-      "end_line": 157,
+      "line": 152,
+      "end_line": 159,
       "layer": "infrastructure",
       "qualified_name": "InvocationService.list_methods",
       "owner": "InvocationService",
@@ -11374,15 +11726,15 @@
         "self",
         "surface"
       ],
-      "id": "function:py:backend/invocation.py:150:InvocationService.list_methods",
+      "id": "function:py:backend/invocation.py:152:InvocationService.list_methods",
       "type": "method",
       "name": "list_methods"
     },
     {
       "language": "python",
       "path": "backend/invocation.py",
-      "line": 159,
-      "end_line": 160,
+      "line": 161,
+      "end_line": 162,
       "layer": "infrastructure",
       "qualified_name": "InvocationService.describe",
       "owner": "InvocationService",
@@ -11391,15 +11743,15 @@
         "self",
         "method_id"
       ],
-      "id": "function:py:backend/invocation.py:159:InvocationService.describe",
+      "id": "function:py:backend/invocation.py:161:InvocationService.describe",
       "type": "method",
       "name": "describe"
     },
     {
       "language": "python",
       "path": "backend/invocation.py",
-      "line": 162,
-      "end_line": 182,
+      "line": 164,
+      "end_line": 184,
       "layer": "infrastructure",
       "qualified_name": "InvocationService.estimate",
       "owner": "InvocationService",
@@ -11409,15 +11761,15 @@
         "method_id",
         "payload"
       ],
-      "id": "function:py:backend/invocation.py:162:InvocationService.estimate",
+      "id": "function:py:backend/invocation.py:164:InvocationService.estimate",
       "type": "method",
       "name": "estimate"
     },
     {
       "language": "python",
       "path": "backend/invocation.py",
-      "line": 185,
-      "end_line": 201,
+      "line": 187,
+      "end_line": 207,
       "layer": "infrastructure",
       "qualified_name": "InvocationService.capabilities",
       "owner": "InvocationService",
@@ -11425,15 +11777,15 @@
       "parameters": [
         "self"
       ],
-      "id": "function:py:backend/invocation.py:185:InvocationService.capabilities",
+      "id": "function:py:backend/invocation.py:187:InvocationService.capabilities",
       "type": "method",
       "name": "capabilities"
     },
     {
       "language": "python",
       "path": "backend/invocation.py",
-      "line": 203,
-      "end_line": 206,
+      "line": 209,
+      "end_line": 212,
       "layer": "infrastructure",
       "qualified_name": "InvocationService.list_jobs",
       "owner": "InvocationService",
@@ -11443,15 +11795,15 @@
         "state",
         "limit"
       ],
-      "id": "function:py:backend/invocation.py:203:InvocationService.list_jobs",
+      "id": "function:py:backend/invocation.py:209:InvocationService.list_jobs",
       "type": "method",
       "name": "list_jobs"
     },
     {
       "language": "python",
       "path": "backend/invocation.py",
-      "line": 208,
-      "end_line": 214,
+      "line": 214,
+      "end_line": 220,
       "layer": "infrastructure",
       "qualified_name": "InvocationService.get_job",
       "owner": "InvocationService",
@@ -11460,15 +11812,15 @@
         "self",
         "job_id"
       ],
-      "id": "function:py:backend/invocation.py:208:InvocationService.get_job",
+      "id": "function:py:backend/invocation.py:214:InvocationService.get_job",
       "type": "method",
       "name": "get_job"
     },
     {
       "language": "python",
       "path": "backend/invocation.py",
-      "line": 216,
-      "end_line": 226,
+      "line": 222,
+      "end_line": 232,
       "layer": "infrastructure",
       "qualified_name": "InvocationService.cancel_job",
       "owner": "InvocationService",
@@ -11477,15 +11829,15 @@
         "self",
         "job_id"
       ],
-      "id": "function:py:backend/invocation.py:216:InvocationService.cancel_job",
+      "id": "function:py:backend/invocation.py:222:InvocationService.cancel_job",
       "type": "method",
       "name": "cancel_job"
     },
     {
       "language": "python",
       "path": "backend/invocation.py",
-      "line": 228,
-      "end_line": 239,
+      "line": 234,
+      "end_line": 245,
       "layer": "infrastructure",
       "qualified_name": "InvocationService.wait_job",
       "owner": "InvocationService",
@@ -11496,15 +11848,15 @@
         "timeout",
         "poll"
       ],
-      "id": "function:py:backend/invocation.py:228:InvocationService.wait_job",
+      "id": "function:py:backend/invocation.py:234:InvocationService.wait_job",
       "type": "method",
       "name": "wait_job"
     },
     {
       "language": "python",
       "path": "backend/invocation.py",
-      "line": 241,
-      "end_line": 284,
+      "line": 247,
+      "end_line": 296,
       "layer": "infrastructure",
       "qualified_name": "InvocationService.submit",
       "owner": "InvocationService",
@@ -11515,17 +11867,19 @@
         "payload",
         "inline_max",
         "budget_seconds",
-        "request_id"
+        "request_id",
+        "actor",
+        "command_id"
       ],
-      "id": "function:py:backend/invocation.py:241:InvocationService.submit",
+      "id": "function:py:backend/invocation.py:247:InvocationService.submit",
       "type": "method",
       "name": "submit"
     },
     {
       "language": "python",
       "path": "backend/invocation.py",
-      "line": 286,
-      "end_line": 295,
+      "line": 298,
+      "end_line": 309,
       "layer": "infrastructure",
       "qualified_name": "InvocationService._run_submitted",
       "owner": "InvocationService",
@@ -11537,17 +11891,19 @@
         "payload",
         "inline_max",
         "budget_seconds",
-        "request_id"
+        "request_id",
+        "actor",
+        "command_id"
       ],
-      "id": "function:py:backend/invocation.py:286:InvocationService._run_submitted",
+      "id": "function:py:backend/invocation.py:298:InvocationService._run_submitted",
       "type": "method",
       "name": "_run_submitted"
     },
     {
       "language": "python",
       "path": "backend/invocation.py",
-      "line": 297,
-      "end_line": 299,
+      "line": 311,
+      "end_line": 313,
       "layer": "infrastructure",
       "qualified_name": "InvocationService._forget_future",
       "owner": "InvocationService",
@@ -11556,15 +11912,15 @@
         "self",
         "job_id"
       ],
-      "id": "function:py:backend/invocation.py:297:InvocationService._forget_future",
+      "id": "function:py:backend/invocation.py:311:InvocationService._forget_future",
       "type": "method",
       "name": "_forget_future"
     },
     {
       "language": "python",
       "path": "backend/invocation.py",
-      "line": 302,
-      "end_line": 443,
+      "line": 316,
+      "end_line": 470,
       "layer": "infrastructure",
       "qualified_name": "InvocationService.invoke",
       "owner": "InvocationService",
@@ -11576,17 +11932,19 @@
         "inline_max",
         "budget_seconds",
         "request_id",
+        "actor",
+        "command_id",
         "_preopened_job_id"
       ],
-      "id": "function:py:backend/invocation.py:302:InvocationService.invoke",
+      "id": "function:py:backend/invocation.py:316:InvocationService.invoke",
       "type": "method",
       "name": "invoke"
     },
     {
       "language": "python",
       "path": "backend/invocation.py",
-      "line": 446,
-      "end_line": 469,
+      "line": 473,
+      "end_line": 500,
       "layer": "infrastructure",
       "qualified_name": "InvocationService._open_job",
       "owner": "InvocationService",
@@ -11596,17 +11954,36 @@
         "spec",
         "payload",
         "budget",
-        "queued"
+        "queued",
+        "actor",
+        "command_id",
+        "request_id"
       ],
-      "id": "function:py:backend/invocation.py:446:InvocationService._open_job",
+      "id": "function:py:backend/invocation.py:473:InvocationService._open_job",
       "type": "method",
       "name": "_open_job"
     },
     {
       "language": "python",
       "path": "backend/invocation.py",
-      "line": 471,
-      "end_line": 492,
+      "line": 503,
+      "end_line": 509,
+      "layer": "infrastructure",
+      "qualified_name": "InvocationService._actor",
+      "owner": "InvocationService",
+      "async_function": false,
+      "parameters": [
+        "actor"
+      ],
+      "id": "function:py:backend/invocation.py:503:InvocationService._actor",
+      "type": "method",
+      "name": "_actor"
+    },
+    {
+      "language": "python",
+      "path": "backend/invocation.py",
+      "line": 511,
+      "end_line": 532,
       "layer": "infrastructure",
       "qualified_name": "InvocationService._require_declared_artifacts",
       "owner": "InvocationService",
@@ -11616,15 +11993,15 @@
         "spec",
         "out"
       ],
-      "id": "function:py:backend/invocation.py:471:InvocationService._require_declared_artifacts",
+      "id": "function:py:backend/invocation.py:511:InvocationService._require_declared_artifacts",
       "type": "method",
       "name": "_require_declared_artifacts"
     },
     {
       "language": "python",
       "path": "backend/invocation.py",
-      "line": 494,
-      "end_line": 531,
+      "line": 534,
+      "end_line": 574,
       "layer": "infrastructure",
       "qualified_name": "InvocationService._envelope",
       "owner": "InvocationService",
@@ -11637,9 +12014,11 @@
         "cache",
         "inline_max",
         "request_id",
-        "job_id"
+        "job_id",
+        "actor",
+        "command_id"
       ],
-      "id": "function:py:backend/invocation.py:494:InvocationService._envelope",
+      "id": "function:py:backend/invocation.py:534:InvocationService._envelope",
       "type": "method",
       "name": "_envelope"
     },
@@ -11662,8 +12041,26 @@
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 115,
-      "end_line": 119,
+      "line": 120,
+      "end_line": 126,
+      "layer": "infrastructure",
+      "qualified_name": "canonical_request_digest",
+      "owner": null,
+      "async_function": false,
+      "parameters": [
+        "method_row_id",
+        "input_sha256",
+        "params"
+      ],
+      "id": "function:py:backend/jobs.py:120:canonical_request_digest",
+      "type": "function",
+      "name": "canonical_request_digest"
+    },
+    {
+      "language": "python",
+      "path": "backend/jobs.py",
+      "line": 140,
+      "end_line": 144,
       "layer": "infrastructure",
       "qualified_name": "JobLedger.__init__",
       "owner": "JobLedger",
@@ -11674,15 +12071,15 @@
         "worker",
         "method_rows"
       ],
-      "id": "function:py:backend/jobs.py:115:JobLedger.__init__",
+      "id": "function:py:backend/jobs.py:140:JobLedger.__init__",
       "type": "method",
       "name": "__init__"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 121,
-      "end_line": 122,
+      "line": 146,
+      "end_line": 147,
       "layer": "infrastructure",
       "qualified_name": "JobLedger.method_row_for",
       "owner": "JobLedger",
@@ -11691,15 +12088,15 @@
         "self",
         "method_id"
       ],
-      "id": "function:py:backend/jobs.py:121:JobLedger.method_row_for",
+      "id": "function:py:backend/jobs.py:146:JobLedger.method_row_for",
       "type": "method",
       "name": "method_row_for"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 124,
-      "end_line": 125,
+      "line": 149,
+      "end_line": 150,
       "layer": "infrastructure",
       "qualified_name": "JobLedger.bind_method_rows",
       "owner": "JobLedger",
@@ -11708,15 +12105,15 @@
         "self",
         "rows"
       ],
-      "id": "function:py:backend/jobs.py:124:JobLedger.bind_method_rows",
+      "id": "function:py:backend/jobs.py:149:JobLedger.bind_method_rows",
       "type": "method",
       "name": "bind_method_rows"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 128,
-      "end_line": 202,
+      "line": 153,
+      "end_line": 232,
       "layer": "infrastructure",
       "qualified_name": "JobLedger.open",
       "owner": "JobLedger",
@@ -11731,17 +12128,21 @@
         "compound_id",
         "conformer_hash",
         "queued",
-        "request_digest"
+        "request_digest",
+        "actor_kind",
+        "actor_id",
+        "command_id",
+        "request_id"
       ],
-      "id": "function:py:backend/jobs.py:128:JobLedger.open",
+      "id": "function:py:backend/jobs.py:153:JobLedger.open",
       "type": "method",
       "name": "open"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 204,
-      "end_line": 221,
+      "line": 234,
+      "end_line": 251,
       "layer": "infrastructure",
       "qualified_name": "JobLedger.start",
       "owner": "JobLedger",
@@ -11750,15 +12151,15 @@
         "self",
         "job_id"
       ],
-      "id": "function:py:backend/jobs.py:204:JobLedger.start",
+      "id": "function:py:backend/jobs.py:234:JobLedger.start",
       "type": "method",
       "name": "start"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 223,
-      "end_line": 240,
+      "line": 253,
+      "end_line": 270,
       "layer": "infrastructure",
       "qualified_name": "JobLedger.done",
       "owner": "JobLedger",
@@ -11771,15 +12172,15 @@
         "peak_rss_mb",
         "result_summary"
       ],
-      "id": "function:py:backend/jobs.py:223:JobLedger.done",
+      "id": "function:py:backend/jobs.py:253:JobLedger.done",
       "type": "method",
       "name": "done"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 242,
-      "end_line": 264,
+      "line": 272,
+      "end_line": 294,
       "layer": "infrastructure",
       "qualified_name": "JobLedger.failed",
       "owner": "JobLedger",
@@ -11792,15 +12193,15 @@
         "seconds",
         "retryable"
       ],
-      "id": "function:py:backend/jobs.py:242:JobLedger.failed",
+      "id": "function:py:backend/jobs.py:272:JobLedger.failed",
       "type": "method",
       "name": "failed"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 267,
-      "end_line": 269,
+      "line": 297,
+      "end_line": 299,
       "layer": "infrastructure",
       "qualified_name": "JobLedger.get",
       "owner": "JobLedger",
@@ -11809,15 +12210,15 @@
         "self",
         "job_id"
       ],
-      "id": "function:py:backend/jobs.py:267:JobLedger.get",
+      "id": "function:py:backend/jobs.py:297:JobLedger.get",
       "type": "method",
       "name": "get"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 271,
-      "end_line": 274,
+      "line": 301,
+      "end_line": 304,
       "layer": "infrastructure",
       "qualified_name": "JobLedger.list",
       "owner": "JobLedger",
@@ -11827,15 +12228,15 @@
         "state",
         "limit"
       ],
-      "id": "function:py:backend/jobs.py:271:JobLedger.list",
+      "id": "function:py:backend/jobs.py:301:JobLedger.list",
       "type": "method",
       "name": "list"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 276,
-      "end_line": 304,
+      "line": 306,
+      "end_line": 334,
       "layer": "infrastructure",
       "qualified_name": "JobLedger.request_cancel",
       "owner": "JobLedger",
@@ -11844,15 +12245,15 @@
         "self",
         "job_id"
       ],
-      "id": "function:py:backend/jobs.py:276:JobLedger.request_cancel",
+      "id": "function:py:backend/jobs.py:306:JobLedger.request_cancel",
       "type": "method",
       "name": "request_cancel"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 306,
-      "end_line": 332,
+      "line": 336,
+      "end_line": 365,
       "layer": "infrastructure",
       "qualified_name": "JobLedger._query_jobs",
       "owner": "JobLedger",
@@ -11863,15 +12264,15 @@
         "params",
         "limit"
       ],
-      "id": "function:py:backend/jobs.py:306:JobLedger._query_jobs",
+      "id": "function:py:backend/jobs.py:336:JobLedger._query_jobs",
       "type": "method",
       "name": "_query_jobs"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 335,
-      "end_line": 400,
+      "line": 368,
+      "end_line": 433,
       "layer": "infrastructure",
       "qualified_name": "JobLedger.wait_for",
       "owner": "JobLedger",
@@ -11885,15 +12286,15 @@
         "poll",
         "request_digest"
       ],
-      "id": "function:py:backend/jobs.py:335:JobLedger.wait_for",
+      "id": "function:py:backend/jobs.py:368:JobLedger.wait_for",
       "type": "method",
       "name": "wait_for"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 403,
-      "end_line": 469,
+      "line": 436,
+      "end_line": 502,
       "layer": "infrastructure",
       "qualified_name": "JobLedger.reap",
       "owner": "JobLedger",
@@ -11901,15 +12302,15 @@
       "parameters": [
         "self"
       ],
-      "id": "function:py:backend/jobs.py:403:JobLedger.reap",
+      "id": "function:py:backend/jobs.py:436:JobLedger.reap",
       "type": "method",
       "name": "reap"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 485,
-      "end_line": 488,
+      "line": 518,
+      "end_line": 521,
       "layer": "infrastructure",
       "qualified_name": "MemoryJobStore.__init__",
       "owner": "MemoryJobStore",
@@ -11917,15 +12318,15 @@
       "parameters": [
         "self"
       ],
-      "id": "function:py:backend/jobs.py:485:MemoryJobStore.__init__",
+      "id": "function:py:backend/jobs.py:518:MemoryJobStore.__init__",
       "type": "method",
       "name": "__init__"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 491,
-      "end_line": 492,
+      "line": 524,
+      "end_line": 525,
       "layer": "infrastructure",
       "qualified_name": "MemoryJobStore.method_row_for",
       "owner": "MemoryJobStore",
@@ -11933,15 +12334,15 @@
       "parameters": [
         "method_id"
       ],
-      "id": "function:py:backend/jobs.py:491:MemoryJobStore.method_row_for",
+      "id": "function:py:backend/jobs.py:524:MemoryJobStore.method_row_for",
       "type": "method",
       "name": "method_row_for"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 494,
-      "end_line": 519,
+      "line": 527,
+      "end_line": 556,
       "layer": "infrastructure",
       "qualified_name": "MemoryJobStore.open",
       "owner": "MemoryJobStore",
@@ -11954,17 +12355,21 @@
         "budget_seconds",
         "est_seconds",
         "queued",
-        "request_digest"
+        "request_digest",
+        "actor_kind",
+        "actor_id",
+        "command_id",
+        "request_id"
       ],
-      "id": "function:py:backend/jobs.py:494:MemoryJobStore.open",
+      "id": "function:py:backend/jobs.py:527:MemoryJobStore.open",
       "type": "method",
       "name": "open"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 521,
-      "end_line": 525,
+      "line": 558,
+      "end_line": 562,
       "layer": "infrastructure",
       "qualified_name": "MemoryJobStore.start",
       "owner": "MemoryJobStore",
@@ -11973,15 +12378,15 @@
         "self",
         "job_id"
       ],
-      "id": "function:py:backend/jobs.py:521:MemoryJobStore.start",
+      "id": "function:py:backend/jobs.py:558:MemoryJobStore.start",
       "type": "method",
       "name": "start"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 527,
-      "end_line": 533,
+      "line": 564,
+      "end_line": 571,
       "layer": "infrastructure",
       "qualified_name": "MemoryJobStore.done",
       "owner": "MemoryJobStore",
@@ -11992,15 +12397,15 @@
         "seconds",
         "result_summary"
       ],
-      "id": "function:py:backend/jobs.py:527:MemoryJobStore.done",
+      "id": "function:py:backend/jobs.py:564:MemoryJobStore.done",
       "type": "method",
       "name": "done"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 535,
-      "end_line": 542,
+      "line": 573,
+      "end_line": 583,
       "layer": "infrastructure",
       "qualified_name": "MemoryJobStore.failed",
       "owner": "MemoryJobStore",
@@ -12013,15 +12418,15 @@
         "seconds",
         "retryable"
       ],
-      "id": "function:py:backend/jobs.py:535:MemoryJobStore.failed",
+      "id": "function:py:backend/jobs.py:573:MemoryJobStore.failed",
       "type": "method",
       "name": "failed"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 544,
-      "end_line": 547,
+      "line": 585,
+      "end_line": 588,
       "layer": "infrastructure",
       "qualified_name": "MemoryJobStore.get",
       "owner": "MemoryJobStore",
@@ -12030,15 +12435,15 @@
         "self",
         "job_id"
       ],
-      "id": "function:py:backend/jobs.py:544:MemoryJobStore.get",
+      "id": "function:py:backend/jobs.py:585:MemoryJobStore.get",
       "type": "method",
       "name": "get"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 549,
-      "end_line": 553,
+      "line": 590,
+      "end_line": 594,
       "layer": "infrastructure",
       "qualified_name": "MemoryJobStore.list",
       "owner": "MemoryJobStore",
@@ -12048,15 +12453,15 @@
         "state",
         "limit"
       ],
-      "id": "function:py:backend/jobs.py:549:MemoryJobStore.list",
+      "id": "function:py:backend/jobs.py:590:MemoryJobStore.list",
       "type": "method",
       "name": "list"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 555,
-      "end_line": 570,
+      "line": 596,
+      "end_line": 612,
       "layer": "infrastructure",
       "qualified_name": "MemoryJobStore.request_cancel",
       "owner": "MemoryJobStore",
@@ -12065,15 +12470,15 @@
         "self",
         "job_id"
       ],
-      "id": "function:py:backend/jobs.py:555:MemoryJobStore.request_cancel",
+      "id": "function:py:backend/jobs.py:596:MemoryJobStore.request_cancel",
       "type": "method",
       "name": "request_cancel"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 572,
-      "end_line": 573,
+      "line": 614,
+      "end_line": 615,
       "layer": "infrastructure",
       "qualified_name": "MemoryJobStore.reap",
       "owner": "MemoryJobStore",
@@ -12081,29 +12486,29 @@
       "parameters": [
         "self"
       ],
-      "id": "function:py:backend/jobs.py:572:MemoryJobStore.reap",
+      "id": "function:py:backend/jobs.py:614:MemoryJobStore.reap",
       "type": "method",
       "name": "reap"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 576,
-      "end_line": 577,
+      "line": 618,
+      "end_line": 619,
       "layer": "infrastructure",
       "qualified_name": "_now",
       "owner": null,
       "async_function": false,
       "parameters": [],
-      "id": "function:py:backend/jobs.py:576:_now",
+      "id": "function:py:backend/jobs.py:618:_now",
       "type": "function",
       "name": "_now"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 580,
-      "end_line": 581,
+      "line": 622,
+      "end_line": 623,
       "layer": "infrastructure",
       "qualified_name": "_public_memory",
       "owner": null,
@@ -12111,15 +12516,15 @@
       "parameters": [
         "row"
       ],
-      "id": "function:py:backend/jobs.py:580:_public_memory",
+      "id": "function:py:backend/jobs.py:622:_public_memory",
       "type": "function",
       "name": "_public_memory"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 584,
-      "end_line": 601,
+      "line": 626,
+      "end_line": 643,
       "layer": "infrastructure",
       "qualified_name": "_json_value",
       "owner": null,
@@ -12127,15 +12532,15 @@
       "parameters": [
         "value"
       ],
-      "id": "function:py:backend/jobs.py:584:_json_value",
+      "id": "function:py:backend/jobs.py:626:_json_value",
       "type": "function",
       "name": "_json_value"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 612,
-      "end_line": 635,
+      "line": 654,
+      "end_line": 677,
       "layer": "infrastructure",
       "qualified_name": "_worker_is_alive",
       "owner": null,
@@ -12143,15 +12548,15 @@
       "parameters": [
         "worker"
       ],
-      "id": "function:py:backend/jobs.py:612:_worker_is_alive",
+      "id": "function:py:backend/jobs.py:654:_worker_is_alive",
       "type": "function",
       "name": "_worker_is_alive"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 638,
-      "end_line": 646,
+      "line": 680,
+      "end_line": 688,
       "layer": "infrastructure",
       "qualified_name": "make_worker_name",
       "owner": null,
@@ -12160,43 +12565,43 @@
         "pid",
         "producer_version"
       ],
-      "id": "function:py:backend/jobs.py:638:make_worker_name",
+      "id": "function:py:backend/jobs.py:680:make_worker_name",
       "type": "function",
       "name": "make_worker_name"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 649,
-      "end_line": 650,
+      "line": 691,
+      "end_line": 692,
       "layer": "infrastructure",
       "qualified_name": "new_uuid",
       "owner": null,
       "async_function": false,
       "parameters": [],
-      "id": "function:py:backend/jobs.py:649:new_uuid",
+      "id": "function:py:backend/jobs.py:691:new_uuid",
       "type": "function",
       "name": "new_uuid"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 76,
-      "end_line": 78,
+      "line": 80,
+      "end_line": 82,
       "layer": "infrastructure",
       "qualified_name": "counters",
       "owner": null,
       "async_function": false,
       "parameters": [],
-      "id": "function:py:backend/jobs.py:76:counters",
+      "id": "function:py:backend/jobs.py:80:counters",
       "type": "function",
       "name": "counters"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 81,
-      "end_line": 85,
+      "line": 85,
+      "end_line": 89,
       "layer": "infrastructure",
       "qualified_name": "_bump",
       "owner": null,
@@ -12205,15 +12610,15 @@
         "key",
         "error"
       ],
-      "id": "function:py:backend/jobs.py:81:_bump",
+      "id": "function:py:backend/jobs.py:85:_bump",
       "type": "function",
       "name": "_bump"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 88,
-      "end_line": 92,
+      "line": 92,
+      "end_line": 96,
       "layer": "infrastructure",
       "qualified_name": "job_error_code",
       "owner": null,
@@ -12221,33 +12626,32 @@
       "parameters": [
         "code"
       ],
-      "id": "function:py:backend/jobs.py:88:job_error_code",
+      "id": "function:py:backend/jobs.py:92:job_error_code",
       "type": "function",
       "name": "job_error_code"
     },
     {
       "language": "python",
       "path": "backend/jobs.py",
-      "line": 95,
-      "end_line": 101,
+      "line": 99,
+      "end_line": 117,
       "layer": "infrastructure",
-      "qualified_name": "canonical_request_digest",
+      "qualified_name": "job_outcome_class",
       "owner": null,
       "async_function": false,
       "parameters": [
-        "method_row_id",
-        "input_sha256",
-        "params"
+        "state",
+        "code"
       ],
-      "id": "function:py:backend/jobs.py:95:canonical_request_digest",
+      "id": "function:py:backend/jobs.py:99:job_outcome_class",
       "type": "function",
-      "name": "canonical_request_digest"
+      "name": "job_outcome_class"
     },
     {
       "language": "python",
       "path": "backend/kernel.py",
-      "line": 134,
-      "end_line": 135,
+      "line": 135,
+      "end_line": 136,
       "layer": "infrastructure",
       "qualified_name": "default_cache.get_cube_for_kernel",
       "owner": "default_cache",
@@ -12257,15 +12661,15 @@
         "kind",
         "basis"
       ],
-      "id": "function:py:backend/kernel.py:134:default_cache.get_cube_for_kernel",
+      "id": "function:py:backend/kernel.py:135:default_cache.get_cube_for_kernel",
       "type": "method",
       "name": "get_cube_for_kernel"
     },
     {
       "language": "python",
       "path": "backend/kernel.py",
-      "line": 146,
-      "end_line": 167,
+      "line": 147,
+      "end_line": 168,
       "layer": "infrastructure",
       "qualified_name": "default_result_cache",
       "owner": null,
@@ -12274,29 +12678,45 @@
         "store",
         "dsn"
       ],
-      "id": "function:py:backend/kernel.py:146:default_result_cache",
+      "id": "function:py:backend/kernel.py:147:default_result_cache",
       "type": "function",
       "name": "default_result_cache"
     },
     {
       "language": "python",
       "path": "backend/kernel.py",
-      "line": 170,
-      "end_line": 184,
+      "line": 171,
+      "end_line": 185,
       "layer": "infrastructure",
       "qualified_name": "default_jobs",
       "owner": null,
       "async_function": false,
       "parameters": [],
-      "id": "function:py:backend/kernel.py:170:default_jobs",
+      "id": "function:py:backend/kernel.py:171:default_jobs",
       "type": "function",
       "name": "default_jobs"
     },
     {
       "language": "python",
       "path": "backend/kernel.py",
-      "line": 187,
-      "end_line": 228,
+      "line": 188,
+      "end_line": 200,
+      "layer": "infrastructure",
+      "qualified_name": "default_traces",
+      "owner": null,
+      "async_function": false,
+      "parameters": [
+        "dsn"
+      ],
+      "id": "function:py:backend/kernel.py:188:default_traces",
+      "type": "function",
+      "name": "default_traces"
+    },
+    {
+      "language": "python",
+      "path": "backend/kernel.py",
+      "line": 203,
+      "end_line": 247,
       "layer": "infrastructure",
       "qualified_name": "build",
       "owner": null,
@@ -12308,45 +12728,46 @@
         "cache",
         "with_cache",
         "job_store",
-        "executor"
+        "executor",
+        "trace_store"
       ],
-      "id": "function:py:backend/kernel.py:187:build",
+      "id": "function:py:backend/kernel.py:203:build",
       "type": "function",
       "name": "build"
     },
     {
       "language": "python",
       "path": "backend/kernel.py",
-      "line": 40,
-      "end_line": 48,
+      "line": 41,
+      "end_line": 49,
       "layer": "infrastructure",
       "qualified_name": "toolkit_versions",
       "owner": null,
       "async_function": false,
       "parameters": [],
-      "id": "function:py:backend/kernel.py:40:toolkit_versions",
+      "id": "function:py:backend/kernel.py:41:toolkit_versions",
       "type": "function",
       "name": "toolkit_versions"
     },
     {
       "language": "python",
       "path": "backend/kernel.py",
-      "line": 51,
-      "end_line": 67,
+      "line": 52,
+      "end_line": 68,
       "layer": "infrastructure",
       "qualified_name": "source_versions",
       "owner": null,
       "async_function": false,
       "parameters": [],
-      "id": "function:py:backend/kernel.py:51:source_versions",
+      "id": "function:py:backend/kernel.py:52:source_versions",
       "type": "function",
       "name": "source_versions"
     },
     {
       "language": "python",
       "path": "backend/kernel.py",
-      "line": 70,
-      "end_line": 93,
+      "line": 71,
+      "end_line": 94,
       "layer": "infrastructure",
       "qualified_name": "default_store",
       "owner": null,
@@ -12354,21 +12775,21 @@
       "parameters": [
         "dsn"
       ],
-      "id": "function:py:backend/kernel.py:70:default_store",
+      "id": "function:py:backend/kernel.py:71:default_store",
       "type": "function",
       "name": "default_store"
     },
     {
       "language": "python",
       "path": "backend/kernel.py",
-      "line": 96,
-      "end_line": 143,
+      "line": 97,
+      "end_line": 144,
       "layer": "infrastructure",
       "qualified_name": "default_cache",
       "owner": null,
       "async_function": false,
       "parameters": [],
-      "id": "function:py:backend/kernel.py:96:default_cache",
+      "id": "function:py:backend/kernel.py:97:default_cache",
       "type": "function",
       "name": "default_cache"
     },
@@ -15905,8 +16326,64 @@
     {
       "language": "python",
       "path": "backend/tests/test_job_store_contract.py",
-      "line": 18,
-      "end_line": 19,
+      "line": 105,
+      "end_line": 113,
+      "layer": "verification",
+      "qualified_name": "test_identical_inflight_open_joins_instead_of_duplicating",
+      "owner": null,
+      "async_function": false,
+      "parameters": [],
+      "id": "function:py:backend/tests/test_job_store_contract.py:105:test_identical_inflight_open_joins_instead_of_duplicating",
+      "type": "function",
+      "name": "test_identical_inflight_open_joins_instead_of_duplicating"
+    },
+    {
+      "language": "python",
+      "path": "backend/tests/test_job_store_contract.py",
+      "line": 116,
+      "end_line": 127,
+      "layer": "verification",
+      "qualified_name": "test_cancellation_distinguishes_queued_from_running",
+      "owner": null,
+      "async_function": false,
+      "parameters": [],
+      "id": "function:py:backend/tests/test_job_store_contract.py:116:test_cancellation_distinguishes_queued_from_running",
+      "type": "function",
+      "name": "test_cancellation_distinguishes_queued_from_running"
+    },
+    {
+      "language": "python",
+      "path": "backend/tests/test_job_store_contract.py",
+      "line": 130,
+      "end_line": 141,
+      "layer": "verification",
+      "qualified_name": "test_executors_share_execute_and_thread_submission_is_bounded",
+      "owner": null,
+      "async_function": false,
+      "parameters": [],
+      "id": "function:py:backend/tests/test_job_store_contract.py:130:test_executors_share_execute_and_thread_submission_is_bounded",
+      "type": "function",
+      "name": "test_executors_share_execute_and_thread_submission_is_bounded"
+    },
+    {
+      "language": "python",
+      "path": "backend/tests/test_job_store_contract.py",
+      "line": 144,
+      "end_line": 153,
+      "layer": "verification",
+      "qualified_name": "test_process_and_remote_executors_share_the_same_boundary",
+      "owner": null,
+      "async_function": false,
+      "parameters": [],
+      "id": "function:py:backend/tests/test_job_store_contract.py:144:test_process_and_remote_executors_share_the_same_boundary",
+      "type": "function",
+      "name": "test_process_and_remote_executors_share_the_same_boundary"
+    },
+    {
+      "language": "python",
+      "path": "backend/tests/test_job_store_contract.py",
+      "line": 20,
+      "end_line": 21,
       "layer": "verification",
       "qualified_name": "_add",
       "owner": null,
@@ -15915,15 +16392,15 @@
         "a",
         "b"
       ],
-      "id": "function:py:backend/tests/test_job_store_contract.py:18:_add",
+      "id": "function:py:backend/tests/test_job_store_contract.py:20:_add",
       "type": "function",
       "name": "_add"
     },
     {
       "language": "python",
       "path": "backend/tests/test_job_store_contract.py",
-      "line": 22,
-      "end_line": 29,
+      "line": 24,
+      "end_line": 31,
       "layer": "verification",
       "qualified_name": "check",
       "owner": null,
@@ -15932,79 +16409,99 @@
         "name",
         "fn"
       ],
-      "id": "function:py:backend/tests/test_job_store_contract.py:22:check",
+      "id": "function:py:backend/tests/test_job_store_contract.py:24:check",
       "type": "function",
       "name": "check"
     },
     {
       "language": "python",
       "path": "backend/tests/test_job_store_contract.py",
-      "line": 32,
-      "end_line": 45,
+      "line": 34,
+      "end_line": 48,
       "layer": "verification",
       "qualified_name": "test_memory_store_lifecycle_and_durability_are_explicit",
       "owner": null,
       "async_function": false,
       "parameters": [],
-      "id": "function:py:backend/tests/test_job_store_contract.py:32:test_memory_store_lifecycle_and_durability_are_explicit",
+      "id": "function:py:backend/tests/test_job_store_contract.py:34:test_memory_store_lifecycle_and_durability_are_explicit",
       "type": "function",
       "name": "test_memory_store_lifecycle_and_durability_are_explicit"
     },
     {
       "language": "python",
       "path": "backend/tests/test_job_store_contract.py",
-      "line": 48,
-      "end_line": 56,
+      "line": 51,
+      "end_line": 58,
       "layer": "verification",
-      "qualified_name": "test_identical_inflight_open_joins_instead_of_duplicating",
+      "qualified_name": "test_outcome_classes_separate_refusals_science_and_operations",
       "owner": null,
       "async_function": false,
       "parameters": [],
-      "id": "function:py:backend/tests/test_job_store_contract.py:48:test_identical_inflight_open_joins_instead_of_duplicating",
+      "id": "function:py:backend/tests/test_job_store_contract.py:51:test_outcome_classes_separate_refusals_science_and_operations",
       "type": "function",
-      "name": "test_identical_inflight_open_joins_instead_of_duplicating"
+      "name": "test_outcome_classes_separate_refusals_science_and_operations"
     },
     {
       "language": "python",
       "path": "backend/tests/test_job_store_contract.py",
-      "line": 59,
-      "end_line": 70,
+      "line": 61,
+      "end_line": 73,
       "layer": "verification",
-      "qualified_name": "test_cancellation_distinguishes_queued_from_running",
+      "qualified_name": "test_memory_store_persists_invocation_identity_and_terminal_meaning",
       "owner": null,
       "async_function": false,
       "parameters": [],
-      "id": "function:py:backend/tests/test_job_store_contract.py:59:test_cancellation_distinguishes_queued_from_running",
+      "id": "function:py:backend/tests/test_job_store_contract.py:61:test_memory_store_persists_invocation_identity_and_terminal_meaning",
       "type": "function",
-      "name": "test_cancellation_distinguishes_queued_from_running"
+      "name": "test_memory_store_persists_invocation_identity_and_terminal_meaning"
     },
     {
       "language": "python",
       "path": "backend/tests/test_job_store_contract.py",
-      "line": 73,
+      "line": 76,
+      "end_line": 102,
+      "layer": "verification",
+      "qualified_name": "test_command_dispatcher_propagates_actor_command_and_request_to_kernel",
+      "owner": null,
+      "async_function": false,
+      "parameters": [],
+      "id": "function:py:backend/tests/test_job_store_contract.py:76:test_command_dispatcher_propagates_actor_command_and_request_to_kernel",
+      "type": "function",
+      "name": "test_command_dispatcher_propagates_actor_command_and_request_to_kernel"
+    },
+    {
+      "language": "python",
+      "path": "backend/tests/test_job_store_contract.py",
+      "line": 78,
+      "end_line": 79,
+      "layer": "verification",
+      "qualified_name": "test_command_dispatcher_propagates_actor_command_and_request_to_kernel.Kernel.__init__",
+      "owner": "Kernel",
+      "async_function": false,
+      "parameters": [
+        "self"
+      ],
+      "id": "function:py:backend/tests/test_job_store_contract.py:78:test_command_dispatcher_propagates_actor_command_and_request_to_kernel.Kernel.__init__",
+      "type": "method",
+      "name": "__init__"
+    },
+    {
+      "language": "python",
+      "path": "backend/tests/test_job_store_contract.py",
+      "line": 81,
       "end_line": 84,
       "layer": "verification",
-      "qualified_name": "test_executors_share_execute_and_thread_submission_is_bounded",
-      "owner": null,
+      "qualified_name": "test_command_dispatcher_propagates_actor_command_and_request_to_kernel.Kernel.invoke",
+      "owner": "Kernel",
       "async_function": false,
-      "parameters": [],
-      "id": "function:py:backend/tests/test_job_store_contract.py:73:test_executors_share_execute_and_thread_submission_is_bounded",
-      "type": "function",
-      "name": "test_executors_share_execute_and_thread_submission_is_bounded"
-    },
-    {
-      "language": "python",
-      "path": "backend/tests/test_job_store_contract.py",
-      "line": 87,
-      "end_line": 96,
-      "layer": "verification",
-      "qualified_name": "test_process_and_remote_executors_share_the_same_boundary",
-      "owner": null,
-      "async_function": false,
-      "parameters": [],
-      "id": "function:py:backend/tests/test_job_store_contract.py:87:test_process_and_remote_executors_share_the_same_boundary",
-      "type": "function",
-      "name": "test_process_and_remote_executors_share_the_same_boundary"
+      "parameters": [
+        "self",
+        "_method_id",
+        "_payload"
+      ],
+      "id": "function:py:backend/tests/test_job_store_contract.py:81:test_command_dispatcher_propagates_actor_command_and_request_to_kernel.Kernel.invoke",
+      "type": "method",
+      "name": "invoke"
     },
     {
       "language": "python",
@@ -16698,6 +17195,154 @@
       "id": "function:py:backend/tests/test_physics_contracts.py:892:main",
       "type": "function",
       "name": "main"
+    },
+    {
+      "language": "python",
+      "path": "backend/traces.py",
+      "line": 105,
+      "end_line": 107,
+      "layer": "infrastructure",
+      "qualified_name": "MemoryCommandTraceStore.__init__",
+      "owner": "MemoryCommandTraceStore",
+      "async_function": false,
+      "parameters": [
+        "self"
+      ],
+      "id": "function:py:backend/traces.py:105:MemoryCommandTraceStore.__init__",
+      "type": "method",
+      "name": "__init__"
+    },
+    {
+      "language": "python",
+      "path": "backend/traces.py",
+      "line": 109,
+      "end_line": 117,
+      "layer": "infrastructure",
+      "qualified_name": "MemoryCommandTraceStore.record",
+      "owner": "MemoryCommandTraceStore",
+      "async_function": false,
+      "parameters": [
+        "self",
+        "command_id",
+        "command_version",
+        "actor",
+        "request_id",
+        "started_at",
+        "finished_at",
+        "envelope"
+      ],
+      "id": "function:py:backend/traces.py:109:MemoryCommandTraceStore.record",
+      "type": "method",
+      "name": "record"
+    },
+    {
+      "language": "python",
+      "path": "backend/traces.py",
+      "line": 20,
+      "end_line": 22,
+      "layer": "infrastructure",
+      "qualified_name": "counters",
+      "owner": null,
+      "async_function": false,
+      "parameters": [],
+      "id": "function:py:backend/traces.py:20:counters",
+      "type": "function",
+      "name": "counters"
+    },
+    {
+      "language": "python",
+      "path": "backend/traces.py",
+      "line": 25,
+      "end_line": 29,
+      "layer": "infrastructure",
+      "qualified_name": "_bump",
+      "owner": null,
+      "async_function": false,
+      "parameters": [
+        "key",
+        "error"
+      ],
+      "id": "function:py:backend/traces.py:25:_bump",
+      "type": "function",
+      "name": "_bump"
+    },
+    {
+      "language": "python",
+      "path": "backend/traces.py",
+      "line": 32,
+      "end_line": 42,
+      "layer": "infrastructure",
+      "qualified_name": "dispatch_outcome",
+      "owner": null,
+      "async_function": false,
+      "parameters": [
+        "envelope"
+      ],
+      "id": "function:py:backend/traces.py:32:dispatch_outcome",
+      "type": "function",
+      "name": "dispatch_outcome"
+    },
+    {
+      "language": "python",
+      "path": "backend/traces.py",
+      "line": 45,
+      "end_line": 66,
+      "layer": "infrastructure",
+      "qualified_name": "observation",
+      "owner": null,
+      "async_function": false,
+      "parameters": [
+        "command_id",
+        "command_version",
+        "actor",
+        "request_id",
+        "started_at",
+        "finished_at",
+        "envelope"
+      ],
+      "id": "function:py:backend/traces.py:45:observation",
+      "type": "function",
+      "name": "observation"
+    },
+    {
+      "language": "python",
+      "path": "backend/traces.py",
+      "line": 73,
+      "end_line": 74,
+      "layer": "infrastructure",
+      "qualified_name": "PostgresCommandTraceStore.__init__",
+      "owner": "PostgresCommandTraceStore",
+      "async_function": false,
+      "parameters": [
+        "self",
+        "connect"
+      ],
+      "id": "function:py:backend/traces.py:73:PostgresCommandTraceStore.__init__",
+      "type": "method",
+      "name": "__init__"
+    },
+    {
+      "language": "python",
+      "path": "backend/traces.py",
+      "line": 76,
+      "end_line": 98,
+      "layer": "infrastructure",
+      "qualified_name": "PostgresCommandTraceStore.record",
+      "owner": "PostgresCommandTraceStore",
+      "async_function": false,
+      "parameters": [
+        "self",
+        "command_id",
+        "command_version",
+        "actor",
+        "request_id",
+        "started_at",
+        "finished_at",
+        "envelope"
+      ],
+      "id": "function:py:backend/traces.py:76:PostgresCommandTraceStore.record",
+      "type": "method",
+      "name": "record"
     },
     {
       "language": "python",
@@ -19689,7 +20334,7 @@
       "language": "python",
       "path": "scripts/build_digital_twin.py",
       "line": 550,
-      "end_line": 614,
+      "end_line": 665,
       "layer": "tooling",
       "qualified_name": "runtime_snapshot",
       "owner": null,
@@ -19700,24 +20345,6 @@
       "id": "function:py:scripts/build_digital_twin.py:550:runtime_snapshot",
       "type": "function",
       "name": "runtime_snapshot"
-    },
-    {
-      "language": "python",
-      "path": "scripts/build_digital_twin.py",
-      "line": 617,
-      "end_line": 784,
-      "layer": "tooling",
-      "qualified_name": "architecture_analysis",
-      "owner": null,
-      "async_function": false,
-      "parameters": [
-        "twin",
-        "ts_data",
-        "runtime"
-      ],
-      "id": "function:py:scripts/build_digital_twin.py:617:architecture_analysis",
-      "type": "function",
-      "name": "architecture_analysis"
     },
     {
       "language": "python",
@@ -19739,6 +20366,24 @@
     {
       "language": "python",
       "path": "scripts/build_digital_twin.py",
+      "line": 668,
+      "end_line": 851,
+      "layer": "tooling",
+      "qualified_name": "architecture_analysis",
+      "owner": null,
+      "async_function": false,
+      "parameters": [
+        "twin",
+        "ts_data",
+        "runtime"
+      ],
+      "id": "function:py:scripts/build_digital_twin.py:668:architecture_analysis",
+      "type": "function",
+      "name": "architecture_analysis"
+    },
+    {
+      "language": "python",
+      "path": "scripts/build_digital_twin.py",
       "line": 72,
       "end_line": 75,
       "layer": "tooling",
@@ -19752,23 +20397,6 @@
       "id": "function:py:scripts/build_digital_twin.py:72:atomic_write",
       "type": "function",
       "name": "atomic_write"
-    },
-    {
-      "language": "python",
-      "path": "scripts/build_digital_twin.py",
-      "line": 787,
-      "end_line": 819,
-      "layer": "tooling",
-      "qualified_name": "validate",
-      "owner": null,
-      "async_function": false,
-      "parameters": [
-        "twin",
-        "ts_data"
-      ],
-      "id": "function:py:scripts/build_digital_twin.py:787:validate",
-      "type": "function",
-      "name": "validate"
     },
     {
       "language": "python",
@@ -19789,14 +20417,63 @@
     {
       "language": "python",
       "path": "scripts/build_digital_twin.py",
-      "line": 822,
-      "end_line": 877,
+      "line": 854,
+      "end_line": 895,
+      "layer": "tooling",
+      "qualified_name": "module_import_cycles",
+      "owner": null,
+      "async_function": false,
+      "parameters": [
+        "twin"
+      ],
+      "id": "function:py:scripts/build_digital_twin.py:854:module_import_cycles",
+      "type": "function",
+      "name": "module_import_cycles"
+    },
+    {
+      "language": "python",
+      "path": "scripts/build_digital_twin.py",
+      "line": 869,
+      "end_line": 890,
+      "layer": "tooling",
+      "qualified_name": "module_import_cycles.visit",
+      "owner": "module_import_cycles",
+      "async_function": false,
+      "parameters": [
+        "node"
+      ],
+      "id": "function:py:scripts/build_digital_twin.py:869:module_import_cycles.visit",
+      "type": "method",
+      "name": "visit"
+    },
+    {
+      "language": "python",
+      "path": "scripts/build_digital_twin.py",
+      "line": 898,
+      "end_line": 945,
+      "layer": "tooling",
+      "qualified_name": "validate",
+      "owner": null,
+      "async_function": false,
+      "parameters": [
+        "twin",
+        "ts_data"
+      ],
+      "id": "function:py:scripts/build_digital_twin.py:898:validate",
+      "type": "function",
+      "name": "validate"
+    },
+    {
+      "language": "python",
+      "path": "scripts/build_digital_twin.py",
+      "line": 948,
+      "end_line": 1003,
       "layer": "tooling",
       "qualified_name": "main",
       "owner": null,
       "async_function": false,
       "parameters": [],
-      "id": "function:py:scripts/build_digital_twin.py:822:main",
+      "id": "function:py:scripts/build_digital_twin.py:948:main",
       "type": "function",
       "name": "main"
     },
@@ -19973,8 +20650,54 @@
     {
       "language": "python",
       "path": "scripts/check_digital_twin.py",
+      "line": 154,
+      "end_line": 189,
+      "layer": "tooling",
+      "qualified_name": "main",
+      "owner": null,
+      "async_function": false,
+      "parameters": [],
+      "id": "function:py:scripts/check_digital_twin.py:154:main",
+      "type": "function",
+      "name": "main"
+    },
+    {
+      "language": "python",
+      "path": "scripts/check_digital_twin.py",
       "line": 19,
-      "end_line": 23,
+      "end_line": 61,
+      "layer": "tooling",
+      "qualified_name": "module_cycles",
+      "owner": null,
+      "async_function": false,
+      "parameters": [
+        "document"
+      ],
+      "id": "function:py:scripts/check_digital_twin.py:19:module_cycles",
+      "type": "function",
+      "name": "module_cycles"
+    },
+    {
+      "language": "python",
+      "path": "scripts/check_digital_twin.py",
+      "line": 35,
+      "end_line": 56,
+      "layer": "tooling",
+      "qualified_name": "module_cycles.visit",
+      "owner": "module_cycles",
+      "async_function": false,
+      "parameters": [
+        "node"
+      ],
+      "id": "function:py:scripts/check_digital_twin.py:35:module_cycles.visit",
+      "type": "method",
+      "name": "visit"
+    },
+    {
+      "language": "python",
+      "path": "scripts/check_digital_twin.py",
+      "line": 64,
+      "end_line": 68,
       "layer": "tooling",
       "qualified_name": "source_fingerprint",
       "owner": null,
@@ -19982,15 +20705,15 @@
       "parameters": [
         "document"
       ],
-      "id": "function:py:scripts/check_digital_twin.py:19:source_fingerprint",
+      "id": "function:py:scripts/check_digital_twin.py:64:source_fingerprint",
       "type": "function",
       "name": "source_fingerprint"
     },
     {
       "language": "python",
       "path": "scripts/check_digital_twin.py",
-      "line": 26,
-      "end_line": 77,
+      "line": 71,
+      "end_line": 151,
       "layer": "tooling",
       "qualified_name": "errors",
       "owner": null,
@@ -19999,23 +20722,9 @@
         "document",
         "html"
       ],
-      "id": "function:py:scripts/check_digital_twin.py:26:errors",
+      "id": "function:py:scripts/check_digital_twin.py:71:errors",
       "type": "function",
       "name": "errors"
-    },
-    {
-      "language": "python",
-      "path": "scripts/check_digital_twin.py",
-      "line": 80,
-      "end_line": 101,
-      "layer": "tooling",
-      "qualified_name": "main",
-      "owner": null,
-      "async_function": false,
-      "parameters": [],
-      "id": "function:py:scripts/check_digital_twin.py:80:main",
-      "type": "function",
-      "name": "main"
     },
     {
       "language": "python",
@@ -48412,7 +49121,16 @@
       "refusals": 5,
       "id": "method:fields.qm.density",
       "type": "scientific-method",
-      "name": "fields.qm.density"
+      "name": "fields.qm.density",
+      "runtime_observation": {
+        "method_id": "fields.qm.density",
+        "invocation_count": 4,
+        "success_count": 4,
+        "expected_refusal_count": 0,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "mean_dispatch_seconds": 0.013276
+      }
     },
     {
       "layer": "scientific-methods",
@@ -48423,7 +49141,16 @@
       "refusals": 5,
       "id": "method:fields.qm.homo",
       "type": "scientific-method",
-      "name": "fields.qm.homo"
+      "name": "fields.qm.homo",
+      "runtime_observation": {
+        "method_id": "fields.qm.homo",
+        "invocation_count": 5,
+        "success_count": 5,
+        "expected_refusal_count": 0,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "mean_dispatch_seconds": 0.011439
+      }
     },
     {
       "layer": "scientific-methods",
@@ -48434,7 +49161,16 @@
       "refusals": 5,
       "id": "method:fields.qm.lumo",
       "type": "scientific-method",
-      "name": "fields.qm.lumo"
+      "name": "fields.qm.lumo",
+      "runtime_observation": {
+        "method_id": "fields.qm.lumo",
+        "invocation_count": 4,
+        "success_count": 4,
+        "expected_refusal_count": 0,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "mean_dispatch_seconds": 0.013345
+      }
     },
     {
       "layer": "scientific-methods",
@@ -48511,7 +49247,16 @@
       "refusals": 5,
       "id": "method:torsion.strain",
       "type": "scientific-method",
-      "name": "torsion.strain"
+      "name": "torsion.strain",
+      "runtime_observation": {
+        "method_id": "torsion.strain",
+        "invocation_count": 1,
+        "success_count": 1,
+        "expected_refusal_count": 0,
+        "scientific_failure_count": 0,
+        "operational_failure_count": 0,
+        "mean_dispatch_seconds": 0.009878
+      }
     },
     {
       "layer": "persistence",
@@ -48631,6 +49376,20 @@
       "id": "migration:016_result_cache",
       "type": "migration",
       "name": "016_result_cache"
+    },
+    {
+      "layer": "persistence",
+      "path": "backend/db/migrations/017_job_outcome_identity.sql",
+      "id": "migration:017_job_outcome_identity",
+      "type": "migration",
+      "name": "017_job_outcome_identity"
+    },
+    {
+      "layer": "persistence",
+      "path": "backend/db/migrations/018_command_observations.sql",
+      "id": "migration:018_command_observations",
+      "type": "migration",
+      "name": "018_command_observations"
     },
     {
       "language": "python",
@@ -49111,6 +49870,16 @@
       "id": "module:py:backend/tests/test_physics_contracts.py",
       "type": "module",
       "name": "test_physics_contracts.py"
+    },
+    {
+      "language": "python",
+      "path": "backend/traces.py",
+      "line": 1,
+      "layer": "infrastructure",
+      "qualified_name": "backend.traces",
+      "id": "module:py:backend/traces.py",
+      "type": "module",
+      "name": "traces.py"
     },
     {
       "language": "python",
@@ -51205,14 +51974,14 @@
       "type": "service",
       "name": "dirac-fields.service :8901",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T14:11:46.859892+00:00",
+        "captured_at": "2026-08-12T14:44:10.662213+00:00",
         "source": "best-effort live probes",
-        "git_commit": "5830591fcf740b6c29228e6de1e3daa3c70eed65",
+        "git_commit": "62a96285619e00c34f93458717a05a25ca99ef51",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
           "SubState=running",
-          "MainPID=1662146",
+          "MainPID=1776717",
           "",
           "Id=dirac-web.service",
           "ActiveState=active",
@@ -51233,28 +52002,167 @@
         "http_v2_command_count": 17,
         "http_v2_reachable": true,
         "postgres": {
-          "tables": 53,
-          "views": 11,
+          "tables": 54,
+          "views": 13,
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 834,
+          "jobs_total": 855,
           "job_states": {
-            "done": 565,
+            "done": 583,
             "cancelled": 29,
-            "failed": 240
+            "failed": 243
           },
           "failure_codes": {
-            "UNPARAMETERIZED": 37,
-            "UNSUPPORTED": 127,
+            "UNPARAMETERIZED": 38,
+            "UNSUPPORTED": 128,
             "INTERNAL": 34,
-            "BUDGET": 42
+            "BUDGET": 43
           },
-          "artifacts": 78,
-          "cached_results": 2,
+          "job_outcomes": {
+            "operational_failure": 34,
+            "cancelled": 29,
+            "expected_refusal": 209,
+            "success": 583
+          },
+          "artifacts": 79,
+          "cached_results": 3,
           "registered_method_rows": 49,
-          "attention_items": 240
+          "attention_items": 34,
+          "approval_waits": 0,
+          "command_traces": 41,
+          "observed_commands": 6
         },
+        "command_observations": [
+          {
+            "command_id": "job.wait",
+            "command_version": 1,
+            "invocation_count": 13,
+            "success_count": 13,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.162551,
+            "p95_dispatch_seconds": 0.231566,
+            "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
+            "last_observed_at": "2026-08-12T07:43:48.039617-07:00"
+          },
+          {
+            "command_id": "structure.field.compute",
+            "command_version": 1,
+            "invocation_count": 21,
+            "success_count": 13,
+            "expected_refusal_count": 8,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 13,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.007856,
+            "p95_dispatch_seconds": 0.015971,
+            "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
+            "last_observed_at": "2026-08-12T07:43:47.820575-07:00"
+          },
+          {
+            "command_id": "structure.interactions",
+            "command_version": 1,
+            "invocation_count": 1,
+            "success_count": 0,
+            "expected_refusal_count": 1,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 9.4e-05,
+            "p95_dispatch_seconds": 9.4e-05,
+            "first_observed_at": "2026-08-12T07:28:55.808062-07:00",
+            "last_observed_at": "2026-08-12T07:28:55.808156-07:00"
+          },
+          {
+            "command_id": "structure.torsion.analyze",
+            "command_version": 1,
+            "invocation_count": 1,
+            "success_count": 1,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 1,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.009878,
+            "p95_dispatch_seconds": 0.009878,
+            "first_observed_at": "2026-08-12T07:29:10.263693-07:00",
+            "last_observed_at": "2026-08-12T07:29:10.273571-07:00"
+          },
+          {
+            "command_id": "system.capabilities",
+            "command_version": 1,
+            "invocation_count": 1,
+            "success_count": 1,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.016617,
+            "p95_dispatch_seconds": 0.016617,
+            "first_observed_at": "2026-08-12T07:28:47.754466-07:00",
+            "last_observed_at": "2026-08-12T07:28:47.771083-07:00"
+          },
+          {
+            "command_id": "system.health",
+            "command_version": 1,
+            "invocation_count": 4,
+            "success_count": 4,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 9.9e-05,
+            "p95_dispatch_seconds": 0.000105,
+            "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
+            "last_observed_at": "2026-08-12T07:43:46.392223-07:00"
+          }
+        ],
+        "method_observations": [
+          {
+            "method_id": "fields.qm.density",
+            "invocation_count": 4,
+            "success_count": 4,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.013276
+          },
+          {
+            "method_id": "fields.qm.homo",
+            "invocation_count": 5,
+            "success_count": 5,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.011439
+          },
+          {
+            "method_id": "fields.qm.lumo",
+            "invocation_count": 4,
+            "success_count": 4,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.013345
+          },
+          {
+            "method_id": "torsion.strain",
+            "invocation_count": 1,
+            "success_count": 1,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.009878
+          }
+        ],
         "drift": {
           "missing_expected_ports": [],
           "unexpected_legacy_port_8902": false,
@@ -51269,14 +52177,14 @@
       "type": "service",
       "name": "dirac-digital-twin.service",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T14:11:46.859892+00:00",
+        "captured_at": "2026-08-12T14:44:10.662213+00:00",
         "source": "best-effort live probes",
-        "git_commit": "5830591fcf740b6c29228e6de1e3daa3c70eed65",
+        "git_commit": "62a96285619e00c34f93458717a05a25ca99ef51",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
           "SubState=running",
-          "MainPID=1662146",
+          "MainPID=1776717",
           "",
           "Id=dirac-web.service",
           "ActiveState=active",
@@ -51297,28 +52205,167 @@
         "http_v2_command_count": 17,
         "http_v2_reachable": true,
         "postgres": {
-          "tables": 53,
-          "views": 11,
+          "tables": 54,
+          "views": 13,
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 834,
+          "jobs_total": 855,
           "job_states": {
-            "done": 565,
+            "done": 583,
             "cancelled": 29,
-            "failed": 240
+            "failed": 243
           },
           "failure_codes": {
-            "UNPARAMETERIZED": 37,
-            "UNSUPPORTED": 127,
+            "UNPARAMETERIZED": 38,
+            "UNSUPPORTED": 128,
             "INTERNAL": 34,
-            "BUDGET": 42
+            "BUDGET": 43
           },
-          "artifacts": 78,
-          "cached_results": 2,
+          "job_outcomes": {
+            "operational_failure": 34,
+            "cancelled": 29,
+            "expected_refusal": 209,
+            "success": 583
+          },
+          "artifacts": 79,
+          "cached_results": 3,
           "registered_method_rows": 49,
-          "attention_items": 240
+          "attention_items": 34,
+          "approval_waits": 0,
+          "command_traces": 41,
+          "observed_commands": 6
         },
+        "command_observations": [
+          {
+            "command_id": "job.wait",
+            "command_version": 1,
+            "invocation_count": 13,
+            "success_count": 13,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.162551,
+            "p95_dispatch_seconds": 0.231566,
+            "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
+            "last_observed_at": "2026-08-12T07:43:48.039617-07:00"
+          },
+          {
+            "command_id": "structure.field.compute",
+            "command_version": 1,
+            "invocation_count": 21,
+            "success_count": 13,
+            "expected_refusal_count": 8,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 13,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.007856,
+            "p95_dispatch_seconds": 0.015971,
+            "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
+            "last_observed_at": "2026-08-12T07:43:47.820575-07:00"
+          },
+          {
+            "command_id": "structure.interactions",
+            "command_version": 1,
+            "invocation_count": 1,
+            "success_count": 0,
+            "expected_refusal_count": 1,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 9.4e-05,
+            "p95_dispatch_seconds": 9.4e-05,
+            "first_observed_at": "2026-08-12T07:28:55.808062-07:00",
+            "last_observed_at": "2026-08-12T07:28:55.808156-07:00"
+          },
+          {
+            "command_id": "structure.torsion.analyze",
+            "command_version": 1,
+            "invocation_count": 1,
+            "success_count": 1,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 1,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.009878,
+            "p95_dispatch_seconds": 0.009878,
+            "first_observed_at": "2026-08-12T07:29:10.263693-07:00",
+            "last_observed_at": "2026-08-12T07:29:10.273571-07:00"
+          },
+          {
+            "command_id": "system.capabilities",
+            "command_version": 1,
+            "invocation_count": 1,
+            "success_count": 1,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.016617,
+            "p95_dispatch_seconds": 0.016617,
+            "first_observed_at": "2026-08-12T07:28:47.754466-07:00",
+            "last_observed_at": "2026-08-12T07:28:47.771083-07:00"
+          },
+          {
+            "command_id": "system.health",
+            "command_version": 1,
+            "invocation_count": 4,
+            "success_count": 4,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 9.9e-05,
+            "p95_dispatch_seconds": 0.000105,
+            "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
+            "last_observed_at": "2026-08-12T07:43:46.392223-07:00"
+          }
+        ],
+        "method_observations": [
+          {
+            "method_id": "fields.qm.density",
+            "invocation_count": 4,
+            "success_count": 4,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.013276
+          },
+          {
+            "method_id": "fields.qm.homo",
+            "invocation_count": 5,
+            "success_count": 5,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.011439
+          },
+          {
+            "method_id": "fields.qm.lumo",
+            "invocation_count": 4,
+            "success_count": 4,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.013345
+          },
+          {
+            "method_id": "torsion.strain",
+            "invocation_count": 1,
+            "success_count": 1,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.009878
+          }
+        ],
         "drift": {
           "missing_expected_ports": [],
           "unexpected_legacy_port_8902": false,
@@ -51333,14 +52380,14 @@
       "type": "service",
       "name": "dirac-web.service :1360",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T14:11:46.859892+00:00",
+        "captured_at": "2026-08-12T14:44:10.662213+00:00",
         "source": "best-effort live probes",
-        "git_commit": "5830591fcf740b6c29228e6de1e3daa3c70eed65",
+        "git_commit": "62a96285619e00c34f93458717a05a25ca99ef51",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
           "SubState=running",
-          "MainPID=1662146",
+          "MainPID=1776717",
           "",
           "Id=dirac-web.service",
           "ActiveState=active",
@@ -51361,28 +52408,167 @@
         "http_v2_command_count": 17,
         "http_v2_reachable": true,
         "postgres": {
-          "tables": 53,
-          "views": 11,
+          "tables": 54,
+          "views": 13,
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 834,
+          "jobs_total": 855,
           "job_states": {
-            "done": 565,
+            "done": 583,
             "cancelled": 29,
-            "failed": 240
+            "failed": 243
           },
           "failure_codes": {
-            "UNPARAMETERIZED": 37,
-            "UNSUPPORTED": 127,
+            "UNPARAMETERIZED": 38,
+            "UNSUPPORTED": 128,
             "INTERNAL": 34,
-            "BUDGET": 42
+            "BUDGET": 43
           },
-          "artifacts": 78,
-          "cached_results": 2,
+          "job_outcomes": {
+            "operational_failure": 34,
+            "cancelled": 29,
+            "expected_refusal": 209,
+            "success": 583
+          },
+          "artifacts": 79,
+          "cached_results": 3,
           "registered_method_rows": 49,
-          "attention_items": 240
+          "attention_items": 34,
+          "approval_waits": 0,
+          "command_traces": 41,
+          "observed_commands": 6
         },
+        "command_observations": [
+          {
+            "command_id": "job.wait",
+            "command_version": 1,
+            "invocation_count": 13,
+            "success_count": 13,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.162551,
+            "p95_dispatch_seconds": 0.231566,
+            "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
+            "last_observed_at": "2026-08-12T07:43:48.039617-07:00"
+          },
+          {
+            "command_id": "structure.field.compute",
+            "command_version": 1,
+            "invocation_count": 21,
+            "success_count": 13,
+            "expected_refusal_count": 8,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 13,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.007856,
+            "p95_dispatch_seconds": 0.015971,
+            "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
+            "last_observed_at": "2026-08-12T07:43:47.820575-07:00"
+          },
+          {
+            "command_id": "structure.interactions",
+            "command_version": 1,
+            "invocation_count": 1,
+            "success_count": 0,
+            "expected_refusal_count": 1,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 9.4e-05,
+            "p95_dispatch_seconds": 9.4e-05,
+            "first_observed_at": "2026-08-12T07:28:55.808062-07:00",
+            "last_observed_at": "2026-08-12T07:28:55.808156-07:00"
+          },
+          {
+            "command_id": "structure.torsion.analyze",
+            "command_version": 1,
+            "invocation_count": 1,
+            "success_count": 1,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 1,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.009878,
+            "p95_dispatch_seconds": 0.009878,
+            "first_observed_at": "2026-08-12T07:29:10.263693-07:00",
+            "last_observed_at": "2026-08-12T07:29:10.273571-07:00"
+          },
+          {
+            "command_id": "system.capabilities",
+            "command_version": 1,
+            "invocation_count": 1,
+            "success_count": 1,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.016617,
+            "p95_dispatch_seconds": 0.016617,
+            "first_observed_at": "2026-08-12T07:28:47.754466-07:00",
+            "last_observed_at": "2026-08-12T07:28:47.771083-07:00"
+          },
+          {
+            "command_id": "system.health",
+            "command_version": 1,
+            "invocation_count": 4,
+            "success_count": 4,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 9.9e-05,
+            "p95_dispatch_seconds": 0.000105,
+            "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
+            "last_observed_at": "2026-08-12T07:43:46.392223-07:00"
+          }
+        ],
+        "method_observations": [
+          {
+            "method_id": "fields.qm.density",
+            "invocation_count": 4,
+            "success_count": 4,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.013276
+          },
+          {
+            "method_id": "fields.qm.homo",
+            "invocation_count": 5,
+            "success_count": 5,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.011439
+          },
+          {
+            "method_id": "fields.qm.lumo",
+            "invocation_count": 4,
+            "success_count": 4,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.013345
+          },
+          {
+            "method_id": "torsion.strain",
+            "invocation_count": 1,
+            "success_count": 1,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.009878
+          }
+        ],
         "drift": {
           "missing_expected_ports": [],
           "unexpected_legacy_port_8902": false,
@@ -51409,14 +52595,14 @@
       "type": "store",
       "name": "PostgreSQL · dirac",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T14:11:46.859892+00:00",
+        "captured_at": "2026-08-12T14:44:10.662213+00:00",
         "source": "best-effort live probes",
-        "git_commit": "5830591fcf740b6c29228e6de1e3daa3c70eed65",
+        "git_commit": "62a96285619e00c34f93458717a05a25ca99ef51",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
           "SubState=running",
-          "MainPID=1662146",
+          "MainPID=1776717",
           "",
           "Id=dirac-web.service",
           "ActiveState=active",
@@ -51437,28 +52623,167 @@
         "http_v2_command_count": 17,
         "http_v2_reachable": true,
         "postgres": {
-          "tables": 53,
-          "views": 11,
+          "tables": 54,
+          "views": 13,
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 834,
+          "jobs_total": 855,
           "job_states": {
-            "done": 565,
+            "done": 583,
             "cancelled": 29,
-            "failed": 240
+            "failed": 243
           },
           "failure_codes": {
-            "UNPARAMETERIZED": 37,
-            "UNSUPPORTED": 127,
+            "UNPARAMETERIZED": 38,
+            "UNSUPPORTED": 128,
             "INTERNAL": 34,
-            "BUDGET": 42
+            "BUDGET": 43
           },
-          "artifacts": 78,
-          "cached_results": 2,
+          "job_outcomes": {
+            "operational_failure": 34,
+            "cancelled": 29,
+            "expected_refusal": 209,
+            "success": 583
+          },
+          "artifacts": 79,
+          "cached_results": 3,
           "registered_method_rows": 49,
-          "attention_items": 240
+          "attention_items": 34,
+          "approval_waits": 0,
+          "command_traces": 41,
+          "observed_commands": 6
         },
+        "command_observations": [
+          {
+            "command_id": "job.wait",
+            "command_version": 1,
+            "invocation_count": 13,
+            "success_count": 13,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.162551,
+            "p95_dispatch_seconds": 0.231566,
+            "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
+            "last_observed_at": "2026-08-12T07:43:48.039617-07:00"
+          },
+          {
+            "command_id": "structure.field.compute",
+            "command_version": 1,
+            "invocation_count": 21,
+            "success_count": 13,
+            "expected_refusal_count": 8,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 13,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.007856,
+            "p95_dispatch_seconds": 0.015971,
+            "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
+            "last_observed_at": "2026-08-12T07:43:47.820575-07:00"
+          },
+          {
+            "command_id": "structure.interactions",
+            "command_version": 1,
+            "invocation_count": 1,
+            "success_count": 0,
+            "expected_refusal_count": 1,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 9.4e-05,
+            "p95_dispatch_seconds": 9.4e-05,
+            "first_observed_at": "2026-08-12T07:28:55.808062-07:00",
+            "last_observed_at": "2026-08-12T07:28:55.808156-07:00"
+          },
+          {
+            "command_id": "structure.torsion.analyze",
+            "command_version": 1,
+            "invocation_count": 1,
+            "success_count": 1,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 1,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.009878,
+            "p95_dispatch_seconds": 0.009878,
+            "first_observed_at": "2026-08-12T07:29:10.263693-07:00",
+            "last_observed_at": "2026-08-12T07:29:10.273571-07:00"
+          },
+          {
+            "command_id": "system.capabilities",
+            "command_version": 1,
+            "invocation_count": 1,
+            "success_count": 1,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.016617,
+            "p95_dispatch_seconds": 0.016617,
+            "first_observed_at": "2026-08-12T07:28:47.754466-07:00",
+            "last_observed_at": "2026-08-12T07:28:47.771083-07:00"
+          },
+          {
+            "command_id": "system.health",
+            "command_version": 1,
+            "invocation_count": 4,
+            "success_count": 4,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 9.9e-05,
+            "p95_dispatch_seconds": 0.000105,
+            "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
+            "last_observed_at": "2026-08-12T07:43:46.392223-07:00"
+          }
+        ],
+        "method_observations": [
+          {
+            "method_id": "fields.qm.density",
+            "invocation_count": 4,
+            "success_count": 4,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.013276
+          },
+          {
+            "method_id": "fields.qm.homo",
+            "invocation_count": 5,
+            "success_count": 5,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.011439
+          },
+          {
+            "method_id": "fields.qm.lumo",
+            "invocation_count": 4,
+            "success_count": 4,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.013345
+          },
+          {
+            "method_id": "torsion.strain",
+            "invocation_count": 1,
+            "success_count": 1,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.009878
+          }
+        ],
         "drift": {
           "missing_expected_ports": [],
           "unexpected_legacy_port_8902": false,
@@ -51479,14 +52804,14 @@
       "type": "store",
       "name": "Architecture Twin JSON + HTML",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T14:11:46.859892+00:00",
+        "captured_at": "2026-08-12T14:44:10.662213+00:00",
         "source": "best-effort live probes",
-        "git_commit": "5830591fcf740b6c29228e6de1e3daa3c70eed65",
+        "git_commit": "62a96285619e00c34f93458717a05a25ca99ef51",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
           "SubState=running",
-          "MainPID=1662146",
+          "MainPID=1776717",
           "",
           "Id=dirac-web.service",
           "ActiveState=active",
@@ -51507,28 +52832,167 @@
         "http_v2_command_count": 17,
         "http_v2_reachable": true,
         "postgres": {
-          "tables": 53,
-          "views": 11,
+          "tables": 54,
+          "views": 13,
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 834,
+          "jobs_total": 855,
           "job_states": {
-            "done": 565,
+            "done": 583,
             "cancelled": 29,
-            "failed": 240
+            "failed": 243
           },
           "failure_codes": {
-            "UNPARAMETERIZED": 37,
-            "UNSUPPORTED": 127,
+            "UNPARAMETERIZED": 38,
+            "UNSUPPORTED": 128,
             "INTERNAL": 34,
-            "BUDGET": 42
+            "BUDGET": 43
           },
-          "artifacts": 78,
-          "cached_results": 2,
+          "job_outcomes": {
+            "operational_failure": 34,
+            "cancelled": 29,
+            "expected_refusal": 209,
+            "success": 583
+          },
+          "artifacts": 79,
+          "cached_results": 3,
           "registered_method_rows": 49,
-          "attention_items": 240
+          "attention_items": 34,
+          "approval_waits": 0,
+          "command_traces": 41,
+          "observed_commands": 6
         },
+        "command_observations": [
+          {
+            "command_id": "job.wait",
+            "command_version": 1,
+            "invocation_count": 13,
+            "success_count": 13,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.162551,
+            "p95_dispatch_seconds": 0.231566,
+            "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
+            "last_observed_at": "2026-08-12T07:43:48.039617-07:00"
+          },
+          {
+            "command_id": "structure.field.compute",
+            "command_version": 1,
+            "invocation_count": 21,
+            "success_count": 13,
+            "expected_refusal_count": 8,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 13,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.007856,
+            "p95_dispatch_seconds": 0.015971,
+            "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
+            "last_observed_at": "2026-08-12T07:43:47.820575-07:00"
+          },
+          {
+            "command_id": "structure.interactions",
+            "command_version": 1,
+            "invocation_count": 1,
+            "success_count": 0,
+            "expected_refusal_count": 1,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 9.4e-05,
+            "p95_dispatch_seconds": 9.4e-05,
+            "first_observed_at": "2026-08-12T07:28:55.808062-07:00",
+            "last_observed_at": "2026-08-12T07:28:55.808156-07:00"
+          },
+          {
+            "command_id": "structure.torsion.analyze",
+            "command_version": 1,
+            "invocation_count": 1,
+            "success_count": 1,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 1,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.009878,
+            "p95_dispatch_seconds": 0.009878,
+            "first_observed_at": "2026-08-12T07:29:10.263693-07:00",
+            "last_observed_at": "2026-08-12T07:29:10.273571-07:00"
+          },
+          {
+            "command_id": "system.capabilities",
+            "command_version": 1,
+            "invocation_count": 1,
+            "success_count": 1,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 0.016617,
+            "p95_dispatch_seconds": 0.016617,
+            "first_observed_at": "2026-08-12T07:28:47.754466-07:00",
+            "last_observed_at": "2026-08-12T07:28:47.771083-07:00"
+          },
+          {
+            "command_id": "system.health",
+            "command_version": 1,
+            "invocation_count": 4,
+            "success_count": 4,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "job_count": 0,
+            "cache_hit_count": 0,
+            "mean_dispatch_seconds": 9.9e-05,
+            "p95_dispatch_seconds": 0.000105,
+            "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
+            "last_observed_at": "2026-08-12T07:43:46.392223-07:00"
+          }
+        ],
+        "method_observations": [
+          {
+            "method_id": "fields.qm.density",
+            "invocation_count": 4,
+            "success_count": 4,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.013276
+          },
+          {
+            "method_id": "fields.qm.homo",
+            "invocation_count": 5,
+            "success_count": 5,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.011439
+          },
+          {
+            "method_id": "fields.qm.lumo",
+            "invocation_count": 4,
+            "success_count": 4,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.013345
+          },
+          {
+            "method_id": "torsion.strain",
+            "invocation_count": 1,
+            "success_count": 1,
+            "expected_refusal_count": 0,
+            "scientific_failure_count": 0,
+            "operational_failure_count": 0,
+            "mean_dispatch_seconds": 0.009878
+          }
+        ],
         "drift": {
           "missing_expected_ports": [],
           "unexpected_legacy_port_8902": false,
@@ -51578,7 +53042,11 @@
       "layer": "application",
       "id": "system:dispatcher",
       "type": "system",
-      "name": "CommandDispatcher"
+      "name": "CommandDispatcher",
+      "runtime_observation": {
+        "traces": 41,
+        "observed_commands": 6
+      }
     },
     {
       "layer": "execution",
@@ -52539,7 +54007,7 @@
     },
     {
       "source": "command:structure.field.compute",
-      "target": "function:py:backend/dirac_app/handlers.py:124:structure_field_compute",
+      "target": "function:py:backend/dirac_app/handlers.py:126:structure_field_compute",
       "relation": "handled-by"
     },
     {
@@ -52569,7 +54037,7 @@
     },
     {
       "source": "command:structure.surface.compute",
-      "target": "function:py:backend/dirac_app/handlers.py:136:structure_surface_compute",
+      "target": "function:py:backend/dirac_app/handlers.py:139:structure_surface_compute",
       "relation": "handled-by"
     },
     {
@@ -52589,7 +54057,7 @@
     },
     {
       "source": "command:structure.torsion.analyze",
-      "target": "function:py:backend/dirac_app/handlers.py:145:structure_torsion_analyze",
+      "target": "function:py:backend/dirac_app/handlers.py:149:structure_torsion_analyze",
       "relation": "handled-by"
     },
     {
@@ -52773,6 +54241,11 @@
       "relation": "permits"
     },
     {
+      "source": "db:function:app.classify_job_outcome",
+      "target": "store:postgres",
+      "relation": "stored-in"
+    },
+    {
       "source": "db:function:app.parse_scf_method",
       "target": "store:postgres",
       "relation": "stored-in"
@@ -52829,6 +54302,11 @@
     },
     {
       "source": "db:table:app.blob",
+      "target": "store:postgres",
+      "relation": "stored-in"
+    },
+    {
+      "source": "db:table:app.command_trace",
       "target": "store:postgres",
       "relation": "stored-in"
     },
@@ -53123,6 +54601,11 @@
       "relation": "stored-in"
     },
     {
+      "source": "db:type:app.job_outcome_class",
+      "target": "store:postgres",
+      "relation": "stored-in"
+    },
+    {
       "source": "db:type:app.job_state",
       "target": "store:postgres",
       "relation": "stored-in"
@@ -53294,6 +54777,16 @@
     },
     {
       "source": "db:view:app.v_cache_meta_coverage",
+      "target": "store:postgres",
+      "relation": "stored-in"
+    },
+    {
+      "source": "db:view:app.v_command_observation",
+      "target": "store:postgres",
+      "relation": "stored-in"
+    },
+    {
+      "source": "db:view:app.v_command_trace",
       "target": "store:postgres",
       "relation": "stored-in"
     },
@@ -54226,6 +55719,11 @@
       "source": "file:backend/tests/test_physics_contracts.py",
       "target": "file:backend/field_server.py",
       "relation": "references-file"
+    },
+    {
+      "source": "file:backend/traces.py",
+      "target": "module:py:backend/traces.py",
+      "relation": "parsed-as"
     },
     {
       "source": "file:bin/dev",
@@ -56553,38 +58051,48 @@
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/jobs.py:584:_json_value",
-      "target": "function:py:backend/jobs.py:584:_json_value",
+      "source": "function:py:backend/jobs.py:626:_json_value",
+      "target": "function:py:backend/jobs.py:626:_json_value",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/kernel.py:187:build",
-      "target": "function:py:backend/kernel.py:146:default_result_cache",
+      "source": "function:py:backend/jobs.py:99:job_outcome_class",
+      "target": "function:py:backend/jobs.py:92:job_error_code",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/kernel.py:187:build",
-      "target": "function:py:backend/kernel.py:170:default_jobs",
+      "source": "function:py:backend/kernel.py:203:build",
+      "target": "function:py:backend/kernel.py:147:default_result_cache",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/kernel.py:187:build",
-      "target": "function:py:backend/kernel.py:40:toolkit_versions",
+      "source": "function:py:backend/kernel.py:203:build",
+      "target": "function:py:backend/kernel.py:171:default_jobs",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/kernel.py:187:build",
-      "target": "function:py:backend/kernel.py:51:source_versions",
+      "source": "function:py:backend/kernel.py:203:build",
+      "target": "function:py:backend/kernel.py:188:default_traces",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/kernel.py:187:build",
-      "target": "function:py:backend/kernel.py:70:default_store",
+      "source": "function:py:backend/kernel.py:203:build",
+      "target": "function:py:backend/kernel.py:41:toolkit_versions",
       "relation": "calls"
     },
     {
-      "source": "function:py:backend/kernel.py:187:build",
-      "target": "function:py:backend/kernel.py:96:default_cache",
+      "source": "function:py:backend/kernel.py:203:build",
+      "target": "function:py:backend/kernel.py:52:source_versions",
+      "relation": "calls"
+    },
+    {
+      "source": "function:py:backend/kernel.py:203:build",
+      "target": "function:py:backend/kernel.py:71:default_store",
+      "relation": "calls"
+    },
+    {
+      "source": "function:py:backend/kernel.py:203:build",
+      "target": "function:py:backend/kernel.py:97:default_cache",
       "relation": "calls"
     },
     {
@@ -57528,6 +59036,11 @@
       "relation": "calls"
     },
     {
+      "source": "function:py:backend/traces.py:45:observation",
+      "target": "function:py:backend/traces.py:32:dispatch_outcome",
+      "relation": "calls"
+    },
+    {
       "source": "function:py:design/check_palette.py:53:oklch",
       "target": "function:py:design/check_palette.py:49:_lin",
       "relation": "calls"
@@ -58018,82 +59531,102 @@
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/build_digital_twin.py:787:validate",
+      "source": "function:py:scripts/build_digital_twin.py:668:architecture_analysis",
+      "target": "function:py:scripts/build_digital_twin.py:854:module_import_cycles",
+      "relation": "calls"
+    },
+    {
+      "source": "function:py:scripts/build_digital_twin.py:854:module_import_cycles",
+      "target": "function:py:scripts/build_digital_twin.py:869:module_import_cycles.visit",
+      "relation": "calls"
+    },
+    {
+      "source": "function:py:scripts/build_digital_twin.py:869:module_import_cycles.visit",
+      "target": "function:py:scripts/build_digital_twin.py:869:module_import_cycles.visit",
+      "relation": "calls"
+    },
+    {
+      "source": "function:py:scripts/build_digital_twin.py:898:validate",
+      "target": "function:py:scripts/build_digital_twin.py:854:module_import_cycles",
+      "relation": "calls"
+    },
+    {
+      "source": "function:py:scripts/build_digital_twin.py:898:validate",
       "target": "function:py:scripts/build_digital_twin.py:94:discovered_files",
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/build_digital_twin.py:822:main",
+      "source": "function:py:scripts/build_digital_twin.py:948:main",
       "target": "function:py:scripts/build_digital_twin.py:134:add_file_inventory",
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/build_digital_twin.py:822:main",
+      "source": "function:py:scripts/build_digital_twin.py:948:main",
       "target": "function:py:scripts/build_digital_twin.py:144:add_file_references",
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/build_digital_twin.py:822:main",
+      "source": "function:py:scripts/build_digital_twin.py:948:main",
       "target": "function:py:scripts/build_digital_twin.py:183:add_python",
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/build_digital_twin.py:822:main",
+      "source": "function:py:scripts/build_digital_twin.py:948:main",
       "target": "function:py:scripts/build_digital_twin.py:306:add_typescript",
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/build_digital_twin.py:822:main",
+      "source": "function:py:scripts/build_digital_twin.py:948:main",
       "target": "function:py:scripts/build_digital_twin.py:322:add_shell",
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/build_digital_twin.py:822:main",
+      "source": "function:py:scripts/build_digital_twin.py:948:main",
       "target": "function:py:scripts/build_digital_twin.py:349:add_contracts",
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/build_digital_twin.py:822:main",
+      "source": "function:py:scripts/build_digital_twin.py:948:main",
       "target": "function:py:scripts/build_digital_twin.py:407:add_app_shell",
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/build_digital_twin.py:822:main",
+      "source": "function:py:scripts/build_digital_twin.py:948:main",
       "target": "function:py:scripts/build_digital_twin.py:436:add_database",
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/build_digital_twin.py:822:main",
+      "source": "function:py:scripts/build_digital_twin.py:948:main",
       "target": "function:py:scripts/build_digital_twin.py:459:add_system_and_flows",
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/build_digital_twin.py:822:main",
+      "source": "function:py:scripts/build_digital_twin.py:948:main",
       "target": "function:py:scripts/build_digital_twin.py:550:runtime_snapshot",
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/build_digital_twin.py:822:main",
-      "target": "function:py:scripts/build_digital_twin.py:617:architecture_analysis",
-      "relation": "calls"
-    },
-    {
-      "source": "function:py:scripts/build_digital_twin.py:822:main",
+      "source": "function:py:scripts/build_digital_twin.py:948:main",
       "target": "function:py:scripts/build_digital_twin.py:63:run",
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/build_digital_twin.py:822:main",
+      "source": "function:py:scripts/build_digital_twin.py:948:main",
+      "target": "function:py:scripts/build_digital_twin.py:668:architecture_analysis",
+      "relation": "calls"
+    },
+    {
+      "source": "function:py:scripts/build_digital_twin.py:948:main",
       "target": "function:py:scripts/build_digital_twin.py:72:atomic_write",
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/build_digital_twin.py:822:main",
-      "target": "function:py:scripts/build_digital_twin.py:787:validate",
+      "source": "function:py:scripts/build_digital_twin.py:948:main",
+      "target": "function:py:scripts/build_digital_twin.py:898:validate",
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/build_digital_twin.py:822:main",
+      "source": "function:py:scripts/build_digital_twin.py:948:main",
       "target": "function:py:scripts/build_digital_twin.py:94:discovered_files",
       "relation": "calls"
     },
@@ -58158,13 +59691,28 @@
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/check_digital_twin.py:26:errors",
-      "target": "function:py:scripts/check_digital_twin.py:19:source_fingerprint",
+      "source": "function:py:scripts/check_digital_twin.py:154:main",
+      "target": "function:py:scripts/check_digital_twin.py:71:errors",
       "relation": "calls"
     },
     {
-      "source": "function:py:scripts/check_digital_twin.py:80:main",
-      "target": "function:py:scripts/check_digital_twin.py:26:errors",
+      "source": "function:py:scripts/check_digital_twin.py:19:module_cycles",
+      "target": "function:py:scripts/check_digital_twin.py:35:module_cycles.visit",
+      "relation": "calls"
+    },
+    {
+      "source": "function:py:scripts/check_digital_twin.py:35:module_cycles.visit",
+      "target": "function:py:scripts/check_digital_twin.py:35:module_cycles.visit",
+      "relation": "calls"
+    },
+    {
+      "source": "function:py:scripts/check_digital_twin.py:71:errors",
+      "target": "function:py:scripts/check_digital_twin.py:19:module_cycles",
+      "relation": "calls"
+    },
+    {
+      "source": "function:py:scripts/check_digital_twin.py:71:errors",
+      "target": "function:py:scripts/check_digital_twin.py:64:source_fingerprint",
       "relation": "calls"
     },
     {
@@ -66023,6 +67571,46 @@
       "relation": "migrates"
     },
     {
+      "source": "migration:017_job_outcome_identity",
+      "target": "db:function:app.classify_job_outcome",
+      "relation": "defines"
+    },
+    {
+      "source": "migration:017_job_outcome_identity",
+      "target": "db:type:app.job_outcome_class",
+      "relation": "defines"
+    },
+    {
+      "source": "migration:017_job_outcome_identity",
+      "target": "db:view:app.v_attention",
+      "relation": "defines"
+    },
+    {
+      "source": "migration:017_job_outcome_identity",
+      "target": "store:postgres",
+      "relation": "migrates"
+    },
+    {
+      "source": "migration:018_command_observations",
+      "target": "db:table:app.command_trace",
+      "relation": "defines"
+    },
+    {
+      "source": "migration:018_command_observations",
+      "target": "db:view:app.v_command_observation",
+      "relation": "defines"
+    },
+    {
+      "source": "migration:018_command_observations",
+      "target": "db:view:app.v_command_trace",
+      "relation": "defines"
+    },
+    {
+      "source": "migration:018_command_observations",
+      "target": "store:postgres",
+      "relation": "migrates"
+    },
+    {
       "source": "module:py:backend/admin_queries.py",
       "target": "function:py:backend/admin_queries.py:106:_row",
       "relation": "contains"
@@ -66584,17 +68172,17 @@
     },
     {
       "source": "module:py:backend/dirac_app/dispatcher.py",
-      "target": "class:py:backend/dirac_app/dispatcher.py:20:CommandDispatcher",
+      "target": "class:py:backend/dirac_app/dispatcher.py:21:CommandDispatcher",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/dirac_app/dispatcher.py",
-      "target": "function:py:backend/dirac_app/dispatcher.py:21:CommandDispatcher.__init__",
+      "target": "function:py:backend/dirac_app/dispatcher.py:22:CommandDispatcher.__init__",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/dirac_app/dispatcher.py",
-      "target": "function:py:backend/dirac_app/dispatcher.py:25:CommandDispatcher.execute",
+      "target": "function:py:backend/dirac_app/dispatcher.py:29:CommandDispatcher.execute",
       "relation": "contains"
     },
     {
@@ -66614,17 +68202,17 @@
     },
     {
       "source": "module:py:backend/dirac_app/handlers.py",
-      "target": "function:py:backend/dirac_app/handlers.py:124:structure_field_compute",
+      "target": "function:py:backend/dirac_app/handlers.py:126:structure_field_compute",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/dirac_app/handlers.py",
-      "target": "function:py:backend/dirac_app/handlers.py:136:structure_surface_compute",
+      "target": "function:py:backend/dirac_app/handlers.py:139:structure_surface_compute",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/dirac_app/handlers.py",
-      "target": "function:py:backend/dirac_app/handlers.py:145:structure_torsion_analyze",
+      "target": "function:py:backend/dirac_app/handlers.py:149:structure_torsion_analyze",
       "relation": "contains"
     },
     {
@@ -67459,77 +69047,82 @@
     },
     {
       "source": "module:py:backend/invocation.py",
-      "target": "function:py:backend/invocation.py:150:InvocationService.list_methods",
+      "target": "function:py:backend/invocation.py:152:InvocationService.list_methods",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/invocation.py",
-      "target": "function:py:backend/invocation.py:159:InvocationService.describe",
+      "target": "function:py:backend/invocation.py:161:InvocationService.describe",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/invocation.py",
-      "target": "function:py:backend/invocation.py:162:InvocationService.estimate",
+      "target": "function:py:backend/invocation.py:164:InvocationService.estimate",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/invocation.py",
-      "target": "function:py:backend/invocation.py:185:InvocationService.capabilities",
+      "target": "function:py:backend/invocation.py:187:InvocationService.capabilities",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/invocation.py",
-      "target": "function:py:backend/invocation.py:203:InvocationService.list_jobs",
+      "target": "function:py:backend/invocation.py:209:InvocationService.list_jobs",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/invocation.py",
-      "target": "function:py:backend/invocation.py:208:InvocationService.get_job",
+      "target": "function:py:backend/invocation.py:214:InvocationService.get_job",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/invocation.py",
-      "target": "function:py:backend/invocation.py:216:InvocationService.cancel_job",
+      "target": "function:py:backend/invocation.py:222:InvocationService.cancel_job",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/invocation.py",
-      "target": "function:py:backend/invocation.py:228:InvocationService.wait_job",
+      "target": "function:py:backend/invocation.py:234:InvocationService.wait_job",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/invocation.py",
-      "target": "function:py:backend/invocation.py:241:InvocationService.submit",
+      "target": "function:py:backend/invocation.py:247:InvocationService.submit",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/invocation.py",
-      "target": "function:py:backend/invocation.py:286:InvocationService._run_submitted",
+      "target": "function:py:backend/invocation.py:298:InvocationService._run_submitted",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/invocation.py",
-      "target": "function:py:backend/invocation.py:297:InvocationService._forget_future",
+      "target": "function:py:backend/invocation.py:311:InvocationService._forget_future",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/invocation.py",
-      "target": "function:py:backend/invocation.py:302:InvocationService.invoke",
+      "target": "function:py:backend/invocation.py:316:InvocationService.invoke",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/invocation.py",
-      "target": "function:py:backend/invocation.py:446:InvocationService._open_job",
+      "target": "function:py:backend/invocation.py:473:InvocationService._open_job",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/invocation.py",
-      "target": "function:py:backend/invocation.py:471:InvocationService._require_declared_artifacts",
+      "target": "function:py:backend/invocation.py:503:InvocationService._actor",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/invocation.py",
-      "target": "function:py:backend/invocation.py:494:InvocationService._envelope",
+      "target": "function:py:backend/invocation.py:511:InvocationService._require_declared_artifacts",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/invocation.py",
+      "target": "function:py:backend/invocation.py:534:InvocationService._envelope",
       "relation": "contains"
     },
     {
@@ -67539,217 +69132,227 @@
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "class:py:backend/jobs.py:104:JobLedger",
+      "target": "class:py:backend/jobs.py:129:JobLedger",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "class:py:backend/jobs.py:475:MemoryJobStore",
+      "target": "class:py:backend/jobs.py:508:MemoryJobStore",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:115:JobLedger.__init__",
+      "target": "function:py:backend/jobs.py:120:canonical_request_digest",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:121:JobLedger.method_row_for",
+      "target": "function:py:backend/jobs.py:140:JobLedger.__init__",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:124:JobLedger.bind_method_rows",
+      "target": "function:py:backend/jobs.py:146:JobLedger.method_row_for",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:128:JobLedger.open",
+      "target": "function:py:backend/jobs.py:149:JobLedger.bind_method_rows",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:204:JobLedger.start",
+      "target": "function:py:backend/jobs.py:153:JobLedger.open",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:223:JobLedger.done",
+      "target": "function:py:backend/jobs.py:234:JobLedger.start",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:242:JobLedger.failed",
+      "target": "function:py:backend/jobs.py:253:JobLedger.done",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:267:JobLedger.get",
+      "target": "function:py:backend/jobs.py:272:JobLedger.failed",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:271:JobLedger.list",
+      "target": "function:py:backend/jobs.py:297:JobLedger.get",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:276:JobLedger.request_cancel",
+      "target": "function:py:backend/jobs.py:301:JobLedger.list",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:306:JobLedger._query_jobs",
+      "target": "function:py:backend/jobs.py:306:JobLedger.request_cancel",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:335:JobLedger.wait_for",
+      "target": "function:py:backend/jobs.py:336:JobLedger._query_jobs",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:403:JobLedger.reap",
+      "target": "function:py:backend/jobs.py:368:JobLedger.wait_for",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:485:MemoryJobStore.__init__",
+      "target": "function:py:backend/jobs.py:436:JobLedger.reap",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:491:MemoryJobStore.method_row_for",
+      "target": "function:py:backend/jobs.py:518:MemoryJobStore.__init__",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:494:MemoryJobStore.open",
+      "target": "function:py:backend/jobs.py:524:MemoryJobStore.method_row_for",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:521:MemoryJobStore.start",
+      "target": "function:py:backend/jobs.py:527:MemoryJobStore.open",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:527:MemoryJobStore.done",
+      "target": "function:py:backend/jobs.py:558:MemoryJobStore.start",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:535:MemoryJobStore.failed",
+      "target": "function:py:backend/jobs.py:564:MemoryJobStore.done",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:544:MemoryJobStore.get",
+      "target": "function:py:backend/jobs.py:573:MemoryJobStore.failed",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:549:MemoryJobStore.list",
+      "target": "function:py:backend/jobs.py:585:MemoryJobStore.get",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:555:MemoryJobStore.request_cancel",
+      "target": "function:py:backend/jobs.py:590:MemoryJobStore.list",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:572:MemoryJobStore.reap",
+      "target": "function:py:backend/jobs.py:596:MemoryJobStore.request_cancel",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:576:_now",
+      "target": "function:py:backend/jobs.py:614:MemoryJobStore.reap",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:580:_public_memory",
+      "target": "function:py:backend/jobs.py:618:_now",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:584:_json_value",
+      "target": "function:py:backend/jobs.py:622:_public_memory",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:612:_worker_is_alive",
+      "target": "function:py:backend/jobs.py:626:_json_value",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:638:make_worker_name",
+      "target": "function:py:backend/jobs.py:654:_worker_is_alive",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:649:new_uuid",
+      "target": "function:py:backend/jobs.py:680:make_worker_name",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:76:counters",
+      "target": "function:py:backend/jobs.py:691:new_uuid",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:81:_bump",
+      "target": "function:py:backend/jobs.py:80:counters",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:88:job_error_code",
+      "target": "function:py:backend/jobs.py:85:_bump",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/jobs.py",
-      "target": "function:py:backend/jobs.py:95:canonical_request_digest",
+      "target": "function:py:backend/jobs.py:92:job_error_code",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/jobs.py",
+      "target": "function:py:backend/jobs.py:99:job_outcome_class",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/kernel.py",
-      "target": "function:py:backend/kernel.py:134:default_cache.get_cube_for_kernel",
+      "target": "function:py:backend/kernel.py:135:default_cache.get_cube_for_kernel",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/kernel.py",
-      "target": "function:py:backend/kernel.py:146:default_result_cache",
+      "target": "function:py:backend/kernel.py:147:default_result_cache",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/kernel.py",
-      "target": "function:py:backend/kernel.py:170:default_jobs",
+      "target": "function:py:backend/kernel.py:171:default_jobs",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/kernel.py",
-      "target": "function:py:backend/kernel.py:187:build",
+      "target": "function:py:backend/kernel.py:188:default_traces",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/kernel.py",
-      "target": "function:py:backend/kernel.py:40:toolkit_versions",
+      "target": "function:py:backend/kernel.py:203:build",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/kernel.py",
-      "target": "function:py:backend/kernel.py:51:source_versions",
+      "target": "function:py:backend/kernel.py:41:toolkit_versions",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/kernel.py",
-      "target": "function:py:backend/kernel.py:70:default_store",
+      "target": "function:py:backend/kernel.py:52:source_versions",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/kernel.py",
-      "target": "function:py:backend/kernel.py:96:default_cache",
+      "target": "function:py:backend/kernel.py:71:default_store",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/kernel.py",
+      "target": "function:py:backend/kernel.py:97:default_cache",
       "relation": "contains"
     },
     {
@@ -68974,37 +70577,67 @@
     },
     {
       "source": "module:py:backend/tests/test_job_store_contract.py",
-      "target": "function:py:backend/tests/test_job_store_contract.py:18:_add",
+      "target": "class:py:backend/tests/test_job_store_contract.py:77:test_command_dispatcher_propagates_actor_command_and_request_to_kernel.Kernel",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/tests/test_job_store_contract.py",
-      "target": "function:py:backend/tests/test_job_store_contract.py:22:check",
+      "target": "function:py:backend/tests/test_job_store_contract.py:105:test_identical_inflight_open_joins_instead_of_duplicating",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/tests/test_job_store_contract.py",
-      "target": "function:py:backend/tests/test_job_store_contract.py:32:test_memory_store_lifecycle_and_durability_are_explicit",
+      "target": "function:py:backend/tests/test_job_store_contract.py:116:test_cancellation_distinguishes_queued_from_running",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/tests/test_job_store_contract.py",
-      "target": "function:py:backend/tests/test_job_store_contract.py:48:test_identical_inflight_open_joins_instead_of_duplicating",
+      "target": "function:py:backend/tests/test_job_store_contract.py:130:test_executors_share_execute_and_thread_submission_is_bounded",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/tests/test_job_store_contract.py",
-      "target": "function:py:backend/tests/test_job_store_contract.py:59:test_cancellation_distinguishes_queued_from_running",
+      "target": "function:py:backend/tests/test_job_store_contract.py:144:test_process_and_remote_executors_share_the_same_boundary",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/tests/test_job_store_contract.py",
-      "target": "function:py:backend/tests/test_job_store_contract.py:73:test_executors_share_execute_and_thread_submission_is_bounded",
+      "target": "function:py:backend/tests/test_job_store_contract.py:20:_add",
       "relation": "contains"
     },
     {
       "source": "module:py:backend/tests/test_job_store_contract.py",
-      "target": "function:py:backend/tests/test_job_store_contract.py:87:test_process_and_remote_executors_share_the_same_boundary",
+      "target": "function:py:backend/tests/test_job_store_contract.py:24:check",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/tests/test_job_store_contract.py",
+      "target": "function:py:backend/tests/test_job_store_contract.py:34:test_memory_store_lifecycle_and_durability_are_explicit",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/tests/test_job_store_contract.py",
+      "target": "function:py:backend/tests/test_job_store_contract.py:51:test_outcome_classes_separate_refusals_science_and_operations",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/tests/test_job_store_contract.py",
+      "target": "function:py:backend/tests/test_job_store_contract.py:61:test_memory_store_persists_invocation_identity_and_terminal_meaning",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/tests/test_job_store_contract.py",
+      "target": "function:py:backend/tests/test_job_store_contract.py:76:test_command_dispatcher_propagates_actor_command_and_request_to_kernel",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/tests/test_job_store_contract.py",
+      "target": "function:py:backend/tests/test_job_store_contract.py:78:test_command_dispatcher_propagates_actor_command_and_request_to_kernel.Kernel.__init__",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/tests/test_job_store_contract.py",
+      "target": "function:py:backend/tests/test_job_store_contract.py:81:test_command_dispatcher_propagates_actor_command_and_request_to_kernel.Kernel.invoke",
       "relation": "contains"
     },
     {
@@ -69250,6 +70883,56 @@
     {
       "source": "module:py:backend/tests/test_physics_contracts.py",
       "target": "function:py:backend/tests/test_physics_contracts.py:892:main",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/traces.py",
+      "target": "class:py:backend/traces.py:101:MemoryCommandTraceStore",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/traces.py",
+      "target": "class:py:backend/traces.py:69:PostgresCommandTraceStore",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/traces.py",
+      "target": "function:py:backend/traces.py:105:MemoryCommandTraceStore.__init__",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/traces.py",
+      "target": "function:py:backend/traces.py:109:MemoryCommandTraceStore.record",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/traces.py",
+      "target": "function:py:backend/traces.py:20:counters",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/traces.py",
+      "target": "function:py:backend/traces.py:25:_bump",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/traces.py",
+      "target": "function:py:backend/traces.py:32:dispatch_outcome",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/traces.py",
+      "target": "function:py:backend/traces.py:45:observation",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/traces.py",
+      "target": "function:py:backend/traces.py:73:PostgresCommandTraceStore.__init__",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:backend/traces.py",
+      "target": "function:py:backend/traces.py:76:PostgresCommandTraceStore.record",
       "relation": "contains"
     },
     {
@@ -70299,12 +71982,12 @@
     },
     {
       "source": "module:py:scripts/build_digital_twin.py",
-      "target": "function:py:scripts/build_digital_twin.py:617:architecture_analysis",
+      "target": "function:py:scripts/build_digital_twin.py:63:run",
       "relation": "contains"
     },
     {
       "source": "module:py:scripts/build_digital_twin.py",
-      "target": "function:py:scripts/build_digital_twin.py:63:run",
+      "target": "function:py:scripts/build_digital_twin.py:668:architecture_analysis",
       "relation": "contains"
     },
     {
@@ -70314,17 +71997,27 @@
     },
     {
       "source": "module:py:scripts/build_digital_twin.py",
-      "target": "function:py:scripts/build_digital_twin.py:787:validate",
-      "relation": "contains"
-    },
-    {
-      "source": "module:py:scripts/build_digital_twin.py",
       "target": "function:py:scripts/build_digital_twin.py:78:layer_for",
       "relation": "contains"
     },
     {
       "source": "module:py:scripts/build_digital_twin.py",
-      "target": "function:py:scripts/build_digital_twin.py:822:main",
+      "target": "function:py:scripts/build_digital_twin.py:854:module_import_cycles",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:scripts/build_digital_twin.py",
+      "target": "function:py:scripts/build_digital_twin.py:869:module_import_cycles.visit",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:scripts/build_digital_twin.py",
+      "target": "function:py:scripts/build_digital_twin.py:898:validate",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:scripts/build_digital_twin.py",
+      "target": "function:py:scripts/build_digital_twin.py:948:main",
       "relation": "contains"
     },
     {
@@ -70384,17 +72077,27 @@
     },
     {
       "source": "module:py:scripts/check_digital_twin.py",
-      "target": "function:py:scripts/check_digital_twin.py:19:source_fingerprint",
+      "target": "function:py:scripts/check_digital_twin.py:154:main",
       "relation": "contains"
     },
     {
       "source": "module:py:scripts/check_digital_twin.py",
-      "target": "function:py:scripts/check_digital_twin.py:26:errors",
+      "target": "function:py:scripts/check_digital_twin.py:19:module_cycles",
       "relation": "contains"
     },
     {
       "source": "module:py:scripts/check_digital_twin.py",
-      "target": "function:py:scripts/check_digital_twin.py:80:main",
+      "target": "function:py:scripts/check_digital_twin.py:35:module_cycles.visit",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:scripts/check_digital_twin.py",
+      "target": "function:py:scripts/check_digital_twin.py:64:source_fingerprint",
+      "relation": "contains"
+    },
+    {
+      "source": "module:py:scripts/check_digital_twin.py",
+      "target": "function:py:scripts/check_digital_twin.py:71:errors",
       "relation": "contains"
     },
     {

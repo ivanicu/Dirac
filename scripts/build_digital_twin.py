@@ -584,19 +584,70 @@ def runtime_snapshot(twin: Twin) -> dict:
         SELECT coalesce(json_object_agg(error_code, n), '{}'::json) value
         FROM (SELECT error_code::text error_code, count(*) n FROM app.job
               WHERE state='failed' GROUP BY error_code) q
+    ), outcomes AS (
+        SELECT coalesce(json_object_agg(outcome_class, n), '{}'::json) value
+        FROM (SELECT outcome_class::text outcome_class, count(*) n FROM app.job
+              WHERE outcome_class IS NOT NULL GROUP BY outcome_class) q
     )
     SELECT json_build_object(
         'jobs_total', (SELECT count(*) FROM app.job),
         'job_states', (SELECT value FROM states),
         'failure_codes', (SELECT value FROM errors),
+        'job_outcomes', (SELECT value FROM outcomes),
         'artifacts', (SELECT count(*) FROM app.artifact),
         'cached_results', (SELECT count(*) FROM app.result_cache),
         'registered_method_rows', (SELECT count(*) FROM meta.method),
-        'attention_items', (SELECT count(*) FROM app.v_attention));
+        'attention_items', (SELECT count(*) FROM app.v_attention),
+        'approval_waits', (SELECT count(*) FROM app.run WHERE state='waiting_approval'),
+        'command_traces', (SELECT count(*) FROM app.command_trace),
+        'observed_commands', (SELECT count(*) FROM app.v_command_observation));
     """
     ok, metrics = run(['psql', '-d', 'dirac', '-Atqc', metrics_query])
     snapshot['operational_metrics'] = json.loads(metrics) if ok and metrics.startswith('{') else {
         'available': False, 'reason': metrics}
+    observations_query = """
+    SELECT coalesce(json_agg(row_to_json(q)), '[]'::json)
+      FROM (
+        SELECT command_id::text, command_version, invocation_count, success_count,
+               expected_refusal_count, scientific_failure_count,
+               operational_failure_count, job_count, cache_hit_count,
+               mean_dispatch_seconds, p95_dispatch_seconds,
+               first_observed_at, last_observed_at
+          FROM app.v_command_observation ORDER BY command_id
+      ) q;
+    """
+    ok, observations = run(['psql', '-d', 'dirac', '-Atqc', observations_query])
+    snapshot['command_observations'] = (json.loads(observations)
+                                        if ok and observations.startswith('[') else [])
+    method_query = """
+    SELECT coalesce(json_agg(row_to_json(q)), '[]'::json)
+      FROM (
+        SELECT method_id::text, count(*) AS invocation_count,
+               count(*) FILTER (WHERE outcome_class='success') AS success_count,
+               count(*) FILTER (WHERE outcome_class='expected_refusal') AS expected_refusal_count,
+               count(*) FILTER (WHERE outcome_class='scientific_failure') AS scientific_failure_count,
+               count(*) FILTER (WHERE outcome_class='operational_failure') AS operational_failure_count,
+               round(avg(duration_seconds), 6) AS mean_dispatch_seconds
+          FROM app.v_command_trace WHERE method_id IS NOT NULL
+         GROUP BY method_id ORDER BY method_id
+      ) q;
+    """
+    ok, method_observations = run(['psql', '-d', 'dirac', '-Atqc', method_query])
+    snapshot['method_observations'] = (json.loads(method_observations)
+                                       if ok and method_observations.startswith('[') else [])
+    for row in snapshot['command_observations']:
+        node_id = f'command:{row["command_id"]}'
+        if node_id in twin.nodes:
+            twin.nodes[node_id]['runtime_observation'] = row
+    for row in snapshot['method_observations']:
+        node_id = f'method:{row["method_id"]}'
+        if node_id in twin.nodes:
+            twin.nodes[node_id]['runtime_observation'] = row
+    if 'system:dispatcher' in twin.nodes:
+        twin.nodes['system:dispatcher']['runtime_observation'] = {
+            'traces': snapshot.get('operational_metrics', {}).get('command_traces', 0),
+            'observed_commands': snapshot.get('operational_metrics', {}).get('observed_commands', 0),
+        }
     expected_ports = {'1355', '1360', '8901'}
     actual_ports = set(snapshot['listening_ports'])
     snapshot['drift'] = {
@@ -695,9 +746,16 @@ def architecture_analysis(twin: Twin, ts_data: dict, runtime: dict) -> dict:
     operational = runtime.get('operational_metrics', {})
     failures = operational.get('failure_codes', {}) if isinstance(operational, dict) else {}
     expected_refusals = sum(int(failures.get(code, 0))
-                            for code in ('UNSUPPORTED', 'BUDGET', 'UNPARAMETERIZED'))
+                            for code in ('PARSE', 'UNSUPPORTED', 'BUDGET',
+                                         'UNPARAMETERIZED', 'TOO_LARGE'))
     internal_failures = int(failures.get('INTERNAL', 0))
+    scientific_failures = int(failures.get('UNCONVERGED', 0))
     attention = int(operational.get('attention_items', 0)) if isinstance(operational, dict) else 0
+    approval_waits = int(operational.get('approval_waits', 0)) if isinstance(operational, dict) else 0
+    command_traces = int(operational.get('command_traces', 0)) if isinstance(operational, dict) else 0
+    observed_commands = int(operational.get('observed_commands', 0)) if isinstance(operational, dict) else 0
+    attention_is_actionable = attention == internal_failures + scientific_failures + approval_waits
+    import_cycles = module_import_cycles(twin)
 
     checks = [
         {'id': 'command-handler-coverage', 'status': 'pass' if command_count == handler_count else 'fail',
@@ -716,37 +774,44 @@ def architecture_analysis(twin: Twin, ts_data: dict, runtime: dict) -> dict:
         {'id': 'product-reality', 'status': 'warn', 'label': 'Product capability coverage',
          'value': f'{product["views_implemented"]}/{product["views_total"]} views',
          'why': 'Registry completeness is not implementation completeness.'},
-        {'id': 'attention-quality', 'status': 'warn' if attention else 'pass',
+        {'id': 'attention-quality', 'status': 'pass' if attention_is_actionable else 'fail',
          'label': 'Attention signal quality', 'value': f'{attention} items',
-         'why': 'Attention currently treats every failed Job as actionable, including expected scientific refusals.'},
-        {'id': 'dynamic-observation', 'status': 'warn', 'label': 'Observed execution coverage',
-         'value': 'aggregate only',
-         'why': 'The twin has runtime aggregates but no per-command trace-to-function telemetry yet.'},
+         'why': ('Attention contains only operational/scientific failures and approval waits; '
+                 'expected refusals remain queryable without becoming incidents.')},
+        {'id': 'dynamic-observation', 'status': 'pass' if command_traces else 'warn',
+         'label': 'Node-keyed execution telemetry',
+         'value': f'{command_traces} traces · {observed_commands}/{command_count} commands observed',
+         'why': 'Persistent traces bind real outcomes and latency to command and method nodes.'},
+        {'id': 'architecture-fitness', 'status': 'pass' if not import_cycles else 'fail',
+         'label': 'Architecture fitness ratchets',
+         'value': f'{len(import_cycles)} import cycles',
+         'why': ('Gate 14 enforces command/method coverage, adapter boundaries, singleton '
+                 'state owners and a zero module-cycle ratchet.')},
     ]
 
     findings = [
-        {'id': 'attention-semantics', 'priority': 'P0', 'kind': 'signal-quality',
-         'title': 'Separate expected scientific refusals from operational failures',
-         'evidence': (f'The current local DB (including verification traffic) yields {attention} Attention items; '
-                      f'{expected_refusals} are expected refusal codes and {internal_failures} are INTERNAL failures.'),
-         'impact': ('The view has no outcome class with which to suppress expected refusals; in real workflows this '
-                    'would create noise while genuine infrastructure failures remain unranked.'),
-         'action': ('Persist outcome_class, actor and command identity with Job/Run; derive Attention only from '
-                    'unexpected failures, approval waits and policy-selected scientific refusals.'),
+        {'id': 'attention-semantics', 'priority': 'DONE', 'kind': 'signal-quality',
+         'title': 'Attention now separates expected refusals from actionable failures',
+         'evidence': (f'{expected_refusals} historical expected refusals remain in the Job ledger while Attention '
+                      f'contains {attention} actionable items: {internal_failures} operational, '
+                      f'{scientific_failures} scientific and {approval_waits} approval waits.'),
+         'impact': ('Operators see a ranked intervention queue without losing scientific refusal history, and every '
+                    'new Job carries actor, command and request identity.'),
+         'action': 'Keep app.classify_job_outcome and app.v_attention under migration and contract gates.',
          'nodes': ['store:jobs', 'db:view:app.v_attention', 'system:dispatcher']},
-        {'id': 'trace-fidelity', 'priority': 'P1', 'kind': 'twin-fidelity',
-         'title': 'Bind observed command traces back to architecture nodes',
-         'evidence': 'Current runtime truth is service/port/DB aggregate state; call edges are static AST evidence.',
-         'impact': 'The twin can estimate change impact but cannot calibrate it with actual traffic, latency or failure paths.',
-         'action': ('Emit command_id, method_version, job_id, cache source, latency and terminal outcome as structured '
-                    'traces; ingest aggregates keyed by existing twin node IDs.'),
+        {'id': 'trace-fidelity', 'priority': 'DONE', 'kind': 'twin-fidelity',
+         'title': 'Observed command traces are bound to architecture nodes',
+         'evidence': (f'{command_traces} durable traces currently cover {observed_commands}/{command_count} commands; '
+                      'linked Jobs resolve to their eventual terminal outcome.'),
+         'impact': 'Command and method inspectors now expose empirical traffic, latency, cache and failure-path data.',
+         'action': 'Let coverage accumulate from real use; do not manufacture traffic merely to turn coverage green.',
          'nodes': ['system:dispatcher', 'system:invocation', 'store:jobs']},
-        {'id': 'fitness-gates', 'priority': 'P1', 'kind': 'architecture-control',
-         'title': 'Turn twin invariants into CI architecture fitness functions',
-         'evidence': f'{command_count}/{command_count} commands and {method_count}/{method_count} methods are structurally linked today.',
-         'impact': 'Without a gate, future adapters can silently bypass the dispatcher or add a second state clock/store.',
-         'action': ('Fail CI on unhandled commands, unmapped methods, forbidden adapter→compute/store edges, duplicate '
-                    'context clocks, a second scene owner, and new module cycles above the ratchet.'),
+        {'id': 'fitness-gates', 'priority': 'DONE', 'kind': 'architecture-control',
+         'title': 'Twin invariants are enforced as architecture fitness functions',
+         'evidence': (f'Gate 14 verifies {command_count}/{command_count} handled commands, '
+                      f'{method_count}/{method_count} implemented methods and {len(import_cycles)} import cycles.'),
+         'impact': 'A future adapter bypass, duplicate owner or import cycle now fails the same gate that checks twin freshness.',
+         'action': 'Keep each new invariant paired with a positive control that proves the checker can convict.',
          'nodes': ['registry:commands', 'registry:methods', 'system:scientific-context', 'system:scene']},
         {'id': 'product-scope', 'priority': 'SCOPE', 'kind': 'product-reality',
          'title': 'Do not confuse the complete substrate with the incomplete product',
@@ -758,17 +823,19 @@ def architecture_analysis(twin: Twin, ts_data: dict, runtime: dict) -> dict:
     ]
     return {
         'maturity': {
-            'level': 'L2', 'name': 'Diagnostic software-architecture twin',
+            'level': 'L3', 'name': 'Observed architecture optimization twin',
             'is_continuously_synchronized': True,
             'synchronization': ('event-driven recursive source synchronization; runtime observations refresh '
                                 'on each regeneration rather than streaming continuously'),
             'source_sync': 'continuous while dirac-digital-twin.service is active',
             'runtime_sync': 'snapshot refreshed on source-triggered or manual regeneration',
             'can_do': ['explain architecture', 'detect declared/observed drift', 'rank static hotspots',
-                       'simulate dependency-radius change impact', 'preserve function-level traceability'],
-            'cannot_yet_do': ['predict latency or failure probability', 'replay real traces',
-                              'calibrate impact from production traffic', 'close the optimization loop automatically'],
-            'next_level': 'L3 requires node-keyed runtime traces and calibrated outcome models.',
+                       'simulate dependency-radius change impact', 'preserve function-level traceability',
+                       'calibrate command latency and outcomes from observed traffic'],
+            'cannot_yet_do': ['predict latency or failure probability for unseen inputs',
+                              'replay commands without separately retained inputs',
+                              'close the optimization loop automatically'],
+            'next_level': 'L4 requires validated predictive models and governed optimization actions.',
         },
         'product_reality': product,
         'health_checks': checks,
@@ -784,6 +851,50 @@ def architecture_analysis(twin: Twin, ts_data: dict, runtime: dict) -> dict:
     }
 
 
+def module_import_cycles(twin: Twin) -> list[list[str]]:
+    modules = {node_id for node_id, node in twin.nodes.items()
+               if node.get('type') == 'module'}
+    adjacency = {node: [] for node in modules}
+    for edge in twin.edges.values():
+        if (edge['relation'] == 'imports' and edge['source'] in modules
+                and edge['target'] in modules):
+            adjacency[edge['source']].append(edge['target'])
+    cursor = 0
+    indexes: dict[str, int] = {}
+    lows: dict[str, int] = {}
+    stack: list[str] = []
+    on_stack: set[str] = set()
+    found: list[list[str]] = []
+
+    def visit(node: str) -> None:
+        nonlocal cursor
+        indexes[node] = lows[node] = cursor
+        cursor += 1
+        stack.append(node)
+        on_stack.add(node)
+        for target in adjacency[node]:
+            if target not in indexes:
+                visit(target)
+                lows[node] = min(lows[node], lows[target])
+            elif target in on_stack:
+                lows[node] = min(lows[node], indexes[target])
+        if lows[node] == indexes[node]:
+            component: list[str] = []
+            while True:
+                item = stack.pop()
+                on_stack.remove(item)
+                component.append(item)
+                if item == node:
+                    break
+            if len(component) > 1 or node in adjacency[node]:
+                found.append(sorted(component))
+
+    for node in sorted(modules):
+        if node not in indexes:
+            visit(node)
+    return sorted(found)
+
+
 def validate(twin: Twin, ts_data: dict) -> dict:
     errors: list[str] = []
     if len(ts_data['registries']['workspaces']) != 8:
@@ -793,7 +904,7 @@ def validate(twin: Twin, ts_data: dict) -> dict:
     if len(ts_data['registries']['modules']) != 10:
         errors.append('AppShell must contain exactly 10 composable modules')
     expected = {'command': 17, 'object-kind': 30, 'relation-kind': 17,
-                'scientific-method': 12, 'migration': 17}
+                'scientific-method': 12, 'migration': 19}
     counts = Counter(n['type'] for n in twin.nodes.values())
     for kind, wanted in expected.items():
         if counts[kind] != wanted:
@@ -808,6 +919,21 @@ def validate(twin: Twin, ts_data: dict) -> dict:
         if not any(e['source'] == command['id'] and e['relation'] == 'handled-by'
                    for e in twin.edges.values()):
             errors.append(f'command lacks handler: {command["name"]}')
+    for method in (n for n in twin.nodes.values() if n['type'] == 'scientific-method'):
+        if not any(e['source'] == method['id'] and e['relation'] == 'implemented-by'
+                   for e in twin.edges.values()):
+            errors.append(f'method lacks implementation: {method["name"]}')
+    forbidden_targets = {'system:invocation', 'system:executor', 'store:jobs',
+                         'store:artifacts', 'store:postgres'}
+    for edge in twin.edges.values():
+        if (twin.nodes[edge['source']]['type'] in ('surface', 'transport')
+                and edge['target'] in forbidden_targets):
+            errors.append(f'adapter bypasses dispatcher: {edge}')
+    for owner in ('system:scientific-context', 'system:scene'):
+        if sum(node_id == owner for node_id in twin.nodes) != 1:
+            errors.append(f'exactly one owner required: {owner}')
+    if cycles := module_import_cycles(twin):
+        errors.append(f'module import cycles exceed zero-cycle ratchet: {cycles[0]}')
     discovered = {path.relative_to(ROOT).as_posix() for path in discovered_files()}
     inventoried = {node['path'] for node in twin.nodes.values()
                    if node['type'] == 'source-file'}

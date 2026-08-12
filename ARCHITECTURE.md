@@ -74,7 +74,8 @@ for a future queue/cluster. SDK, CLI, HTTP and MCP do not change when the execut
 PostgreSQL is the durable authority:
 
 - `meta.method` identifies computational currency by source digest.
-- `app.job` records durable lifecycle and in-flight deduplication.
+- `app.job` records durable lifecycle, invocation identity, generated outcome class and
+  in-flight deduplication.
 - `app.blob` and `app.artifact` content-address result bytes; `app.job_artifact` links
   outputs without adding one Job column per result type.
 - field cubes use the domain cache; other deterministic methods use
@@ -84,10 +85,12 @@ PostgreSQL is the durable authority:
   scientific state.
 - Mission, Run and Job are distinct. `app.run_job` links execution to delegated intent.
 - `app.object_relation` is a controlled, actor-attributed graph over canonical refs.
-- `app.v_attention` is derived from failed Jobs and approval-waiting Runs; it is not a
-  manually editable list that can drift from reality.
+- `app.v_attention` contains operational/scientific failures and approval-waiting Runs;
+  expected refusals remain in the Job ledger without becoming incidents.
+- `app.command_trace` and `app.v_command_observation` retain semantic-command outcomes,
+  latency, cache, actor and linked-Job evidence for the architecture twin.
 
-Migrations are forward-only and content-hash checked. Applied migrations 000–016 are the
+Migrations are forward-only and content-hash checked. Applied migrations 000–018 are the
 current schema history.
 
 ## Client application
@@ -136,13 +139,15 @@ and a change-impact simulator; function-level detail remains searchable on deman
 Upstream Mol* and other third-party internals remain explicit external boundaries rather
 than copied source.
 
-The truthful maturity is **L2 diagnostic**, not a predictive twin. Source structure is
-continuously synchronized while `dirac-digital-twin.service` is active; runtime evidence
-is a snapshot refreshed during each rebuild, not streaming telemetry. The twin can
-detect declared/observed drift, rank static hotspots and estimate dependency-radius
-impact. L3 requires node-keyed command traces and calibrated latency/failure outcome
-models. The platform substrate is complete against its approved DoD; the product is
-explicitly partial (currently 3/8 Workspaces and 7/30 Views implemented).
+The truthful maturity is **L3 observed**, not a predictive twin. Source structure is
+continuously synchronized while `dirac-digital-twin.service` is active. Semantic command
+traces are durably recorded in PostgreSQL, joined to their Job's eventual terminal
+outcome, and aggregated onto `command:<id>` / `method:<id>` nodes whenever the twin
+rebuilds. The model can therefore calibrate observed command latency and outcomes in
+addition to detecting drift, ranking static hotspots and estimating dependency radius.
+It still cannot predict unseen inputs or autonomously change the architecture; that is
+the L4 boundary. The platform substrate is complete against its approved DoD; the
+product is explicitly partial (currently 3/8 Workspaces and 7/30 Views implemented).
 
 `scripts/digital_twin_scope.json` is the ownership boundary. The watcher recursively
 discovers tracked and untracked files under all first-party roots and automatically
@@ -150,7 +155,9 @@ includes new code roots unless they are explicitly classified as upstream/extern
 Python AST, the TypeScript compiler, Shell and SQL parsers add files, functions, imports,
 calls, schema objects and references. Outputs are written atomically after a 900 ms
 debounce. `gate-14-architecture-twin` fails on a new/deleted file, a source fingerprint
-change, dangling graph data, a stale embedded model or leakage of generated RDKit code.
+change, dangling graph data, a stale embedded model, unhandled commands, unmapped
+methods, adapter bypasses, duplicate state owners, any module import cycle, or leakage
+of generated RDKit code. Its self-test proves both dangling-edge and cycle detection.
 
 Regenerate both artifacts from the repository and a best-effort live runtime snapshot:
 

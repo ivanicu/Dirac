@@ -134,12 +134,14 @@ class InvocationService:
                  ledger: Any | None = None,
                  cache: Any | None = None,
                  executor: Any | None = None,
+                 trace_store: Any | None = None,
                  toolkit_versions: dict[str, str] | None = None) -> None:
         self.catalog = catalog
         self.store = store or A.MemoryArtifactStore()
         self.ledger = ledger
         self.cache = cache
         self.executor = executor or E.InlineExecutor()
+        self.command_traces = trace_store
         self.toolkit_versions = toolkit_versions or {}
         self._futures: dict[str, Any] = {}
         self._futures_lock = threading.Lock()
@@ -195,6 +197,10 @@ class InvocationService:
                                else 'process'),
             },
             'executor': {'kind': getattr(self.executor, 'kind', 'unknown')},
+            'command_traces': {
+                'kind': getattr(self.command_traces, 'kind', 'none'),
+                'durability': getattr(self.command_traces, 'durability', 'none'),
+            },
             # Inline Python cannot interrupt C/Fortran work. Queued cancellation becomes
             # available when ThreadExecutor owns a submitted future.
             'cancellation': 'queued-only',
@@ -241,7 +247,9 @@ class InvocationService:
     def submit(self, method_id: str, payload: dict, *,
                inline_max: int | None = None,
                budget_seconds: float | None = None,
-               request_id: str | None = None) -> dict:
+               request_id: str | None = None,
+               actor: dict[str, str] | None = None,
+               command_id: str | None = None) -> dict:
         """Create a reconnectable queued Job and execute it on the injected executor."""
         spec = self.catalog.get(method_id)
         self.catalog.validate(method_id, payload)
@@ -262,14 +270,17 @@ class InvocationService:
         if budget is None:
             budget = float((payload.get('parameters') or {}).get('max_seconds')
                            or spec.execution.get('default_budget_seconds') or 0.0) or None
-        job_id, conflicted = self._open_job(spec, payload, budget, queued=True)
+        actor_ref = self._actor(actor)
+        job_id, conflicted = self._open_job(
+            spec, payload, budget, queued=True, actor=actor_ref,
+            command_id=command_id, request_id=request_id)
         if job_id is None:
             raise failures.DiracInternal(
                 'the JobStore could not create or resolve a durable job handle')
         if not conflicted:
             future = self.executor.submit(
                 self._run_submitted, job_id, method_id, payload,
-                inline_max, budget, request_id)
+                inline_max, budget, request_id, actor_ref, command_id)
             with self._futures_lock:
                 self._futures[job_id] = future
             future.add_done_callback(lambda _f, jid=job_id: self._forget_future(jid))
@@ -280,18 +291,21 @@ class InvocationService:
             'meta': {'envelope': 2, 'method_id': method_id,
                      'version': spec.version, 'job_id': job_id,
                      'execution_mode': 'job', 'deduplicated': conflicted,
-                     'request_id': request_id},
+                     'request_id': request_id, 'actor': actor_ref,
+                     'command': command_id},
         }
 
     def _run_submitted(self, job_id: str, method_id: str, payload: dict,
                        inline_max: int | None, budget_seconds: float | None,
-                       request_id: str | None) -> None:
+                       request_id: str | None, actor: dict[str, str],
+                       command_id: str | None) -> None:
         row = self.ledger.get(job_id)
         if row is None or row.get('state') == 'cancelled':
             return
         self.ledger.start(job_id)
         self.invoke(method_id, payload, inline_max=inline_max,
                     budget_seconds=budget_seconds, request_id=request_id,
+                    actor=actor, command_id=command_id,
                     _preopened_job_id=job_id)
 
     def _forget_future(self, job_id: str) -> None:
@@ -303,6 +317,8 @@ class InvocationService:
                inline_max: int | None = None,
                budget_seconds: float | None = None,
                request_id: str | None = None,
+               actor: dict[str, str] | None = None,
+               command_id: str | None = None,
                _preopened_job_id: str | None = None) -> dict:
         """Run a method and return a v2 envelope. Never raises for a REFUSAL.
 
@@ -321,6 +337,7 @@ class InvocationService:
         job_id = _preopened_job_id
         spec = None
         try:
+            actor_ref = self._actor(actor)
             spec = self.catalog.get(method_id)
             self.catalog.validate(method_id, payload)
             handler = spec.handler()
@@ -348,7 +365,8 @@ class InvocationService:
                 self.catalog.validate_output(method_id, hit.result)
                 env = self._envelope(spec, hit, t0, cache='db',
                                      inline_max=inline_max, request_id=request_id,
-                                     job_id=job_id)
+                                     job_id=job_id, actor=actor_ref,
+                                     command_id=command_id)
                 if job_id is not None and self.ledger is not None:
                     self.ledger.done(
                         job_id, seconds=round(time.time() - t0, 3),
@@ -361,7 +379,9 @@ class InvocationService:
                 return env
 
             if self.ledger is not None and job_id is None:
-                job_id, _ = self._open_job(spec, payload, budget)
+                job_id, _ = self._open_job(
+                    spec, payload, budget, actor=actor_ref,
+                    command_id=command_id, request_id=request_id)
 
             ctx = InvocationContext(
                 method_id=method_id, version=spec.version, budget_seconds=budget,
@@ -381,7 +401,8 @@ class InvocationService:
             self.catalog.validate_output(method_id, out.result)
             env = self._envelope(spec, out, t0, cache=out.cache,
                                  inline_max=inline_max, request_id=request_id,
-                                 job_id=job_id)
+                                 job_id=job_id, actor=actor_ref,
+                                 command_id=command_id)
             # Cache only after ArtifactStore has minted stable references. Generic caches
             # persist those references; specialised field caches may still use the bytes in
             # HandlerResult. Either way persistence follows validation and cannot turn a
@@ -422,7 +443,10 @@ class InvocationService:
                 'meta': {'envelope': 2, 'method_id': method_id,
                          'version': spec.version if spec else None,
                          'seconds': round(time.time() - t0, 3),
-                         'request_id': request_id, 'job_id': job_id},
+                         'request_id': request_id, 'job_id': job_id,
+                         'actor': actor if actor is not None else
+                                  {'kind': 'service', 'id': 'dirac-kernel'},
+                         'command': command_id},
             }
         except Exception as e:                                      # noqa: BLE001
             # An untyped escape is OUR fault by definition: everything the science is
@@ -440,11 +464,16 @@ class InvocationService:
                     'meta': {'envelope': 2, 'method_id': method_id,
                              'version': spec.version if spec else None,
                              'seconds': round(time.time() - t0, 3),
-                             'request_id': request_id, 'job_id': job_id}}
+                             'request_id': request_id, 'job_id': job_id,
+                             'actor': actor if actor is not None else
+                                      {'kind': 'service', 'id': 'dirac-kernel'},
+                             'command': command_id}}
 
     # ── internals ─────────────────────────────────────────────────────────────
     def _open_job(self, spec: C.MethodSpec, payload: dict,
-                  budget: float | None, *, queued: bool = False) -> tuple[str | None, bool]:
+                  budget: float | None, *, queued: bool = False,
+                  actor: dict[str, str], command_id: str | None,
+                  request_id: str | None) -> tuple[str | None, bool]:
         """Open a ledger row, and never let the ledger break the invocation.
 
         A job row is OBSERVABILITY. If the database is down, the science must still
@@ -460,13 +489,24 @@ class InvocationService:
                                       lambda _m: None)(spec.method_id),
                 input_sha256=hashlib.sha256(canonical.encode()).digest(),
                 params=dict(payload.get('parameters') or {}),
-                budget_seconds=budget, queued=queued)
+                budget_seconds=budget, queued=queued,
+                actor_kind=actor['kind'], actor_id=actor['id'],
+                command_id=command_id, request_id=request_id)
             return job_id, conflict
         except Exception as e:                                     # noqa: BLE001
             print(f'[invoke] ledger unavailable ({type(e).__name__}: {e}) — running '
                   f'anyway, and provenance will say job_id: null', file=sys.stderr,
                   flush=True)
             return None, False
+
+    @staticmethod
+    def _actor(actor: dict[str, str] | None) -> dict[str, str]:
+        actor_ref = actor or {'kind': 'service', 'id': 'dirac-kernel'}
+        if (actor_ref.get('kind') not in ('human', 'agent', 'service')
+                or not str(actor_ref.get('id', '')).strip()):
+            raise failures.DiracInvalidParameters(
+                'actor must be a human, agent, or service with a non-empty id')
+        return {'kind': str(actor_ref['kind']), 'id': str(actor_ref['id'])}
 
     def _require_declared_artifacts(self, spec: C.MethodSpec,
                                     out: HandlerResult) -> None:
@@ -493,7 +533,8 @@ class InvocationService:
 
     def _envelope(self, spec: C.MethodSpec, out: HandlerResult, t0: float, *,
                   cache: str, inline_max: int | None, request_id: str | None,
-                  job_id: str | None) -> dict:
+                  job_id: str | None, actor: dict[str, str],
+                  command_id: str | None) -> dict:
         refs = []
         for role, data in out.artifacts:
             declared = next((a for a in spec.artifacts if a.role == role), None)
@@ -524,6 +565,8 @@ class InvocationService:
                 'seconds': round(time.time() - t0, 3),
                 'request_id': request_id,
                 'job_id': job_id,
+                'actor': actor,
+                'command': command_id,
                 'parameters_used': out.parameters_used,
                 'toolkits': self.toolkit_versions,
                 'provenance': out.provenance,

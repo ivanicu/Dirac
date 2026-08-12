@@ -72,6 +72,10 @@ _JOB_ERROR = {
     'UNSUPPORTED', 'TOO_LARGE', 'INTERNAL', 'CANCELLED',
 }
 
+_EXPECTED_REFUSALS = {
+    'PARSE', 'UNPARAMETERIZED', 'BUDGET', 'UNSUPPORTED', 'TOO_LARGE',
+}
+
 
 def counters() -> dict:
     with _lock:
@@ -90,6 +94,27 @@ def job_error_code(code: str | None) -> str:
     if code in _JOB_ERROR:
         return code
     return 'INTERNAL'
+
+
+def job_outcome_class(state: str, code: str | None = None) -> str | None:
+    """Mirror ``app.classify_job_outcome`` for process-local JobStores.
+
+    The database function remains canonical for durable rows. This mirror gives an
+    offline CLI the same public Job shape, and the contract test pins the two small,
+    closed decision tables together.
+    """
+    if state == 'done':
+        return 'success'
+    if state == 'cancelled':
+        return 'cancelled'
+    if state != 'failed':
+        return None
+    mapped = job_error_code(code)
+    if mapped == 'INTERNAL':
+        return 'operational_failure'
+    if mapped == 'UNCONVERGED':
+        return 'scientific_failure'
+    return 'expected_refusal'
 
 
 def canonical_request_digest(method_row_id: str, input_sha256: bytes,
@@ -130,7 +155,10 @@ class JobLedger:
              compound_id: str | None = None,
              conformer_hash: bytes | None = None,
              queued: bool = False,
-             request_digest: bytes | None = None) -> tuple[str | None, bool]:
+             request_digest: bytes | None = None,
+             actor_kind: str = 'service', actor_id: str = 'dirac-kernel',
+             command_id: str | None = None,
+             request_id: str | None = None) -> tuple[str | None, bool]:
         """Insert a 'running' row. Returns (job_id, conflicted).
 
         THE SECOND VALUE EXISTS BECAUSE None HAD THREE MEANINGS — database
@@ -167,12 +195,14 @@ class JobLedger:
                     "INSERT INTO app.job (method_row_id, state, input_sha256, "
                     "       request_digest, params, "
                     "       budget_seconds, est_seconds, compound_id, conformer_hash, "
-                    f"       worker, started_at) "
+                    f"       worker, actor_kind, actor_id, command_id, request_id, started_at) "
                     f"VALUES (%s, '{state}', %s, %s, %s, %s, %s, %s, %s, %s, "
+                    f"        %s, %s, %s, %s, "
                     f"        {started or 'NULL'}) "
                     'RETURNING id',
                     (method_row_id, input_sha256, request_digest, json.dumps(params), budget,
-                     est_seconds, compound_id, conformer_hash, self.worker))
+                     est_seconds, compound_id, conformer_hash, self.worker,
+                     actor_kind, actor_id, command_id, request_id))
                 row = cur.fetchone()
             _bump('opened')
             return (str(row[0]) if row else None), False
@@ -309,6 +339,8 @@ class JobLedger:
             'j.budget_seconds, j.est_seconds, j.seconds, j.error_code::text, '
             'j.error_detail, j.worker, j.created_at, j.started_at, j.finished_at, '
             'j.request_digest, j.durability, j.cancel_requested_at, j.result_summary, '
+            'j.outcome_class::text, j.actor_kind::text, j.actor_id, j.command_id::text, '
+            'j.request_id, '
             "coalesce(jsonb_agg(jsonb_build_object('id', a.id, 'role', ja.role, "
             "'sha256', encode(a.blob_sha256, 'hex'), 'media_type', a.media_type, "
             "'size_bytes', a.size_bytes)) FILTER (WHERE a.id IS NOT NULL), '[]'::jsonb) "
@@ -328,6 +360,7 @@ class JobLedger:
                 'budget_seconds', 'estimated_seconds', 'seconds', 'error_code',
                 'error_detail', 'worker', 'created_at', 'started_at', 'finished_at',
                 'request_digest', 'durability', 'cancel_requested_at', 'result_summary',
+                'outcome_class', 'actor_kind', 'actor_id', 'command_id', 'request_id',
                 'artifacts')
         return [{k: _json_value(v) for k, v in zip(keys, row)} for row in rows]
 
@@ -494,6 +527,8 @@ class MemoryJobStore:
     def open(self, *, method_row_id: str, input_sha256: bytes, params: dict,
              budget_seconds: float | None = None, est_seconds: float | None = None,
              queued: bool = False, request_digest: bytes | None = None,
+             actor_kind: str = 'service', actor_id: str = 'dirac-kernel',
+             command_id: str | None = None, request_id: str | None = None,
              **_kw) -> tuple[str | None, bool]:
         digest = bytes(request_digest or canonical_request_digest(
             method_row_id, input_sha256, params)).hex()
@@ -514,6 +549,8 @@ class MemoryJobStore:
                 'started_at': None if queued else now, 'finished_at': None,
                 'request_digest': digest, 'durability': self.durability,
                 'cancel_requested_at': None, 'result_summary': None,
+                'outcome_class': None, 'actor_kind': actor_kind, 'actor_id': actor_id,
+                'command_id': command_id, 'request_id': request_id,
                 'artifacts': [], '_digest': digest,
             }
         return jid, False
@@ -530,16 +567,20 @@ class MemoryJobStore:
             row = self._rows.get(job_id or '')
             if row and row['state'] == 'running':
                 row.update(state='done', seconds=round(float(seconds), 3),
-                           finished_at=_now(), result_summary=result_summary)
+                           finished_at=_now(), result_summary=result_summary,
+                           outcome_class='success')
 
     def failed(self, job_id: str | None, *, code: str, detail: str,
                seconds: float | None = None, retryable: bool | None = None) -> None:
         with self._lock:
             row = self._rows.get(job_id or '')
             if row and row['state'] in ('queued', 'running'):
-                row.update(state='cancelled' if code == 'CANCELLED' else 'failed',
+                mapped = job_error_code(code)
+                state = 'cancelled' if mapped == 'CANCELLED' else 'failed'
+                row.update(state=state,
                            started_at=row['started_at'] or _now(), finished_at=_now(),
-                           seconds=seconds, error_code=code, error_detail=detail)
+                           seconds=seconds, error_code=mapped, error_detail=detail,
+                           outcome_class=job_outcome_class(state, mapped))
 
     def get(self, job_id: str) -> dict | None:
         with self._lock:
@@ -562,7 +603,8 @@ class MemoryJobStore:
                 row['cancel_requested_at'] = row['cancel_requested_at'] or _now()
             if accepted:
                 row.update(state='cancelled', started_at=_now(), finished_at=_now(),
-                           error_code='CANCELLED', error_detail='cancelled while queued')
+                           error_code='CANCELLED', error_detail='cancelled while queued',
+                           outcome_class='cancelled')
             out = _public_memory(row)
             out['cancel'] = {'requested': True, 'accepted': accepted,
                              'capability': ('queued' if accepted else
