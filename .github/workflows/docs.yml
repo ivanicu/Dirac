@@ -2,12 +2,12 @@ name: Build & Deploy Docs
 
 on:
   push:
-    branches: master
+    branches: main   # was `master`: inherited from upstream Mol*, and this fork's canonical branch is main — so these two workflows had never run here
     paths:
       - docs/**
       - ".github/workflows/docs.yml"
   pull_request:
-    branches: master
+    branches: main
     paths:
       - docs/**
       - ".github/workflows/docs.yml"

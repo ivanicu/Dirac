@@ -2,9 +2,9 @@ name: Build
 
 on:
   push:
-    branches: master
+    branches: main   # was `master`: inherited from upstream Mol*, and this fork's canonical branch is main — so these two workflows had never run here
   pull_request:
-    branches: master
+    branches: main
 
 jobs:
   build:

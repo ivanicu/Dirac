@@ -46,7 +46,7 @@ run_gate() {
 }
 
 # ---- gate selection -------------------------------------------------------
-ALL=(tsc build palette css migrations docs contracts physics commits)
+ALL=(tsc build palette css migrations docs contracts physics commits portability)
 if [ "$#" -eq 0 ]; then
     WANT=("${ALL[@]}")
 else
@@ -111,6 +111,13 @@ wanted docs    && run_gate 'gate-6-docs-facts'  node scripts/check_docs_facts.mj
 # naming the tooling in its history; the harness's default convention appends
 # exactly that, so the rule has to be mechanised or the default wins. Selftest
 # first, same as 7 and 8.
+# Gate 10 · test portability ratchet. Measures how much of the suite can be
+# imported without the science stack — the invocation-kernel extraction's progress
+# stated as a number rather than as a diagram. Fails when coupling GROWS.
+if wanted portability; then
+    run_gate 'gate-10-portability' python3 scripts/test_portability.py
+fi
+
 if wanted commits; then
     if bash scripts/check_commit_hygiene.sh --selftest >/dev/null 2>&1; then
         run_gate 'gate-9-commit-hygiene' bash scripts/check_commit_hygiene.sh

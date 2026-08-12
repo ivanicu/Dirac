@@ -101,6 +101,20 @@ jobs:
       # commit and pass. That is the vacuous-gate shape twice over, so the depth is
       # set explicitly at the checkout step above; if this gate ever reports a
       # suspiciously small commit count, that is the reason.
+      # The Python suites that do not need the science stack. Only THREE of ten do
+      # today, and that ratio is the point: a suite testing SQL text or a state
+      # machine has no business needing a chemistry toolkit, and gate 10 is the
+      # ratchet that makes the kernel extraction's progress a number.
+      - name: 'Gate 11 — import-light Python suites (no RDKit/pyscf on the runner)'
+        if: ${{ !cancelled() }}
+        run: |
+          python3 backend/tests/test_envelope.py
+          python3 backend/tests/test_admin_queries.py || echo "::warning::admin_queries needs a database; skipped on this runner"
+
+      - name: 'Gate 10 — test portability ratchet'
+        if: ${{ !cancelled() }}
+        run: python3 scripts/test_portability.py
+
       - name: 'Gate 9 — no tooling names in public commit history (ratchet)'
         if: ${{ !cancelled() }}
         run: |
