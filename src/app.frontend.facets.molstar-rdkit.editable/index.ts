@@ -529,8 +529,15 @@ function initShellNavigation(): void {
     const breadcrumb = document.getElementById('shell-breadcrumb');
     if (!host || !viewHost || !canvasHost || !outlineHost || !breadcrumb) return;
     const moduleHost = createDomModuleHost();
+    const navigate = (route: Parameters<typeof appShell.navigate>[0]) => {
+        const target = VIEWS.find(view => view.id === route.view && view.workspace === route.workspace);
+        appShell.navigate(route);
+        // Preview Workspaces boot without WebGL. Entering a connected scientific
+        // View performs one deliberate reload so the Mol* capability can attach.
+        if (target?.implemented && !sceneService.current()) location.reload();
+    };
     const workspaceCanvas = new WorkspaceCanvas(canvasHost, outlineHost, breadcrumb,
-        route => appShell.navigate(route));
+        navigate);
     const render = (active: WorkspaceId, activeView: string) => {
         host.replaceChildren();
         for (const workspace of WORKSPACES.filter(w => w.shellReady)) {
@@ -541,7 +548,7 @@ function initShellNavigation(): void {
             button.setAttribute('aria-selected', String(workspace.id === active));
             button.addEventListener('click', () => {
                 const next = VIEWS.find(view => view.id === workspace.defaultView)!;
-                appShell.navigate({ workspace: workspace.id, view: next.id,
+                navigate({ workspace: workspace.id, view: next.id,
                     programId: appShell.current().programId || 'current' });
             });
             host.appendChild(button);
@@ -552,7 +559,7 @@ function initShellNavigation(): void {
             button.type = 'button'; button.textContent = view.label;
             button.dataset.capability = view.implemented ? 'implemented' : 'shell';
             button.setAttribute('aria-selected', String(view.id === activeView));
-            button.addEventListener('click', () => appShell.navigate({ workspace: active,
+            button.addEventListener('click', () => navigate({ workspace: active,
                 view: view.id, programId: appShell.current().programId || 'current' }));
             viewHost.appendChild(button);
         }
@@ -602,6 +609,15 @@ class MolecularVfxLab {
 
 
     async init() {
+        // Product navigation and non-3D Workspaces must survive a missing or failed
+        // WebGL context. The molecular workbench is one capability, not the boot gate
+        // for Programs, Campaigns, Experiments, Knowledge, or Runs.
+        initShellNavigation();
+        const initialView = VIEWS.find(view => view.id === appShell.current().view);
+        if (!initialView?.implemented) {
+            byId('status').textContent = 'Workspace ready';
+            return;
+        }
         this.workbench = await createChemWorkbench({ target: byId('viewport') });
         // Scene ownership sits above every View. AppShell navigation may project this
         // host elsewhere, but it never constructs or disposes the plugin instance.
@@ -632,7 +648,6 @@ class MolecularVfxLab {
         // — and the field colours were still chosen for the colour that lost.
         await this.workbench.setBackground(Color(sceneBackgroundColor()));
         this.createControls();
-        initShellNavigation();
         await this.loadMolecule(this.currentMolecule);
         this.baseline = captureMolstarVisualState(this.workbench.plugin);
         await this.applyRepresentationAndVisuals();

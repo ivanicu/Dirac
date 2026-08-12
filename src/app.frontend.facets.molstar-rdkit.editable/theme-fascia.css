@@ -29,7 +29,7 @@
 
     --text:#1d1d1a;
     --text-2:#6d6c65;
-    --text-3:#94938a;        /* engraved */
+    --text-3:#6d6c65;        /* engraved, still readable at interface sizes */
 
     --accent:#d71921;        /* the one red */
     --accent-soft:#fbe9ea;
@@ -75,7 +75,7 @@
 
     --face:#e7e5e0;
     --well:#f1f0eb;
-    --etch:#94938a;
+    --etch:#6d6c65;
     --mono:'IBM Plex Mono', ui-monospace, Menlo, monospace;
     --doto:'Doto','IBM Plex Mono', ui-monospace, monospace;
     --dots: radial-gradient(circle at 1.5px 1.5px, rgba(29,29,26,.075) 1px, transparent 1.45px);
@@ -343,3 +343,39 @@ main {
 .ligand-export-value, .ligand-export-label { font-family: var(--mono); font-size: 9px; letter-spacing: .06em; }
 
 .detail-scroll { scrollbar-color: var(--border-strong) transparent; }
+
+/* Readability and keyboard baseline shared by connected scientific Views. */
+#app button:focus-visible,
+#app select:focus-visible,
+#app input:focus-visible,
+#app textarea:focus-visible,
+#app summary:focus-visible {
+    outline: 3px solid var(--text);
+    outline-offset: 2px;
+}
+.brand .eyebrow,
+.topbar-scene label { font-size: 10px; letter-spacing: .1em; }
+select, input[type="text"] { min-height: 40px; font-size: 12px; }
+.btn-ghost, .btn-copy, .designer-toolbar button, .designer-add-row button,
+.import-row button, .smarts-search button { min-height: 40px; font-size: 11px; letter-spacing: .08em; }
+.status-pill { font-size: 11px; letter-spacing: .08em; }
+.workspace-nav button,
+.view-nav button { min-height: 36px; font-size: 12px !important; }
+.context-cell span,
+.context-actions,
+.context-actions button { font-size: 11px !important; }
+.context-cell strong { font-size: 13px !important; }
+.master-tab { min-height: 42px; font-size: 11px; letter-spacing: .08em; }
+.scene-summary-row { font-size: 13px; }
+#molecule-note { font-size: 12px; letter-spacing: .03em; }
+.panel-heading h2 { font-size: 12px; letter-spacing: .08em; }
+.panel-index { font-size: 10px; letter-spacing: .08em; }
+.layer-summary-copy strong { font-size: 13px; }
+.layer-summary-copy span { font-size: 12px; }
+.rule-line { font-size: 12px; }
+.diag-cell dt,
+.diagnostics summary { font-size: 10px; letter-spacing: .08em; }
+.metrics dt,
+.metrics dd,
+.note { font-size: 12px; }
+.badge { font-size: 10px; letter-spacing: .08em; }

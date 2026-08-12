@@ -13,7 +13,7 @@ const element = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: stri
     return node;
 };
 
-const storageKey = (kind: 'note' | 'pin', viewId: string) => `dirac:shell:${kind}:${viewId}`;
+const storageKey = (kind: 'note', viewId: string) => `dirac:shell:${kind}:${viewId}`;
 
 function readLocal(key: string): string {
     try { return localStorage.getItem(key) || ''; } catch { return ''; }
@@ -48,7 +48,9 @@ export class WorkspaceCanvas {
         const workspace = WORKSPACES.find(item => item.id === route.workspace);
         if (!definition || !workspace) return;
         const scaffold = !definition.implemented;
-        document.getElementById('app')?.classList.toggle('shell-scaffold', scaffold);
+        const app = document.getElementById('app');
+        app?.classList.toggle('shell-scaffold', scaffold);
+        if (app) app.dataset.workspace = route.workspace;
         this.breadcrumb.hidden = !scaffold;
         this.breadcrumb.textContent = scaffold ? `${workspace.label}  /  ${definition.label}` : '';
         this.host.hidden = !scaffold;
@@ -67,7 +69,6 @@ export class WorkspaceCanvas {
     private renderOutline(active: ViewDefinition, programId?: string): void {
         const workspace = WORKSPACES.find(item => item.id === active.workspace)!;
         const views = navigableViews(active.workspace);
-        const operational = views.filter(view => view.implemented).length;
         const heading = element('div', 'workspace-outline-heading');
         const icon = element('span', 'workspace-outline-icon', workspace.icon);
         const copy = element('div');
@@ -75,34 +76,24 @@ export class WorkspaceCanvas {
             element('h2', '', workspace.label));
         heading.append(icon, copy);
         const narrative = element('p', 'workspace-outline-copy', WORKSPACE_NARRATIVES[workspace.id]);
-        const meter = element('div', 'workspace-outline-meter');
-        const meterCopy = element('div');
-        meterCopy.append(element('strong', '', `${views.length}/${views.length}`),
-            element('span', '', ' view shells'));
-        const meterCapability = element('div');
-        meterCapability.append(element('strong', '', `${operational}/${views.length}`),
-            element('span', '', ' capabilities'));
-        meter.append(meterCopy, meterCapability);
-
-        const label = element('span', 'workspace-outline-label', 'View map');
+        const label = element('span', 'workspace-outline-label', 'Views');
         const list = element('nav', 'workspace-outline-list');
         list.setAttribute('aria-label', `${workspace.label} view map`);
         for (const view of views) {
             const button = element('button', 'workspace-outline-view');
             button.type = 'button';
             button.dataset.active = String(view.id === active.id);
+            if (view.id === active.id) button.setAttribute('aria-current', 'page');
             const name = element('span', '', view.label);
-            const status = element('small', view.implemented ? 'is-live' : 'is-shell',
-                view.implemented ? 'LIVE' : 'SHELL');
+            const status = element('small', view.implemented ? 'is-live' : 'is-preview',
+                view.implemented ? 'Ready' : 'Preview');
             button.append(name, status);
             button.addEventListener('click', () => this.navigate({
                 workspace: view.workspace, view: view.id, programId: programId || 'current',
             }));
             list.append(button);
         }
-        const truth = element('p', 'workspace-outline-truth',
-            'SHELL means the route and interface contract exist. LIVE means real scientific capability is connected.');
-        this.outline.replaceChildren(heading, narrative, meter, label, list, truth);
+        this.outline.replaceChildren(heading, narrative, label, list);
     }
 
     private renderCanvas(definition: ViewDefinition, programId?: string): void {
@@ -118,47 +109,27 @@ export class WorkspaceCanvas {
         eyebrow.append(element('span', 'workspace-page-icon', workspace.icon),
             element('span', '', `${workspace.label} workspace`),
             element('span', 'workspace-page-separator', '·'),
-            element('span', 'workspace-page-state', 'Shell ready'));
+            element('span', 'workspace-page-state', 'Preview · no data selected'));
         titleBlock.append(eyebrow, element('h1', '', definition.label),
             element('p', '', experience.summary));
 
-        const actions = element('div', 'workspace-page-actions');
-        const pin = element('button', 'workspace-pin');
-        pin.type = 'button';
-        const refreshPin = () => {
-            const pinned = readLocal(storageKey('pin', definition.id)) === '1';
-            pin.setAttribute('aria-pressed', String(pinned));
-            pin.textContent = pinned ? '★ Pinned to build queue' : '☆ Pin to build queue';
-        };
-        refreshPin();
-        pin.addEventListener('click', () => {
-            const next = readLocal(storageKey('pin', definition.id)) === '1' ? '' : '1';
-            writeLocal(storageKey('pin', definition.id), next);
-            refreshPin();
-        });
-        actions.append(pin);
-        if (experience.liveTarget) {
-            const target = VIEWS.find(view => view.id === experience.liveTarget);
-            if (target) {
-                const open = element('button', 'workspace-open-live', 'Open connected capability →');
-                open.type = 'button';
-                open.addEventListener('click', () => this.navigate({
-                    workspace: target.workspace, view: target.id, programId: programId || 'current',
-                }));
-                actions.append(open);
-            }
-        }
-        header.append(titleBlock, actions);
+        const target = experience.liveTarget ? VIEWS.find(view => view.id === experience.liveTarget) : undefined;
+        const targetWorkspace = target ? WORKSPACES.find(item => item.id === target.workspace) : undefined;
+        const openTarget = target ? () => this.navigate({
+            workspace: target.workspace, view: target.id, programId: programId || 'current',
+        }) : undefined;
+        const actionLabel = target && targetWorkspace ? `Continue in ${targetWorkspace.label} · ${target.label}` : undefined;
+        header.append(titleBlock);
 
         const question = element('section', 'workspace-question');
         question.append(element('span', '', 'The human question'),
             element('blockquote', '', experience.question));
-        const visual = renderWorkspaceVisual(definition, experience);
+        const visual = renderWorkspaceVisual(definition, experience, { actionLabel, onAction: openTarget });
 
         const toolbar = element('div', 'workspace-module-toolbar');
         const moduleHeading = element('div');
-        moduleHeading.append(element('span', 'workspace-section-kicker', 'Interface contract'),
-            element('h2', '', 'Modules this View will compose'));
+        moduleHeading.append(element('span', 'workspace-section-kicker', 'Product readiness'),
+            element('h2', '', 'Planned data and interactions'));
         const searchWrap = element('label', 'workspace-module-search');
         searchWrap.append(element('span', '', 'Filter modules'));
         const search = element('input') as HTMLInputElement;
@@ -185,15 +156,15 @@ export class WorkspaceCanvas {
 
         const lower = element('section', 'workspace-lower-grid');
         const milestone = element('div', 'workspace-milestone');
-        milestone.append(element('span', 'workspace-section-kicker', 'Next vertical slice'),
-            element('h2', '', 'Definition of the next real step'),
+        milestone.append(element('span', 'workspace-section-kicker', 'Connection plan'),
+            element('h2', '', 'What must be connected next'),
             element('p', '', experience.nextMilestone));
         const ladder = element('ol', 'workspace-delivery-ladder');
         const stages = [
-            ['01', 'Route & product shell', 'complete'],
-            ['02', 'Domain objects & contracts', experience.modules.some(m => m.readiness === 'foundation') ? 'in progress' : 'planned'],
-            ['03', 'Commands & read models', 'planned'],
-            ['04', 'Interactive scientific module', 'planned'],
+            ['01', 'Select a source object', 'required'],
+            ['02', 'Load traceable observations', experience.modules.some(m => m.readiness === 'foundation') ? 'partly ready' : 'required'],
+            ['03', 'Review quality and provenance', 'required'],
+            ['04', 'Enable decisions and actions', 'required'],
         ] as const;
         for (const [index, label, status] of stages) {
             const row = element('li');
@@ -205,9 +176,9 @@ export class WorkspaceCanvas {
         milestone.append(ladder);
 
         const notebook = element('div', 'workspace-notebook');
-        notebook.append(element('span', 'workspace-section-kicker', 'Local product notebook'),
-            element('h2', '', 'What should this View do first?'),
-            element('p', '', 'A lightweight browser-local note for shaping the next vertical slice. It is not scientific evidence.'));
+        notebook.append(element('span', 'workspace-section-kicker', 'Private note'),
+            element('h2', '', 'Capture working context'),
+            element('p', '', 'This note stays in this browser. It is not shared, durable, or scientific evidence.'));
         const textarea = element('textarea') as HTMLTextAreaElement;
         textarea.placeholder = 'Capture the first workflow, decision, or data source to connect…';
         textarea.value = readLocal(storageKey('note', definition.id));
@@ -224,11 +195,13 @@ export class WorkspaceCanvas {
         notebook.append(textarea, saved);
         lower.append(milestone, notebook);
 
-        const footer = element('footer', 'workspace-page-footer');
-        footer.append(element('span', '', `Route · ${definition.route}`),
-            element('span', '', `Program · ${programId || 'current'}`),
-            element('span', '', 'Capability · planned'));
-        page.append(header, question, visual, toolbar, moduleGrid, lower, footer);
+        const readiness = element('details', 'workspace-readiness');
+        const readinessSummary = element('summary');
+        readinessSummary.append(element('strong', '', 'Product readiness'),
+            element('span', '', 'Planned modules, connection sequence, and private note'));
+        readiness.append(readinessSummary, toolbar, moduleGrid, lower);
+
+        page.append(header, question, visual, readiness);
         this.host.replaceChildren(page);
     }
 
@@ -241,7 +214,7 @@ export class WorkspaceCanvas {
         card.append(top, element('h3', '', module.title), element('p', '', module.purpose));
         const boundary = element('div', 'workspace-module-boundary');
         boundary.append(element('span', '', module.readiness === 'available' ? 'Connected now'
-            : module.readiness === 'foundation' ? 'Domain foundation exists' : 'No backend claim'));
+            : module.readiness === 'foundation' ? 'Data contract ready' : 'Not connected'));
         card.append(boundary);
         return card;
     }

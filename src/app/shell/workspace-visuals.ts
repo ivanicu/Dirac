@@ -19,11 +19,16 @@ const svg = <K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string,
     return node;
 };
 
-function emptyMessage(label = 'Awaiting connected observations'): HTMLElement {
+export interface WorkspaceVisualOptions {
+    actionLabel?: string;
+    onAction?: () => void;
+}
+
+function emptyMessage(label = 'No records yet'): HTMLElement {
     const empty = html('div', 'workspace-visual-empty');
     empty.append(html('span', 'workspace-visual-empty-mark', '—'),
         html('strong', '', label),
-        html('small', '', 'Structure is defined · no scientific values are being invented'));
+        html('small', '', 'No scientific marks are drawn until a provenance-bearing source is selected'));
     return empty;
 }
 
@@ -40,11 +45,13 @@ function flow(spec: WorkspaceVisualSpec): HTMLElement {
 
 function timeline(spec: WorkspaceVisualSpec): HTMLElement {
     const body = html('div', 'workspace-timeline');
+    body.setAttribute('role', 'img');
+    body.setAttribute('aria-label', `${spec.title}: expected event types; not a time scale`);
     const track = html('div', 'workspace-timeline-track');
     spec.primary.forEach((label, index) => {
         const event = html('div', 'workspace-timeline-event');
         event.style.setProperty('--position', `${(index / Math.max(spec.primary.length - 1, 1)) * 100}%`);
-        event.append(html('i'), html('strong', '', label), html('small', '', index === spec.primary.length - 1 ? 'Now' : 'No event connected'));
+        event.append(html('i'), html('strong', '', label), html('small', '', 'Expected event type'));
         track.append(event);
     });
     body.append(track);
@@ -91,30 +98,23 @@ function axes(spec: WorkspaceVisualSpec, kind: 'scatter' | 'curve'): HTMLElement
     const empty = svg('text', { x: '377', y: '130', 'text-anchor': 'middle', class: 'empty-label' });
     empty.textContent = 'AWAITING CONNECTED OBSERVATIONS';
     chart.append(xLabel, yLabel, empty);
-    if (kind === 'curve') chart.append(svg('path', { d: 'M80 196 C190 170 250 170 350 132 S520 92 674 58', class: 'ghost-series' }));
-    else {
-        const zone = svg('rect', { x: '420', y: '48', width: '230', height: '96', rx: '3', class: 'target-zone' });
-        chart.insertBefore(zone, empty);
-    }
     wrap.append(chart);
     return wrap;
 }
 
 function network(spec: WorkspaceVisualSpec): HTMLElement {
     const wrap = html('div', 'workspace-network');
-    const graph = svg('svg', { viewBox: '0 0 720 300', role: 'img', 'aria-label': `${spec.title}: relationship structure` });
+    const graph = svg('svg', {
+        viewBox: '0 0 720 300',
+        role: 'img',
+        'aria-label': `${spec.title}: expected entity types; relationships are not loaded`,
+    });
     const primary = spec.primary;
     const secondary = spec.secondary || [];
     const positions = [
         [150, 84], [360, 54], [570, 84], [230, 222], [490, 222], [360, 154],
     ];
     const labels = [...primary, ...secondary].slice(0, positions.length);
-    labels.forEach((_label, index) => {
-        if (index > 0) graph.append(svg('line', {
-            x1: String(positions[0][0]), y1: String(positions[0][1]),
-            x2: String(positions[index][0]), y2: String(positions[index][1]), class: 'edge',
-        }));
-    });
     labels.forEach((label, index) => {
         const [x, y] = positions[index];
         const group = svg('g', { class: index === 0 ? 'node node--primary' : 'node' });
@@ -130,10 +130,11 @@ function network(spec: WorkspaceVisualSpec): HTMLElement {
 
 function funnel(spec: WorkspaceVisualSpec): HTMLElement {
     const body = html('div', 'workspace-funnel');
+    body.setAttribute('role', 'img');
+    body.setAttribute('aria-label', `${spec.title}: ordered review stages without counts or attrition`);
     spec.primary.forEach((label, index) => {
         const row = html('div', 'workspace-funnel-stage');
-        row.style.setProperty('--inset', `${index * 5}%`);
-        row.append(html('span', '', String(index + 1).padStart(2, '0')), html('strong', '', label), html('small', '', '—'));
+        row.append(html('span', '', String(index + 1).padStart(2, '0')), html('strong', '', label), html('small', '', 'No count'));
         body.append(row);
     });
     return body;
@@ -145,7 +146,7 @@ function kanban(spec: WorkspaceVisualSpec): HTMLElement {
         const lane = html('section', 'workspace-kanban-lane');
         const header = html('header');
         header.append(html('strong', '', column), html('span', '', '0'));
-        lane.append(header, emptyMessage('No connected items'));
+        lane.append(header, emptyMessage('No items in this state'));
         body.append(lane);
     }
     return body;
@@ -154,10 +155,15 @@ function kanban(spec: WorkspaceVisualSpec): HTMLElement {
 function plate(spec: WorkspaceVisualSpec): HTMLElement {
     const body = html('div', 'workspace-plate-map');
     const map = html('div', 'workspace-plate-grid');
+    map.setAttribute('role', 'img');
+    map.setAttribute('aria-label', `${spec.title}: empty 8 by 12 plate schema; no samples or controls assigned`);
+    map.append(html('span', 'workspace-plate-corner'));
+    for (let column = 0; column < 12; column++) map.append(html('span', 'workspace-plate-axis', String(column + 1)));
     for (let row = 0; row < 8; row++) {
+        map.append(html('span', 'workspace-plate-axis', String.fromCharCode(65 + row)));
         for (let column = 0; column < 12; column++) {
             const well = html('i');
-            well.setAttribute('aria-label', `${String.fromCharCode(65 + row)}${String(column + 1).padStart(2, '0')}: no observation`);
+            well.setAttribute('aria-hidden', 'true');
             map.append(well);
         }
     }
@@ -224,35 +230,34 @@ function visualBody(spec: WorkspaceVisualSpec): HTMLElement {
     return compare(spec);
 }
 
-export function renderWorkspaceVisual(definition: ViewDefinition, experience: ViewExperience): HTMLElement {
+export function renderWorkspaceVisual(definition: ViewDefinition, experience: ViewExperience,
+    options: WorkspaceVisualOptions = {}): HTMLElement {
     const spec = WORKSPACE_VISUALS[definition.id];
-    const available = experience.modules.filter(module => module.readiness === 'available').length;
-    const foundation = experience.modules.filter(module => module.readiness === 'foundation').length;
-    const planned = experience.modules.filter(module => module.readiness === 'planned').length;
     const section = html('section', 'workspace-visual');
     section.dataset.kind = spec.kind;
 
     const heading = html('header', 'workspace-visual-heading');
     const copy = html('div');
     copy.append(html('span', 'workspace-section-kicker', `${spec.kind} view`), html('h2', '', spec.title), html('p', '', spec.caption));
-    const truth = html('span', 'workspace-visual-truth', 'LIVE DATA · NOT CONNECTED');
+    const truth = html('span', 'workspace-visual-truth', 'NO DATA SELECTED');
     heading.append(copy, truth);
 
     const body = html('div', 'workspace-visual-layout');
     const stage = html('div', 'workspace-visual-stage');
     stage.append(visualBody(spec));
     const rail = html('aside', 'workspace-visual-rail');
-    const counters = [
-        ['Connected', available], ['Foundation', foundation], ['Planned', planned],
-    ];
-    for (const [label, value] of counters) {
-        const counter = html('div', 'workspace-visual-counter');
-        counter.append(html('span', '', label as string), html('strong', '', String(value)));
-        rail.append(counter);
+    rail.append(html('span', 'workspace-visual-guide-label', 'Start here'),
+        html('h3', '', 'Choose a connected source'),
+        html('p', '', 'This View stays empty until an object or read model provides traceable observations.'));
+    if (options.actionLabel && options.onAction) {
+        const action = html('button', 'workspace-visual-action', options.actionLabel);
+        action.type = 'button';
+        action.addEventListener('click', options.onAction);
+        rail.append(action);
     }
     const boundary = html('div', 'workspace-visual-boundary');
-    boundary.append(html('span', '', 'Data boundary'), html('p', '',
-        'The chart grammar is real. Scientific marks appear only after a command or read model supplies provenance-bearing observations.'));
+    boundary.append(html('span', '', 'Evidence boundary'), html('p', '',
+        'Axes and stages describe the reading contract only. No trend, relationship, target region, or event timing is inferred.'));
     rail.append(boundary);
     body.append(stage, rail);
     section.append(heading, body);
