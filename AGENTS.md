@@ -4,6 +4,14 @@
 
 This file is the **source of truth for any agent** working in this repo. Read it before committing.
 
+> ## ⚠ ONE DEV SERVER: PORT 1360. DO NOT START ANOTHER.
+> `http://192.168.1.3:1360/` serves `build/dirac` on `0.0.0.0`. Rebuild with
+> `npm run build:dirac` and reload — do not spin up a second server on a second
+> port, not even for one screenshot. **Rules and the measured reason they exist:
+> `CLAUDE.md` in this directory.** (Short version: fifteen servers were running
+> against this repo at once, one of them left over from an earlier session, and
+> two rounds of verification screenshots turned out to be of a stale build.)
+
 ## Repository topology
 
 ```
