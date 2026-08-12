@@ -439,6 +439,7 @@ class InvocationService:
             if job_id is not None and self.ledger is not None:
                 try:
                     self.ledger.failed(job_id, code=f.code, detail=f.message,
+                                       seconds=round(time.time() - t0, 3),
                                        retryable=f.retryable)
                 except Exception:                                  # noqa: BLE001
                     pass          # the refusal is the answer; a ledger write is not
@@ -462,6 +463,7 @@ class InvocationService:
             if job_id is not None and self.ledger is not None:
                 try:
                     self.ledger.failed(job_id, code='INTERNAL', detail=str(e),
+                                       seconds=round(time.time() - t0, 3),
                                        retryable=True)
                 except Exception:                                  # noqa: BLE001
                     pass

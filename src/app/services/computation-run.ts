@@ -1,7 +1,7 @@
 import type { Envelope } from './dirac-client';
 
 export type ComputationRunPhase = 'idle' | 'submitting' | 'queued' | 'running'
-    | 'done' | 'refused' | 'failed' | 'cancelled' | 'observed';
+    | 'done' | 'refused' | 'failed' | 'cancel-requested' | 'cancelled' | 'observed';
 
 export type ComputationArtifact = {
     role: string;
@@ -65,11 +65,13 @@ export function observedComputationRun(command: string,
 }
 
 export function failedComputationRun(command: string, error: unknown,
-    phase: 'failed' | 'cancelled' = 'failed'): ComputationRunRecord {
+    phase: 'failed' | 'cancel-requested' | 'cancelled' = 'failed',
+    jobId?: string): ComputationRunRecord {
     const message = error instanceof Error ? error.message : String(error);
     return {
-        command, phase, executor: 'service', artifacts: [], provenance: {},
-        error: { code: phase === 'cancelled' ? 'CANCELLED' : 'INTERNAL', message },
+        command, phase, executor: 'service', jobId, artifacts: [], provenance: {},
+        error: { code: phase === 'cancelled' ? 'CANCELLED'
+            : phase === 'cancel-requested' ? 'CANCEL_REQUESTED' : 'INTERNAL', message },
     };
 }
 
@@ -105,7 +107,8 @@ export function computationRunRows(run: ComputationRunRecord): Array<[string, st
 
 const phaseLabels: Record<ComputationRunPhase, string> = {
     idle: 'Not started', submitting: 'Submitting', queued: 'Queued', running: 'Running',
-    done: 'Done', refused: 'Refused', failed: 'Failed', cancelled: 'Cancelled',
+    done: 'Done', refused: 'Refused', failed: 'Failed',
+    'cancel-requested': 'Cancel requested', cancelled: 'Cancelled',
     observed: 'Observed',
 };
 

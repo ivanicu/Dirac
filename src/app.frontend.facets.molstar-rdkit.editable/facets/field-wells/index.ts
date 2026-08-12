@@ -443,7 +443,9 @@ function molfileHeavyAtoms(mf: string): number {
  */
 class FieldRefusal extends Error {
     constructor(message: string,
-        readonly reason: 'budget' | 'unsupported' | 'internal' | 'network' | 'cancelled') {
+        readonly reason: 'budget' | 'unsupported' | 'internal' | 'network'
+            | 'cancel-requested' | 'cancelled',
+        readonly jobId?: string) {
         super(message);
     }
 }
@@ -512,6 +514,7 @@ async function fetchField(kind: FieldKind, store = false,
     const controller = new AbortController();
     inFlight = controller;
     inFlightCommand = 'structure.field.compute';
+    let acceptedJobId: string | undefined;
     let timedOut = false;
     const timer = setTimeout(() => {
         timedOut = true;
@@ -523,7 +526,8 @@ async function fetchField(kind: FieldKind, store = false,
                 molfile: requestMolfile!, basis, maxSeconds: budget,
                 signal: controller.signal,
                 onAccepted: accepted => {
-                    inFlightJobId = String(accepted.meta?.job_id || '') || null;
+                    acceptedJobId = String(accepted.meta?.job_id || '') || undefined;
+                    inFlightJobId = acceptedJobId || null;
                     if (reportActivity) {
                         renderComputationRun('field-run-record',
                             computationRunFromEnvelope('structure.field.compute', accepted, 'queued'));
@@ -571,8 +575,13 @@ async function fetchField(kind: FieldKind, store = false,
                     bucket);
             }
             if (controller.signal.aborted) {
+                const abortReason = controller.signal.reason;
+                if (abortReason instanceof FieldRefusal) throw abortReason;
                 if (!timedOut) {
-                    throw new FieldRefusal('Cancelled by user.', 'cancelled');
+                    throw new FieldRefusal(acceptedJobId
+                        ? 'Cancel requested; local wait stopped. Running native work may finish under its deadline.'
+                        : 'Cancelled before a durable Job was accepted.',
+                    acceptedJobId ? 'cancel-requested' : 'cancelled', acceptedJobId);
                 }
                 throw new FieldRefusal(
                     `cancelled after ${budget * 2 + 20} s — the daemon should have `
@@ -614,12 +623,17 @@ function abortInFlight() {
         void dirac.execute('job.cancel', { job_ref: { kind: 'job', id: jobId } });
     }
     if (command) {
+        const phase = jobId ? 'cancel-requested' : 'cancelled';
         renderComputationRun('field-run-record',
             failedComputationRun(command, jobId
-                ? `Cancellation requested for durable Job ${jobId}`
-                : 'Cancelled before a durable Job was accepted.', 'cancelled'));
+                ? `Cancel requested for durable Job ${jobId}; running native work may finish under its deadline.`
+                : 'Cancelled before a durable Job was accepted.', phase,
+            jobId || undefined));
     }
-    inFlight?.abort();
+    inFlight?.abort(new FieldRefusal(jobId
+        ? 'Cancel requested; local wait stopped. Running native work may finish under its deadline.'
+        : 'Cancelled before a durable Job was accepted.',
+    jobId ? 'cancel-requested' : 'cancelled', jobId || undefined));
     inFlight = null;
     inFlightJobId = null;
     inFlightCommand = null;
@@ -629,6 +643,48 @@ function abortInFlight() {
     // "ligand changed" for a click the user just made. The first field click
     // after switching molecules silently did nothing.
     pendingFetch.clear();
+}
+
+/** User cancellation waits for the JobStore answer before discarding the local
+ * wait. A fast result can beat the cancel request; calling that durable Job
+ * cancelled would make the evidence card disagree with the ledger. */
+async function cancelInFlight(): Promise<boolean> {
+    const controller = inFlight;
+    const jobId = inFlightJobId;
+    const command = inFlightCommand;
+    let cancelReason: 'cancel-requested' | 'cancelled' = jobId
+        ? 'cancel-requested' : 'cancelled';
+    if (!controller) return false;
+    if (jobId) {
+        try {
+            const response = await dirac.execute('job.cancel', {
+                job_ref: { kind: 'job', id: jobId },
+            });
+            if (inFlight !== controller) return false;
+            const state = String(response.data?.state || '');
+            if (state === 'done' || state === 'failed') {
+                setStatus(`Job ${state} before cancellation took effect; loading its result…`,
+                    state === 'done' ? 'busy' : 'error');
+                return false;
+            }
+            if (state === 'cancelled') cancelReason = 'cancelled';
+        } catch { /* the local wait can still be abandoned */ }
+    }
+    if (inFlight !== controller) return false;
+    const message = cancelReason === 'cancelled'
+        ? 'Cancelled before native execution started.'
+        : 'Cancel requested; local wait stopped. This executor cannot interrupt running native work, which may finish under its deadline.';
+    if (command) {
+        renderComputationRun('field-run-record', failedComputationRun(
+            command, message, cancelReason, jobId || undefined));
+    }
+    controller.abort(new FieldRefusal(message, cancelReason, jobId || undefined));
+    inFlight = null;
+    inFlightJobId = null;
+    inFlightCommand = null;
+    pendingFetch.clear();
+    setStatus(message, 'idle');
+    return true;
 }
 
 function setPrefetchNote(text: string) {
@@ -1278,12 +1334,17 @@ async function requestField(kind: FieldKind, budget = budgetFor(kind)) {
         }
         setStatus(`${spec.label} rendered for ${ligandLabel ?? 'ligand'}.`, 'ok');
     } catch (e) {
+        // A cancellation caused by switching ligands belongs to the request we
+        // just abandoned. It must not overwrite the new ligand's panel with an
+        // old cancellation or refusal after that context has already landed.
+        if (molfile !== requestMolfile) return;
         const reason = e instanceof FieldRefusal ? e.reason : 'internal';
         const msg = e instanceof Error ? e.message : String(e);
         renderMeta(null);
-        if (reason === 'cancelled') {
+        if (reason === 'cancelled' || reason === 'cancel-requested') {
             renderComputationRun('field-run-record',
-                failedComputationRun('structure.field.compute', msg, 'cancelled'));
+                failedComputationRun('structure.field.compute', msg, reason,
+                    e instanceof FieldRefusal ? e.jobId : undefined));
             setStatus(msg, 'idle');
             return;
         }
@@ -1390,16 +1451,15 @@ export function initFieldWellsPanel(p: PluginContext) {
         clearRetry();
         setStatus('Field cleared.', 'idle');
     });
-    // A running calculation the user cannot stop is the whole complaint: the
-    // panel said "Solving…" for 36 minutes with every control disabled. The
-    // daemon now stops itself too, but a bound the user cannot reach is not a
-    // control, it is a promise.
+    // The local wait is interruptible. A queued durable Job can be cancelled;
+    // native work that is already running cannot, so its deadline remains the
+    // hard resource bound and the UI reports only that cancellation was asked.
     byId('field-cancel')?.addEventListener('click', () => {
-        abortInFlight();
-        busy = false;
-        setButtonsEnabled();
-        setStatus('Cancellation requested. The durable Job records the request; '
-            + 'native work stops at cooperative checkpoints.', 'idle');
+        void cancelInFlight().then(cancelled => {
+            if (!cancelled) return;
+            busy = false;
+            setButtonsEnabled();
+        });
     });
     // Changing basis invalidates the quantum entries only; classical fields
     // have no basis. Cheapest correct move: refetch on demand.

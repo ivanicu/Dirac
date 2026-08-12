@@ -1,4 +1,5 @@
-import { computationRunFromEnvelope, computationRunRows, observedComputationRun } from '../computation-run';
+import { computationRunFromEnvelope, computationRunRows, failedComputationRun,
+    observedComputationRun } from '../computation-run';
 
 describe('computation run evidence projection', () => {
     it('keeps durable job, method, artifacts, and provenance visible', () => {
@@ -39,5 +40,13 @@ describe('computation run evidence projection', () => {
         expect(computationRunRows(run)).toContainEqual([
             'Evidence boundary', 'Geometry-qualified observation; not an energy.',
         ]);
+    });
+
+    it('does not claim a running durable Job was cancelled', () => {
+        const run = failedComputationRun(
+            'structure.surface.compute', 'Cancellation requested', 'cancel-requested', 'job-9');
+        expect(run.phase).toBe('cancel-requested');
+        expect(run.error?.code).toBe('CANCEL_REQUESTED');
+        expect(computationRunRows(run)).toContainEqual(['Durable job', 'job-9']);
     });
 });

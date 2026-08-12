@@ -45,6 +45,25 @@ class SurfaceBudgetTests(unittest.TestCase):
                       deadline=time.time() - 1, max_seconds=1)
         field.mol.intor.assert_not_called()
 
+    def test_refused_job_records_elapsed_seconds(self):
+        import catalog
+        import invocation
+        import jobs
+
+        molfile = (_BACKEND.parent / 'contracts/golden/fixtures/o_3.mol').read_text()
+        ledger = jobs.MemoryJobStore()
+        service = invocation.InvocationService(catalog.MethodCatalog.load(), ledger=ledger)
+        envelope = service.invoke('surface.mep', {
+            'molecule': {'kind': 'molfile', 'content': molfile, 'dimensionality': 3},
+            'parameters': {'basis': 'sto-3g'},
+        }, budget_seconds=1e-9)
+        self.assertFalse(envelope['ok'])
+        self.assertEqual(envelope['error']['code'], 'BUDGET')
+        job = ledger.get(envelope['meta']['job_id'])
+        self.assertEqual(job['state'], 'failed')
+        self.assertIsNotNone(job['seconds'])
+        self.assertGreaterEqual(job['seconds'], 0)
+
 
 if __name__ == '__main__':
     unittest.main()

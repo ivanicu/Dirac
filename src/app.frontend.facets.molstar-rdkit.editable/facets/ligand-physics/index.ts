@@ -104,6 +104,15 @@ let inFlight: AbortController | null = null;
 let inFlightJobId: string | null = null;
 let inFlightRunHostId: string | null = null;
 let busy = false;
+
+class RunAbortError extends Error {
+    readonly name = 'AbortError';
+    constructor(message: string,
+        readonly kind: 'cancel-requested' | 'cancelled' | 'timeout',
+        readonly jobId?: string) {
+        super(message);
+    }
+}
 /**
  * Monotonic ligand generation. A multi-second SCF that lands after the user
  * has moved on must be DISCARDED, not rendered: it would put a confident
@@ -177,7 +186,11 @@ async function post(path: string, body: Record<string, unknown>, budget: number,
     runHostId: string) {
     const controller = new AbortController();
     inFlight = controller;
-    const timer = setTimeout(() => controller.abort(), clientTimeoutMs(budget));
+    const timer = setTimeout(() => {
+        controller.abort(new RunAbortError(
+            `Client wait exceeded ${budget * 2 + 20} s; the durable Job remains queryable.`,
+            'timeout', inFlightJobId || undefined));
+    }, clientTimeoutMs(budget));
     let monitor: ReturnType<typeof setInterval> | null = null;
     let monitorBusy = false;
     let settled = false;
@@ -202,8 +215,12 @@ async function post(path: string, body: Record<string, unknown>, budget: number,
                 void dirac.jobGet(jobId).then(snapshot => {
                     if (settled || inFlight !== controller || !snapshot.ok) return;
                     const state = String(snapshot.data?.state || 'queued');
-                    const phase = state === 'running' ? 'running' : state === 'cancelled'
-                        ? 'cancelled' : 'queued';
+                    if (state === 'done' || state === 'failed' || state === 'cancelled') {
+                        settled = true;
+                        if (monitor) clearInterval(monitor);
+                        return;
+                    }
+                    const phase = state === 'running' ? 'running' : 'queued';
                     const run = computationRunFromEnvelope(method, accepted, phase);
                     run.methodId = String(snapshot.data?.method_id || run.methodId || '') || undefined;
                     run.version = String(snapshot.data?.method_version || run.version || '') || undefined;
@@ -228,6 +245,15 @@ async function post(path: string, body: Record<string, unknown>, budget: number,
         if (!ref) return { ok: false, error: 'torsion job returned no profile artifact' };
         const profile = JSON.parse((await dirac.fetchArtifact(ref, controller.signal)).text());
         return { ok: true, ...profile };
+    } catch (error) {
+        if (controller.signal.aborted) {
+            const reason = controller.signal.reason;
+            if (reason instanceof RunAbortError) throw reason;
+            throw new RunAbortError('Local wait stopped.',
+                inFlightJobId ? 'cancel-requested' : 'cancelled',
+                inFlightJobId || undefined);
+        }
+        throw error;
     } finally {
         settled = true;
         if (monitor) clearInterval(monitor);
@@ -242,6 +268,8 @@ async function cancelCurrentRun() {
     const controller = inFlight;
     const jobId = inFlightJobId;
     const runHostId = inFlightRunHostId;
+    let cancelKind: 'cancel-requested' | 'cancelled' = jobId
+        ? 'cancel-requested' : 'cancelled';
     if (!controller && !jobId) return;
     if (jobId) {
         try {
@@ -252,30 +280,34 @@ async function cancelCurrentRun() {
             // In that case, preserve the completed evidence card and let the original
             // wait land the real result instead of claiming a cancellation.
             if (inFlight !== controller) return;
-            if (response.ok && String(response.data?.state) === 'done') {
+            const state = String(response.data?.state || '');
+            if (response.ok && (state === 'done' || state === 'failed')) {
                 setStatus(runHostId === 'phys-torsion-run-record'
                     ? 'phys-torsion-status' : 'phys-surface-status',
-                'Job completed before cancellation took effect; loading its result…', 'busy');
+                `Job ${state} before cancellation took effect; loading its result…`,
+                state === 'done' ? 'busy' : 'error');
                 return;
             }
+            if (state === 'cancelled') cancelKind = 'cancelled';
         } catch { /* abort the local wait even if the cancellation request failed */ }
     }
     if (inFlight !== controller) return;
-    controller?.abort();
+    const cancelMessage = cancelKind === 'cancelled'
+        ? 'Cancelled before native execution started.'
+        : 'Cancel requested; local wait stopped. This executor cannot interrupt running native work, which may finish under its deadline.';
+    controller?.abort(new RunAbortError(cancelMessage, cancelKind, jobId || undefined));
     inFlight = null;
     if (runHostId) {
         const command = runHostId === 'phys-torsion-run-record'
             ? 'structure.torsion.analyze' : 'structure.surface.compute';
         renderComputationRun(runHostId,
-            failedComputationRun(command, jobId
-                ? `Cancellation requested for durable Job ${jobId}`
-                : 'Cancelled before a durable Job was accepted.', 'cancelled'));
+            failedComputationRun(command, cancelMessage, cancelKind, jobId || undefined));
     }
     inFlightRunHostId = null;
     setBusy(false);
     setStatus(runHostId === 'phys-torsion-run-record'
         ? 'phys-torsion-status' : 'phys-surface-status',
-    'Cancellation requested; running native work stops only at cooperative checkpoints.', 'idle');
+    cancelMessage, 'idle');
 }
 
 // ── σ-hole ──────────────────────────────────────────────────────────────────
@@ -497,13 +529,17 @@ async function runSurface() {
             `Surface electrostatics for ${ligandLabel ?? 'ligand'}.`, 'ok');
         try { await markExtrema(out.extrema); } catch { /* table still stands */ }
     } catch (e) {
-        const aborted = e instanceof Error && e.name === 'AbortError';
-        setStatus('phys-surface-status', aborted
-            ? 'Cancelled.'
-            : 'Dirac service unreachable on port 8901',
-        aborted ? 'idle' : 'error');
+        const aborted = e instanceof RunAbortError && e.kind === 'cancelled';
+        const cancelRequested = e instanceof RunAbortError && e.kind === 'cancel-requested';
+        const timedOut = e instanceof RunAbortError && e.kind === 'timeout';
+        setStatus('phys-surface-status', aborted ? 'Cancelled.'
+            : cancelRequested || timedOut ? e.message
+                : 'Dirac service unreachable on port 8901',
+        aborted || cancelRequested ? 'idle' : 'error');
         renderComputationRun('phys-surface-run-record',
-            failedComputationRun('structure.surface.compute', e, aborted ? 'cancelled' : 'failed'));
+            failedComputationRun('structure.surface.compute', e,
+                aborted ? 'cancelled' : cancelRequested ? 'cancel-requested' : 'failed',
+                e instanceof RunAbortError ? e.jobId : undefined));
     } finally {
         setBusy(false);
     }
@@ -542,13 +578,17 @@ async function runTorsion() {
         setStatus('phys-torsion-status',
             `${out.meta.n_scanned} rotors scanned for ${ligandLabel ?? 'ligand'}.`, 'ok');
     } catch (e) {
-        const aborted = e instanceof Error && e.name === 'AbortError';
-        setStatus('phys-torsion-status', aborted
-            ? 'Cancelled.'
-            : 'Dirac service unreachable on port 8901',
-        aborted ? 'idle' : 'error');
+        const aborted = e instanceof RunAbortError && e.kind === 'cancelled';
+        const cancelRequested = e instanceof RunAbortError && e.kind === 'cancel-requested';
+        const timedOut = e instanceof RunAbortError && e.kind === 'timeout';
+        setStatus('phys-torsion-status', aborted ? 'Cancelled.'
+            : cancelRequested || timedOut ? e.message
+                : 'Dirac service unreachable on port 8901',
+        aborted || cancelRequested ? 'idle' : 'error');
         renderComputationRun('phys-torsion-run-record',
-            failedComputationRun('structure.torsion.analyze', e, aborted ? 'cancelled' : 'failed'));
+            failedComputationRun('structure.torsion.analyze', e,
+                aborted ? 'cancelled' : cancelRequested ? 'cancel-requested' : 'failed',
+                e instanceof RunAbortError ? e.jobId : undefined));
     } finally {
         setBusy(false);
     }
