@@ -385,6 +385,14 @@
             border-radius: 6px; background: var(--surface-2);
             font-size: 9.5px; line-height: 1.5; color: var(--text-3);
         }
+        /* The overlay composites with the finished frame. Which BLEND depends
+           on the scene's ground: additive light on a dark scene, subtractive
+           ink on a light one. It lives in CSS rather than as an inline style
+           because an inline assignment reads back as empty if anything ever
+           resets the element, and the failure mode is silent — the canvas then
+           composites NORMALLY and paints opaquely over the whole viewport. */
+        canvas.dirac-field-overlay { mix-blend-mode: multiply; }
+        canvas.dirac-field-overlay[data-ground="dark"] { mix-blend-mode: screen; }
         .field-channels { display: flex; flex-wrap: wrap; gap: 4px; }
         .field-chan {
             font: inherit; font-size: 10px; letter-spacing: .04em;
@@ -1263,6 +1271,11 @@
         }
     </style>
     <link rel="stylesheet" href="./theme-fascia.css">
+    <!-- addons.css carries the two chrome additions that are not part of the fascia theme
+         itself: the palette picker's column in .topbar-scene, and the save button. Kept out
+         of theme-fascia.css on purpose — that file is the THEME, and a control that only
+         exists because a feature exists does not belong in it. -->
+    <link rel="stylesheet" href="./addons.css">
 </head>
 <body>
     <div id="app">
@@ -1715,6 +1728,12 @@
     <script src="./assets/rdkit/RDKit_minimal.js"></script>
     <script src="./dirac.js"></script>
     <script src="./theme-fascia.js"></script>
+    <!-- The substructure palettes. Self-contained: it waits for the mol* plugin, inserts its
+         own <select> into .topbar-scene next to Representation, and re-applies on every state
+         change. Loaded as a plain script rather than imported by the bundle because it drives
+         the plugin from OUTSIDE the app's own state machine — it colours what is already on
+         screen and owns no scene state of its own. -->
+    <script src="./palette.js"></script>
     <script>
         // master-tab navigation: show one section at a time
         document.addEventListener('click', e => {
