@@ -1,5 +1,5 @@
 # dirac-web.service — serves the built dirac bundle (build/dirac/) as a
-# static site on :1338.
+# static site on :1360.
 #
 # -g enables gzip. -c-1 DISABLES caching — this is not cosmetic: a cached
 # bundle behind a browser/proxy cache wasted an hour of debugging on this
@@ -11,16 +11,27 @@
 # rate-limiting (StartLimitBurst on dirac-backend.service exists to protect
 # PostgreSQL from a hammering backend; there is nothing analogous here).
 #
-# NOT INSTALLED BY THIS COMMIT. See deploy/README.md for the install steps.
+# PORT 1360 IS THE ONLY DEV SERVER FOR THIS REPO (Ivan, 2026-08-11). See
+# CLAUDE.md for why that is a correctness rule rather than housekeeping. This
+# unit exists so the rule is ENFORCEABLE: a backgrounded `python3 -m
+# http.server` dies with the shell that started it and never returns after a
+# reboot, so "there is one server" degrades into "there is one server until
+# someone closes a terminal", and the next agent starts a second one because
+# the first is gone. `-a 0.0.0.0` so the LAN and the tailnet reach the same
+# build.
+#
+# INSTALLED as a --user unit. Restart after a rebuild is not required (it
+# serves from disk), but `systemctl --user restart dirac-web` is the sanctioned
+# way to bring it back, replacing a command nobody remembers.
 
 [Unit]
-Description=Dirac static web bundle (build/dirac) on :1338
+Description=Dirac static web bundle (build/dirac) on :1360
 After=network.target
 
 [Service]
 Type=simple
 WorkingDirectory=/home/ivan/dirac
-ExecStart=/home/ivan/dirac/node_modules/.bin/http-server build/dirac -p 1338 -g -c-1
+ExecStart=/home/ivan/dirac/node_modules/.bin/http-server build/dirac -p 1360 -g -c-1 -a 0.0.0.0
 Restart=always
 RestartSec=2
 

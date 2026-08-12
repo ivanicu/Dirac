@@ -25,8 +25,17 @@ LAN and the tailnet reaches the same build.
    screenshot", not "temporarily". If you need to look at the app, rebuild with
    `npm run build:dirac` and reload 1360 — it serves `build/dirac`, so a rebuild
    is all it takes to see your change.
-2. **If 1360 is down**, restart it *on 1360*:
-   `cd /home/ivan/dirac/build/dirac && python3 -m http.server 1360 --bind 0.0.0.0 &`
+2. **1360 is a systemd `--user` unit**, not a backgrounded shell process:
+   `systemctl --user restart dirac-web` · status with `systemctl --user status dirac-web`.
+   It is `enabled` (returns after a reboot) and `Restart=always` (returns after
+   a crash — verified by killing it). It serves with `-c-1`, i.e. **caching
+   off**: a cached bundle behind a browser cache already cost this project an
+   hour of debugging a fix that had in fact landed.
+   *It became a unit because a backgrounded `python3 -m http.server` dies with
+   the shell that started it. "There is one server" then quietly degrades into
+   "there is one server until someone closes a terminal", and the next agent
+   starts a second one because the first is gone — which is the very thing this
+   rule exists to prevent.*
 3. **Do not kill 1360.** Other agents and Ivan's other devices are on it.
 4. **A test harness that needs its own copy** (e.g. `scripts/shoot-fields.sh`,
    which appends a driver to a staged copy) must stop its server when it exits.
@@ -49,6 +58,25 @@ consequences, both measured on 2026-08-11:
 So this is a correctness rule, not a housekeeping one: **more than one server
 against one repo means you cannot know which build you are looking at**, and the
 failure never announces itself — it hands you a plausible screenshot.
+
+---
+
+## ⚠ THE BACKEND DAEMON DOES NOT RELOAD ITSELF
+
+**After touching anything in `backend/`: `systemctl --user restart dirac-fields`.**
+(`dirac-physics` likewise for `backend/physics/`.)
+
+The daemon on `:8901` holds your code in memory. Edit a handler, take a
+screenshot, and you have photographed a build that no longer exists on disk —
+the same class of error as the stale server above, arriving from the other
+direction. Measured on 2026-08-11 by the acceptance test: the running daemon
+answered from an OLD handler while the in-process leg used the new one, and the
+diff reported it as a *transport disagreement* rather than as staleness, which
+sent the reader looking for a bug in the transport. `scripts/acceptance_parity.py`
+now flags that case specifically. *(Reported by the 架构升级 session, which
+measured it.)*
+
+---
 
 **When a rule needs the port to change**, change it here first, then tell the
 other agents; do not fork onto a second port and sort it out later.
