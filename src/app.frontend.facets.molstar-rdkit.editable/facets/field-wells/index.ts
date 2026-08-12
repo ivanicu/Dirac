@@ -291,10 +291,11 @@ const Kinds: Record<FieldKind, KindSpec> = {
  * construction and the only staleness check needed is whether the generated file is
  * current.
  *
- * `regionExtras` is the ONE remaining legacy pocket, and it is named so it cannot hide:
- * /field/region has not been folded into the kernel yet, so its two facts (waters_excluded,
- * waters_note) still arrive outside the contract. It is deleted when that route joins the
- * catalog, and its presence here is the reminder that it has not.
+ * There is no legacy pocket left. `regionExtras` used to carry the two facts /field/region
+ * returned outside any contract (waters_excluded, waters_note); that route became the
+ * contracted method fields.region.mep, which DECLARES them in `output.region` and warns with
+ * SOURCES_EXCLUDED — so the pocket was deleted rather than documented, which is the only
+ * honest end for a field whose reason to exist was a missing contract.
  */
 export type FieldView = {
     data: Record<string, any>;
@@ -302,7 +303,6 @@ export type FieldView = {
     meta: Record<string, any> | null;
     digestVerified?: boolean;
     digestUnverifiedReason?: string;
-    regionExtras?: { waters_excluded?: number | null; waters_note?: string | null };
 };
 
 let plugin: PluginContext | null = null;
@@ -822,8 +822,21 @@ export function buildMetaDisplay(view: FieldView | null): { rows: MetaRow[], cav
     if (present(model.charge_model) && !present(wf.method)) {
         rows.push({ label: 'Charge model', value: String(model.charge_model) });
     }
-    if (present(view.regionExtras?.waters_excluded)) {
-        rows.push({ label: 'Waters excluded', value: String(view.regionExtras!.waters_excluded) });
+    // From output.region, which the region methods now declare. The sent-minus-used gap is
+    // the part of the pocket the number does not contain, so both halves are shown.
+    const region = view.data.region ?? {};
+    if (present(region.waters_excluded) && region.waters_excluded > 0) {
+        rows.push({ label: 'Waters excluded', value: String(region.waters_excluded) });
+    }
+    if (present(region.n_sources_used)) {
+        rows.push({ label: 'Source atoms',
+                    value: present(region.n_sources_sent)
+                        && region.n_sources_sent !== region.n_sources_used
+                        ? `${region.n_sources_used} of ${region.n_sources_sent} sent`
+                        : String(region.n_sources_used) });
+    }
+    if (present(region.dielectric)) {
+        rows.push({ label: 'Dielectric', value: String(region.dielectric) });
     }
 
     // EVERY warning is shown, recognised or not. A code this build has never seen is the
@@ -836,7 +849,6 @@ export function buildMetaDisplay(view: FieldView | null): { rows: MetaRow[], cav
             + 'reports the opposite sign. Use the Physics tab, which computes the '
             + 'potential on the isodensity surface.');
     }
-    if (present(view.regionExtras?.waters_note)) caveats.push(view.regionExtras!.waters_note);
     // iso_sized_for is the isovalue the BOX was grown to keep closed at the slider FLOOR;
     // iso_fixed is the contour actually drawn at the slider's default. The two differ by
     // design on every freshly-computed grid field, and the difference is what tells a
@@ -1031,8 +1043,11 @@ async function updateIsoSurfaces() {
 }
 
 /**
- * The reverse field. Goes to /field/region rather than /field, because it is
- * not a field OF the ligand: the ligand only supplies the box.
+ * The reverse field. Invokes fields.region.mep rather than a fields.* method, because it
+ * is not a field OF the ligand: the ligand supplies only the BOX, and the pocket
+ * supplies the source atoms. That separation is the whole architectural point — it is
+ * what makes "what field does my ligand SIT IN" expressible at all, and what keeps the
+ * grid ligand-sized while the source is the whole protein.
  */
 async function requestPocketField() {
     if (!plugin || busy) return;
@@ -1050,78 +1065,74 @@ async function requestPocketField() {
         // ligand-sized while the source is the whole pocket. So the caller
         // owns the growing too. Measured: a ligand box + 3 Å does not close a
         // pocket field, and the panel drew a flat cut face down one side.
-        let payload: Record<string, unknown> = {};
+        let env: Awaited<ReturnType<DiracClient['invoke']>> | null = null;
         let framePad = 3;
         for (const pad of [3, 6, 9, 12]) {
             framePad = pad;
             const grown = buildSurroundingsRequest(
                 plugin, currentFocusOptions?.() ?? {}, pad);
             if ('error' in grown) break;
-            const resp = await fetch(`${BACKEND}/field/region`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sources: grown.sources, frame: grown.frame,
-                                       kind: 'mep' }),
-            });
-            payload = await resp.json();
-            if (!payload.ok) break;
-            const meta = payload.meta as { contour_closes_in_box?: boolean };
-            if (meta?.contour_closes_in_box !== false) break;
+            // THROUGH THE KERNEL. /field/region was the last route outside it, and it is now
+            // the contracted method fields.region.mep — so this call gets the same typed
+            // refusals, the same artifact reference and the same provenance as every other
+            // method, instead of a flat shape lifted into shape by hand at this call site.
+            //
+            // The contract declares `xyz: [x, y, z]` where the old route took three separate
+            // keys: a coordinate triple is ONE fact, and an array of exactly 3 cannot be
+            // two-thirds present.
+            env = await dirac.invoke('fields.region.mep', {
+                sources: grown.sources.map((a: any) => {
+                    const { x, y, z, ...rest } = a;
+                    return { ...rest, xyz: [x, y, z] };
+                }),
+                frame: grown.frame,
+            }, { inlineMax: 0 });
+            if (!env.ok) break;
+            // The box-growing loop reads the CONTRACT-DECLARED flag now, not a key that
+            // happened to be in an ungoverned dict.
+            if (env.data?.field?.box?.contour_closes_in_box !== false) break;
         }
-        if (!payload.ok) { setStatus(String(payload.error), 'error'); return; }
-        // /field/region is the LAST route still outside the kernel: it is not an
-        // executable method in the catalog, so it answers in the flat v1 shape and is
-        // lifted into the canonical view here. `regionExtras` carries the two facts the
-        // output contract has no home for yet (waters), named so they cannot be mistaken
-        // for contract-declared data. This block is deleted when the region route becomes
-        // a method — and the fact that it is still here is the reminder that it has not.
-        const pmeta = payload.meta as Record<string, any>;
+        if (!env || !env.ok) {
+            const e = env?.error;
+            setStatus(e ? `${e.user_message || e.message}${e.caller_action ? ' — ' + e.caller_action : ''}`
+                        : 'the pocket field could not be computed', 'error');
+            return;
+        }
+        const ref = (env.artifacts || [])[0];
+        if (!ref) {
+            setStatus('the pocket field returned no artifact — nothing to render, and an '
+                + 'empty volume looks exactly like a converged one', 'error');
+            return;
+        }
+        const got = await dirac.fetchArtifact(ref);
         const pview: FieldView = {
-            data: {
-                field: {
-                    kind: 'pocket_mep', native_units: pmeta.units,
-                    grid: { dimensions: pmeta.dims, spacing_angstrom: pmeta.spacing },
-                    extrema: { min: pmeta.vmin, max: pmeta.vmax },
-                    single_signed: pmeta.single_signed ?? null,
-                    box: {
-                        iso_fixed: pmeta.iso_fixed ?? null,
-                        iso_sized_for: pmeta.iso_sized_for ?? null,
-                        contour_closes_in_box: pmeta.contour_closes_in_box ?? null,
-                        pad_angstrom: pmeta.pad_used_angstrom ?? null,
-                        wall_seconds: pmeta.wall_max ?? null,
-                    },
-                },
-                model: {
-                    charge_model: pmeta.charge_model ?? null,
-                    net_charge: pmeta.net_charge ?? null,
-                },
-            },
-            warnings: [pmeta.physics_caveat, pmeta.model_caveat]
-                .filter(Boolean)
-                .map((m: string) => ({ code: 'MODEL_CAVEAT', message: String(m) })),
-            meta: { cache: pmeta.cache ?? null, seconds: pmeta.total_seconds ?? null,
-                    version: pmeta.method_version ?? null,
-                    provenance: { n_atoms: pmeta.natoms ?? null } },
-            regionExtras: { waters_excluded: pmeta.waters_excluded ?? null,
-                            waters_note: pmeta.waters_note ?? null },
-            digestVerified: false,
-            digestUnverifiedReason: '/field/region is still a v1 route: it returns the '
-                + 'bytes inline with no artifact row, so there is no digest to check',
+            data: env.data || {}, warnings: env.warnings || [],
+            meta: env.meta ?? null,
+            digestVerified: got.verified,
+            digestUnverifiedReason: got.unverifiedReason,
         };
-        await renderCube(payload.cube as string, 'pocket_mep', pview);
+        await renderCube(got.text(), 'pocket_mep', pview);
         renderMeta(pview);
         // present() before interpolation — the same class of bug as the
         // meta-panel rows: a status line built with a bare template literal
         // cannot tell an absent/null charge_model from the literal word.
-        const chargeModelNote = present(pmeta.charge_model)
-            ? pmeta.charge_model : 'charge model not recorded';
+        const model = env.data?.model ?? {};
+        const region = env.data?.region ?? {};
+        const chargeModelNote = present(model.charge_model)
+            ? model.charge_model : 'charge model not recorded';
         // The region route owns no padding — the FRAME is the caller's, which
         // is the whole point of the split — so it has no pad to report and the
         // status line printed "frame grown to ? Å". A question mark on screen
         // is the same defect as the `null` rows: a field the renderer had no
         // business asking for. Report the pad the CALLER used, which it knows.
-        setStatus(`Pocket map from ${pmeta.n_sources_used} residue-shell atoms, `
-            + `net charge ${pmeta.net_charge} · ${chargeModelNote} · frame `
-            + `+${framePad} Å around the ligand.`, 'ok');
+        // The sent-minus-used gap is stated when there is one: the field is of the atoms
+        // USED, and a reader who sees only "42 atoms" cannot know three were dropped.
+        const sourceNote = present(region.n_sources_sent)
+            && region.n_sources_sent !== region.n_sources_used
+            ? `${region.n_sources_used} of ${region.n_sources_sent} residue-shell atoms`
+            : `${region.n_sources_used} residue-shell atoms`;
+        setStatus(`Pocket map from ${sourceNote}, net charge ${model.net_charge} · `
+            + `${chargeModelNote} · frame +${framePad} Å around the ligand.`, 'ok');
     } catch (e) {
         setStatus(`Backend unreachable — ${e instanceof Error ? e.message : String(e)}`, 'error');
     } finally {

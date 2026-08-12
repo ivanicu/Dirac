@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-MethodId = Literal["fields.mep", "fields.mlp", "fields.qm.density", "fields.qm.homo", "fields.qm.lumo", "fields.qm.mep_qm", "molecule.embed", "surface.mep", "surface.mep_at", "torsion.strain"]
+MethodId = Literal["fields.mep", "fields.mlp", "fields.qm.density", "fields.qm.homo", "fields.qm.lumo", "fields.qm.mep_qm", "fields.region.mep", "fields.region.mlp", "molecule.embed", "surface.mep", "surface.mep_at", "torsion.strain"]
 
 # fields.mep — Classical electrostatic potential from Gasteiger point charges, on a grid sized to close its own contour.
 class FieldsMepParameters(TypedDict, total=False):
@@ -58,6 +58,22 @@ FIELDSQMMEPQM_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': '
 FIELDSQMMEPQM_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
 FIELDSQMMEPQM_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
 
+# fields.region.mep — Electrostatic potential of an ARBITRARY ATOM SET, sampled in a caller-supplied box.
+class FieldsRegionMepParameters(TypedDict, total=False):
+    dielectric: Literal["r-dependent", "vacuum", "uniform-4"]
+
+FIELDSREGIONMEP_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 'inline_threshold_seconds': 5.0, 'resource_class': 'cpu-classical', 'concurrency_class': 'classical', 'supports_cancellation': False, 'deterministic': True, 'cacheable': False, 'side_effects': 'none'}
+FIELDSREGIONMEP_REFUSALS = ['UNPARAMETERIZED']
+FIELDSREGIONMEP_WARNINGS = ['CLASSICAL_MODEL_SCOPE', 'SIGMA_HOLE_NOT_REPRESENTABLE', 'SOURCES_EXCLUDED']
+
+# fields.region.mlp — Lipophilicity potential of an ARBITRARY ATOM SET, sampled in a caller-supplied box.
+class FieldsRegionMlpParameters(TypedDict, total=False):
+    dielectric: object
+
+FIELDSREGIONMLP_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 'inline_threshold_seconds': 5.0, 'resource_class': 'cpu-classical', 'concurrency_class': 'classical', 'supports_cancellation': False, 'deterministic': True, 'cacheable': False, 'side_effects': 'none'}
+FIELDSREGIONMLP_REFUSALS = ['UNPARAMETERIZED']
+FIELDSREGIONMLP_WARNINGS = ['SOURCES_EXCLUDED']
+
 # molecule.embed — SMILES or a 2D molfile to an ETKDG-embedded 3D conformer, MMFF-optimised where MMFF can type it.
 class MoleculeEmbedParameters(TypedDict, total=False):
     seed: int
@@ -91,4 +107,4 @@ TORSIONSTRAIN_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': '
 TORSIONSTRAIN_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
 TORSIONSTRAIN_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
 
-METHOD_IDS = ['fields.mep', 'fields.mlp', 'fields.qm.density', 'fields.qm.homo', 'fields.qm.lumo', 'fields.qm.mep_qm', 'molecule.embed', 'surface.mep', 'surface.mep_at', 'torsion.strain']
+METHOD_IDS = ['fields.mep', 'fields.mlp', 'fields.qm.density', 'fields.qm.homo', 'fields.qm.lumo', 'fields.qm.mep_qm', 'fields.region.mep', 'fields.region.mlp', 'molecule.embed', 'surface.mep', 'surface.mep_at', 'torsion.strain']

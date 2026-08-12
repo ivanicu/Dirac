@@ -39,6 +39,8 @@ export type MethodId =
     | 'fields.qm.homo'
     | 'fields.qm.lumo'
     | 'fields.qm.mep_qm'
+    | 'fields.region.mep'
+    | 'fields.region.mlp'
     | 'molecule.embed'
     | 'surface.mep'
     | 'surface.mep_at'
@@ -457,6 +459,140 @@ export const FieldsQmMep_qmExecution = {
     "side_effects": "writes_cache"
 } as const;
 
+/** fields.region.mep output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type FieldsRegionMepOutput = {
+    field: {
+        kind: 'mep_region';
+        native_units: 'kcal/mol';
+        grid: {
+            dimensions: Array<number>;
+            spacing_angstrom?: number;
+        };
+        extrema: {
+            min: number;
+            max: number;
+        };
+        /** How the SERVER chose the box, which is a decision a client must be able to read rather than infer. These were undeclared until now and the frontend consumed them anyway, out of a flat `meta` dict that no schema governed  */
+        box?: {
+            /** The isovalue actually drawn. */
+            iso_fixed?: number | null;
+            /** Whether the drawn isosurface is closed inside the grid. False means the surface is CLIPPED by the box, and a clipped lobe looks exactly like a small one. */
+            contour_closes_in_box?: boolean | null;
+            /** Wall time the grid evaluation took. */
+            wall_seconds?: number | null;
+        };
+        /** True when every value has the same sign, so no opposite-sign lobe exists. A renderer needs it to pick a one-sided colour ramp — a diverging ramp on a single-signed field spends half its range on values that cannot occur, */
+        single_signed?: boolean | null;
+    };
+    /** WHICH MODEL produced the numbers, in machine-readable form. A caveat in prose travels as a warning; the model IDENTITY travels here, because a client comparing two fields must be able to establish they came from the same */
+    model?: {
+        charge_model?: string | null;
+        logp_model?: string | null;
+        net_charge?: number | null;
+        total_logp?: number | null;
+        sigma_hole_representable?: boolean | null;
+    };
+    /** What was actually SUMMED, and what was deliberately left out. A group field is additive but a charge model is not, so 'which atoms' and 'whose charges' are facts about the number, not decoration. */
+    region?: {
+        n_sources_sent?: number;
+        /** Below n_sources_sent when atoms were cut by the distance cutoff or excluded as water. The gap is the part of the pocket the number does not contain. */
+        n_sources_used?: number;
+        cutoff_angstrom?: number | null;
+        /** Crystallographic waters left OUT: their hydrogens were never resolved, and a bare oxygen would be a point negative where a real water has a dipole. */
+        waters_excluded?: number;
+        /** True always, and stated because it is a REFUSAL made legible: this method cannot grow the box to close a contour the way the ligand path does, so it reports a clipped surface instead of fixing it. */
+        frame_is_callers?: boolean | null;
+        dielectric?: string | null;
+    };
+};
+
+/** fields.region.mep — Electrostatic potential of an ARBITRARY ATOM SET, sampled in a caller-supplied box. */
+export interface FieldsRegionMepParameters {
+    dielectric?: 'r-dependent' | 'vacuum' | 'uniform-4';
+}
+
+export const FieldsRegionMepExecution = {
+    "supported_modes": [
+        "sync"
+    ],
+    "default_mode": "sync",
+    "inline_threshold_seconds": 5.0,
+    "resource_class": "cpu-classical",
+    "concurrency_class": "classical",
+    "supports_cancellation": false,
+    "deterministic": true,
+    "cacheable": false,
+    "side_effects": "none"
+} as const;
+
+/** fields.region.mlp output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type FieldsRegionMlpOutput = {
+    field: {
+        kind: 'mlp_region';
+        native_units: 'MLP (Crippen/Fauchere)';
+        grid: {
+            dimensions: Array<number>;
+            spacing_angstrom?: number;
+        };
+        extrema: {
+            min: number;
+            max: number;
+        };
+        /** How the SERVER chose the box, which is a decision a client must be able to read rather than infer. These were undeclared until now and the frontend consumed them anyway, out of a flat `meta` dict that no schema governed  */
+        box?: {
+            /** The isovalue actually drawn. */
+            iso_fixed?: number | null;
+            /** Whether the drawn isosurface is closed inside the grid. False means the surface is CLIPPED by the box, and a clipped lobe looks exactly like a small one. */
+            contour_closes_in_box?: boolean | null;
+            /** Wall time the grid evaluation took. */
+            wall_seconds?: number | null;
+        };
+        /** True when every value has the same sign, so no opposite-sign lobe exists. A renderer needs it to pick a one-sided colour ramp — a diverging ramp on a single-signed field spends half its range on values that cannot occur, */
+        single_signed?: boolean | null;
+    };
+    total_logp?: number | null;
+    single_signed?: boolean;
+    /** WHICH MODEL produced the numbers, in machine-readable form. A caveat in prose travels as a warning; the model IDENTITY travels here, because a client comparing two fields must be able to establish they came from the same */
+    model?: {
+        charge_model?: string | null;
+        logp_model?: string | null;
+        net_charge?: number | null;
+        total_logp?: number | null;
+        sigma_hole_representable?: boolean | null;
+    };
+    /** What was actually SUMMED, and what was deliberately left out. A group field is additive but a charge model is not, so 'which atoms' and 'whose charges' are facts about the number, not decoration. */
+    region?: {
+        n_sources_sent?: number;
+        /** Below n_sources_sent when atoms were cut by the distance cutoff or excluded as water. The gap is the part of the pocket the number does not contain. */
+        n_sources_used?: number;
+        cutoff_angstrom?: number | null;
+        /** Crystallographic waters left OUT: their hydrogens were never resolved, and a bare oxygen would be a point negative where a real water has a dipole. */
+        waters_excluded?: number;
+        /** True always, and stated because it is a REFUSAL made legible: this method cannot grow the box to close a contour the way the ligand path does, so it reports a clipped surface instead of fixing it. */
+        frame_is_callers?: boolean | null;
+        dielectric?: string | null;
+    };
+};
+
+/** fields.region.mlp — Lipophilicity potential of an ARBITRARY ATOM SET, sampled in a caller-supplied box. */
+export interface FieldsRegionMlpParameters {
+    dielectric?: unknown;
+}
+
+export const FieldsRegionMlpExecution = {
+    "supported_modes": [
+        "sync"
+    ],
+    "default_mode": "sync",
+    "inline_threshold_seconds": 5.0,
+    "resource_class": "cpu-classical",
+    "concurrency_class": "classical",
+    "supports_cancellation": false,
+    "deterministic": true,
+    "cacheable": false,
+    "side_effects": "none"
+} as const;
+
 /** molecule.embed output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type MoleculeEmbedOutput = {
     molecule: {
@@ -583,6 +719,8 @@ export const METHOD_IDS: readonly MethodId[] = [
     "fields.qm.homo",
     "fields.qm.lumo",
     "fields.qm.mep_qm",
+    "fields.region.mep",
+    "fields.region.mlp",
     "molecule.embed",
     "surface.mep",
     "surface.mep_at",

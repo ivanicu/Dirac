@@ -162,14 +162,75 @@ UNITS.update({
                          'refuses': ['unparseable_smiles', 'embedding_failed'],
                          'deterministic_given_seed': True},
     },
+    # The region methods, registered when /field/region joined the kernel. They share ONE
+    # science function with two kinds, so they share a version — which is honest: the same
+    # source produced both, and pretending otherwise would imply an independence that does
+    # not exist. (fields.qm.* have shared a version the same way since they were added.)
+    'fields.region.mep': {
+        'fns': ['field_region', 'resolve_charges', 'write_cube'],
+        'consts': ['MAX_REGION_SOURCES', 'WATER_RESNAMES', 'CHARGE_FORCEFIELD'],
+        'exec_class': 'interactive',
+        'in_schema': {'type': 'object', 'required': ['sources', 'frame'],
+                      'properties': {'sources': {'type': 'array'},
+                                     'frame': {'type': 'object'}}},
+        'out_schema': {'type': 'object', 'required': ['cube', 'units'],
+                       'properties': {'cube': {'type': 'string'},
+                                      'units': {'const': 'kcal/mol'}}},
+        'capabilities': {'charges': 'residue templates (pdb2pqr)',
+                         'refuses': ['quantum_kind', 'no_sources', 'untypable_atom'],
+                         'frame_is_callers': True},
+    },
     'fields.qm.homo': _qm_unit('homo', 'homo_amplitude', 'amplitude'),
     'fields.qm.lumo': _qm_unit('lumo', 'lumo_amplitude', 'amplitude'),
     'fields.qm.density': _qm_unit('density', 'electron_density', 'e/Bohr^3'),
     'fields.qm.mep_qm': _qm_unit('mep_qm', 'electrostatic_potential', 'Ha/e'),
 })
+UNITS['fields.region.mlp'] = {
+    **UNITS['fields.region.mep'],
+    'out_schema': {'type': 'object', 'required': ['cube', 'units'],
+                   'properties': {'cube': {'type': 'string'},
+                                  'units': {'const': 'MLP (Crippen/Fauchere)'}}},
+    'capabilities': {**UNITS['fields.region.mep']['capabilities'],
+                     'charges': 'caller-supplied logp contributions'},
+}
 
 
 # ── version = hash of the compute unit, machine-derived ─────────────────────
+
+def _canonical_repr(value) -> str:
+    """A repr that is the same in every process. THE VERSION DEPENDS ON THIS.
+
+    MEASURED DEFECT, 2026-08-11, found by noticing a version that moved between runs when
+    the source had not: `repr(set)` iterates in hash order, and Python randomises string
+    hashing per process (PYTHONHASHSEED). So a unit listing a set constant got a DIFFERENT
+    version in every process —
+
+        a7ecafb6dbd2 · {'WAT', 'TP3', 'SOL', 'HOH', 'TIP', 'H2O', 'DOD'}
+        044091195c99 · {'HOH', 'TP3', 'TIP', 'SOL', 'DOD', 'H2O', 'WAT'}
+        772a2048d83a · {'TP3', 'WAT', 'TIP', 'H2O', 'HOH', 'DOD', 'SOL'}
+
+    — three digests, one source. That breaks the only thing a version is for: "same version
+    means same code". Concretely it would have invalidated the cache on every daemon restart
+    and stamped provenance a second run could not reproduce.
+    (fields.mep/mlp were NOT affected and it was checked rather than assumed: their
+    FIXED_ISO is a dict, and dict repr has followed INSERTION order since 3.7, so a literal
+    is deterministic — measured stable across three processes. But relying on that is
+    relying on an accident of the language for the foundation of provenance, so unordered
+    containers are canonicalised here regardless of which ones happen to be safe today.)
+
+    Recursive, because a tuple of sets is exactly the shape that would sneak past a
+    shallow fix.
+    """
+    if isinstance(value, (set, frozenset)):
+        return '{' + ', '.join(sorted(_canonical_repr(v) for v in value)) + '}'
+    if isinstance(value, dict):
+        return '{' + ', '.join(f'{_canonical_repr(k)}: {_canonical_repr(v)}'
+                               for k, v in sorted(value.items(), key=lambda kv: repr(kv[0]))) + '}'
+    if isinstance(value, (list, tuple)):
+        inner = ', '.join(_canonical_repr(v) for v in value)
+        return f'[{inner}]' if isinstance(value, list) else f'({inner})'
+    return repr(value)
+
 
 def unit_version(module, fns: Iterable[str],
                  consts: Iterable[str] = ()) -> tuple[str, bytes]:
@@ -211,7 +272,7 @@ def unit_version(module, fns: Iterable[str],
                 f'in {module.__name__} — a constant that vanished silently stops '
                 f'being part of the version, which is how this hole was made')
         h.update(name.encode())
-        h.update(repr(getattr(module, name)).encode())
+        h.update(_canonical_repr(getattr(module, name)).encode())
     digest = h.digest()
     return digest.hex()[:12], digest
 

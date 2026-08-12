@@ -416,3 +416,110 @@ def embed_estimate(payload: dict) -> dict:
     return {'available': True, 'seconds': 0.2,
             'confidence': 'ETKDG + MMFF on a drug-sized ligand is 0.05-0.5 s on this '
                           'machine; the number is a ceiling, not a fit'}
+
+
+REGION_KIND_FOR_METHOD = {'fields.region.mep': 'mep', 'fields.region.mlp': 'mlp'}
+
+
+def region_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
+    """fields.region.* — the classical field of an ARBITRARY atom set in a caller's box.
+
+    THE LAST ROUTE OUTSIDE THE KERNEL until now. /field/region answered in the flat v1 shape
+    and the frontend lifted it into the canonical view through a pocket named
+    `regionExtras` — one fact, two homes, and the pocket existed only because this method had
+    no contract. It has one now, so the pocket goes.
+
+    It also carried the line PR-03 deleted everywhere else:
+
+        reason = 'unsupported' if isinstance(e, (ValueError, KeyError)) else 'internal'
+
+    A KeyError from a missing `frame` and a ValueError from "quantum region fields are not
+    attempted" were being reported to a client as the same word. Through the kernel they are
+    INVALID_PARAMETERS and UNSUPPORTED respectively — different remedies, which is the whole
+    point of the vocabulary.
+
+    NOT CACHEABLE, declared in the descriptor: the cache is keyed on a molfile hash, and this
+    method has no molfile. A source set plus a box would need a different key, and inventing
+    one that collides would serve a pocket field for the wrong pocket — the one failure mode
+    worse than recomputing.
+    """
+    import field_server as FS
+
+    kind = REGION_KIND_FOR_METHOD.get(ctx.method_id)
+    if kind is None:
+        raise failures.DiracInternal(
+            f'{ctx.method_id} routed to region_handler and REGION_KIND_FOR_METHOD has no '
+            f'entry for it')
+    sources = payload['sources']
+    frame = payload['frame']
+    params = dict(payload.get('parameters') or {})
+    spacing = float(frame.get('spacing', 0.5))
+    dielectric = params.get('dielectric') or 'r-dependent'
+
+    # THE CONTRACT DECLARES `xyz: [x, y, z]`; field_region reads a['x'], a['y'], a['z'].
+    # The contract keeps the better shape and the handler adapts, which is this layer's job:
+    # a coordinate triple is ONE fact, and three separate keys can be two-thirds present
+    # while an array of exactly 3 cannot. Adapting here costs a dict comprehension; declaring
+    # the weaker shape would cost every future client the ability to be sure a position is
+    # complete.
+    adapted = []
+    for a in sources:
+        x, y, z = a['xyz']
+        adapted.append({**{k: v for k, v in a.items() if k != 'xyz'},
+                        'x': x, 'y': y, 'z': z})
+    cube, meta = FS.field_region(adapted, frame['lo'], frame['hi'], spacing, kind,
+                                 req_dielectric=dielectric)
+    ctx.on_progress('computed', 0.9)
+
+    import cube as CU
+    wrote_at = CU.timestamp_in(cube)
+    cube = CU.canonicalise(cube)
+    grid = parse_cube_header(cube)
+    vmin, vmax = cube_extrema(cube)
+
+    box = {k: v for k, v in (
+        ('iso_fixed', meta.get('iso_fixed')),
+        ('contour_closes_in_box', meta.get('contour_closes_in_box')),
+        ('wall_seconds', meta.get('wall_max')),
+    ) if v is not None}
+    result: dict[str, Any] = {
+        'field': {
+            'kind': f'{kind}_region',
+            'native_units': declared_units(ctx, kind),
+            'grid': {'dimensions': grid['dimensions'],
+                     'spacing_angstrom': grid['spacing_angstrom']},
+            'extrema': {'min': vmin, 'max': vmax},
+            'single_signed': bool(vmin >= 0 or vmax <= 0),
+            **({'box': box} if box else {}),
+        },
+        'model': {k: v for k, v in (
+            ('charge_model', meta.get('charge_model')),
+            ('net_charge', meta.get('net_charge')),
+            ('total_logp', meta.get('total_logp')),
+        ) if v is not None},
+        'region': {
+            'n_sources_sent': int(meta.get('n_sources_sent') or 0),
+            'n_sources_used': int(meta.get('n_sources_used') or 0),
+            'cutoff_angstrom': meta.get('cutoff_angstrom'),
+            'waters_excluded': int(meta.get('waters_excluded') or 0),
+            # Stated rather than implied: this method cannot grow the box, so a clipped
+            # surface is reported instead of repaired.
+            'frame_is_callers': True,
+            'dielectric': meta.get('dielectric'),
+        },
+    }
+    warnings = []
+    for key, code in (('physics_caveat', 'MODEL_CAVEAT'),
+                      ('model_caveat', 'MODEL_CAVEAT'),
+                      ('waters_note', 'SOURCES_EXCLUDED')):
+        if meta.get(key):
+            warnings.append({'code': code, 'message': str(meta[key]),
+                             'affects': ['field', 'region']})
+    return HandlerResult(
+        result=result,
+        artifacts=[('field.cube', cube.encode())],
+        provenance={'n_atoms': meta.get('n_sources_used'),
+                    'toolkit_wrote_at': wrote_at},
+        warnings=warnings,
+        parameters_used={'dielectric': dielectric, 'spacing': spacing},
+        cache='computed')

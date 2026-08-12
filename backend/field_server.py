@@ -1765,6 +1765,13 @@ def field_region(sources, lo, hi, spacing: float, kind: str,
 
     # Charges come from the residue template when the caller sent residue
     # identity instead of a number. Unresolved atoms are named, not zeroed.
+    # CAPTURED BEFORE THE FILTER. `n_sources_sent` was len(sources) computed AFTER waters
+    # were removed, so a caller who sent 3 atoms including one water read
+    # sent=2 / used=2 — "nothing was dropped" — while one atom had been. Measured on a
+    # three-atom pocket the moment this method got an output contract whose own description
+    # promises that the sent-minus-used gap is "the part of the pocket the number does not
+    # contain". It cannot promise that while `sent` silently excludes the exclusions.
+    n_sent_originally = len(sources)
     n_water = sum(1 for a in sources
                   if str(a.get('resname', '')).upper() in WATER_RESNAMES)
     if kind == 'mep' and n_water:
@@ -1866,7 +1873,7 @@ def field_region(sources, lo, hi, spacing: float, kind: str,
     meta = {
         'kind': f'{kind}_region', 'method': 'caller-supplied point weights',
         'units': 'kcal/mol' if kind == 'mep' else 'MLP (Crippen/Fauchère)',
-        'n_sources_sent': len(sources), 'n_sources_used': used,
+        'n_sources_sent': n_sent_originally, 'n_sources_used': used,
         'cutoff_angstrom': cutoff,
         'net_charge': round(float(weights.sum()), 3),
         'charge_model': (f'{CHARGE_FORCEFIELD} residue templates (pdb2pqr)'

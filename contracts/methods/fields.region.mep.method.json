@@ -1,0 +1,405 @@
+{
+  "schema_version": "1.0.0",
+  "method_id": "fields.region.mep",
+  "summary": "Electrostatic potential of an ARBITRARY ATOM SET, sampled in a caller-supplied box.",
+  "implementation": {
+    "module": "backend.field_server",
+    "functions": [
+      "field_region",
+      "resolve_charges",
+      "write_cube"
+    ],
+    "constants": [
+      "CHARGE_FORCEFIELD",
+      "MAX_REGION_SOURCES",
+      "WATER_RESNAMES"
+    ]
+  },
+  "input": {
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sources",
+        "frame"
+      ],
+      "properties": {
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20000,
+          "items": {
+            "type": "object",
+            "description": "One source atom. Charges are the CALLER's responsibility for mlp and resolved from residue templates for mep \u2014 never invented here, because Gasteiger is computed per-MOLECULE and a truncated pocket would get different charges than the real one.",
+            "additionalProperties": false,
+            "required": [
+              "element",
+              "xyz"
+            ],
+            "properties": {
+              "element": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 3
+              },
+              "xyz": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                },
+                "description": "\u00c5ngstr\u00f6m, in the same frame as the box."
+              },
+              "charge": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Explicit charge, e. When absent, mep resolves it from resname/atom_name via residue templates and REFUSES rather than zeroing an atom it cannot type."
+              },
+              "logp": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "Crippen contribution, mlp only."
+              },
+              "resname": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "atom_name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "resid": {
+                "type": [
+                  "integer",
+                  "string",
+                  "null"
+                ]
+              },
+              "chain": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "frame": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "lo",
+            "hi"
+          ],
+          "description": "The BOX, supplied by the caller and NOT derived from the sources. That separation is the architectural point of this method: source = the pocket, frame = the ligand's box, so the expressible question becomes 'what field does my ligand SIT IN' rather than only 'what does my ligand look like'. It also keeps the grid ligand-sized while the source is the whole protein, which is what makes it cheap.",
+          "properties": {
+            "lo": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "items": {
+                "type": "number"
+              }
+            },
+            "hi": {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "items": {
+                "type": "number"
+              }
+            },
+            "spacing": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 0.5
+            }
+          }
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "dielectric": {
+              "enum": [
+                "r-dependent",
+                "vacuum",
+                "uniform-4"
+              ],
+              "default": "r-dependent",
+              "description": "mep only. eps(r)=4r screening by default; the result is a QUALITATIVE map of where the pocket is positive or negative, never an interaction energy."
+            }
+          }
+        }
+      }
+    },
+    "examples": []
+  },
+  "output": {
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field"
+      ],
+      "properties": {
+        "field": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "native_units",
+            "grid",
+            "extrema"
+          ],
+          "properties": {
+            "kind": {
+              "const": "mep_region"
+            },
+            "native_units": {
+              "const": "kcal/mol"
+            },
+            "grid": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "dimensions"
+              ],
+              "properties": {
+                "dimensions": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "items": {
+                    "type": "integer",
+                    "minimum": 2
+                  }
+                },
+                "spacing_angstrom": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            },
+            "extrema": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "min",
+                "max"
+              ],
+              "properties": {
+                "min": {
+                  "type": "number"
+                },
+                "max": {
+                  "type": "number"
+                }
+              }
+            },
+            "box": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "How the SERVER chose the box, which is a decision a client must be able to read rather than infer. These were undeclared until now and the frontend consumed them anyway, out of a flat `meta` dict that no schema governed \u2014 so a renderer depended on facts the contract did not promise, which is the drift this whole chain exists to remove.",
+              "properties": {
+                "iso_fixed": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "The isovalue actually drawn."
+                },
+                "contour_closes_in_box": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "Whether the drawn isosurface is closed inside the grid. False means the surface is CLIPPED by the box, and a clipped lobe looks exactly like a small one."
+                },
+                "wall_seconds": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "description": "Wall time the grid evaluation took."
+                }
+              }
+            },
+            "single_signed": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "True when every value has the same sign, so no opposite-sign lobe exists. A renderer needs it to pick a one-sided colour ramp \u2014 a diverging ramp on a single-signed field spends half its range on values that cannot occur, and the map reads as though the missing half were merely small."
+            }
+          }
+        },
+        "model": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "WHICH MODEL produced the numbers, in machine-readable form. A caveat in prose travels as a warning; the model IDENTITY travels here, because a client comparing two fields must be able to establish they came from the same model without parsing English.",
+          "properties": {
+            "charge_model": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "logp_model": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "net_charge": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "total_logp": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "sigma_hole_representable": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        },
+        "region": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "What was actually SUMMED, and what was deliberately left out. A group field is additive but a charge model is not, so 'which atoms' and 'whose charges' are facts about the number, not decoration.",
+          "properties": {
+            "n_sources_sent": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "n_sources_used": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Below n_sources_sent when atoms were cut by the distance cutoff or excluded as water. The gap is the part of the pocket the number does not contain."
+            },
+            "cutoff_angstrom": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "waters_excluded": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Crystallographic waters left OUT: their hydrogens were never resolved, and a bare oxygen would be a point negative where a real water has a dipole."
+            },
+            "frame_is_callers": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "True always, and stated because it is a REFUSAL made legible: this method cannot grow the box to close a contour the way the ligand path does, so it reports a clipped surface instead of fixing it."
+            },
+            "dielectric": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "artifacts": [
+      {
+        "role": "field.cube",
+        "media_type": "application/vnd.dirac.gaussian-cube",
+        "typical_size_bytes": 1900000
+      }
+    ]
+  },
+  "refusals": [
+    {
+      "code": "UNPARAMETERIZED",
+      "condition": "Gasteiger has no parameters for an element present (hypervalent P, several metals)",
+      "points_at": "fields.qm.mep_qm",
+      "measured": "PF6- returns NaN charges; nan_to_num laundered them into a flat zero field that was cached and served as a result"
+    },
+    {
+      "code": "UNPARAMETERIZED",
+      "condition": "every charge is zero, so the field carries no information",
+      "points_at": "fields.qm.mep_qm",
+      "measured": "a zero field is silence, not a measurement"
+    }
+  ],
+  "warnings": [
+    {
+      "code": "SIGMA_HOLE_NOT_REPRESENTABLE",
+      "meaning": "A spherical point charge cannot represent a sigma-hole at all, so this map cannot answer a halogen-bonding question.",
+      "scope": [
+        "output.field"
+      ],
+      "measured": "bromobenzene at the cap: Gasteiger -6.2 kcal/mol vs the QM surface route +9.9 \u2014 opposite signs, ~16 kcal/mol apart"
+    },
+    {
+      "code": "CLASSICAL_MODEL_SCOPE",
+      "meaning": "Point charges: no lone-pair or sigma-hole anisotropy, and ~0.4x the QM molecular dipole. A qualitative map, not an interaction energy.",
+      "scope": [
+        "output.field"
+      ],
+      "measured": "~0.4x the QM dipole"
+    },
+    {
+      "code": "SOURCES_EXCLUDED",
+      "meaning": "Some sent source atoms were NOT summed \u2014 cut by the distance cutoff or excluded as crystallographic water. The field is of the atoms used, not of the atoms sent, and the difference is not decoration.",
+      "scope": [
+        "output.region"
+      ],
+      "measured": "a bare crystallographic oxygen is a point negative where a real water has a dipole, so including unresolved waters would add a wrong sign rather than a small error"
+    }
+  ],
+  "execution": {
+    "supported_modes": [
+      "sync"
+    ],
+    "default_mode": "sync",
+    "inline_threshold_seconds": 5.0,
+    "resource_class": "cpu-classical",
+    "concurrency_class": "classical",
+    "supports_cancellation": false,
+    "deterministic": true,
+    "cacheable": false,
+    "side_effects": "none"
+  },
+  "exposure": {
+    "sdk": true,
+    "cli": true,
+    "mcp": "curated"
+  },
+  "invocation": {
+    "handler": "handlers:region_handler",
+    "artifacts": [
+      {
+        "role": "field.cube",
+        "media_type": "application/vnd.dirac.gaussian-cube",
+        "required": true,
+        "typical_bytes": 1200000
+      }
+    ]
+  },
+  "description": "Both classical fields are EXACTLY linear in the atom set \u2014 measured on a shared grid, benzene plus acetate: |V_AB - (V_A + V_B)| / |V_AB| = 5.2e-16, machine precision. So a group field needs no bond perception, no capping, no valence and no molfile: it needs (element, position, charge) per atom and a box. That is why this is a separate method rather than a wider molfile input \u2014 the molfile path must perceive topology, and the topology builder cannot currently express more than one residue without silently dropping bonds. This method cannot hit that class of bug because it never asks."
+}
