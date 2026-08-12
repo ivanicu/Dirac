@@ -26,6 +26,15 @@ StartLimitBurst=5
 [Service]
 Type=simple
 WorkingDirectory=/home/ivan/dirac
+# Scratch goes to DISK, not to /tmp. Measured 2026-08-11: pyscf's cubegen writes the
+# whole 6.7 MB cube into TMPDIR before returning it, and /tmp here is a 30 GB tmpfs with
+# a PER-USER quota. With the quota tight, the same calculation dies with
+# `OSError: [Errno 122] Disk quota exceeded` from inside cubegen.write — an error a
+# chemist can do nothing with, arriving from a path that has nothing to do with them.
+# backend/scratch.py sets this in code as well, so every entry point is covered; this
+# line exists so an operator reading the unit can SEE where the scratch lives.
+Environment=TMPDIR=/home/ivan/.cache/dirac/scratch
+Environment=PYSCF_TMPDIR=/home/ivan/.cache/dirac/scratch
 ExecStart=/home/ivan/dirac/backend/env/bin/python backend/physics/server.py
 Restart=on-failure
 RestartSec=5
