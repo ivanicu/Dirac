@@ -122,3 +122,18 @@ scientific compute, define a semantic Command for application behavior, persist 
 objects and relations, then expose the command through SDK/UI and the safe MCP projection.
 No new Workspace or adapter may introduce a private scientific API, cache key, Job state,
 error vocabulary, staleness clock, or mol* instance.
+
+## Executable Digital Twin
+
+`docs/architecture/dirac-digital-twin.html` is the offline interactive projection of
+this architecture. It embeds `dirac-digital-twin.json`, a source-derived graph covering
+every in-scope first-party Python, JavaScript, Shell and custom TypeScript function/method, their real
+import/call edges, semantic contracts, AppShell registries, SQL objects, runtime
+services and the system's principal information flows. Upstream Mol* and other
+third-party internals remain explicit external boundaries rather than copied source.
+
+Regenerate both artifacts from the repository and a best-effort live runtime snapshot:
+
+```bash
+python3 scripts/build_digital_twin.py
+```
