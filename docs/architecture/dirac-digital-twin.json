@@ -1,9 +1,9 @@
 {
   "schema": "https://dirac.local/schemas/software-architecture-twin/v2",
   "title": "Dirac Architecture Optimization Twin",
-  "generated_at": "2026-08-12T18:36:45.440867+00:00",
-  "source_base_commit": "ea76cd79de7ef258491fbac806db243a0218b80f",
-  "source_fingerprint_sha256": "933ff4c6f391dba6aab6b8f62d67e3bde5f9370cc30bedebda3d3420b1f89d26",
+  "generated_at": "2026-08-12T18:54:50.044219+00:00",
+  "source_base_commit": "0926f2a7e4e614f17eade4a89aebd4b80e82cfa5",
+  "source_fingerprint_sha256": "8d345c18aba3b0afd79af40ffbfaf072b65ff8ed650bc37e0256b6c8e092eb6e",
   "scope": {
     "included": [
       "all first-party Python, JavaScript, and Shell functions in backend, SDK, tooling, gates, and operations",
@@ -18,7 +18,7 @@
   },
   "summary": {
     "nodes": 3466,
-    "edges": 5882,
+    "edges": 5880,
     "flows": 6,
     "source_files": 320,
     "by_type": {
@@ -53,9 +53,9 @@
     "typescript_diagnostics": []
   },
   "runtime_snapshot": {
-    "captured_at": "2026-08-12T18:36:45.284758+00:00",
+    "captured_at": "2026-08-12T18:54:49.897467+00:00",
     "source": "best-effort live probes",
-    "git_commit": "ea76cd79de7ef258491fbac806db243a0218b80f",
+    "git_commit": "0926f2a7e4e614f17eade4a89aebd4b80e82cfa5",
     "systemd": [
       "Id=dirac-fields.service",
       "ActiveState=active",
@@ -109,24 +109,24 @@
       "registered_method_rows": 49,
       "attention_items": 34,
       "approval_waits": 0,
-      "command_traces": 157,
+      "command_traces": 165,
       "observed_commands": 9
     },
     "command_observations": [
       {
         "command_id": "attention.list",
         "command_version": 1,
-        "invocation_count": 18,
-        "success_count": 18,
+        "invocation_count": 21,
+        "success_count": 21,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.004426,
-        "p95_dispatch_seconds": 0.007992,
+        "mean_dispatch_seconds": 0.004223,
+        "p95_dispatch_seconds": 0.006261,
         "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-        "last_observed_at": "2026-08-12T11:27:43.125944-07:00"
+        "last_observed_at": "2026-08-12T11:52:40.817187-07:00"
       },
       {
         "command_id": "job.list",
@@ -161,17 +161,17 @@
       {
         "command_id": "structure.field.compute",
         "command_version": 1,
-        "invocation_count": 67,
+        "invocation_count": 69,
         "success_count": 43,
-        "expected_refusal_count": 24,
+        "expected_refusal_count": 26,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 43,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.006326,
-        "p95_dispatch_seconds": 0.014536,
+        "mean_dispatch_seconds": 0.006147,
+        "p95_dispatch_seconds": 0.01435,
         "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-        "last_observed_at": "2026-08-12T11:30:29.87626-07:00"
+        "last_observed_at": "2026-08-12T11:52:39.947166-07:00"
       },
       {
         "command_id": "structure.interactions",
@@ -221,17 +221,17 @@
       {
         "command_id": "system.health",
         "command_version": 1,
-        "invocation_count": 20,
-        "success_count": 20,
+        "invocation_count": 23,
+        "success_count": 23,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 9.1e-05,
+        "mean_dispatch_seconds": 9e-05,
         "p95_dispatch_seconds": 0.000105,
         "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-        "last_observed_at": "2026-08-12T11:27:43.121598-07:00"
+        "last_observed_at": "2026-08-12T11:52:40.813209-07:00"
       },
       {
         "command_id": "system.version",
@@ -895,7 +895,7 @@
         "id": "dynamic-observation",
         "status": "pass",
         "label": "Node-keyed execution telemetry",
-        "value": "157 traces · 9/18 commands observed",
+        "value": "165 traces · 9/18 commands observed",
         "why": "Persistent traces bind real outcomes and latency to command and method nodes."
       },
       {
@@ -926,7 +926,7 @@
         "priority": "DONE",
         "kind": "twin-fidelity",
         "title": "Observed command traces are bound to architecture nodes",
-        "evidence": "157 durable traces currently cover 9/18 commands; linked Jobs resolve to their eventual terminal outcome.",
+        "evidence": "165 durable traces currently cover 9/18 commands; linked Jobs resolve to their eventual terminal outcome.",
         "impact": "Command and method inspectors now expose empirical traffic, latency, cache and failure-path data.",
         "action": "Let coverage accumulate from real use; do not manufacture traffic merely to turn coverage green.",
         "nodes": [
@@ -2829,17 +2829,17 @@
       "runtime_observation": {
         "command_id": "attention.list",
         "command_version": 1,
-        "invocation_count": 18,
-        "success_count": 18,
+        "invocation_count": 21,
+        "success_count": 21,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.004426,
-        "p95_dispatch_seconds": 0.007992,
+        "mean_dispatch_seconds": 0.004223,
+        "p95_dispatch_seconds": 0.006261,
         "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-        "last_observed_at": "2026-08-12T11:27:43.125944-07:00"
+        "last_observed_at": "2026-08-12T11:52:40.817187-07:00"
       }
     },
     {
@@ -3101,17 +3101,17 @@
       "runtime_observation": {
         "command_id": "structure.field.compute",
         "command_version": 1,
-        "invocation_count": 67,
+        "invocation_count": 69,
         "success_count": 43,
-        "expected_refusal_count": 24,
+        "expected_refusal_count": 26,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 43,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.006326,
-        "p95_dispatch_seconds": 0.014536,
+        "mean_dispatch_seconds": 0.006147,
+        "p95_dispatch_seconds": 0.01435,
         "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-        "last_observed_at": "2026-08-12T11:30:29.87626-07:00"
+        "last_observed_at": "2026-08-12T11:52:39.947166-07:00"
       }
     },
     {
@@ -3268,17 +3268,17 @@
       "runtime_observation": {
         "command_id": "system.health",
         "command_version": 1,
-        "invocation_count": 20,
-        "success_count": 20,
+        "invocation_count": 23,
+        "success_count": 23,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 9.1e-05,
+        "mean_dispatch_seconds": 9e-05,
         "p95_dispatch_seconds": 0.000105,
         "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-        "last_observed_at": "2026-08-12T11:27:43.121598-07:00"
+        "last_observed_at": "2026-08-12T11:52:40.813209-07:00"
       }
     },
     {
@@ -6906,8 +6906,8 @@
       "layer": "runtime",
       "path": "src/app.frontend.facets.molstar-rdkit.editable/index.html",
       "extension": ".html",
-      "bytes": 92099,
-      "sha256": "f6f1eb05c874d931c58bd51c36d3c09228c05ebad7269a6ffc135ea95a5cfbad",
+      "bytes": 92001,
+      "sha256": "78a7cf0f6a28e0701c127e20267f5b7fd4d3df552552ed25eadd15c510d80990",
       "generated": false,
       "id": "file:src/app.frontend.facets.molstar-rdkit.editable/index.html",
       "type": "source-file",
@@ -7027,8 +7027,8 @@
       "layer": "runtime",
       "path": "src/app.frontend.facets.molstar-rdkit.editable/workspace-shell.css",
       "extension": ".css",
-      "bytes": 13890,
-      "sha256": "7a40b5018596311d4029f7580696538bd5f9da615ebc2932c335952f43ac00c4",
+      "bytes": 21312,
+      "sha256": "44c28b10929a99374674e69e5e81d4c437129037f741c45061f3a449d3457634",
       "generated": false,
       "id": "file:src/app.frontend.facets.molstar-rdkit.editable/workspace-shell.css",
       "type": "source-file",
@@ -55143,9 +55143,9 @@
       "type": "service",
       "name": "dirac-fields.service :8901",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T18:36:45.284758+00:00",
+        "captured_at": "2026-08-12T18:54:49.897467+00:00",
         "source": "best-effort live probes",
-        "git_commit": "ea76cd79de7ef258491fbac806db243a0218b80f",
+        "git_commit": "0926f2a7e4e614f17eade4a89aebd4b80e82cfa5",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -55199,24 +55199,24 @@
           "registered_method_rows": 49,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 157,
+          "command_traces": 165,
           "observed_commands": 9
         },
         "command_observations": [
           {
             "command_id": "attention.list",
             "command_version": 1,
-            "invocation_count": 18,
-            "success_count": 18,
+            "invocation_count": 21,
+            "success_count": 21,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.004426,
-            "p95_dispatch_seconds": 0.007992,
+            "mean_dispatch_seconds": 0.004223,
+            "p95_dispatch_seconds": 0.006261,
             "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-            "last_observed_at": "2026-08-12T11:27:43.125944-07:00"
+            "last_observed_at": "2026-08-12T11:52:40.817187-07:00"
           },
           {
             "command_id": "job.list",
@@ -55251,17 +55251,17 @@
           {
             "command_id": "structure.field.compute",
             "command_version": 1,
-            "invocation_count": 67,
+            "invocation_count": 69,
             "success_count": 43,
-            "expected_refusal_count": 24,
+            "expected_refusal_count": 26,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 43,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.006326,
-            "p95_dispatch_seconds": 0.014536,
+            "mean_dispatch_seconds": 0.006147,
+            "p95_dispatch_seconds": 0.01435,
             "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-            "last_observed_at": "2026-08-12T11:30:29.87626-07:00"
+            "last_observed_at": "2026-08-12T11:52:39.947166-07:00"
           },
           {
             "command_id": "structure.interactions",
@@ -55311,17 +55311,17 @@
           {
             "command_id": "system.health",
             "command_version": 1,
-            "invocation_count": 20,
-            "success_count": 20,
+            "invocation_count": 23,
+            "success_count": 23,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 9.1e-05,
+            "mean_dispatch_seconds": 9e-05,
             "p95_dispatch_seconds": 0.000105,
             "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-            "last_observed_at": "2026-08-12T11:27:43.121598-07:00"
+            "last_observed_at": "2026-08-12T11:52:40.813209-07:00"
           },
           {
             "command_id": "system.version",
@@ -55391,9 +55391,9 @@
       "type": "service",
       "name": "dirac-digital-twin.service",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T18:36:45.284758+00:00",
+        "captured_at": "2026-08-12T18:54:49.897467+00:00",
         "source": "best-effort live probes",
-        "git_commit": "ea76cd79de7ef258491fbac806db243a0218b80f",
+        "git_commit": "0926f2a7e4e614f17eade4a89aebd4b80e82cfa5",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -55447,24 +55447,24 @@
           "registered_method_rows": 49,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 157,
+          "command_traces": 165,
           "observed_commands": 9
         },
         "command_observations": [
           {
             "command_id": "attention.list",
             "command_version": 1,
-            "invocation_count": 18,
-            "success_count": 18,
+            "invocation_count": 21,
+            "success_count": 21,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.004426,
-            "p95_dispatch_seconds": 0.007992,
+            "mean_dispatch_seconds": 0.004223,
+            "p95_dispatch_seconds": 0.006261,
             "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-            "last_observed_at": "2026-08-12T11:27:43.125944-07:00"
+            "last_observed_at": "2026-08-12T11:52:40.817187-07:00"
           },
           {
             "command_id": "job.list",
@@ -55499,17 +55499,17 @@
           {
             "command_id": "structure.field.compute",
             "command_version": 1,
-            "invocation_count": 67,
+            "invocation_count": 69,
             "success_count": 43,
-            "expected_refusal_count": 24,
+            "expected_refusal_count": 26,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 43,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.006326,
-            "p95_dispatch_seconds": 0.014536,
+            "mean_dispatch_seconds": 0.006147,
+            "p95_dispatch_seconds": 0.01435,
             "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-            "last_observed_at": "2026-08-12T11:30:29.87626-07:00"
+            "last_observed_at": "2026-08-12T11:52:39.947166-07:00"
           },
           {
             "command_id": "structure.interactions",
@@ -55559,17 +55559,17 @@
           {
             "command_id": "system.health",
             "command_version": 1,
-            "invocation_count": 20,
-            "success_count": 20,
+            "invocation_count": 23,
+            "success_count": 23,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 9.1e-05,
+            "mean_dispatch_seconds": 9e-05,
             "p95_dispatch_seconds": 0.000105,
             "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-            "last_observed_at": "2026-08-12T11:27:43.121598-07:00"
+            "last_observed_at": "2026-08-12T11:52:40.813209-07:00"
           },
           {
             "command_id": "system.version",
@@ -55639,9 +55639,9 @@
       "type": "service",
       "name": "dirac-web.service :1360",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T18:36:45.284758+00:00",
+        "captured_at": "2026-08-12T18:54:49.897467+00:00",
         "source": "best-effort live probes",
-        "git_commit": "ea76cd79de7ef258491fbac806db243a0218b80f",
+        "git_commit": "0926f2a7e4e614f17eade4a89aebd4b80e82cfa5",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -55695,24 +55695,24 @@
           "registered_method_rows": 49,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 157,
+          "command_traces": 165,
           "observed_commands": 9
         },
         "command_observations": [
           {
             "command_id": "attention.list",
             "command_version": 1,
-            "invocation_count": 18,
-            "success_count": 18,
+            "invocation_count": 21,
+            "success_count": 21,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.004426,
-            "p95_dispatch_seconds": 0.007992,
+            "mean_dispatch_seconds": 0.004223,
+            "p95_dispatch_seconds": 0.006261,
             "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-            "last_observed_at": "2026-08-12T11:27:43.125944-07:00"
+            "last_observed_at": "2026-08-12T11:52:40.817187-07:00"
           },
           {
             "command_id": "job.list",
@@ -55747,17 +55747,17 @@
           {
             "command_id": "structure.field.compute",
             "command_version": 1,
-            "invocation_count": 67,
+            "invocation_count": 69,
             "success_count": 43,
-            "expected_refusal_count": 24,
+            "expected_refusal_count": 26,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 43,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.006326,
-            "p95_dispatch_seconds": 0.014536,
+            "mean_dispatch_seconds": 0.006147,
+            "p95_dispatch_seconds": 0.01435,
             "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-            "last_observed_at": "2026-08-12T11:30:29.87626-07:00"
+            "last_observed_at": "2026-08-12T11:52:39.947166-07:00"
           },
           {
             "command_id": "structure.interactions",
@@ -55807,17 +55807,17 @@
           {
             "command_id": "system.health",
             "command_version": 1,
-            "invocation_count": 20,
-            "success_count": 20,
+            "invocation_count": 23,
+            "success_count": 23,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 9.1e-05,
+            "mean_dispatch_seconds": 9e-05,
             "p95_dispatch_seconds": 0.000105,
             "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-            "last_observed_at": "2026-08-12T11:27:43.121598-07:00"
+            "last_observed_at": "2026-08-12T11:52:40.813209-07:00"
           },
           {
             "command_id": "system.version",
@@ -55899,9 +55899,9 @@
       "type": "store",
       "name": "PostgreSQL · dirac",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T18:36:45.284758+00:00",
+        "captured_at": "2026-08-12T18:54:49.897467+00:00",
         "source": "best-effort live probes",
-        "git_commit": "ea76cd79de7ef258491fbac806db243a0218b80f",
+        "git_commit": "0926f2a7e4e614f17eade4a89aebd4b80e82cfa5",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -55955,24 +55955,24 @@
           "registered_method_rows": 49,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 157,
+          "command_traces": 165,
           "observed_commands": 9
         },
         "command_observations": [
           {
             "command_id": "attention.list",
             "command_version": 1,
-            "invocation_count": 18,
-            "success_count": 18,
+            "invocation_count": 21,
+            "success_count": 21,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.004426,
-            "p95_dispatch_seconds": 0.007992,
+            "mean_dispatch_seconds": 0.004223,
+            "p95_dispatch_seconds": 0.006261,
             "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-            "last_observed_at": "2026-08-12T11:27:43.125944-07:00"
+            "last_observed_at": "2026-08-12T11:52:40.817187-07:00"
           },
           {
             "command_id": "job.list",
@@ -56007,17 +56007,17 @@
           {
             "command_id": "structure.field.compute",
             "command_version": 1,
-            "invocation_count": 67,
+            "invocation_count": 69,
             "success_count": 43,
-            "expected_refusal_count": 24,
+            "expected_refusal_count": 26,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 43,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.006326,
-            "p95_dispatch_seconds": 0.014536,
+            "mean_dispatch_seconds": 0.006147,
+            "p95_dispatch_seconds": 0.01435,
             "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-            "last_observed_at": "2026-08-12T11:30:29.87626-07:00"
+            "last_observed_at": "2026-08-12T11:52:39.947166-07:00"
           },
           {
             "command_id": "structure.interactions",
@@ -56067,17 +56067,17 @@
           {
             "command_id": "system.health",
             "command_version": 1,
-            "invocation_count": 20,
-            "success_count": 20,
+            "invocation_count": 23,
+            "success_count": 23,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 9.1e-05,
+            "mean_dispatch_seconds": 9e-05,
             "p95_dispatch_seconds": 0.000105,
             "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-            "last_observed_at": "2026-08-12T11:27:43.121598-07:00"
+            "last_observed_at": "2026-08-12T11:52:40.813209-07:00"
           },
           {
             "command_id": "system.version",
@@ -56153,9 +56153,9 @@
       "type": "store",
       "name": "Architecture Twin JSON + HTML",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T18:36:45.284758+00:00",
+        "captured_at": "2026-08-12T18:54:49.897467+00:00",
         "source": "best-effort live probes",
-        "git_commit": "ea76cd79de7ef258491fbac806db243a0218b80f",
+        "git_commit": "0926f2a7e4e614f17eade4a89aebd4b80e82cfa5",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -56209,24 +56209,24 @@
           "registered_method_rows": 49,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 157,
+          "command_traces": 165,
           "observed_commands": 9
         },
         "command_observations": [
           {
             "command_id": "attention.list",
             "command_version": 1,
-            "invocation_count": 18,
-            "success_count": 18,
+            "invocation_count": 21,
+            "success_count": 21,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.004426,
-            "p95_dispatch_seconds": 0.007992,
+            "mean_dispatch_seconds": 0.004223,
+            "p95_dispatch_seconds": 0.006261,
             "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-            "last_observed_at": "2026-08-12T11:27:43.125944-07:00"
+            "last_observed_at": "2026-08-12T11:52:40.817187-07:00"
           },
           {
             "command_id": "job.list",
@@ -56261,17 +56261,17 @@
           {
             "command_id": "structure.field.compute",
             "command_version": 1,
-            "invocation_count": 67,
+            "invocation_count": 69,
             "success_count": 43,
-            "expected_refusal_count": 24,
+            "expected_refusal_count": 26,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 43,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.006326,
-            "p95_dispatch_seconds": 0.014536,
+            "mean_dispatch_seconds": 0.006147,
+            "p95_dispatch_seconds": 0.01435,
             "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-            "last_observed_at": "2026-08-12T11:30:29.87626-07:00"
+            "last_observed_at": "2026-08-12T11:52:39.947166-07:00"
           },
           {
             "command_id": "structure.interactions",
@@ -56321,17 +56321,17 @@
           {
             "command_id": "system.health",
             "command_version": 1,
-            "invocation_count": 20,
-            "success_count": 20,
+            "invocation_count": 23,
+            "success_count": 23,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 9.1e-05,
+            "mean_dispatch_seconds": 9e-05,
             "p95_dispatch_seconds": 0.000105,
             "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-            "last_observed_at": "2026-08-12T11:27:43.121598-07:00"
+            "last_observed_at": "2026-08-12T11:52:40.813209-07:00"
           },
           {
             "command_id": "system.version",
@@ -56438,7 +56438,7 @@
       "type": "system",
       "name": "CommandDispatcher",
       "runtime_observation": {
-        "traces": 157,
+        "traces": 165,
         "observed_commands": 9
       }
     },
@@ -60475,22 +60475,12 @@
     },
     {
       "source": "file:src/app.frontend.facets.molstar-rdkit.editable/index.html",
-      "target": "file:src/app.frontend.facets.molstar-rdkit.editable/theme-dark.css",
-      "relation": "references-file"
-    },
-    {
-      "source": "file:src/app.frontend.facets.molstar-rdkit.editable/index.html",
       "target": "file:src/app.frontend.facets.molstar-rdkit.editable/theme-fascia.css",
       "relation": "references-file"
     },
     {
       "source": "file:src/app.frontend.facets.molstar-rdkit.editable/index.html",
       "target": "file:src/app.frontend.facets.molstar-rdkit.editable/theme-fascia.js",
-      "relation": "references-file"
-    },
-    {
-      "source": "file:src/app.frontend.facets.molstar-rdkit.editable/index.html",
-      "target": "file:src/app.frontend.facets.molstar-rdkit.editable/theme-toggle.js",
       "relation": "references-file"
     },
     {
