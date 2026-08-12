@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thirty-five visual languages for one field</title>
+<style>
+  :root {
+    --paper: #efece5;
+    --card:  #f7f5f0;
+    --ink:   #16150f;
+    --ink-2: #5d5a4f;
+    --ink-3: #8d8a7e;
+    --rule:  #d6d2c6;
+    --accent:#8a3b2e;
+    --mono: ui-monospace, "SF Mono", "IBM Plex Mono", Menlo, monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--paper); color: var(--ink); }
+  body {
+    font-family: var(--mono);
+    -webkit-font-smoothing: antialiased;
+    padding: 0 0 120px;
+  }
+
+  /* ── masthead ─────────────────────────────────────────────────────────── */
+  header {
+    max-width: 1400px; margin: 0 auto; padding: 72px 40px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .eyebrow {
+    font-size: 9px; letter-spacing: .34em; text-transform: uppercase;
+    color: var(--ink-3); margin: 0 0 22px;
+  }
+  h1 {
+    font-family: var(--serif); font-weight: 400; font-style: italic;
+    font-size: clamp(30px, 5.2vw, 60px); line-height: 1.02;
+    letter-spacing: -.02em; margin: 0 0 24px; max-width: 17ch;
+  }
+  .standfirst {
+    max-width: 62ch; font-size: 12.5px; line-height: 1.75; color: var(--ink-2);
+    margin: 0 0 34px;
+  }
+  .standfirst strong { color: var(--ink); font-weight: 600; }
+  .specimen {
+    display: flex; flex-wrap: wrap; gap: 0; margin: 0 0 -1px;
+    border-top: 1px solid var(--rule);
+  }
+  .specimen div {
+    padding: 14px 26px 14px 0; margin-right: 26px;
+    border-right: 1px solid var(--rule);
+  }
+  .specimen div:last-child { border-right: 0; }
+  .specimen dt {
+    font-size: 8.5px; letter-spacing: .2em; text-transform: uppercase;
+    color: var(--ink-3); margin: 0 0 5px;
+  }
+  .specimen dd { margin: 0; font-size: 12px; color: var(--ink); }
+
+  /* ── families ─────────────────────────────────────────────────────────── */
+  main { max-width: 1400px; margin: 0 auto; padding: 0 40px; }
+  section { padding: 58px 0 8px; }
+  /* The family header is a full-width band, not a sidebar. As a sidebar the
+     grid was squeezed to 4 columns while the families hold 4, 5 and 6 tiles —
+     so every 5- and 6-tile family orphaned one onto a second row against a
+     wall of white. A contact sheet whose rows do not close is not a contact
+     sheet. Columns are now set per family from its own count. */
+  .family { margin-bottom: 22px; max-width: 96ch; }
+  .family .cols { display: flex; gap: 34px; align-items: baseline; }
+  .family h2 {
+    font-family: var(--serif); font-weight: 400; font-size: 21px;
+    line-height: 1.25; margin: 0 0 10px; letter-spacing: -.01em;
+  }
+  .family .n {
+    font-size: 9px; letter-spacing: .24em; color: var(--accent);
+    text-transform: uppercase; margin: 0 0 9px;
+  }
+  .family p {
+    font-size: 11px; line-height: 1.7; color: var(--ink-2); margin: 0;
+  }
+
+  .grid { display: grid; gap: 24px; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); }
+  @media (max-width: 1180px) { .grid { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+  @media (max-width: 780px)  { .grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+  figure {
+    margin: 0; background: var(--card);
+    border: 1px solid var(--rule);
+    display: flex; flex-direction: column;
+  }
+  .frame { position: relative; aspect-ratio: 1; background: var(--card); }
+  canvas { width: 100%; height: 100%; display: block; }
+  .idx {
+    position: absolute; top: 8px; left: 9px; z-index: 2;
+    font-size: 8.5px; letter-spacing: .1em; color: rgba(255,255,255,.9);
+    mix-blend-mode: difference; font-variant-numeric: tabular-nums;
+  }
+  figcaption { padding: 12px 13px 14px; border-top: 1px solid var(--rule); }
+  figcaption h3 {
+    margin: 0 0 6px; font-size: 11.5px; font-weight: 600; letter-spacing: -.005em;
+  }
+  figcaption p { margin: 0; font-size: 10px; line-height: 1.62; color: var(--ink-2); }
+  figcaption .cost {
+    display: block; margin-top: 8px; padding-top: 7px;
+    border-top: 1px dotted var(--rule);
+    font-size: 9px; color: var(--ink-3);
+  }
+  figcaption .cost b { color: var(--accent); font-weight: 600; }
+
+  /* Two max-widths on one rule: the second silently won, so the footer
+     centred itself at 78ch in the middle of a 1400px page and read as a
+     stray column. The measure belongs on the paragraphs, not the band. */
+  footer {
+    max-width: 1400px; margin: 66px auto 0; padding: 30px 40px 0;
+    border-top: 1px solid var(--rule);
+    font-size: 10px; line-height: 1.8; color: var(--ink-3);
+  }
+  footer p { max-width: 78ch; }
+  footer code { color: var(--ink-2); }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#141310; --card:#1b1a16; --ink:#eae7dd; --ink-2:#a5a094;
+      --ink-3:#757166; --rule:#2f2d27; --accent:#d08a72;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="eyebrow">Dirac · design study · fields only</p>
+  <h1>Thirty-five ways to draw the same field, and what each one costs</h1>
+  <p class="standfirst">
+    Every tile below renders <strong>identical data</strong>: aspirin's classical
+    electrostatic potential, one 96×96 slice through the molecular plane, computed
+    by <code>backend/field_server.py</code>. Nothing here is a texture or a mock —
+    if a language cannot survive real data it is not a language, it is a filter.
+    <br><br>
+    <strong>These are not thirty-five palettes.</strong> Thirty-five recolourings of one
+    isosurface is the first thing anyone reaches for, which is exactly why it is
+    worth nothing. What varies here is <strong>the mark</strong>: what the field is
+    made of on the page. A contour is a line asserting equality. A stipple is a
+    countable event. A hillshade is a lie about light that the eye reads as height.
+    Each tradition below already solved “how do I show a continuous quantity” for a
+    different medium and a different reader — and each one brings its own distortion,
+    named underneath it.
+  </p>
+  <dl class="specimen">
+    <div><dt>Specimen</dt><dd>Aspirin · classical MEP</dd></div>
+    <div><dt>Range</dt><dd>−109.5 … +127.8 kcal/mol</dd></div>
+    <div><dt>Slice</dt><dd>96 × 96, molecular plane</dd></div>
+    <div><dt>Zero</dt><dd>held at zero in every tile</dd></div>
+    <div><dt>Transfer</dt><dd>signed |v|<sup>0.42</sup> — declared, not baked in</dd></div>
+  </dl>
+</header>
+
+<main id="main"></main>
+
+<footer>
+  <p>
+    One rule is enforced across all 35 and is worth stating because it is the
+    easiest thing to lose: <strong>zero stays at zero</strong>. A diverging field
+    normalised to its own min and max drifts the neutral region off-centre and the
+    picture then asserts a charge the molecule does not have. Every tile normalises
+    against <code>max(|min|, |max|)</code> instead.
+  </p>
+  <p>
+    Rendered live from <code>design/field-languages/data.js</code>. Regenerate the
+    specimen with a different molecule or field by re-running the extraction against
+    any cached cube — the renderers take the grid, not a picture.
+  </p>
+  <p>
+    <strong>On the transfer function.</strong> A 1/r Coulomb field collapses to near
+    zero a couple of ångström out, so a linear ramp spends most of its range on the
+    nuclei and leaves the frame blank — all 35 languages would be drawing the
+    same empty square, and the comparison would be about nothing. Display therefore
+    applies a signed power law, |v|<sup>0.42</sup>, preserving sign and zero. The
+    <em>data</em> stays raw. That split is the point: raw data with a declared
+    transfer is honest; pre-scaled data under a linear-looking legend is not, and
+    it is the same error as a colour ramp that quietly renormalises per molecule.
+  </p>
+</footer>
+
+<script src="data.js"></script>
+<script src="renderers.js"></script>
+<script>
+const FAMILIES = [
+  { n: 'Family A', h: 'The field as a substance',
+    p: 'Continuous tone. The oldest answer and the one everyone defaults to: value maps to colour, everywhere at once. Reads instantly, and hides exactly where the field is changing.',
+    items: [
+      ['wash', 'Diverging wash', 'Value to colour, continuous, zero held neutral. The baseline every other tile argues with.', 'Cost: no quantity is recoverable — you can rank, not read.'],
+      ['bands', 'Posterised bands', 'The same ramp quantised to nine steps, so each band is a stated interval.', 'Cost: invents edges where the field is smooth.'],
+      ['contour', 'Contour set', 'Lines of equal value, weighted so major levels read first.', 'Cost: says nothing between the lines.'],
+      ['haze', 'Accumulated haze', 'Brightness as integrated magnitude — the 2D analogue of a ray march.', 'Cost: depth is implied, not present; the eye over-reads it.'],
+      ['edge', 'Gradient magnitude', 'Draws where the field CHANGES rather than what it is.', 'Cost: discards sign entirely — a wall, not a slope.'],
+    ]},
+  { n: 'Family B', h: 'The field as countable',
+    p: 'Discrete marks. Density stands in for magnitude, which means the reader can in principle count — and means the medium can be ink, thread, or anything else that is either present or absent.',
+    items: [
+      ['stipple', 'Stipple density', 'Dot frequency is the value. Sign by hue, magnitude by count.', 'Cost: unreliable below ~10% — sparse and empty look alike.'],
+      ['halftone', 'Halftone', 'Fixed lattice, varying dot radius. A press could print this.', 'Cost: the lattice itself becomes visible structure.'],
+      ['hatch', 'Directional hatch', 'Stroke DIRECTION carries sign; density carries magnitude.', 'Cost: survives photocopying; fights with molecular geometry.'],
+      ['engrave', 'Engraved rules', 'One family of lines displaced by the value — a banknote’s answer.', 'Cost: displacement reads as shape, not quantity.'],
+      ['voxel', 'Quantised cells', 'Areal averages on a coarse lattice, opacity in four steps.', 'Cost: honest about resolution, brutal about detail.'],
+      ['rings', 'Per-atom rings', 'Count of rings = field at that nucleus. Atom-centric, not spatial.', 'Cost: throws the whole continuum away to answer one question well.'],
+    ]},
+  { n: 'Family C', h: 'The field as flow',
+    p: 'A scalar has a gradient, and the gradient is a vector nobody usually draws. These make the direction of change visible — which is what a chemist is actually reasoning about when they ask where a charge is pulling.',
+    items: [
+      ['streamlines', 'Gradient streamlines', 'Paths walked uphill from a seed lattice.', 'Cost: seeds are arbitrary; density lies about importance.'],
+      ['lic', 'Line integral convolution', 'Noise smeared along the gradient — texture direction IS the vector.', 'Cost: beautiful, and almost unreadable as a magnitude.'],
+      ['hairline', 'Dense hairlines', 'Contours only, uniform weight, tight spacing.', 'Cost: spacing carries the gradient, which most readers never decode.'],
+      ['ribbon', 'Weighted ribbons', 'Streamlines whose width and opacity carry magnitude.', 'Cost: the prettiest tile here, and the least measurable.'],
+    ]},
+  { n: 'Family D', h: 'Borrowed from cartography',
+    p: 'Maps solved continuous-quantity display centuries ago, for readers who had to act on it. Each convention below is load-bearing somewhere — and each carries an assumption about the reader that may not transfer to a chemist.',
+    items: [
+      ['bathymetric', 'Bathymetric ramp', 'Sea-chart palette: depth below, land above, shoreline at zero.', 'Cost: implies a hard boundary at zero that chemistry does not have.'],
+      ['hillshade', 'Hillshade relief', 'A lie about light the eye reads as height.', 'Cost: the illumination angle silently privileges one direction.'],
+      ['topographic', 'Topographic sheet', 'Tinted bands plus index contours every fifth line.', 'Cost: dense; assumes a reader trained to read contour spacing.'],
+      ['choropleth', 'Choropleth cells', 'Areal averages in bounded units, as a census map.', 'Cost: the cell boundary is an artefact and reads as real.'],
+      ['spotheights', 'Spot heights', 'Extrema found, marked and LABELLED with the number.', 'Cost: only the extrema; but they are the part anyone quotes.'],
+    ]},
+  { n: 'Family E', h: 'Borrowed from print',
+    p: 'Reproduction constraints produce their own aesthetics. These ask what the field looks like when the medium can only do two inks, one bit, or a bite into paper — and constraint tends to force the question of what actually matters.',
+    items: [
+      ['riso', 'Risograph duotone', 'Two spot inks, deliberately misregistered; overlap is the third colour.', 'Cost: registration error reads as data if you do not know the medium.'],
+      ['blueprint', 'Cyanotype', 'White lines on process blue; contours only.', 'Cost: no fill, so magnitude lives entirely in line spacing.'],
+      ['newsprint', 'Screened halftone', 'A single angled screen, black ink only.', 'Cost: loses sign completely — magnitude only.'],
+      ['deboss', 'Debossed paper', 'No colour at all. The field becomes relief.', 'Cost: sign is nearly unreadable; texture is everything.'],
+      ['thermal', 'Thermal 1-bit', 'Ordered dither — a receipt printer’s entire vocabulary.', 'Cost: four grey levels of perceived tone, and that is the ceiling.'],
+    ]},
+  { n: 'Family F', h: 'How instruments already draw fields',
+    p: 'Before anyone rendered a molecular field, machines were imaging continuous quantities directly onto phosphor, film and glass. These languages come with a built-in claim of measurement — which is a real risk as well as a real asset.',
+    items: [
+      ['phosphor', 'Storage oscilloscope', 'Glowing contours with tube bloom and scanlines.', 'Cost: borrows scientific authority it has not earned.'],
+      ['schlieren', 'Schlieren', 'A knife-edge turns a gradient into brightness, as in a wind tunnel.', 'Cost: images the derivative; the value itself is absent.'],
+      ['fringes', 'Interference fringes', 'Equal phase, not equal value — spacing is the gradient.', 'Cost: aliases badly where the field is steep.'],
+      ['radar', 'PPI radar', 'Polar sweep with range attenuation and range rings.', 'Cost: imposes a centre and a radial bias the molecule does not have.'],
+      ['autoradiograph', 'Autoradiograph', 'Log response with film grain — exposure, not measurement.', 'Cost: grain is honest about a finite exposure and dishonest about noise.'],
+    ]},
+  { n: 'Family G', h: 'The ones that argue',
+    p: 'Every tile above shows all the values at once. These four each refuse something on purpose — and the refusal is the proposal. Included because a design study that only widens the space has not made an argument.',
+    items: [
+      ['negative', 'The neutral region', 'Draws only where the field ISN’T. Everything else buries this in white.', 'Proposes: the empty space is the design opportunity.'],
+      ['uncertainty', 'Value × confidence', 'Sharp where the claim is safe, dissolved where it is not — the measured ±25%.', 'Proposes: precision should be visible, not a footnote.'],
+      ['threshold', 'One decision', 'Above, below, or neither. No gradient at all.', 'Proposes: the honest picture of a binary judgement.'],
+      ['duotoneDepth', 'Shape carries sign', 'Ink density only; sign is stroke ORIENTATION, not hue.', 'Proposes: colourblind-safe by construction, not by palette.'],
+      ['isolineOnly', 'The single contour', 'Exactly the one level the panel actually renders.', 'Proposes: the reader may never have needed the rest.'],
+    ]},
+];
+
+const D = window.FIELD_DATA.mep;
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+const pending = [];
+let idx = 0;
+const main = document.getElementById('main');
+
+for (const fam of FAMILIES) {
+  const sec = document.createElement('section');
+  const head = document.createElement('div');
+  head.className = 'family';
+  head.innerHTML = `<div class="cols"><div style="flex:0 0 auto"><p class="n">${fam.n}</p>
+                      <h2>${fam.h}</h2></div><p style="flex:1 1 auto">${fam.p}</p></div>`;
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  grid.style.setProperty('--cols', Math.min(6, fam.items.length));
+  for (const [key, title, why, cost] of fam.items) {
+    idx++;
+    const fig = document.createElement('figure');
+    const num = String(idx).padStart(2, '0');
+    fig.innerHTML = `<div class="frame"><span class="idx">${num}</span>
+        <canvas></canvas></div>
+      <figcaption><h3>${title}</h3><p>${why}</p>
+        <span class="cost">${cost.replace(/^(Cost|Proposes):/, '<b>$1:</b>')}</span></figcaption>`;
+    grid.appendChild(fig);
+    pending.push([fig, key]);
+  }
+  sec.appendChild(head);
+  sec.appendChild(grid);
+  main.appendChild(sec);
+}
+
+// Render AFTER layout, at the size each tile actually occupies. A fixed 232px
+// backing store was upscaled to 330 in the four-column families and downscaled
+// in the six — so the study comparing marks was comparing resampling artefacts
+// as much as marks.
+for (const [fig, key] of pending) {
+  const frame = fig.querySelector('.frame');
+  const S = Math.round(frame.clientWidth) || 232;
+  const cv = fig.querySelector('canvas');
+  cv.width = S * DPR; cv.height = S * DPR;
+  const ctx = cv.getContext('2d');
+  ctx.scale(DPR, DPR);
+  const fn = window.FIELD_RENDERERS[key];
+  if (fn) { try { fn(ctx, S, D); } catch (e) { console.error(key, e); } }
+  else { ctx.fillStyle = '#f00'; ctx.fillText('missing: ' + key, 10, 20); }
+}
+console.log('rendered', idx, 'languages');
+</script>
+</body>
+</html>
