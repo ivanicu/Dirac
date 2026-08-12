@@ -4,11 +4,28 @@ Last re-derived: **2026-08-11**, against the running system, not from memory. Ev
 number in here has the command that produced it next to it — if a claim has no
 command, it is marked as a judgement, not a measurement.
 
-> **NOT DEPLOYED.** Nothing here runs as a supervised service. Three processes are
-> started by hand (`bin/dev`), there is no authentication, and there is no public
-> URL. The systemd units in `deploy/systemd/` were installed, proven (a `kill -9`
-> came back in 8 s), and then uninstalled the same hour — see `deploy/README.md`.
-> Treat every "SHIPPED" below as *shipped into the repo and runnable locally*.
+> **TWO TIERS, AND THEY RUN DIFFERENT AMOUNTS OF THIS ARCHITECTURE.**
+>
+> **① The public tier — `ivan.icu/dirac/index.html`.** A static bake on Cloudflare
+> Pages. Verified: the live `dirac.js` is **byte-identical** to the local build
+> (md5 `6090c48a`), so the frontend architecture IS deployed. It reads PRECOMPUTED
+> fields (`fields/manifest.json`) because a static host cannot run pyscf — so the
+> job ledger, dedup, concurrency bound, method-currency cache and `/admin` surface
+> are **absent there by construction**, not by omission.
+>
+> **② The local host — this box, supervised.** `systemctl --user`, linger on, so it
+> comes back after a reboot without a login:
+> `dirac-fields` :8901 · `dirac-web` :1338 · `dirac-ops` :1355 ·
+> `dirac-physics` :8902 installed-not-started (that port is held by a hand-run
+> process belonging to another session).
+> Reachable on the LAN (`192.168.1.3`) and over Tailscale (`100.78.155.10`).
+> Supervision PROVEN, not assumed: `kill -9` on the fields daemon returned a new
+> pid inside 8 s with `/health` 200.
+>
+> **Auth: none, stated.** Shell access to this box is the boundary; a `Host`/`Origin`
+> allowlist blocks DNS rebinding but anyone who can reach the LAN can submit
+> compute. Every backend measurement in this file is therefore a claim about tier
+> ②, which is the only place that half of the architecture exists.
 
 ## How to read the state column
 

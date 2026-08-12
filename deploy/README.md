@@ -13,26 +13,39 @@ This directory does not fix that by itself — it documents the fix
 three services (`bin/dev`) plus a safe way to reclaim stale compute
 (`bin/dirac-sweep`).
 
-> **STATUS 2026-08-11 — NOT DEPLOYED, BY DECISION.** Ivan: 「先不deploy」. The
-> units below were installed, started and then **uninstalled the same hour**; the
-> copies under `~/.config/systemd/user/` are gone and nothing dirac-related is
-> enabled except the pre-existing `dirac-sync.timer` (git auto-sync, unrelated to
-> the app). The three services are back to hand-started processes — which is what
-> `bin/dev` is for.
+> **STATUS 2026-08-11 (evening) — RUNNING AS THE LOCAL HOST.** Ivan:
+> 「我们本地还跑一个自己的host」. The units were installed, uninstalled at his
+> earlier 「先不deploy」, and are now installed again for a different and better
+> reason: the public site is a STATIC bake, so the backend half of the
+> architecture has no deployment target there. This box is that target.
 >
-> **What that hour bought, kept because it is not re-derivable from the files:**
-> the units were shown to WORK before being switched off. `kill -9` on the fields
-> daemon's MainPID returned a new pid inside 8 s with `/health` 200, and
-> `loginctl show-user -p Linger` was already `yes`, so nothing extra is needed for
-> start-at-boot when this is turned back on. That is the difference between a unit
-> file and a supervision story: this one has been executed. To deploy, follow the
-> install steps below — they are the exact commands that were run.
+> | unit | port | state |
+> |---|---|---|
+> | `dirac-fields` | 8901 | enabled + active |
+> | `dirac-web` | 1338 | enabled + active |
+> | `dirac-ops` | 1355 | enabled + active |
+> | `dirac-physics` | 8902 | installed, NOT started — the port is held by a hand-run process from another session |
 >
-> **One real defect came out of it and is FIXED in the code, not here:** over
-> Tailscale the page served 200 while the fields daemon answered 403, because the
-> Host allowlist derived this box's addresses from the default route only. That is
-> the "backend offline" report from the Mac. `_allowed_hosts()` now enumerates
-> every interface address, with `DIRAC_EXTRA_HOSTS` for names.
+> Linger is on, so all three start at boot without a login. Supervision proven:
+> `kill -9` on the fields MainPID returned a new pid inside 8 s, `/health` 200.
+> Verified on the LAN (192.168.1.3) and over Tailscale (100.78.155.10), including
+> a real MEP computed through the Tailscale address — the path that used to answer
+> 403 because the Host allowlist only knew the default route.
+>
+> **`dirac-ops` is a separate unit on its own port, and both halves of that are
+> deliberate.** The console is what you open when the app is broken, so it must not
+> share a process, a directory or a build step with the app it reports on — a build
+> failure would otherwise take the diagnostic surface down exactly when it is
+> needed. Before it existed, `ops/index.html` was not reachable on this host at
+> all, because :1338 serves `build/dirac` and the console lives in the repo root.
+>
+> **It is ALSO rate-limited, unlike `dirac-web`, because I broke it first.** I
+> picked :1339 without checking, another session's sandbox server already held it,
+> and `Restart=always` with no limit turned that into an infinite restart loop that
+> burned CPU and filled the journal while `systemctl` still called it "installed" —
+> the exact failure I had described to a teammate an hour earlier when arguing for
+> splitting the merged unit. `StartLimitBurst=5` in 300 s makes a port conflict
+> fail VISIBLY instead of forever.
 
 > **The unit was still SPLIT, and that stands regardless of deployment.**
 > `dirac-backend.service` became `dirac-fields` + `dirac-physics` (the

@@ -1,0 +1,45 @@
+# dirac-ops.service — serves the OPS CONSOLE (ops/) on :1355.
+#
+# -g enables gzip. -c-1 DISABLES caching — this is not cosmetic: a cached
+# bundle behind a browser/proxy cache wasted an hour of debugging on this
+# project already (stale JS served after a rebuild, looking like the fix
+# hadn't landed). Do not drop -c-1 to "simplify" this line.
+#
+# Trivial by design: if it dies, restart it, unconditionally, always — a
+# static file server has no state to protect and no crash loop worth
+# rate-limiting (StartLimitBurst on dirac-backend.service exists to protect
+# PostgreSQL from a hammering backend; there is nothing analogous here).
+#
+# WHY A SEPARATE UNIT AND PORT rather than folding ops/ into the built bundle:
+# the console is the thing you open when the app is broken, so it must not be
+# served by the same process, from the same directory, or behind the same build
+# step as the app it reports on. A build failure that takes the app down would
+# otherwise take its diagnostic surface down with it — which is exactly when it
+# is needed. Measured symptom before this existed: ops/index.html was not
+# reachable at all on the local host, because :1338 serves build/dirac and the
+# console lives in the repo root.
+
+[Unit]
+Description=Dirac ops console (ops/) on :1355
+After=network.target
+
+# Rate-limited, unlike dirac-web, and the difference is deliberate: this unit's
+# port can be TAKEN by something else on a developer box (it was — another
+# session's sandbox server held the first port I picked), and `Restart=always`
+# with no limit turns that into an infinite restart loop that burns CPU and
+# fills the journal while looking "installed". Five attempts in five minutes,
+# then systemd gives up and `is-active` says failed, which is a state a human
+# can see. Inherited from dirac-fields, where the same reasoning applies to
+# PostgreSQL being down.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ivan/dirac
+ExecStart=/home/ivan/dirac/node_modules/.bin/http-server ops -p 1355 -g -c-1
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target
