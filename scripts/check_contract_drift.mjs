@@ -337,6 +337,25 @@ for (const m of fieldMetaSource.matchAll(/\bmeta\[\s*['"](\w+)['"]\s*\]\s*=/g)) 
     backendFieldMetaKeys.add(m[1]);
 }
 
+// (d) the normalize_meta WRAPPER writes into a dict it calls `out`, not `meta`, and the
+//     scan above could not see it. Found the honest way: the gate reported
+//     `iface.pyi declares ["method_version"], which the backend extraction did not find
+//     anywhere — either a dead contract key or a broken extractor`, and it was the
+//     extractor. Widened rather than working around it, because the alternative was to
+//     rename a variable in the backend to suit an instrument, which is fitting the
+//     object to the measurement.
+//
+//     PROXY LEDGER. PROPERTY: every key the backend can emit. PROXY: bracket
+//     assignments into a dict named `meta` OR `out` within the excised region.
+//     IMPLICATION: proxy => property (an assignment IS an emission); property => proxy
+//     FAILS for any third variable name. SAFE SIDE: a key the scan FINDS is really
+//     emitted, so `missing from iface.pyi` is sound; a key it does NOT find may still be
+//     emitted, which is why the `declares X the backend does not emit` branch says
+//     "check by hand" instead of failing outright.
+for (const m of fieldMetaSource.matchAll(/\bout\[\s*['"](\w+)['"]\s*\]\s*=/g)) {
+    backendFieldMetaKeys.add(m[1]);
+}
+
 if (backendFieldMetaKeys.size < 10) {
     fail(`static analysis found only ${backendFieldMetaKeys.size} FieldMeta key(s) in `
         + `${backendPath} — the extraction is almost certainly broken, not the backend `

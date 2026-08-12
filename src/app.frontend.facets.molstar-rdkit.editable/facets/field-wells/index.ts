@@ -266,6 +266,10 @@ const Kinds: Record<FieldKind, KindSpec> = {
 type CacheSource = 'browser' | 'memory' | 'db' | 'computed';
 
 interface FieldMeta {
+  method_version?: string | null;   // the running SOURCE digest of the method
+  toolkit_wrote_at?: string | null; // pyscf stamps the wall clock INSIDE the cube;
+                                    // moved into meta so the bytes stay a function
+                                    // of the input (backend/cube.py)
     kind: string;
     basis?: string;                  // quantum kinds only
     method?: string;
