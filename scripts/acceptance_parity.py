@@ -218,6 +218,34 @@ def normalise_sdk(env: dict) -> dict:
     return base
 
 
+def via_http_v2(molfile: str) -> dict:
+    """Leg 5: /v2/invoke, spoken directly with urllib — no SDK in the path.
+
+    Separate from the SDK leg on purpose. The SDK's HttpTransport tries /v2/invoke first
+    and falls back to v1, so the SDK leg passing does NOT establish that v2 itself is
+    right — it could be passing through the fallback. This leg has no fallback: if v2 is
+    broken or absent, it fails loudly here.
+    """
+    req = urllib.request.Request(
+        BASE + '/v2/invoke',
+        data=json.dumps({
+            'method_id': METHOD,
+            'input': {'molecule': {'kind': 'molfile', 'content': molfile,
+                                   'dimensionality': 3},
+                      'parameters': {'basis': BASIS}},
+            'inline_max': 0}).encode(),
+        headers={'Content-Type': 'application/json'})
+    t0 = time.time()
+    try:
+        with urllib.request.urlopen(req, timeout=900) as fh:
+            body = json.load(fh)
+    except urllib.error.HTTPError as e:
+        body = json.loads(e.read() or b'{}')
+        body['_http_status'] = e.code
+    body['_wall'] = round(time.time() - t0, 2)
+    return body
+
+
 def via_cli_json(molfile: str) -> dict:
     """Leg 4: the CLI, invoked as a SUBPROCESS, parsing only its stdout.
 
@@ -254,8 +282,6 @@ def via_cli_json(molfile: str) -> dict:
 
 
 ABSENT_LEGS = {
-    'http_v2': 'PR-07 has not landed; /v2/invoke does not exist, so the v1 route is '
-               'compared instead and the v2 leg is ABSENT',
     'mcp': 'PR-14 has not landed',
 }
 
@@ -277,8 +303,10 @@ def main() -> int:
     http_body = via_http_v1(molfile)
     sdk_env = via_python_sdk(molfile)
     cli_env = via_cli_json(molfile)
+    v2_env = via_http_v2(molfile)
     legs = {'core': normalise_core(core_env),
-            'http': normalise_http(http_body),
+            'v1': normalise_http(http_body),
+            'v2': normalise_core(v2_env),
             'sdk': normalise_sdk(sdk_env),
             'cli': normalise_sdk(cli_env)}
 
@@ -291,12 +319,13 @@ def main() -> int:
         if not same:
             diffs.append((k, vals))
         mark = '  ' if same else '≠≠'
-        row = '  '.join(f'{n}={str(v)[:26]}' for n, v in vals.items())
+        row = ' '.join(f'{n}={str(v)[:20]}' for n, v in vals.items())
         print(f'  {mark} {k:<{width}}  {row}')
-    core, http = legs['core'], legs['http']
+    core = legs['core']
     print()
-    print(f'  wall: core {core_env.get("_wall")}s · http {http_body.get("_wall")}s · '
-          f'sdk {sdk_env.get("_wall")}s (excluded from the comparison)')
+    print(f'  wall: core {core_env.get("_wall")}s · v1 {http_body.get("_wall")}s · '
+          f'v2 {v2_env.get("_wall")}s · sdk {sdk_env.get("_wall")}s '
+          f'(excluded from the comparison)')
     print(f'  sdk transport: {(sdk_env.get("meta") or {}).get("transport")}')
     print(f'  cli exit code: {cli_env.get("_cli_exit")} · stdout parsed as JSON: '
           f'{"_stdout_not_json" not in cli_env}')
@@ -324,6 +353,44 @@ def main() -> int:
               'fail.')
         return 1
     if diffs:
+        # DUMP THE EVIDENCE, because the one real disagreement seen so far did not
+        # recur. 2026-08-11: a single run had core=9db3a91b… against 06b686f0… on the
+        # other four legs, with the energy, extrema, grid and method version identical to
+        # 9-10 digits — so the science agreed and the bytes did not. Three subsequent
+        # runs of all five legs and eight in-process recomputations were all identical,
+        # and the cause is UNVERIFIED. It is not called fixed.
+        #
+        # What was missing was not an explanation but the EVIDENCE: by the time the
+        # difference was noticed the cubes were gone, so the obvious hypothesis (an
+        # orbital phase flip — water's HOMO has symmetric extrema, so a global sign
+        # change leaves every reported number identical and alters every byte) could not
+        # be tested. Now a failure writes both payloads and the next occurrence is
+        # diagnosable in one command instead of unreproducible.
+        try:
+            import pathlib as _pl
+            dump = _pl.Path(os.environ.get('DIRAC_SCRATCH')
+                            or (_pl.Path.home() / '.cache/dirac/scratch')) / 'parity-fail'
+            dump.mkdir(parents=True, exist_ok=True)
+            for name, env in (('core', core_env), ('v1', http_body), ('v2', v2_env),
+                              ('sdk', sdk_env), ('cli', cli_env)):
+                (dump / f'{name}.envelope.json').write_text(json.dumps(env, indent=2,
+                                                                      default=str))
+                blob = None
+                if name == 'v1':
+                    blob = (env.get('cube') or '').encode()
+                else:
+                    refs = env.get('artifacts') or []
+                    if refs and refs[0].get('inline_base64'):
+                        import base64
+                        blob = base64.b64decode(refs[0]['inline_base64'])
+                if blob:
+                    (dump / f'{name}.cube').write_bytes(blob)
+            (dump / 'molfile.mol').write_text(molfile)
+            print(f'  evidence written to {dump} — compare with:')
+            print(f'    python3 -c "import numpy as np; …"  or diff the .cube files '
+                  f'directly; a global sign flip shows as identical |values|')
+        except Exception as e:                                      # noqa: BLE001
+            print(f'  (could not write the evidence dump: {e})')
         print(f'PARITY FAILED — {len(diffs)} difference(s) across '
               f'{len(legs)} transports:')
         for k, vals in diffs:

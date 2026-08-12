@@ -259,6 +259,127 @@ PRODUCER_NOTES = ('wall-clock deadline inside the SCF loop + measured cube-cost 
 def _db(): return psycopg.connect(DB_DSN, autocommit=True)
 
 
+# ── the v2 surface: ONE logical endpoint over the kernel (PR-06/07) ───────────
+#
+# THE POINT, and it is the audit's whole thesis in one paragraph: /field is 200 lines of
+# orchestration — validate, consult the cache, open a job, take a concurrency slot, run
+# science, register artifacts, normalise metadata, close the job, shape a response — and
+# every one of those steps is reachable ONLY by speaking HTTP. These routes reach the
+# same steps by calling backend/kernel.build(), which is the same call the SDK's
+# LocalTransport makes. So there is one orchestration with two front doors instead of two
+# orchestrations that agree by luck.
+#
+# /field IS NOT TOUCHED HERE. It keeps its own path, the v1 golden keeps passing, and
+# scripts/acceptance_parity.py compares the two on every gate run. Deleting the old
+# orchestration is a later, separate commit whose safety is measured rather than argued —
+# and the measurement already exists.
+#
+# LAZY, and the laziness is load-bearing: kernel.build() imports field_server to compute
+# source digests, so building it during field_server's own import would hand it a
+# half-initialised module. Built on the first /v2 request instead.
+_kernel_singleton = None
+_kernel_lock = threading.Lock()
+_kernel_error: str | None = None
+
+
+def _kernel():
+    global _kernel_singleton, _kernel_error
+    if _kernel_singleton is not None:
+        return _kernel_singleton
+    with _kernel_lock:
+        if _kernel_singleton is None:
+            import kernel as _k
+            _kernel_singleton = _k.build()
+            print(f'[v2] kernel ready · store={getattr(_kernel_singleton, "store_kind", "?")}'
+                  f' · {len(_kernel_singleton.catalog)} methods', flush=True)
+    return _kernel_singleton
+
+
+def _v2_error(code: str, message: str, **details) -> tuple[int, dict]:
+    f = failures.DiracFailure(code, message, details=details or None)
+    return f.http_status if f.http_status != 200 else 400, {
+        'ok': False, 'error': f.to_error_payload(), 'meta': {'envelope': 2}}
+
+
+def handle_v2(method: str, path: str, body: dict | None) -> tuple[int, dict] | None:
+    """Returns (status, payload) for a path this surface owns, else None.
+
+    One dispatch function rather than a branch per route in do_POST/do_GET, so the
+    daemon's routing table stays readable and this whole surface can be tested without a
+    socket — which is what backend/tests/test_v2_routes.py does.
+    """
+    if not path.startswith('/v2/'):
+        return None
+    q = path.split('?', 1)
+    path = q[0]
+
+    try:
+        if method == 'GET' and path == '/v2/methods':
+            svc = _kernel()
+            return 200, {'ok': True, 'data': {'methods': svc.list_methods()},
+                         'meta': {'envelope': 2,
+                                  'store': getattr(svc, 'store_kind', None)}}
+
+        if method == 'GET' and path.startswith('/v2/methods/'):
+            mid = urllib.parse.unquote(path[len('/v2/methods/'):]).strip('/')
+            if mid.endswith('/estimate'):
+                return _v2_error('UNSUPPORTED',
+                                 'estimate is a POST — it needs the molecule to be able '
+                                 'to say anything about the cost')
+            return 200, {'ok': True, 'data': _kernel().describe(mid),
+                         'meta': {'envelope': 2}}
+
+        if method == 'POST' and path.endswith('/estimate') and \
+                path.startswith('/v2/methods/'):
+            mid = urllib.parse.unquote(
+                path[len('/v2/methods/'):-len('/estimate')]).strip('/')
+            payload = (body or {}).get('input') or {}
+            return 200, {'ok': True, 'data': _kernel().estimate(mid, payload),
+                         'meta': {'envelope': 2}}
+
+        if method == 'POST' and path == '/v2/invoke':
+            body = body or {}
+            mid = body.get('method_id')
+            if not mid:
+                return _v2_error('PARSE',
+                                 'no method_id in the request. The shape is '
+                                 '{"method_id": "fields.qm.homo", "input": {...}}',
+                                 got_keys=sorted(body))
+            if 'input' not in body:
+                return _v2_error('PARSE',
+                                 f'no input for {mid}. GET /v2/methods/{mid} returns the '
+                                 f'schema it must satisfy', got_keys=sorted(body))
+            kw = {}
+            for k in ('inline_max', 'budget_seconds', 'request_id'):
+                if body.get(k) is not None:
+                    kw[k] = body[k]
+            env = _kernel().invoke(mid, body['input'], **kw)
+            # A REFUSAL IS A RESULT and travels 200 by default, exactly as v1 does — the
+            # error payload is the answer, and its `code` is what a client branches on. A
+            # few codes carry their own HTTP status (413 TOO_LARGE, 404 NOT_FOUND) because
+            # an intermediary should see those; the rest are 200 with ok:false, and the
+            # vocabulary in contracts/errors.json is the single authority for which.
+            if env.get('ok'):
+                return 200, env
+            code = (env.get('error') or {}).get('code', 'INTERNAL')
+            status = failures._CATALOG.get(code, {}).get('http', 200)
+            return status, env
+
+        return _v2_error('NOT_FOUND', f'no v2 route for {method} {path}')
+
+    except failures.DiracFailure as f:
+        return (f.http_status if f.http_status != 200 else 400), {
+            'ok': False, 'error': f.to_error_payload(), 'meta': {'envelope': 2}}
+    except Exception as e:                                          # noqa: BLE001
+        # Never let a v2 fault take down /field. The daemon's whole reason for existing
+        # keeps working while this surface reports its own breakage.
+        traceback.print_exc()
+        f = failures.DiracInternal(e)
+        return 500, {'ok': False, 'error': f.to_error_payload(),
+                     'meta': {'envelope': 2}}
+
+
+
 # ── the artifact store (PR-04) ─────────────────────────────────────────────────
 #
 # One instance, created on first use rather than at import: this daemon must start
@@ -2056,6 +2177,13 @@ class Handler(BaseHTTPRequestHandler):
         # readable here and the bodies live where they can be tested.
         if self._handle_artifact(self.path):
             return
+        # The v2 surface (PR-06/07): one logical endpoint over the kernel. Ordered AFTER
+        # artifacts because /v2/artifacts/... is owned by the streaming path above — it
+        # serves raw bytes, and handle_v2 only ever returns JSON.
+        v2 = handle_v2('GET', self.path, None)
+        if v2 is not None:
+            self._send(*v2)
+            return
         if self.path == '/health':
             import pyscf
             import rdkit
@@ -2091,6 +2219,31 @@ class Handler(BaseHTTPRequestHandler):
             # allowlist actually gates compute.
             self._send(415, {'ok': False, 'error': 'Content-Type must be application/json'})
             return
+        # The v2 surface (PR-06/07). Reads the body HERE rather than inside handle_v2,
+        # because the body can only be read once from the socket and the v1 branches below
+        # read it themselves — a dispatcher that consumed it speculatively would leave
+        # /field with an empty stream, which is the kind of failure that looks like a
+        # malformed request from the client's side.
+        if self.path.startswith('/v2/'):
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                if length > MAX_BODY_BYTES:
+                    self._send(413, {'ok': False, 'error': {
+                        'code': 'TOO_LARGE',
+                        'message': f'request body is {length} bytes, over the '
+                                   f'{MAX_BODY_BYTES} limit'},
+                        'meta': {'envelope': 2}})
+                    return
+                body = json.loads(self.rfile.read(length) or b'{}')
+            except (ValueError, json.JSONDecodeError) as e:
+                self._send(400, {'ok': False, 'error': {
+                    'code': 'PARSE', 'message': f'request body is not JSON: {e}',
+                    'retryable': False}, 'meta': {'envelope': 2}})
+                return
+            v2 = handle_v2('POST', self.path, body)
+            if v2 is not None:
+                self._send(*v2)
+                return
         if self.path == '/field/region':
             try:
                 length = int(self.headers.get('Content-Length', '0'))
