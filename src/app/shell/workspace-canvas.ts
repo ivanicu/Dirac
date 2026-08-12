@@ -1,6 +1,7 @@
 import type { ShellRoute } from './app-shell';
 import { navigableViews, VIEWS, WORKSPACES, type ViewDefinition } from './registries';
 import { VIEW_EXPERIENCES, WORKSPACE_NARRATIVES, type ExperienceModule } from './workspace-catalog';
+import { renderWorkspaceVisual } from './workspace-visuals';
 
 type Navigate = (route: ShellRoute) => void;
 
@@ -152,6 +153,7 @@ export class WorkspaceCanvas {
         const question = element('section', 'workspace-question');
         question.append(element('span', '', 'The human question'),
             element('blockquote', '', experience.question));
+        const visual = renderWorkspaceVisual(definition, experience);
 
         const toolbar = element('div', 'workspace-module-toolbar');
         const moduleHeading = element('div');
@@ -226,7 +228,7 @@ export class WorkspaceCanvas {
         footer.append(element('span', '', `Route · ${definition.route}`),
             element('span', '', `Program · ${programId || 'current'}`),
             element('span', '', 'Capability · planned'));
-        page.append(header, question, toolbar, moduleGrid, lower, footer);
+        page.append(header, question, visual, toolbar, moduleGrid, lower, footer);
         this.host.replaceChildren(page);
     }
 

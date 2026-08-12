@@ -4,6 +4,7 @@ import { AppShell } from '../app-shell';
 import { assertRegistryIntegrity, availableViews, MODULES, navigableViews, VIEWS, WORKSPACES } from '../registries';
 import { SceneService } from '../scene-service';
 import { assertExperienceCatalog, VIEW_EXPERIENCES } from '../workspace-catalog';
+import { assertWorkspaceVisualCatalog, WORKSPACE_VISUALS } from '../workspace-visual-catalog';
 
 describe('canonical AppShell architecture', () => {
     it('defines a navigable shell for all eight workspaces and thirty views', () => {
@@ -15,6 +16,8 @@ describe('canonical AppShell architecture', () => {
         expect(WORKSPACES.flatMap(w => availableViews(w.id)).every(v => v.implemented)).toBe(true);
         expect(Object.keys(VIEW_EXPERIENCES)).toHaveLength(30);
         expect(() => assertExperienceCatalog(VIEWS.map(v => v.id))).not.toThrow();
+        expect(Object.keys(WORKSPACE_VISUALS)).toHaveLength(30);
+        expect(() => assertWorkspaceVisualCatalog(VIEWS.map(v => v.id))).not.toThrow();
     });
 
     it('convicts a module that names an unknown command', () => {

@@ -1,9 +1,9 @@
 {
   "schema": "https://dirac.local/schemas/software-architecture-twin/v2",
   "title": "Dirac Architecture Optimization Twin",
-  "generated_at": "2026-08-12T18:54:50.044219+00:00",
-  "source_base_commit": "0926f2a7e4e614f17eade4a89aebd4b80e82cfa5",
-  "source_fingerprint_sha256": "8d345c18aba3b0afd79af40ffbfaf072b65ff8ed650bc37e0256b6c8e092eb6e",
+  "generated_at": "2026-08-12T19:19:44.274453+00:00",
+  "source_base_commit": "122eae8bc97a0c6351c3372671b75787b98347f5",
+  "source_fingerprint_sha256": "54790432eda884ab96b4b4052ace3fdc3aef97a784e221381634f42869da9de5",
   "scope": {
     "included": [
       "all first-party Python, JavaScript, and Shell functions in backend, SDK, tooling, gates, and operations",
@@ -14,13 +14,13 @@
     "function_definition": "AST-declared functions, async functions, constructors, accessors, methods, arrows, function expressions, and named Shell functions.",
     "discovery_policy": "scripts/digital_twin_scope.json",
     "automatic_discovery": true,
-    "discovered_files": 319
+    "discovered_files": 321
   },
   "summary": {
-    "nodes": 3466,
-    "edges": 5880,
+    "nodes": 3502,
+    "edges": 5959,
     "flows": 6,
-    "source_files": 320,
+    "source_files": 322,
     "by_type": {
       "actor": 2,
       "artifact-role": 5,
@@ -32,16 +32,16 @@
       "db-type": 35,
       "db-view": 13,
       "external-system": 4,
-      "function": 2000,
+      "function": 2032,
       "method": 549,
       "migration": 20,
-      "module": 214,
+      "module": 216,
       "object-kind": 30,
       "registry": 2,
       "relation-kind": 17,
       "scientific-method": 12,
       "service": 3,
-      "source-file": 319,
+      "source-file": 321,
       "store": 5,
       "surface": 5,
       "system": 8,
@@ -53,9 +53,9 @@
     "typescript_diagnostics": []
   },
   "runtime_snapshot": {
-    "captured_at": "2026-08-12T18:54:49.897467+00:00",
+    "captured_at": "2026-08-12T19:19:44.136622+00:00",
     "source": "best-effort live probes",
-    "git_commit": "0926f2a7e4e614f17eade4a89aebd4b80e82cfa5",
+    "git_commit": "122eae8bc97a0c6351c3372671b75787b98347f5",
     "systemd": [
       "Id=dirac-fields.service",
       "ActiveState=active",
@@ -86,9 +86,9 @@
       "schemas": 6
     },
     "operational_metrics": {
-      "jobs_total": 920,
+      "jobs_total": 1115,
       "job_states": {
-        "done": 630,
+        "done": 825,
         "cancelled": 29,
         "failed": 261
       },
@@ -102,76 +102,76 @@
         "cancelled": 29,
         "operational_failure": 34,
         "expected_refusal": 227,
-        "success": 630
+        "success": 825
       },
       "artifacts": 79,
       "cached_results": 3,
       "registered_method_rows": 49,
       "attention_items": 34,
       "approval_waits": 0,
-      "command_traces": 165,
+      "command_traces": 857,
       "observed_commands": 9
     },
     "command_observations": [
       {
         "command_id": "attention.list",
         "command_version": 1,
-        "invocation_count": 21,
-        "success_count": 21,
+        "invocation_count": 99,
+        "success_count": 99,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.004223,
-        "p95_dispatch_seconds": 0.006261,
+        "mean_dispatch_seconds": 0.003926,
+        "p95_dispatch_seconds": 0.00611,
         "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-        "last_observed_at": "2026-08-12T11:52:40.817187-07:00"
+        "last_observed_at": "2026-08-12T12:17:40.167645-07:00"
       },
       {
         "command_id": "job.list",
         "command_version": 1,
-        "invocation_count": 3,
-        "success_count": 3,
+        "invocation_count": 12,
+        "success_count": 12,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.009702,
-        "p95_dispatch_seconds": 0.011669,
+        "mean_dispatch_seconds": 0.010386,
+        "p95_dispatch_seconds": 0.014404,
         "first_observed_at": "2026-08-12T08:30:15.745925-07:00",
-        "last_observed_at": "2026-08-12T08:36:33.226013-07:00"
+        "last_observed_at": "2026-08-12T12:17:15.47045-07:00"
       },
       {
         "command_id": "job.wait",
         "command_version": 1,
-        "invocation_count": 43,
-        "success_count": 43,
+        "invocation_count": 237,
+        "success_count": 237,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.152797,
-        "p95_dispatch_seconds": 0.225739,
+        "mean_dispatch_seconds": 0.139257,
+        "p95_dispatch_seconds": 0.220209,
         "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-        "last_observed_at": "2026-08-12T11:30:29.984848-07:00"
+        "last_observed_at": "2026-08-12T12:17:41.431346-07:00"
       },
       {
         "command_id": "structure.field.compute",
         "command_version": 1,
-        "invocation_count": 69,
-        "success_count": 43,
-        "expected_refusal_count": 26,
+        "invocation_count": 402,
+        "success_count": 238,
+        "expected_refusal_count": 164,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "job_count": 43,
+        "job_count": 238,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.006147,
-        "p95_dispatch_seconds": 0.01435,
+        "mean_dispatch_seconds": 0.005196,
+        "p95_dispatch_seconds": 0.012385,
         "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-        "last_observed_at": "2026-08-12T11:52:39.947166-07:00"
+        "last_observed_at": "2026-08-12T12:17:41.319204-07:00"
       },
       {
         "command_id": "structure.interactions",
@@ -221,17 +221,17 @@
       {
         "command_id": "system.health",
         "command_version": 1,
-        "invocation_count": 23,
-        "success_count": 23,
+        "invocation_count": 101,
+        "success_count": 101,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
         "mean_dispatch_seconds": 9e-05,
-        "p95_dispatch_seconds": 0.000105,
+        "p95_dispatch_seconds": 0.000102,
         "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-        "last_observed_at": "2026-08-12T11:52:40.813209-07:00"
+        "last_observed_at": "2026-08-12T12:17:40.161384-07:00"
       },
       {
         "command_id": "system.version",
@@ -252,30 +252,30 @@
     "method_observations": [
       {
         "method_id": "fields.qm.density",
-        "invocation_count": 12,
-        "success_count": 12,
+        "invocation_count": 77,
+        "success_count": 77,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "mean_dispatch_seconds": 0.009869
+        "mean_dispatch_seconds": 0.008515
       },
       {
         "method_id": "fields.qm.homo",
-        "invocation_count": 19,
-        "success_count": 19,
+        "invocation_count": 84,
+        "success_count": 84,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "mean_dispatch_seconds": 0.009619
+        "mean_dispatch_seconds": 0.008747
       },
       {
         "method_id": "fields.qm.lumo",
-        "invocation_count": 12,
-        "success_count": 12,
+        "invocation_count": 77,
+        "success_count": 77,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "mean_dispatch_seconds": 0.009926
+        "mean_dispatch_seconds": 0.008774
       },
       {
         "method_id": "torsion.strain",
@@ -867,7 +867,7 @@
         "id": "source-auto-sync",
         "status": "pass",
         "label": "Architecture source auto-sync",
-        "value": "319 files",
+        "value": "321 files",
         "why": "The watcher must be active and every discovered first-party file must have an inventory node."
       },
       {
@@ -895,7 +895,7 @@
         "id": "dynamic-observation",
         "status": "pass",
         "label": "Node-keyed execution telemetry",
-        "value": "165 traces · 9/18 commands observed",
+        "value": "857 traces · 9/18 commands observed",
         "why": "Persistent traces bind real outcomes and latency to command and method nodes."
       },
       {
@@ -926,7 +926,7 @@
         "priority": "DONE",
         "kind": "twin-fidelity",
         "title": "Observed command traces are bound to architecture nodes",
-        "evidence": "165 durable traces currently cover 9/18 commands; linked Jobs resolve to their eventual terminal outcome.",
+        "evidence": "857 durable traces currently cover 9/18 commands; linked Jobs resolve to their eventual terminal outcome.",
         "impact": "Command and method inspectors now expose empirical traffic, latency, cache and failure-path data.",
         "action": "Let coverage accumulate from real use; do not manufacture traffic merely to turn coverage green.",
         "nodes": [
@@ -1169,6 +1169,18 @@
         "change_risk_score": 71
       },
       {
+        "node": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+        "name": "html",
+        "path": "src/app/shell/workspace-visuals.ts",
+        "line": 8,
+        "layer": "application-shell",
+        "lines": 7,
+        "fan_in": 18,
+        "fan_out": 0,
+        "boundary_calls": 0,
+        "change_risk_score": 70
+      },
+      {
         "node": "function:ts:src/chemistry.backend.perception.rdkit-wasm.editable/ligand-pipeline.ts:54:1:ligandLociToMolfile",
         "name": "ligandLociToMolfile",
         "path": "src/chemistry.backend.perception.rdkit-wasm.editable/ligand-pipeline.ts",
@@ -1190,18 +1202,6 @@
         "fan_in": 17,
         "fan_out": 0,
         "boundary_calls": 0,
-        "change_risk_score": 68
-      },
-      {
-        "node": "function:ts:src/app/services/ligand-store.ts:160:5:LigandStore.generation",
-        "name": "LigandStore.generation",
-        "path": "src/app/services/ligand-store.ts",
-        "line": 160,
-        "layer": "client-sdk",
-        "lines": 1,
-        "fan_in": 5,
-        "fan_out": 1,
-        "boundary_calls": 6,
         "change_risk_score": 68
       }
     ],
@@ -1363,6 +1363,18 @@
         "change_risk_score": 21
       },
       {
+        "node": "function:ts:src/app/shell/workspace-canvas.ts:108:5:WorkspaceCanvas.renderCanvas",
+        "name": "WorkspaceCanvas.renderCanvas",
+        "path": "src/app/shell/workspace-canvas.ts",
+        "line": 108,
+        "layer": "application-shell",
+        "lines": 126,
+        "fan_in": 1,
+        "fan_out": 6,
+        "boundary_calls": 0,
+        "change_risk_score": 52
+      },
+      {
         "node": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/index.ts:776:5:MolecularVfxLab.createLayerSurface",
         "name": "MolecularVfxLab.createLayerSurface",
         "path": "src/app.frontend.facets.molstar-rdkit.editable/index.ts",
@@ -1373,18 +1385,6 @@
         "fan_out": 1,
         "boundary_calls": 0,
         "change_risk_score": 37
-      },
-      {
-        "node": "function:ts:src/app/shell/workspace-canvas.ts:107:5:WorkspaceCanvas.renderCanvas",
-        "name": "WorkspaceCanvas.renderCanvas",
-        "path": "src/app/shell/workspace-canvas.ts",
-        "line": 107,
-        "layer": "application-shell",
-        "lines": 125,
-        "fan_in": 1,
-        "fan_out": 5,
-        "boundary_calls": 0,
-        "change_risk_score": 50
       },
       {
         "node": "function:py:backend/field_coverage.py:271:main",
@@ -2829,17 +2829,17 @@
       "runtime_observation": {
         "command_id": "attention.list",
         "command_version": 1,
-        "invocation_count": 21,
-        "success_count": 21,
+        "invocation_count": 99,
+        "success_count": 99,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.004223,
-        "p95_dispatch_seconds": 0.006261,
+        "mean_dispatch_seconds": 0.003926,
+        "p95_dispatch_seconds": 0.00611,
         "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-        "last_observed_at": "2026-08-12T11:52:40.817187-07:00"
+        "last_observed_at": "2026-08-12T12:17:40.167645-07:00"
       }
     },
     {
@@ -2926,17 +2926,17 @@
       "runtime_observation": {
         "command_id": "job.list",
         "command_version": 1,
-        "invocation_count": 3,
-        "success_count": 3,
+        "invocation_count": 12,
+        "success_count": 12,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.009702,
-        "p95_dispatch_seconds": 0.011669,
+        "mean_dispatch_seconds": 0.010386,
+        "p95_dispatch_seconds": 0.014404,
         "first_observed_at": "2026-08-12T08:30:15.745925-07:00",
-        "last_observed_at": "2026-08-12T08:36:33.226013-07:00"
+        "last_observed_at": "2026-08-12T12:17:15.47045-07:00"
       }
     },
     {
@@ -2961,17 +2961,17 @@
       "runtime_observation": {
         "command_id": "job.wait",
         "command_version": 1,
-        "invocation_count": 43,
-        "success_count": 43,
+        "invocation_count": 237,
+        "success_count": 237,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.152797,
-        "p95_dispatch_seconds": 0.225739,
+        "mean_dispatch_seconds": 0.139257,
+        "p95_dispatch_seconds": 0.220209,
         "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-        "last_observed_at": "2026-08-12T11:30:29.984848-07:00"
+        "last_observed_at": "2026-08-12T12:17:41.431346-07:00"
       }
     },
     {
@@ -3101,17 +3101,17 @@
       "runtime_observation": {
         "command_id": "structure.field.compute",
         "command_version": 1,
-        "invocation_count": 69,
-        "success_count": 43,
-        "expected_refusal_count": 26,
+        "invocation_count": 402,
+        "success_count": 238,
+        "expected_refusal_count": 164,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "job_count": 43,
+        "job_count": 238,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.006147,
-        "p95_dispatch_seconds": 0.01435,
+        "mean_dispatch_seconds": 0.005196,
+        "p95_dispatch_seconds": 0.012385,
         "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-        "last_observed_at": "2026-08-12T11:52:39.947166-07:00"
+        "last_observed_at": "2026-08-12T12:17:41.319204-07:00"
       }
     },
     {
@@ -3268,17 +3268,17 @@
       "runtime_observation": {
         "command_id": "system.health",
         "command_version": 1,
-        "invocation_count": 23,
-        "success_count": 23,
+        "invocation_count": 101,
+        "success_count": 101,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
         "mean_dispatch_seconds": 9e-05,
-        "p95_dispatch_seconds": 0.000105,
+        "p95_dispatch_seconds": 0.000102,
         "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-        "last_observed_at": "2026-08-12T11:52:40.813209-07:00"
+        "last_observed_at": "2026-08-12T12:17:40.161384-07:00"
       }
     },
     {
@@ -7027,8 +7027,8 @@
       "layer": "runtime",
       "path": "src/app.frontend.facets.molstar-rdkit.editable/workspace-shell.css",
       "extension": ".css",
-      "bytes": 21312,
-      "sha256": "44c28b10929a99374674e69e5e81d4c437129037f741c45061f3a449d3457634",
+      "bytes": 33647,
+      "sha256": "17bfdcc9481b711181be4acf65f9d69345b7e082b19e0a467d97f292555cda2e",
       "generated": false,
       "id": "file:src/app.frontend.facets.molstar-rdkit.editable/workspace-shell.css",
       "type": "source-file",
@@ -7126,8 +7126,8 @@
       "layer": "verification",
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "extension": ".ts",
-      "bytes": 3912,
-      "sha256": "ad9a909eeb6ae3b9b72bb0d1006c3924a9856b091a3d734d052dbe7e614f101a",
+      "bytes": 4160,
+      "sha256": "1b65e27649142cfca09cc228c188efc78f4f04a0b785f1f68bf81ac1a13d13ce",
       "generated": false,
       "id": "file:src/app/shell/_spec/app-shell.spec.ts",
       "type": "source-file",
@@ -7192,8 +7192,8 @@
       "layer": "runtime",
       "path": "src/app/shell/workspace-canvas.ts",
       "extension": ".ts",
-      "bytes": 12788,
-      "sha256": "9b47be4df75910f4be3cffd89d86b34823661eae95a7a2b75b17a31215fcb533",
+      "bytes": 12927,
+      "sha256": "a048ac1d025e08a3ed0006168648b3b8d7c2cb3a7138f935ee418226f87548ce",
       "generated": false,
       "id": "file:src/app/shell/workspace-canvas.ts",
       "type": "source-file",
@@ -7209,6 +7209,28 @@
       "id": "file:src/app/shell/workspace-catalog.ts",
       "type": "source-file",
       "name": "workspace-catalog.ts"
+    },
+    {
+      "layer": "runtime",
+      "path": "src/app/shell/workspace-visual-catalog.ts",
+      "extension": ".ts",
+      "bytes": 9933,
+      "sha256": "2ef4b37a5e6f48e0f667fb71ee52fc0b57c43a5ee759f4c3065632e64830fdfb",
+      "generated": false,
+      "id": "file:src/app/shell/workspace-visual-catalog.ts",
+      "type": "source-file",
+      "name": "workspace-visual-catalog.ts"
+    },
+    {
+      "layer": "runtime",
+      "path": "src/app/shell/workspace-visuals.ts",
+      "extension": ".ts",
+      "bytes": 12328,
+      "sha256": "df255b2553414488dceff39654e73eaae2f7997d4caf9a2f9239a01e5e78bf03",
+      "generated": false,
+      "id": "file:src/app/shell/workspace-visuals.ts",
+      "type": "source-file",
+      "name": "workspace-visuals.ts"
     },
     {
       "layer": "verification",
@@ -43139,29 +43161,27 @@
       "exported": false,
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "layer": "verification",
-      "line": 12,
-      "column": 16,
-      "end_line": 12,
-      "end_column": 47,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:12:16:<anonymous>",
+      "line": 10,
+      "column": 79,
+      "end_line": 21,
+      "end_column": 6,
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:10:79:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
     {
       "language": "typescript",
       "qualified_name": "<anonymous>",
-      "parameters": [
-        "w"
-      ],
+      "parameters": [],
       "async": false,
       "exported": false,
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "layer": "verification",
       "line": 13,
-      "column": 35,
+      "column": 16,
       "end_line": 13,
-      "end_column": 60,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:13:35:<anonymous>",
+      "end_column": 47,
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:13:16:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -43176,10 +43196,10 @@
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "layer": "verification",
       "line": 14,
-      "column": 33,
+      "column": 35,
       "end_line": 14,
-      "end_column": 50,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:14:33:<anonymous>",
+      "end_column": 60,
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:14:35:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -43194,10 +43214,28 @@
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "layer": "verification",
       "line": 15,
-      "column": 35,
+      "column": 33,
       "end_line": 15,
+      "end_column": 50,
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:15:33:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [
+        "w"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/_spec/app-shell.spec.ts",
+      "layer": "verification",
+      "line": 16,
+      "column": 35,
+      "end_line": 16,
       "end_column": 60,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:15:35:<anonymous>",
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:16:35:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -43211,11 +43249,11 @@
       "exported": false,
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "layer": "verification",
-      "line": 15,
+      "line": 16,
       "column": 68,
-      "end_line": 15,
+      "end_line": 16,
       "end_column": 86,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:15:68:<anonymous>",
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:16:68:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -43227,11 +43265,11 @@
       "exported": false,
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "layer": "verification",
-      "line": 17,
+      "line": 18,
       "column": 16,
-      "end_line": 17,
+      "end_line": 18,
       "end_column": 67,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:17:16:<anonymous>",
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:18:16:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -43245,11 +43283,11 @@
       "exported": false,
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "layer": "verification",
-      "line": 17,
+      "line": 18,
       "column": 56,
-      "end_line": 17,
+      "end_line": 18,
       "end_column": 65,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:17:56:<anonymous>",
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:18:56:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -43262,10 +43300,44 @@
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "layer": "verification",
       "line": 20,
+      "column": 16,
+      "end_line": 20,
+      "end_column": 72,
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:20:16:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [
+        "v"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/_spec/app-shell.spec.ts",
+      "layer": "verification",
+      "line": 20,
+      "column": 61,
+      "end_line": 20,
+      "end_column": 70,
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:20:61:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/_spec/app-shell.spec.ts",
+      "layer": "verification",
+      "line": 23,
       "column": 59,
-      "end_line": 23,
+      "end_line": 26,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:20:59:<anonymous>",
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:23:59:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -43280,27 +43352,11 @@
       "exported": false,
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "layer": "verification",
-      "line": 21,
+      "line": 24,
       "column": 36,
-      "end_line": 21,
+      "end_line": 24,
       "end_column": 105,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:21:36:<anonymous>",
-      "type": "function",
-      "name": "<anonymous>"
-    },
-    {
-      "language": "typescript",
-      "qualified_name": "<anonymous>",
-      "parameters": [],
-      "async": false,
-      "exported": false,
-      "path": "src/app/shell/_spec/app-shell.spec.ts",
-      "layer": "verification",
-      "line": 22,
-      "column": 16,
-      "end_line": 22,
-      "end_column": 72,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:22:16:<anonymous>",
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:24:36:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -43313,10 +43369,26 @@
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "layer": "verification",
       "line": 25,
+      "column": 16,
+      "end_line": 25,
+      "end_column": 72,
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:25:16:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/_spec/app-shell.spec.ts",
+      "layer": "verification",
+      "line": 28,
       "column": 62,
-      "end_line": 36,
+      "end_line": 39,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:25:62:<anonymous>",
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:28:62:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -43328,11 +43400,11 @@
       "exported": false,
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "layer": "verification",
-      "line": 38,
+      "line": 41,
       "column": 49,
-      "end_line": 44,
+      "end_line": 47,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:38:49:<anonymous>",
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:41:49:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -43344,11 +43416,11 @@
       "exported": false,
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "layer": "verification",
-      "line": 46,
+      "line": 49,
       "column": 81,
-      "end_line": 51,
+      "end_line": 54,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:46:81:<anonymous>",
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:49:81:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -43360,11 +43432,11 @@
       "exported": false,
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "layer": "verification",
-      "line": 53,
+      "line": 56,
       "column": 89,
-      "end_line": 58,
+      "end_line": 61,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:53:89:<anonymous>",
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:56:89:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -43378,27 +43450,27 @@
       "exported": false,
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "layer": "verification",
-      "line": 57,
-      "column": 27,
-      "end_line": 57,
-      "end_column": 61,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:57:27:<anonymous>",
-      "type": "function",
-      "name": "<anonymous>"
-    },
-    {
-      "language": "typescript",
-      "qualified_name": "<anonymous>",
-      "parameters": [],
-      "async": false,
-      "exported": false,
-      "path": "src/app/shell/_spec/app-shell.spec.ts",
-      "layer": "verification",
       "line": 60,
+      "column": 27,
+      "end_line": 60,
+      "end_column": 61,
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:60:27:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/_spec/app-shell.spec.ts",
+      "layer": "verification",
+      "line": 63,
       "column": 80,
-      "end_line": 68,
+      "end_line": 71,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:60:80:<anonymous>",
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:63:80:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -43410,27 +43482,11 @@
       "exported": false,
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "layer": "verification",
-      "line": 67,
+      "line": 70,
       "column": 16,
-      "end_line": 67,
+      "end_line": 70,
       "end_column": 68,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:67:16:<anonymous>",
-      "type": "function",
-      "name": "<anonymous>"
-    },
-    {
-      "language": "typescript",
-      "qualified_name": "<anonymous>",
-      "parameters": [],
-      "async": false,
-      "exported": false,
-      "path": "src/app/shell/_spec/app-shell.spec.ts",
-      "layer": "verification",
-      "line": 8,
-      "column": 45,
-      "end_line": 69,
-      "end_column": 2,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:8:45:<anonymous>",
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:70:16:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -43443,10 +43499,10 @@
       "path": "src/app/shell/_spec/app-shell.spec.ts",
       "layer": "verification",
       "line": 9,
-      "column": 79,
-      "end_line": 18,
-      "end_column": 6,
-      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:9:79:<anonymous>",
+      "column": 45,
+      "end_line": 72,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/_spec/app-shell.spec.ts:9:45:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -44408,11 +44464,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 107,
+      "line": 108,
       "column": 5,
-      "end_line": 231,
+      "end_line": 233,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:107:5:WorkspaceCanvas.renderCanvas",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:108:5:WorkspaceCanvas.renderCanvas",
       "type": "method",
       "name": "renderCanvas"
     },
@@ -44427,11 +44483,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 110,
+      "line": 111,
       "column": 43,
-      "end_line": 110,
+      "end_line": 111,
       "end_column": 83,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:110:43:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:111:43:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -44444,11 +44500,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 127,
+      "line": 128,
       "column": 28,
-      "end_line": 131,
+      "end_line": 132,
       "end_column": 10,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:127:28:WorkspaceCanvas.refreshPin",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:128:28:WorkspaceCanvas.refreshPin",
       "type": "function",
       "name": "refreshPin"
     },
@@ -44461,11 +44517,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 133,
+      "line": 134,
       "column": 39,
-      "end_line": 137,
+      "end_line": 138,
       "end_column": 10,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:133:39:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:134:39:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -44480,11 +44536,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 140,
+      "line": 141,
       "column": 39,
-      "end_line": 140,
+      "end_line": 141,
       "end_column": 80,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:140:39:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:141:39:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -44497,11 +44553,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 144,
+      "line": 145,
       "column": 48,
-      "end_line": 146,
+      "end_line": 147,
       "end_column": 19,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:144:48:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:145:48:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -44516,11 +44572,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 15,
+      "line": 16,
       "column": 20,
-      "end_line": 15,
+      "end_line": 16,
       "end_column": 93,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:15:20:storageKey",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:16:20:storageKey",
       "type": "function",
       "name": "storageKey"
     },
@@ -44533,11 +44589,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 171,
+      "line": 173,
       "column": 31,
-      "end_line": 180,
+      "end_line": 182,
       "end_column": 10,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:171:31:WorkspaceCanvas.renderModules",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:173:31:WorkspaceCanvas.renderModules",
       "type": "function",
       "name": "renderModules"
     },
@@ -44552,11 +44608,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 174,
+      "line": 176,
       "column": 55,
-      "end_line": 175,
+      "end_line": 177,
       "end_column": 82,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:174:55:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:176:55:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -44572,11 +44628,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 176,
+      "line": 178,
       "column": 55,
-      "end_line": 177,
+      "end_line": 179,
       "end_column": 51,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:176:55:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:178:55:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -44590,11 +44646,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 17,
+      "line": 18,
       "column": 1,
-      "end_line": 19,
+      "end_line": 20,
       "end_column": 2,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:17:1:readLocal",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:18:1:readLocal",
       "type": "function",
       "name": "readLocal"
     },
@@ -44609,11 +44665,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 192,
+      "line": 194,
       "column": 74,
-      "end_line": 192,
+      "end_line": 194,
       "end_column": 107,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:192:74:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:194:74:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -44626,11 +44682,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 214,
+      "line": 216,
       "column": 44,
-      "end_line": 221,
+      "end_line": 223,
       "end_column": 10,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:214:44:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:216:44:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -44643,11 +44699,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 217,
+      "line": 219,
       "column": 36,
-      "end_line": 220,
+      "end_line": 222,
       "end_column": 14,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:217:36:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:219:36:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -44662,11 +44718,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 21,
+      "line": 22,
       "column": 1,
-      "end_line": 26,
+      "end_line": 27,
       "end_column": 2,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:21:1:writeLocal",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:22:1:writeLocal",
       "type": "function",
       "name": "writeLocal"
     },
@@ -44682,11 +44738,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 233,
+      "line": 235,
       "column": 5,
-      "end_line": 245,
+      "end_line": 247,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:233:5:WorkspaceCanvas.moduleCard",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:235:5:WorkspaceCanvas.moduleCard",
       "type": "method",
       "name": "moduleCard"
     },
@@ -44704,11 +44760,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 33,
+      "line": 34,
       "column": 5,
-      "end_line": 43,
+      "end_line": 44,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:33:5:WorkspaceCanvas.constructor",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:34:5:WorkspaceCanvas.constructor",
       "type": "method",
       "name": "constructor"
     },
@@ -44723,11 +44779,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 35,
+      "line": 36,
       "column": 46,
-      "end_line": 42,
+      "end_line": 43,
       "end_column": 10,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:35:46:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:36:46:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -44742,11 +44798,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 45,
+      "line": 46,
       "column": 5,
-      "end_line": 64,
+      "end_line": 65,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:45:5:WorkspaceCanvas.render",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:46:5:WorkspaceCanvas.render",
       "type": "method",
       "name": "render"
     },
@@ -44761,11 +44817,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 46,
+      "line": 47,
       "column": 39,
-      "end_line": 46,
+      "end_line": 47,
       "end_column": 69,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:46:39:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:47:39:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -44780,11 +44836,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 47,
+      "line": 48,
       "column": 43,
-      "end_line": 47,
+      "end_line": 48,
       "end_column": 78,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:47:43:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:48:43:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -44800,11 +44856,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 66,
+      "line": 67,
       "column": 5,
-      "end_line": 105,
+      "end_line": 106,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:66:5:WorkspaceCanvas.renderOutline",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:67:5:WorkspaceCanvas.renderOutline",
       "type": "method",
       "name": "renderOutline"
     },
@@ -44819,11 +44875,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 67,
+      "line": 68,
       "column": 43,
-      "end_line": 67,
+      "end_line": 68,
       "end_column": 79,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:67:43:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:68:43:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -44838,11 +44894,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 69,
+      "line": 70,
       "column": 42,
-      "end_line": 69,
+      "end_line": 70,
       "end_column": 66,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:69:42:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:70:42:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -44858,11 +44914,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 7,
+      "line": 8,
       "column": 17,
-      "end_line": 13,
+      "end_line": 14,
       "end_column": 2,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:7:17:element",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:8:17:element",
       "type": "function",
       "name": "element"
     },
@@ -44875,11 +44931,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 97,
+      "line": 98,
       "column": 46,
-      "end_line": 99,
+      "end_line": 100,
       "end_column": 15,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:97:46:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:98:46:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -44942,6 +44998,556 @@
       "id": "function:ts:src/app/shell/workspace-catalog.ts:33:14:view",
       "type": "function",
       "name": "view"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "assertWorkspaceVisualCatalog",
+      "parameters": [
+        "viewIds"
+      ],
+      "async": false,
+      "exported": true,
+      "path": "src/app/shell/workspace-visual-catalog.ts",
+      "layer": "application-shell",
+      "line": 161,
+      "column": 1,
+      "end_line": 167,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visual-catalog.ts:161:1:assertWorkspaceVisualCatalog",
+      "type": "function",
+      "name": "assertWorkspaceVisualCatalog"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [
+        "view"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visual-catalog.ts",
+      "layer": "application-shell",
+      "line": 161,
+      "column": 85,
+      "end_line": 161,
+      "end_column": 100,
+      "id": "function:ts:src/app/shell/workspace-visual-catalog.ts:161:85:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [
+        "id"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visual-catalog.ts",
+      "layer": "application-shell",
+      "line": 162,
+      "column": 36,
+      "end_line": 162,
+      "end_column": 64,
+      "id": "function:ts:src/app/shell/workspace-visual-catalog.ts:162:36:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [
+        "id"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visual-catalog.ts",
+      "layer": "application-shell",
+      "line": 163,
+      "column": 57,
+      "end_line": 163,
+      "end_column": 84,
+      "id": "function:ts:src/app/shell/workspace-visual-catalog.ts:163:57:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "network",
+      "parameters": [
+        "spec"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 103,
+      "column": 1,
+      "end_line": 129,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:103:1:network",
+      "type": "function",
+      "name": "network"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [
+        "_label",
+        "index"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 112,
+      "column": 20,
+      "end_line": 117,
+      "end_column": 6,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:112:20:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [
+        "label",
+        "index"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 118,
+      "column": 20,
+      "end_line": 126,
+      "end_column": 6,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:118:20:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "funnel",
+      "parameters": [
+        "spec"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 131,
+      "column": 1,
+      "end_line": 140,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:131:1:funnel",
+      "type": "function",
+      "name": "funnel"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [
+        "label",
+        "index"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 133,
+      "column": 26,
+      "end_line": 138,
+      "end_column": 6,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:133:26:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "kanban",
+      "parameters": [
+        "spec"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 142,
+      "column": 1,
+      "end_line": 152,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:142:1:kanban",
+      "type": "function",
+      "name": "kanban"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "plate",
+      "parameters": [
+        "spec"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 154,
+      "column": 1,
+      "end_line": 168,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:154:1:plate",
+      "type": "function",
+      "name": "plate"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "svg",
+      "parameters": [
+        "tag",
+        "attrs"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 16,
+      "column": 13,
+      "end_line": 20,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:16:13:svg",
+      "type": "function",
+      "name": "svg"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "table",
+      "parameters": [
+        "spec"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 170,
+      "column": 1,
+      "end_line": 184,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:170:1:table",
+      "type": "function",
+      "name": "table"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "lineage",
+      "parameters": [
+        "spec"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 186,
+      "column": 1,
+      "end_line": 196,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:186:1:lineage",
+      "type": "function",
+      "name": "lineage"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "compare",
+      "parameters": [
+        "spec"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 198,
+      "column": 1,
+      "end_line": 211,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:198:1:compare",
+      "type": "function",
+      "name": "compare"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "panel",
+      "parameters": [
+        "label"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 200,
+      "column": 19,
+      "end_line": 204,
+      "end_column": 6,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:200:19:panel",
+      "type": "function",
+      "name": "panel"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [
+        "label"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 206,
+      "column": 109,
+      "end_line": 208,
+      "end_column": 6,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:206:109:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "visualBody",
+      "parameters": [
+        "spec"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 213,
+      "column": 1,
+      "end_line": 225,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:213:1:visualBody",
+      "type": "function",
+      "name": "visualBody"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "renderWorkspaceVisual",
+      "parameters": [
+        "definition",
+        "experience"
+      ],
+      "async": false,
+      "exported": true,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 227,
+      "column": 1,
+      "end_line": 260,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:227:1:renderWorkspaceVisual",
+      "type": "function",
+      "name": "renderWorkspaceVisual"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [
+        "module"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 229,
+      "column": 49,
+      "end_line": 229,
+      "end_column": 91,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:229:49:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "emptyMessage",
+      "parameters": [
+        "label"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 22,
+      "column": 1,
+      "end_line": 28,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:22:1:emptyMessage",
+      "type": "function",
+      "name": "emptyMessage"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [
+        "module"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 230,
+      "column": 50,
+      "end_line": 230,
+      "end_column": 93,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:230:50:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [
+        "module"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 231,
+      "column": 47,
+      "end_line": 231,
+      "end_column": 87,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:231:47:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "flow",
+      "parameters": [
+        "spec"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 30,
+      "column": 1,
+      "end_line": 39,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:30:1:flow",
+      "type": "function",
+      "name": "flow"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [
+        "label",
+        "index"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 32,
+      "column": 26,
+      "end_line": 37,
+      "end_column": 6,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:32:26:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "timeline",
+      "parameters": [
+        "spec"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 41,
+      "column": 1,
+      "end_line": 52,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:41:1:timeline",
+      "type": "function",
+      "name": "timeline"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "<anonymous>",
+      "parameters": [
+        "label",
+        "index"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 44,
+      "column": 26,
+      "end_line": 49,
+      "end_column": 6,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:44:26:<anonymous>",
+      "type": "function",
+      "name": "<anonymous>"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "matrix",
+      "parameters": [
+        "spec"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 54,
+      "column": 1,
+      "end_line": 76,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:54:1:matrix",
+      "type": "function",
+      "name": "matrix"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "axes",
+      "parameters": [
+        "spec",
+        "kind"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 78,
+      "column": 1,
+      "end_line": 101,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:78:1:axes",
+      "type": "function",
+      "name": "axes"
+    },
+    {
+      "language": "typescript",
+      "qualified_name": "html",
+      "parameters": [
+        "tag",
+        "className",
+        "text"
+      ],
+      "async": false,
+      "exported": false,
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 8,
+      "column": 14,
+      "end_line": 14,
+      "end_column": 2,
+      "id": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "type": "function",
+      "name": "html"
     },
     {
       "language": "typescript",
@@ -52186,12 +52792,12 @@
       "name": "fields.qm.density",
       "runtime_observation": {
         "method_id": "fields.qm.density",
-        "invocation_count": 12,
-        "success_count": 12,
+        "invocation_count": 77,
+        "success_count": 77,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "mean_dispatch_seconds": 0.009869
+        "mean_dispatch_seconds": 0.008515
       }
     },
     {
@@ -52206,12 +52812,12 @@
       "name": "fields.qm.homo",
       "runtime_observation": {
         "method_id": "fields.qm.homo",
-        "invocation_count": 19,
-        "success_count": 19,
+        "invocation_count": 84,
+        "success_count": 84,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "mean_dispatch_seconds": 0.009619
+        "mean_dispatch_seconds": 0.008747
       }
     },
     {
@@ -52226,12 +52832,12 @@
       "name": "fields.qm.lumo",
       "runtime_observation": {
         "method_id": "fields.qm.lumo",
-        "invocation_count": 12,
-        "success_count": 12,
+        "invocation_count": 77,
+        "success_count": 77,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "mean_dispatch_seconds": 0.009926
+        "mean_dispatch_seconds": 0.008774
       }
     },
     {
@@ -54053,7 +54659,7 @@
       "layer": "verification",
       "line": 1,
       "column": 1,
-      "end_line": 70,
+      "end_line": 73,
       "end_column": 1,
       "id": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
       "type": "module",
@@ -54125,7 +54731,7 @@
       "layer": "application-shell",
       "line": 1,
       "column": 1,
-      "end_line": 247,
+      "end_line": 249,
       "end_column": 1,
       "id": "module:ts:src/app/shell/workspace-canvas.ts",
       "type": "module",
@@ -54142,6 +54748,30 @@
       "id": "module:ts:src/app/shell/workspace-catalog.ts",
       "type": "module",
       "name": "workspace-catalog.ts"
+    },
+    {
+      "language": "typescript",
+      "path": "src/app/shell/workspace-visual-catalog.ts",
+      "layer": "application-shell",
+      "line": 1,
+      "column": 1,
+      "end_line": 170,
+      "end_column": 1,
+      "id": "module:ts:src/app/shell/workspace-visual-catalog.ts",
+      "type": "module",
+      "name": "workspace-visual-catalog.ts"
+    },
+    {
+      "language": "typescript",
+      "path": "src/app/shell/workspace-visuals.ts",
+      "layer": "application-shell",
+      "line": 1,
+      "column": 1,
+      "end_line": 261,
+      "end_column": 1,
+      "id": "module:ts:src/app/shell/workspace-visuals.ts",
+      "type": "module",
+      "name": "workspace-visuals.ts"
     },
     {
       "language": "typescript",
@@ -55143,9 +55773,9 @@
       "type": "service",
       "name": "dirac-fields.service :8901",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T18:54:49.897467+00:00",
+        "captured_at": "2026-08-12T19:19:44.136622+00:00",
         "source": "best-effort live probes",
-        "git_commit": "0926f2a7e4e614f17eade4a89aebd4b80e82cfa5",
+        "git_commit": "122eae8bc97a0c6351c3372671b75787b98347f5",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -55176,9 +55806,9 @@
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 920,
+          "jobs_total": 1115,
           "job_states": {
-            "done": 630,
+            "done": 825,
             "cancelled": 29,
             "failed": 261
           },
@@ -55192,76 +55822,76 @@
             "cancelled": 29,
             "operational_failure": 34,
             "expected_refusal": 227,
-            "success": 630
+            "success": 825
           },
           "artifacts": 79,
           "cached_results": 3,
           "registered_method_rows": 49,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 165,
+          "command_traces": 857,
           "observed_commands": 9
         },
         "command_observations": [
           {
             "command_id": "attention.list",
             "command_version": 1,
-            "invocation_count": 21,
-            "success_count": 21,
+            "invocation_count": 99,
+            "success_count": 99,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.004223,
-            "p95_dispatch_seconds": 0.006261,
+            "mean_dispatch_seconds": 0.003926,
+            "p95_dispatch_seconds": 0.00611,
             "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-            "last_observed_at": "2026-08-12T11:52:40.817187-07:00"
+            "last_observed_at": "2026-08-12T12:17:40.167645-07:00"
           },
           {
             "command_id": "job.list",
             "command_version": 1,
-            "invocation_count": 3,
-            "success_count": 3,
+            "invocation_count": 12,
+            "success_count": 12,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.009702,
-            "p95_dispatch_seconds": 0.011669,
+            "mean_dispatch_seconds": 0.010386,
+            "p95_dispatch_seconds": 0.014404,
             "first_observed_at": "2026-08-12T08:30:15.745925-07:00",
-            "last_observed_at": "2026-08-12T08:36:33.226013-07:00"
+            "last_observed_at": "2026-08-12T12:17:15.47045-07:00"
           },
           {
             "command_id": "job.wait",
             "command_version": 1,
-            "invocation_count": 43,
-            "success_count": 43,
+            "invocation_count": 237,
+            "success_count": 237,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.152797,
-            "p95_dispatch_seconds": 0.225739,
+            "mean_dispatch_seconds": 0.139257,
+            "p95_dispatch_seconds": 0.220209,
             "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-            "last_observed_at": "2026-08-12T11:30:29.984848-07:00"
+            "last_observed_at": "2026-08-12T12:17:41.431346-07:00"
           },
           {
             "command_id": "structure.field.compute",
             "command_version": 1,
-            "invocation_count": 69,
-            "success_count": 43,
-            "expected_refusal_count": 26,
+            "invocation_count": 402,
+            "success_count": 238,
+            "expected_refusal_count": 164,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "job_count": 43,
+            "job_count": 238,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.006147,
-            "p95_dispatch_seconds": 0.01435,
+            "mean_dispatch_seconds": 0.005196,
+            "p95_dispatch_seconds": 0.012385,
             "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-            "last_observed_at": "2026-08-12T11:52:39.947166-07:00"
+            "last_observed_at": "2026-08-12T12:17:41.319204-07:00"
           },
           {
             "command_id": "structure.interactions",
@@ -55311,17 +55941,17 @@
           {
             "command_id": "system.health",
             "command_version": 1,
-            "invocation_count": 23,
-            "success_count": 23,
+            "invocation_count": 101,
+            "success_count": 101,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
             "mean_dispatch_seconds": 9e-05,
-            "p95_dispatch_seconds": 0.000105,
+            "p95_dispatch_seconds": 0.000102,
             "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-            "last_observed_at": "2026-08-12T11:52:40.813209-07:00"
+            "last_observed_at": "2026-08-12T12:17:40.161384-07:00"
           },
           {
             "command_id": "system.version",
@@ -55342,30 +55972,30 @@
         "method_observations": [
           {
             "method_id": "fields.qm.density",
-            "invocation_count": 12,
-            "success_count": 12,
+            "invocation_count": 77,
+            "success_count": 77,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.009869
+            "mean_dispatch_seconds": 0.008515
           },
           {
             "method_id": "fields.qm.homo",
-            "invocation_count": 19,
-            "success_count": 19,
+            "invocation_count": 84,
+            "success_count": 84,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.009619
+            "mean_dispatch_seconds": 0.008747
           },
           {
             "method_id": "fields.qm.lumo",
-            "invocation_count": 12,
-            "success_count": 12,
+            "invocation_count": 77,
+            "success_count": 77,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.009926
+            "mean_dispatch_seconds": 0.008774
           },
           {
             "method_id": "torsion.strain",
@@ -55391,9 +56021,9 @@
       "type": "service",
       "name": "dirac-digital-twin.service",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T18:54:49.897467+00:00",
+        "captured_at": "2026-08-12T19:19:44.136622+00:00",
         "source": "best-effort live probes",
-        "git_commit": "0926f2a7e4e614f17eade4a89aebd4b80e82cfa5",
+        "git_commit": "122eae8bc97a0c6351c3372671b75787b98347f5",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -55424,9 +56054,9 @@
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 920,
+          "jobs_total": 1115,
           "job_states": {
-            "done": 630,
+            "done": 825,
             "cancelled": 29,
             "failed": 261
           },
@@ -55440,76 +56070,76 @@
             "cancelled": 29,
             "operational_failure": 34,
             "expected_refusal": 227,
-            "success": 630
+            "success": 825
           },
           "artifacts": 79,
           "cached_results": 3,
           "registered_method_rows": 49,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 165,
+          "command_traces": 857,
           "observed_commands": 9
         },
         "command_observations": [
           {
             "command_id": "attention.list",
             "command_version": 1,
-            "invocation_count": 21,
-            "success_count": 21,
+            "invocation_count": 99,
+            "success_count": 99,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.004223,
-            "p95_dispatch_seconds": 0.006261,
+            "mean_dispatch_seconds": 0.003926,
+            "p95_dispatch_seconds": 0.00611,
             "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-            "last_observed_at": "2026-08-12T11:52:40.817187-07:00"
+            "last_observed_at": "2026-08-12T12:17:40.167645-07:00"
           },
           {
             "command_id": "job.list",
             "command_version": 1,
-            "invocation_count": 3,
-            "success_count": 3,
+            "invocation_count": 12,
+            "success_count": 12,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.009702,
-            "p95_dispatch_seconds": 0.011669,
+            "mean_dispatch_seconds": 0.010386,
+            "p95_dispatch_seconds": 0.014404,
             "first_observed_at": "2026-08-12T08:30:15.745925-07:00",
-            "last_observed_at": "2026-08-12T08:36:33.226013-07:00"
+            "last_observed_at": "2026-08-12T12:17:15.47045-07:00"
           },
           {
             "command_id": "job.wait",
             "command_version": 1,
-            "invocation_count": 43,
-            "success_count": 43,
+            "invocation_count": 237,
+            "success_count": 237,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.152797,
-            "p95_dispatch_seconds": 0.225739,
+            "mean_dispatch_seconds": 0.139257,
+            "p95_dispatch_seconds": 0.220209,
             "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-            "last_observed_at": "2026-08-12T11:30:29.984848-07:00"
+            "last_observed_at": "2026-08-12T12:17:41.431346-07:00"
           },
           {
             "command_id": "structure.field.compute",
             "command_version": 1,
-            "invocation_count": 69,
-            "success_count": 43,
-            "expected_refusal_count": 26,
+            "invocation_count": 402,
+            "success_count": 238,
+            "expected_refusal_count": 164,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "job_count": 43,
+            "job_count": 238,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.006147,
-            "p95_dispatch_seconds": 0.01435,
+            "mean_dispatch_seconds": 0.005196,
+            "p95_dispatch_seconds": 0.012385,
             "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-            "last_observed_at": "2026-08-12T11:52:39.947166-07:00"
+            "last_observed_at": "2026-08-12T12:17:41.319204-07:00"
           },
           {
             "command_id": "structure.interactions",
@@ -55559,17 +56189,17 @@
           {
             "command_id": "system.health",
             "command_version": 1,
-            "invocation_count": 23,
-            "success_count": 23,
+            "invocation_count": 101,
+            "success_count": 101,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
             "mean_dispatch_seconds": 9e-05,
-            "p95_dispatch_seconds": 0.000105,
+            "p95_dispatch_seconds": 0.000102,
             "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-            "last_observed_at": "2026-08-12T11:52:40.813209-07:00"
+            "last_observed_at": "2026-08-12T12:17:40.161384-07:00"
           },
           {
             "command_id": "system.version",
@@ -55590,30 +56220,30 @@
         "method_observations": [
           {
             "method_id": "fields.qm.density",
-            "invocation_count": 12,
-            "success_count": 12,
+            "invocation_count": 77,
+            "success_count": 77,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.009869
+            "mean_dispatch_seconds": 0.008515
           },
           {
             "method_id": "fields.qm.homo",
-            "invocation_count": 19,
-            "success_count": 19,
+            "invocation_count": 84,
+            "success_count": 84,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.009619
+            "mean_dispatch_seconds": 0.008747
           },
           {
             "method_id": "fields.qm.lumo",
-            "invocation_count": 12,
-            "success_count": 12,
+            "invocation_count": 77,
+            "success_count": 77,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.009926
+            "mean_dispatch_seconds": 0.008774
           },
           {
             "method_id": "torsion.strain",
@@ -55639,9 +56269,9 @@
       "type": "service",
       "name": "dirac-web.service :1360",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T18:54:49.897467+00:00",
+        "captured_at": "2026-08-12T19:19:44.136622+00:00",
         "source": "best-effort live probes",
-        "git_commit": "0926f2a7e4e614f17eade4a89aebd4b80e82cfa5",
+        "git_commit": "122eae8bc97a0c6351c3372671b75787b98347f5",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -55672,9 +56302,9 @@
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 920,
+          "jobs_total": 1115,
           "job_states": {
-            "done": 630,
+            "done": 825,
             "cancelled": 29,
             "failed": 261
           },
@@ -55688,76 +56318,76 @@
             "cancelled": 29,
             "operational_failure": 34,
             "expected_refusal": 227,
-            "success": 630
+            "success": 825
           },
           "artifacts": 79,
           "cached_results": 3,
           "registered_method_rows": 49,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 165,
+          "command_traces": 857,
           "observed_commands": 9
         },
         "command_observations": [
           {
             "command_id": "attention.list",
             "command_version": 1,
-            "invocation_count": 21,
-            "success_count": 21,
+            "invocation_count": 99,
+            "success_count": 99,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.004223,
-            "p95_dispatch_seconds": 0.006261,
+            "mean_dispatch_seconds": 0.003926,
+            "p95_dispatch_seconds": 0.00611,
             "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-            "last_observed_at": "2026-08-12T11:52:40.817187-07:00"
+            "last_observed_at": "2026-08-12T12:17:40.167645-07:00"
           },
           {
             "command_id": "job.list",
             "command_version": 1,
-            "invocation_count": 3,
-            "success_count": 3,
+            "invocation_count": 12,
+            "success_count": 12,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.009702,
-            "p95_dispatch_seconds": 0.011669,
+            "mean_dispatch_seconds": 0.010386,
+            "p95_dispatch_seconds": 0.014404,
             "first_observed_at": "2026-08-12T08:30:15.745925-07:00",
-            "last_observed_at": "2026-08-12T08:36:33.226013-07:00"
+            "last_observed_at": "2026-08-12T12:17:15.47045-07:00"
           },
           {
             "command_id": "job.wait",
             "command_version": 1,
-            "invocation_count": 43,
-            "success_count": 43,
+            "invocation_count": 237,
+            "success_count": 237,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.152797,
-            "p95_dispatch_seconds": 0.225739,
+            "mean_dispatch_seconds": 0.139257,
+            "p95_dispatch_seconds": 0.220209,
             "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-            "last_observed_at": "2026-08-12T11:30:29.984848-07:00"
+            "last_observed_at": "2026-08-12T12:17:41.431346-07:00"
           },
           {
             "command_id": "structure.field.compute",
             "command_version": 1,
-            "invocation_count": 69,
-            "success_count": 43,
-            "expected_refusal_count": 26,
+            "invocation_count": 402,
+            "success_count": 238,
+            "expected_refusal_count": 164,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "job_count": 43,
+            "job_count": 238,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.006147,
-            "p95_dispatch_seconds": 0.01435,
+            "mean_dispatch_seconds": 0.005196,
+            "p95_dispatch_seconds": 0.012385,
             "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-            "last_observed_at": "2026-08-12T11:52:39.947166-07:00"
+            "last_observed_at": "2026-08-12T12:17:41.319204-07:00"
           },
           {
             "command_id": "structure.interactions",
@@ -55807,17 +56437,17 @@
           {
             "command_id": "system.health",
             "command_version": 1,
-            "invocation_count": 23,
-            "success_count": 23,
+            "invocation_count": 101,
+            "success_count": 101,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
             "mean_dispatch_seconds": 9e-05,
-            "p95_dispatch_seconds": 0.000105,
+            "p95_dispatch_seconds": 0.000102,
             "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-            "last_observed_at": "2026-08-12T11:52:40.813209-07:00"
+            "last_observed_at": "2026-08-12T12:17:40.161384-07:00"
           },
           {
             "command_id": "system.version",
@@ -55838,30 +56468,30 @@
         "method_observations": [
           {
             "method_id": "fields.qm.density",
-            "invocation_count": 12,
-            "success_count": 12,
+            "invocation_count": 77,
+            "success_count": 77,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.009869
+            "mean_dispatch_seconds": 0.008515
           },
           {
             "method_id": "fields.qm.homo",
-            "invocation_count": 19,
-            "success_count": 19,
+            "invocation_count": 84,
+            "success_count": 84,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.009619
+            "mean_dispatch_seconds": 0.008747
           },
           {
             "method_id": "fields.qm.lumo",
-            "invocation_count": 12,
-            "success_count": 12,
+            "invocation_count": 77,
+            "success_count": 77,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.009926
+            "mean_dispatch_seconds": 0.008774
           },
           {
             "method_id": "torsion.strain",
@@ -55899,9 +56529,9 @@
       "type": "store",
       "name": "PostgreSQL · dirac",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T18:54:49.897467+00:00",
+        "captured_at": "2026-08-12T19:19:44.136622+00:00",
         "source": "best-effort live probes",
-        "git_commit": "0926f2a7e4e614f17eade4a89aebd4b80e82cfa5",
+        "git_commit": "122eae8bc97a0c6351c3372671b75787b98347f5",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -55932,9 +56562,9 @@
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 920,
+          "jobs_total": 1115,
           "job_states": {
-            "done": 630,
+            "done": 825,
             "cancelled": 29,
             "failed": 261
           },
@@ -55948,76 +56578,76 @@
             "cancelled": 29,
             "operational_failure": 34,
             "expected_refusal": 227,
-            "success": 630
+            "success": 825
           },
           "artifacts": 79,
           "cached_results": 3,
           "registered_method_rows": 49,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 165,
+          "command_traces": 857,
           "observed_commands": 9
         },
         "command_observations": [
           {
             "command_id": "attention.list",
             "command_version": 1,
-            "invocation_count": 21,
-            "success_count": 21,
+            "invocation_count": 99,
+            "success_count": 99,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.004223,
-            "p95_dispatch_seconds": 0.006261,
+            "mean_dispatch_seconds": 0.003926,
+            "p95_dispatch_seconds": 0.00611,
             "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-            "last_observed_at": "2026-08-12T11:52:40.817187-07:00"
+            "last_observed_at": "2026-08-12T12:17:40.167645-07:00"
           },
           {
             "command_id": "job.list",
             "command_version": 1,
-            "invocation_count": 3,
-            "success_count": 3,
+            "invocation_count": 12,
+            "success_count": 12,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.009702,
-            "p95_dispatch_seconds": 0.011669,
+            "mean_dispatch_seconds": 0.010386,
+            "p95_dispatch_seconds": 0.014404,
             "first_observed_at": "2026-08-12T08:30:15.745925-07:00",
-            "last_observed_at": "2026-08-12T08:36:33.226013-07:00"
+            "last_observed_at": "2026-08-12T12:17:15.47045-07:00"
           },
           {
             "command_id": "job.wait",
             "command_version": 1,
-            "invocation_count": 43,
-            "success_count": 43,
+            "invocation_count": 237,
+            "success_count": 237,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.152797,
-            "p95_dispatch_seconds": 0.225739,
+            "mean_dispatch_seconds": 0.139257,
+            "p95_dispatch_seconds": 0.220209,
             "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-            "last_observed_at": "2026-08-12T11:30:29.984848-07:00"
+            "last_observed_at": "2026-08-12T12:17:41.431346-07:00"
           },
           {
             "command_id": "structure.field.compute",
             "command_version": 1,
-            "invocation_count": 69,
-            "success_count": 43,
-            "expected_refusal_count": 26,
+            "invocation_count": 402,
+            "success_count": 238,
+            "expected_refusal_count": 164,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "job_count": 43,
+            "job_count": 238,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.006147,
-            "p95_dispatch_seconds": 0.01435,
+            "mean_dispatch_seconds": 0.005196,
+            "p95_dispatch_seconds": 0.012385,
             "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-            "last_observed_at": "2026-08-12T11:52:39.947166-07:00"
+            "last_observed_at": "2026-08-12T12:17:41.319204-07:00"
           },
           {
             "command_id": "structure.interactions",
@@ -56067,17 +56697,17 @@
           {
             "command_id": "system.health",
             "command_version": 1,
-            "invocation_count": 23,
-            "success_count": 23,
+            "invocation_count": 101,
+            "success_count": 101,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
             "mean_dispatch_seconds": 9e-05,
-            "p95_dispatch_seconds": 0.000105,
+            "p95_dispatch_seconds": 0.000102,
             "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-            "last_observed_at": "2026-08-12T11:52:40.813209-07:00"
+            "last_observed_at": "2026-08-12T12:17:40.161384-07:00"
           },
           {
             "command_id": "system.version",
@@ -56098,30 +56728,30 @@
         "method_observations": [
           {
             "method_id": "fields.qm.density",
-            "invocation_count": 12,
-            "success_count": 12,
+            "invocation_count": 77,
+            "success_count": 77,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.009869
+            "mean_dispatch_seconds": 0.008515
           },
           {
             "method_id": "fields.qm.homo",
-            "invocation_count": 19,
-            "success_count": 19,
+            "invocation_count": 84,
+            "success_count": 84,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.009619
+            "mean_dispatch_seconds": 0.008747
           },
           {
             "method_id": "fields.qm.lumo",
-            "invocation_count": 12,
-            "success_count": 12,
+            "invocation_count": 77,
+            "success_count": 77,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.009926
+            "mean_dispatch_seconds": 0.008774
           },
           {
             "method_id": "torsion.strain",
@@ -56153,9 +56783,9 @@
       "type": "store",
       "name": "Architecture Twin JSON + HTML",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T18:54:49.897467+00:00",
+        "captured_at": "2026-08-12T19:19:44.136622+00:00",
         "source": "best-effort live probes",
-        "git_commit": "0926f2a7e4e614f17eade4a89aebd4b80e82cfa5",
+        "git_commit": "122eae8bc97a0c6351c3372671b75787b98347f5",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -56186,9 +56816,9 @@
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 920,
+          "jobs_total": 1115,
           "job_states": {
-            "done": 630,
+            "done": 825,
             "cancelled": 29,
             "failed": 261
           },
@@ -56202,76 +56832,76 @@
             "cancelled": 29,
             "operational_failure": 34,
             "expected_refusal": 227,
-            "success": 630
+            "success": 825
           },
           "artifacts": 79,
           "cached_results": 3,
           "registered_method_rows": 49,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 165,
+          "command_traces": 857,
           "observed_commands": 9
         },
         "command_observations": [
           {
             "command_id": "attention.list",
             "command_version": 1,
-            "invocation_count": 21,
-            "success_count": 21,
+            "invocation_count": 99,
+            "success_count": 99,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.004223,
-            "p95_dispatch_seconds": 0.006261,
+            "mean_dispatch_seconds": 0.003926,
+            "p95_dispatch_seconds": 0.00611,
             "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-            "last_observed_at": "2026-08-12T11:52:40.817187-07:00"
+            "last_observed_at": "2026-08-12T12:17:40.167645-07:00"
           },
           {
             "command_id": "job.list",
             "command_version": 1,
-            "invocation_count": 3,
-            "success_count": 3,
+            "invocation_count": 12,
+            "success_count": 12,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.009702,
-            "p95_dispatch_seconds": 0.011669,
+            "mean_dispatch_seconds": 0.010386,
+            "p95_dispatch_seconds": 0.014404,
             "first_observed_at": "2026-08-12T08:30:15.745925-07:00",
-            "last_observed_at": "2026-08-12T08:36:33.226013-07:00"
+            "last_observed_at": "2026-08-12T12:17:15.47045-07:00"
           },
           {
             "command_id": "job.wait",
             "command_version": 1,
-            "invocation_count": 43,
-            "success_count": 43,
+            "invocation_count": 237,
+            "success_count": 237,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.152797,
-            "p95_dispatch_seconds": 0.225739,
+            "mean_dispatch_seconds": 0.139257,
+            "p95_dispatch_seconds": 0.220209,
             "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-            "last_observed_at": "2026-08-12T11:30:29.984848-07:00"
+            "last_observed_at": "2026-08-12T12:17:41.431346-07:00"
           },
           {
             "command_id": "structure.field.compute",
             "command_version": 1,
-            "invocation_count": 69,
-            "success_count": 43,
-            "expected_refusal_count": 26,
+            "invocation_count": 402,
+            "success_count": 238,
+            "expected_refusal_count": 164,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "job_count": 43,
+            "job_count": 238,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.006147,
-            "p95_dispatch_seconds": 0.01435,
+            "mean_dispatch_seconds": 0.005196,
+            "p95_dispatch_seconds": 0.012385,
             "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-            "last_observed_at": "2026-08-12T11:52:39.947166-07:00"
+            "last_observed_at": "2026-08-12T12:17:41.319204-07:00"
           },
           {
             "command_id": "structure.interactions",
@@ -56321,17 +56951,17 @@
           {
             "command_id": "system.health",
             "command_version": 1,
-            "invocation_count": 23,
-            "success_count": 23,
+            "invocation_count": 101,
+            "success_count": 101,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
             "mean_dispatch_seconds": 9e-05,
-            "p95_dispatch_seconds": 0.000105,
+            "p95_dispatch_seconds": 0.000102,
             "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-            "last_observed_at": "2026-08-12T11:52:40.813209-07:00"
+            "last_observed_at": "2026-08-12T12:17:40.161384-07:00"
           },
           {
             "command_id": "system.version",
@@ -56352,30 +56982,30 @@
         "method_observations": [
           {
             "method_id": "fields.qm.density",
-            "invocation_count": 12,
-            "success_count": 12,
+            "invocation_count": 77,
+            "success_count": 77,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.009869
+            "mean_dispatch_seconds": 0.008515
           },
           {
             "method_id": "fields.qm.homo",
-            "invocation_count": 19,
-            "success_count": 19,
+            "invocation_count": 84,
+            "success_count": 84,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.009619
+            "mean_dispatch_seconds": 0.008747
           },
           {
             "method_id": "fields.qm.lumo",
-            "invocation_count": 12,
-            "success_count": 12,
+            "invocation_count": 77,
+            "success_count": 77,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.009926
+            "mean_dispatch_seconds": 0.008774
           },
           {
             "method_id": "torsion.strain",
@@ -56438,7 +57068,7 @@
       "type": "system",
       "name": "CommandDispatcher",
       "runtime_observation": {
-        "traces": 165,
+        "traces": 857,
         "observed_commands": 9
       }
     },
@@ -60646,6 +61276,16 @@
     {
       "source": "file:src/app/shell/workspace-catalog.ts",
       "target": "module:ts:src/app/shell/workspace-catalog.ts",
+      "relation": "parsed-as"
+    },
+    {
+      "source": "file:src/app/shell/workspace-visual-catalog.ts",
+      "target": "module:ts:src/app/shell/workspace-visual-catalog.ts",
+      "relation": "parsed-as"
+    },
+    {
+      "source": "file:src/app/shell/workspace-visuals.ts",
+      "target": "module:ts:src/app/shell/workspace-visuals.ts",
       "relation": "parsed-as"
     },
     {
@@ -68110,7 +68750,7 @@
     },
     {
       "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/index.ts:560:21:project",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:45:5:WorkspaceCanvas.render",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:46:5:WorkspaceCanvas.render",
       "relation": "calls"
     },
     {
@@ -69279,97 +69919,102 @@
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:12:16:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:13:16:<anonymous>",
       "target": "function:ts:src/app/shell/registries.ts:110:1:assertRegistryIntegrity",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:13:35:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:14:35:<anonymous>",
       "target": "function:ts:src/app/shell/registries.ts:99:1:navigableViews",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:15:35:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:16:35:<anonymous>",
       "target": "function:ts:src/app/shell/registries.ts:94:1:availableViews",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:17:16:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:18:16:<anonymous>",
       "target": "function:ts:src/app/shell/workspace-catalog.ts:320:1:assertExperienceCatalog",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:22:16:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:20:16:<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-visual-catalog.ts:161:1:assertWorkspaceVisualCatalog",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:25:16:<anonymous>",
       "target": "function:ts:src/app/shell/registries.ts:110:1:assertRegistryIntegrity",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:25:62:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:28:62:<anonymous>",
       "target": "function:ts:src/app/context/scientific-context-store.ts:30:5:ScientificContextStore.current",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:25:62:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:28:62:<anonymous>",
       "target": "function:ts:src/app/domain/object-ref.ts:6:1:objectRef",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:25:62:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:28:62:<anonymous>",
       "target": "function:ts:src/app/shell/app-shell.ts:35:5:AppShell.restore",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:38:49:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:41:49:<anonymous>",
       "target": "function:ts:src/app/shell/app-shell.ts:35:5:AppShell.restore",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:46:81:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:49:81:<anonymous>",
       "target": "function:ts:src/app/context/scientific-context-store.ts:30:5:ScientificContextStore.current",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:46:81:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:49:81:<anonymous>",
       "target": "function:ts:src/app/domain/object-ref.ts:6:1:objectRef",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:46:81:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:49:81:<anonymous>",
       "target": "function:ts:src/app/shell/app-shell.ts:20:5:AppShell.navigate",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:53:89:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:56:89:<anonymous>",
       "target": "function:ts:src/app/shell/app-shell.ts:16:5:AppShell.current",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:53:89:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:56:89:<anonymous>",
       "target": "function:ts:src/app/shell/app-shell.ts:20:5:AppShell.navigate",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:57:27:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:60:27:<anonymous>",
       "target": "function:ts:src/app/shell/app-shell.ts:16:5:AppShell.current",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:60:80:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:63:80:<anonymous>",
       "target": "function:ts:src/app/shell/app-shell.ts:20:5:AppShell.navigate",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:60:80:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:63:80:<anonymous>",
       "target": "function:ts:src/app/shell/scene-service.ts:16:5:SceneService.current",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:60:80:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:63:80:<anonymous>",
       "target": "function:ts:src/app/shell/scene-service.ts:8:5:SceneService.attach",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:67:16:<anonymous>",
+      "source": "function:ts:src/app/shell/_spec/app-shell.spec.ts:70:16:<anonymous>",
       "target": "function:ts:src/app/shell/scene-service.ts:8:5:SceneService.attach",
       "relation": "calls"
     },
@@ -69464,103 +70109,293 @@
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:107:5:WorkspaceCanvas.renderCanvas",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:127:28:WorkspaceCanvas.refreshPin",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:108:5:WorkspaceCanvas.renderCanvas",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:128:28:WorkspaceCanvas.refreshPin",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:107:5:WorkspaceCanvas.renderCanvas",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:15:20:storageKey",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:108:5:WorkspaceCanvas.renderCanvas",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:16:20:storageKey",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:107:5:WorkspaceCanvas.renderCanvas",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:171:31:WorkspaceCanvas.renderModules",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:108:5:WorkspaceCanvas.renderCanvas",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:173:31:WorkspaceCanvas.renderModules",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:107:5:WorkspaceCanvas.renderCanvas",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:17:1:readLocal",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:108:5:WorkspaceCanvas.renderCanvas",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:18:1:readLocal",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:107:5:WorkspaceCanvas.renderCanvas",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:7:17:element",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:108:5:WorkspaceCanvas.renderCanvas",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:8:17:element",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:127:28:WorkspaceCanvas.refreshPin",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:15:20:storageKey",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:108:5:WorkspaceCanvas.renderCanvas",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:227:1:renderWorkspaceVisual",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:127:28:WorkspaceCanvas.refreshPin",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:17:1:readLocal",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:128:28:WorkspaceCanvas.refreshPin",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:16:20:storageKey",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:133:39:WorkspaceCanvas.<anonymous>",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:127:28:WorkspaceCanvas.refreshPin",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:128:28:WorkspaceCanvas.refreshPin",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:18:1:readLocal",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:133:39:WorkspaceCanvas.<anonymous>",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:15:20:storageKey",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:134:39:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:128:28:WorkspaceCanvas.refreshPin",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:133:39:WorkspaceCanvas.<anonymous>",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:17:1:readLocal",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:134:39:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:16:20:storageKey",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:133:39:WorkspaceCanvas.<anonymous>",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:21:1:writeLocal",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:134:39:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:18:1:readLocal",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:171:31:WorkspaceCanvas.renderModules",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:7:17:element",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:134:39:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:22:1:writeLocal",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:176:55:WorkspaceCanvas.<anonymous>",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:233:5:WorkspaceCanvas.moduleCard",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:173:31:WorkspaceCanvas.renderModules",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:8:17:element",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:217:36:WorkspaceCanvas.<anonymous>",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:15:20:storageKey",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:178:55:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:235:5:WorkspaceCanvas.moduleCard",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:217:36:WorkspaceCanvas.<anonymous>",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:21:1:writeLocal",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:219:36:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:16:20:storageKey",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:233:5:WorkspaceCanvas.moduleCard",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:7:17:element",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:219:36:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:22:1:writeLocal",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:45:5:WorkspaceCanvas.render",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:107:5:WorkspaceCanvas.renderCanvas",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:235:5:WorkspaceCanvas.moduleCard",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:8:17:element",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:45:5:WorkspaceCanvas.render",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:66:5:WorkspaceCanvas.renderOutline",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:46:5:WorkspaceCanvas.render",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:108:5:WorkspaceCanvas.renderCanvas",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:66:5:WorkspaceCanvas.renderOutline",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:46:5:WorkspaceCanvas.render",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:67:5:WorkspaceCanvas.renderOutline",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:67:5:WorkspaceCanvas.renderOutline",
       "target": "function:ts:src/app/shell/registries.ts:99:1:navigableViews",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:66:5:WorkspaceCanvas.renderOutline",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:7:17:element",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:67:5:WorkspaceCanvas.renderOutline",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:8:17:element",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:103:1:network",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:16:13:svg",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:103:1:network",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:112:20:<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:16:13:svg",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:118:20:<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:16:13:svg",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:131:1:funnel",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:133:26:<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:142:1:kanban",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:22:1:emptyMessage",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:142:1:kanban",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:154:1:plate",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:170:1:table",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:22:1:emptyMessage",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:170:1:table",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:186:1:lineage",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:198:1:compare",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:200:19:panel",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:198:1:compare",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:200:19:panel",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:206:109:<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:213:1:visualBody",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:103:1:network",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:213:1:visualBody",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:131:1:funnel",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:213:1:visualBody",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:142:1:kanban",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:213:1:visualBody",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:154:1:plate",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:213:1:visualBody",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:170:1:table",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:213:1:visualBody",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:186:1:lineage",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:213:1:visualBody",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:198:1:compare",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:213:1:visualBody",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:30:1:flow",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:213:1:visualBody",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:41:1:timeline",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:213:1:visualBody",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:54:1:matrix",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:213:1:visualBody",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:78:1:axes",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:227:1:renderWorkspaceVisual",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:213:1:visualBody",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:227:1:renderWorkspaceVisual",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:22:1:emptyMessage",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:30:1:flow",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:32:26:<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:41:1:timeline",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:44:26:<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:54:1:matrix",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:78:1:axes",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:16:13:svg",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app/shell/workspace-visuals.ts:78:1:axes",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
       "relation": "calls"
     },
     {
@@ -82700,97 +83535,107 @@
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:12:16:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:10:79:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:13:35:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:13:16:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:14:33:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:14:35:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:15:35:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:15:33:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:15:68:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:16:35:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:17:16:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:16:68:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:17:56:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:18:16:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:20:59:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:18:56:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:21:36:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:20:16:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:22:16:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:20:61:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:25:62:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:23:59:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:38:49:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:24:36:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:46:81:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:25:16:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:53:89:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:28:62:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:57:27:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:41:49:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:60:80:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:49:81:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:67:16:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:56:89:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:8:45:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:60:27:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
-      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:9:79:<anonymous>",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:63:80:<anonymous>",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:70:16:<anonymous>",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
+      "target": "function:ts:src/app/shell/_spec/app-shell.spec.ts:9:45:<anonymous>",
       "relation": "contains"
     },
     {
@@ -82821,6 +83666,11 @@
     {
       "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
       "target": "module:ts:src/app/shell/workspace-catalog.ts",
+      "relation": "imports"
+    },
+    {
+      "source": "module:ts:src/app/shell/_spec/app-shell.spec.ts",
+      "target": "module:ts:src/app/shell/workspace-visual-catalog.ts",
       "relation": "imports"
     },
     {
@@ -83140,47 +83990,42 @@
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:107:5:WorkspaceCanvas.renderCanvas",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:108:5:WorkspaceCanvas.renderCanvas",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:110:43:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:111:43:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:127:28:WorkspaceCanvas.refreshPin",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:128:28:WorkspaceCanvas.refreshPin",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:133:39:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:134:39:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:140:39:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:141:39:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:144:48:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:145:48:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:15:20:storageKey",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:16:20:storageKey",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:171:31:WorkspaceCanvas.renderModules",
-      "relation": "contains"
-    },
-    {
-      "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:174:55:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:173:31:WorkspaceCanvas.renderModules",
       "relation": "contains"
     },
     {
@@ -83190,82 +84035,87 @@
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:17:1:readLocal",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:178:55:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:192:74:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:18:1:readLocal",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:214:44:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:194:74:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:217:36:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:216:44:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:21:1:writeLocal",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:219:36:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:233:5:WorkspaceCanvas.moduleCard",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:22:1:writeLocal",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:33:5:WorkspaceCanvas.constructor",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:235:5:WorkspaceCanvas.moduleCard",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:35:46:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:34:5:WorkspaceCanvas.constructor",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:45:5:WorkspaceCanvas.render",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:36:46:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:46:39:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:46:5:WorkspaceCanvas.render",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:47:43:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:47:39:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:66:5:WorkspaceCanvas.renderOutline",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:48:43:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:67:43:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:67:5:WorkspaceCanvas.renderOutline",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:69:42:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:68:43:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:7:17:element",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:70:42:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:97:46:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:8:17:element",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-canvas.ts",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:98:46:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
@@ -83281,6 +84131,11 @@
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
       "target": "module:ts:src/app/shell/workspace-catalog.ts",
+      "relation": "imports"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-canvas.ts",
+      "target": "module:ts:src/app/shell/workspace-visuals.ts",
       "relation": "imports"
     },
     {
@@ -83301,6 +84156,176 @@
     {
       "source": "module:ts:src/app/shell/workspace-catalog.ts",
       "target": "module:ts:src/app/shell/registries.ts",
+      "relation": "imports"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visual-catalog.ts",
+      "target": "function:ts:src/app/shell/workspace-visual-catalog.ts:161:1:assertWorkspaceVisualCatalog",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visual-catalog.ts",
+      "target": "function:ts:src/app/shell/workspace-visual-catalog.ts:161:85:<anonymous>",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visual-catalog.ts",
+      "target": "function:ts:src/app/shell/workspace-visual-catalog.ts:162:36:<anonymous>",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visual-catalog.ts",
+      "target": "function:ts:src/app/shell/workspace-visual-catalog.ts:163:57:<anonymous>",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visual-catalog.ts",
+      "target": "module:ts:src/app/shell/registries.ts",
+      "relation": "imports"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:103:1:network",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:112:20:<anonymous>",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:118:20:<anonymous>",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:131:1:funnel",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:133:26:<anonymous>",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:142:1:kanban",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:154:1:plate",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:16:13:svg",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:170:1:table",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:186:1:lineage",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:198:1:compare",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:200:19:panel",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:206:109:<anonymous>",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:213:1:visualBody",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:227:1:renderWorkspaceVisual",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:229:49:<anonymous>",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:22:1:emptyMessage",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:230:50:<anonymous>",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:231:47:<anonymous>",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:30:1:flow",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:32:26:<anonymous>",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:41:1:timeline",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:44:26:<anonymous>",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:54:1:matrix",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:78:1:axes",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "function:ts:src/app/shell/workspace-visuals.ts:8:14:html",
+      "relation": "contains"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "module:ts:src/app/shell/registries.ts",
+      "relation": "imports"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "module:ts:src/app/shell/workspace-catalog.ts",
+      "relation": "imports"
+    },
+    {
+      "source": "module:ts:src/app/shell/workspace-visuals.ts",
+      "target": "module:ts:src/app/shell/workspace-visual-catalog.ts",
       "relation": "imports"
     },
     {
