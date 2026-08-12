@@ -490,7 +490,13 @@ async function fetchField(kind: FieldKind, store = false,
         }
     }
 
-    const basis = currentBasis();
+    // ONLY the quantum kinds take a basis, and the Kinds table already says which. Sent
+    // unconditionally, this produced a REAL refusal the browser surfaced today:
+    // `fields.mlp: /parameters Additional properties are not allowed ('basis' was
+    // unexpected)`. The contract was right and the client was wrong — and the client had
+    // the answer in its own table the whole time. Sending a parameter a method does not
+    // declare is not harmless politeness; the schema is closed, and closed is the point.
+    const basis = Kinds[kind].quantum ? currentBasis() : undefined;
     const controller = new AbortController();
     inFlight = controller;
     const timer = setTimeout(() => controller.abort(), clientTimeoutMs(budget));

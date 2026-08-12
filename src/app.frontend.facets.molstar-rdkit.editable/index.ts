@@ -1106,6 +1106,19 @@ class MolecularVfxLab {
             void updateBondAtlas(null);
             updateHalogenAudit(null, this.currentFocusOptions());
             void updatePharmacophoreDesigner(null, this.currentFocusOptions(), { structureId: this.currentMolecule.id, ligandLabel: null });
+            // The properties cockpit was missing from this list, and missing from it in
+            // the one direction that cannot be seen: every other facet here CLEARS, so
+            // switching from haemoglobin to crambin emptied the wells, the atlas and the
+            // designer while the cockpit went on displaying HEM · A:142, MW 616.5, LogP
+            // 4.74 — a full, plausible, internally consistent readout of a molecule that
+            // is not in the scene. Ivan: 我发现它这个永远就是它那个值是不变的.
+            //
+            // The reason it survived a test is worth more than the fix. I checked this
+            // panel on 1CBS, 1XKK and 4HHB, watched every number change, and concluded it
+            // recomputed — but all three HAVE a deposited ligand, so all three take the
+            // path above this branch. I picked the sample points and therefore picked the
+            // answer. The molecules that expose it are the ones with nothing to show.
+            void renderPropertiesPanel(null, null);
             return;
         }
 
@@ -1120,6 +1133,9 @@ class MolecularVfxLab {
             target.innerHTML = '<p class="ledger-empty">RDKit cannot parse this ligand (ComponentBond / CCD data unavailable).</p>';
             summary.textContent = 'RDKit parse failed';
             stats.textContent = '';
+            // Same omission, same direction: a ligand RDKit cannot read is not a reason to
+            // keep showing the last one it could.
+            void renderPropertiesPanel(null, null);
             updateFieldWellsLigand(null, null);
             void updateBondAtlas(null);
             updateHalogenAudit(null, this.currentFocusOptions());

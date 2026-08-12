@@ -95,6 +95,9 @@ vec3 gradAt(vec3 t, float e) {
 
 float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 
+// premultiplied 'over', accumulating into (col, a)
+#define OVER(C, A) { float _a = clamp(A, 0.0, 1.0); col = (C) * _a + col * (1.0 - _a); a = _a + a * (1.0 - _a); }
+
 /** slab test in TEXTURE space, which handles a non-orthogonal cell for free */
 bool hitBox(vec3 ro, vec3 rd, out float t0, out float t1) {
     vec3 inv = 1.0 / rd;
@@ -182,8 +185,11 @@ void main() {
             // over the whole box footprint, and near-maximum neutral ink over
             // warm paper is precisely the brown smear Ivan was looking at.
             // Bounded by construction, and it is now the quantity it claims.
-            vec3 contrib = mix(vec3(1.0), (v < 0.0 ? uNeg : uPos), 0.55) * r;
-            rim = max(rim, contrib);
+            // Accumulate, bounded later. 'max' made this a pure silhouette and
+            // lost the nested-shell structure that gives the picture its form:
+            // a molecule with many lobes crosses the contour many times, and
+            // THAT is the shape. Kept achromatic so hue stays the sign's alone.
+            rim += vec3(r);
             if (!gotSign) {
                 gotSign = true;
                 sgn = clamp(v / uScale, -1.0, 1.0);
@@ -215,7 +221,7 @@ void main() {
     // added 1.35 per crossing — so they ran away and saturated. Saturating
     // exponentially keeps the ordering: more crossings still reads as more.
     steep = clamp(steep, 0.0, 1.0);
-    float rimD   = clamp(length(rim) * 0.85, 0.0, 1.0);
+    float rimD   = 1.0 - exp(-rim.x * 1.30);
     float grainD = 1.0 - exp(-grain);
     float steepD = pow(steep, 0.75);
     float signD  = abs(sgn) * face;
@@ -240,10 +246,22 @@ void main() {
     //
     // Straight alpha has no such dependency: alpha 0 is exactly "nothing here"
     // no matter what is underneath or how the DOM is nested.
-    float dRim   = rimD   * 0.55 * uChan.x;
-    float dSteep = steepD * 0.34 * uChan.y;
-    float dGrain = grainD * 0.22 * uChan.z;
-    float dSign  = signD  * 0.62 * uChan.w;
+    // Weights raised ~3x after LOOKING at it in the app rather than at a pixel
+    // histogram. Correctly placed, correctly composited, and so faint it read
+    // as nothing — which is the failure mode that wastes the most time,
+    // because "too weak to see" and "not drawing at all" are the same picture.
+    // PER-GROUND WEIGHTS. Additive light on a dark scene saturates far faster
+    // than ink on paper: the same numbers that made the light version readable
+    // blew the dark one to flat white. The app's --scene-bg resolves to
+    // #0b0e12 today, so the dark path is the one actually on screen -- and the
+    // premise I built the light path on (a #f1f0eb panel, read out of ONE
+    // theme block rather than from the resolved token) was wrong from the
+    // start. Read the computed value, not a stylesheet line.
+    float kg = uLight > 0.5 ? 1.0 : 0.38;
+    float dRim   = rimD   * 1.55 * kg * uChan.x;
+    float dSteep = steepD * 1.05 * kg * uChan.y;
+    float dGrain = grainD * 0.55 * kg * uChan.z;
+    float dSign  = signD  * 1.90 * kg * uChan.w;
 
     // EVERY CHANNEL IS A SATURATED COLOUR. None of them is grey, and none is
     // allowed near black.
@@ -280,22 +298,36 @@ void main() {
         dRim *= 1.25; dSteep *= 0.75; dGrain *= 0.45; dSign *= 0.30;
     }
 
-    float wsum = dRim + dSteep + dGrain + dSign;
-    if (wsum < 1e-4) { fragColor = vec4(0.0); return; }
-
-    vec3 col;
+    // ── FOUR LAYERS, COMPOSITED — NOT AVERAGED ─────────────────────────
+    //
+    // This was 'col = sum(colour_i * density_i) / sum(density_i)': a weighted
+    // AVERAGE of four colours into one. That is not compositing, and it
+    // destroys exactly what the four channels exist for — each channel's hue
+    // is dissolved into a single mid-tone, so a rim, a gradient and a sign all
+    // arrive as the same muddy grey-blue and the picture stops being separable.
+    // The study version looked the way it did because its channels were
+    // separate LIGHTS ADDED on top of one another, each still legible.
+    //
+    // Layered 'over' keeps that property on paper: sign lays down the broad
+    // wash, steepness and grain sit on it, the rim draws last and thinnest so
+    // the boundary stays crisp instead of being averaged into the fill.
+    vec3 col = vec3(0.0); float a = 0.0;
     if (uStyle == 3) {
-        // one ink: value is carried by DENSITY, sign only by a slight warm or
-        // cool shift within the same drafting blue
+        // blueprint: one ink, so layering is a density question only
         vec3 base = vec3(0.13, 0.30, 0.52);
-        col = mix(base, sgn < 0.0 ? vec3(0.34, 0.26, 0.42) : vec3(0.10, 0.36, 0.58), 0.5);
+        float d = 1.0 - exp(-(dRim + dSteep + dGrain + dSign) * 2.2);
+        col = base; a = d * 0.85;
     } else {
-        col = (cRim * dRim + cSteep * dSteep + cGrain * dGrain + signHue * dSign) / wsum;
+        OVER(signHue,  dSign  * 0.95);
+        OVER(cSteep,   dSteep * 0.80);
+        OVER(cGrain,   dGrain * 0.70);
+        OVER(cRim,     dRim   * 0.90);
+        a *= (uStyle == 2 ? 0.95 : 0.86);
     }
+    if (a < 1e-3) { fragColor = vec4(0.0); return; }
+    col /= max(a, 1e-4);
     float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
-    if (uLight > 0.5 && lum < 0.24) col *= 0.24 / max(lum, 1e-4);
-
-    float a = (1.0 - exp(-wsum * 1.35)) * (uStyle == 2 ? 0.85 : 0.72);
+    if (uLight > 0.5 && lum < 0.22) col *= 0.22 / max(lum, 1e-4);
     fragColor = vec4(col * a, a);   // premultiplied, as the context expects
 }`;
 

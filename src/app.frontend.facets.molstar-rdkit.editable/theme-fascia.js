@@ -22,7 +22,8 @@
     function paintBackground() {
         var w = wb();
         if (!w || typeof w.setBackground !== 'function') return false;
-        try { w.setBackground(WELL); return true; } catch (e) { return false; }
+        var col = (typeof window.__diracSceneBg === 'number') ? window.__diracSceneBg : WELL;
+        try { w.setBackground(col); return true; } catch (e) { return false; }
     }
 
     // Uniform graphite on every structure component, so the only colour in the
