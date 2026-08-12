@@ -125,13 +125,27 @@ export function getLigandFocusTargets(structure: Structure): readonly LigandFocu
             location.unit = entry.unit;
             location.element = entry.unit.elements[unitIndex];
             const residueKey = StructureProperties.residue.key(location);
+            // A location that cannot yield a residue key is not addressing a residue, and
+            // every other property read off it is garbage rather than merely wrong.
+            // Measured on 1GRM: residue.key came back undefined and chain.auth_asym_id
+            // returned the ENTIRE 300,821-character mmCIF file, which travelled into the
+            // ligand selector, the ligand panel header and the properties cockpit header.
+            // The group is simply not a ligand residue and must not enter the list.
+            //
+            // Note what the first attempt got wrong: guarding `comp` produced
+            // "?undefined · <the whole file>" — the corruption just moved to the next
+            // field. Guarding a symptom field by field chases it; asking whether the
+            // LOCATION is valid answers it once.
+            if (typeof residueKey !== 'number' || !Number.isFinite(residueKey)) continue;
             const id = `${entry.unit.model.id}:${residueKey}`;
             let group = groups.get(id);
             if (!group) {
                 const comp = StructureProperties.atom.label_comp_id(location);
                 const chain = StructureProperties.chain.auth_asym_id(location) || StructureProperties.chain.label_asym_id(location);
                 const seq = StructureProperties.residue.auth_seq_id(location);
-                group = { label: `${comp} · ${chain || '—'}:${seq}`, units: new Map() };
+                // Belt and braces behind the location check above.
+                const safeComp = /^[A-Za-z0-9]{1,5}$/.test(comp) ? comp : `?${residueKey}`;
+                group = { label: `${safeComp} · ${chain || '—'}:${seq}`, units: new Map() };
                 groups.set(id, group);
             }
             let unit = group.units.get(entry.unit.id);
