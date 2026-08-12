@@ -1320,6 +1320,7 @@
     </style>
     <link rel="stylesheet" href="./theme-fascia.css">
     <link rel="stylesheet" href="./theme-dark.css">
+    <link rel="stylesheet" href="./workspace-shell.css">
     <!-- addons.css carries the two chrome additions that are not part of the fascia theme
          itself: the palette picker's column in .topbar-scene, and the save button. Kept out
          of theme-fascia.css on purpose — that file is the THEME, and a control that only
@@ -1333,6 +1334,7 @@
                 <p class="eyebrow">Open-source Schrödinger</p>
                 <h1>Dirac</h1>
             </div>
+            <div id="shell-breadcrumb" class="shell-breadcrumb" hidden></div>
             <div class="topbar-scene">
                 <label>Molecule<select id="molecule"></select></label>
                 <label>Representation<select id="representation"></select></label>
@@ -1363,6 +1365,7 @@
                     <span class="attention-slot">Attention <b id="attention-count">…</b></span>
                 </div>
             </section>
+            <section id="workspace-outline" class="workspace-outline" aria-label="Workspace implementation map" hidden></section>
             <nav class="master-nav" role="tablist" aria-label="Workspace sections">
                 <button type="button" class="master-tab" data-jump="focus">Focus</button>
                 <button type="button" class="master-tab" data-jump="semantic" aria-selected="true">Semantics</button>
@@ -1812,6 +1815,7 @@
         <main>
             <div id="viewport"></div>
             <div id="badge" class="badge">Mol* native · semantics preserved</div>
+            <section id="workspace-canvas" class="workspace-canvas" aria-label="Workspace view" hidden></section>
         </main>
     </div>
 

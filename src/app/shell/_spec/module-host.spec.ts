@@ -25,9 +25,25 @@ describe('registry-driven ModuleHost', () => {
         ]);
     });
 
-    it('refuses an unknown or capability-gated view', () => {
-        expect(() => new ModuleHost(new Map()).activate('knowledge.entities', {
+    it('unmounts operational modules when a scaffold view takes over the canvas', () => {
+        const events: string[] = [];
+        const adapters = new Map<string, ModuleAdapter>(MODULES.map(module => [module.id, {
+            mount: () => events.push(`mount:${module.id}`),
+            unmount: () => events.push(`unmount:${module.id}`),
+        }]));
+        const host = new ModuleHost(adapters);
+        const context = {
             selectedObjects: [], activeHypotheses: [], origin: 'navigation', generation: 0,
-        })).toThrow('no implemented modules');
+        } as ScientificContext;
+        host.activate('structures.complex', context);
+        expect(host.activate('knowledge.entities', context)).toEqual([]);
+        expect(host.activeModules()).toEqual([]);
+        expect(events.some(event => event.startsWith('unmount:'))).toBe(true);
+    });
+
+    it('still rejects an unknown View instead of treating it as an empty scaffold', () => {
+        expect(() => new ModuleHost(new Map()).activate('unknown.view', {
+            selectedObjects: [], activeHypotheses: [], origin: 'navigation', generation: 0,
+        })).toThrow('has no product shell');
     });
 });

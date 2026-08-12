@@ -86,8 +86,9 @@ import { appShell } from '../app/shell/app-shell';
 import { sceneService } from '../app/shell/scene-service';
 import { scientificContext } from '../app/context/scientific-context-store';
 import { ModuleHost, type ModuleAdapter } from '../app/shell/module-host';
-import { availableViews, MODULES, WORKSPACES, type ModuleDefinition,
+import { MODULES, navigableViews, VIEWS, WORKSPACES, type ModuleDefinition,
     type WorkspaceId } from '../app/shell/registries';
+import { WorkspaceCanvas } from '../app/shell/workspace-canvas';
 import { DiracClient } from '../app/services/dirac-client';
 // A READ-ONLY handle on the store, for driving the real code from a test rather
 // than reasoning about it. Not a second code path: it exposes the same singleton
@@ -465,8 +466,9 @@ function initCommandPalette(): void {
     const show = async () => {
         dialog.showModal(); search.focus();
         if (!commands.length) {
-            try { commands = await applicationClient.commands(); render(); }
-            catch (error) { output.textContent = String(error); }
+            try {
+                commands = await applicationClient.commands(); render();
+            } catch (error) { output.textContent = String(error); }
         }
     };
     open.addEventListener('click', () => void show());
@@ -522,37 +524,48 @@ function createDomModuleHost(): ModuleHost {
 function initShellNavigation(): void {
     const host = document.getElementById('workspace-nav');
     const viewHost = document.getElementById('view-nav');
-    if (!host || !viewHost) return;
+    const canvasHost = document.getElementById('workspace-canvas');
+    const outlineHost = document.getElementById('workspace-outline');
+    const breadcrumb = document.getElementById('shell-breadcrumb');
+    if (!host || !viewHost || !canvasHost || !outlineHost || !breadcrumb) return;
     const moduleHost = createDomModuleHost();
+    const workspaceCanvas = new WorkspaceCanvas(canvasHost, outlineHost, breadcrumb,
+        route => appShell.navigate(route));
     const render = (active: WorkspaceId, activeView: string) => {
-        host.innerHTML = '';
-        for (const workspace of WORKSPACES.filter(w => availableViews(w.id).length)) {
+        host.replaceChildren();
+        for (const workspace of WORKSPACES.filter(w => w.shellReady)) {
             const button = document.createElement('button');
-            button.type = 'button'; button.textContent = workspace.label;
+            button.type = 'button';
+            button.textContent = `${workspace.icon} ${workspace.label}`;
+            button.dataset.capability = workspace.availability;
             button.setAttribute('aria-selected', String(workspace.id === active));
             button.addEventListener('click', () => {
-                const next = availableViews(workspace.id)[0];
+                const next = VIEWS.find(view => view.id === workspace.defaultView)!;
                 appShell.navigate({ workspace: workspace.id, view: next.id,
                     programId: appShell.current().programId || 'current' });
             });
             host.appendChild(button);
         }
         viewHost.replaceChildren();
-        for (const view of availableViews(active)) {
+        for (const view of navigableViews(active)) {
             const button = document.createElement('button');
             button.type = 'button'; button.textContent = view.label;
+            button.dataset.capability = view.implemented ? 'implemented' : 'shell';
             button.setAttribute('aria-selected', String(view.id === activeView));
             button.addEventListener('click', () => appShell.navigate({ workspace: active,
                 view: view.id, programId: appShell.current().programId || 'current' }));
             viewHost.appendChild(button);
         }
     };
-    appShell.restore();
-    appShell.subscribe(route => {
+    const project = (route: ReturnType<typeof appShell.current>) => {
         render(route.workspace, route.view);
         moduleHost.activate(route.view, scientificContext.current());
+        workspaceCanvas.render(route);
         if (route.workspace === 'runs') void refreshRuns();
-    });
+    };
+    appShell.restore();
+    appShell.subscribe(project);
+    window.addEventListener('popstate', () => project(appShell.restore()));
     document.getElementById('run-job-refresh')?.addEventListener('click', () => void refreshRuns());
     initGlobalContext();
     initCommandPalette();
@@ -1570,7 +1583,8 @@ class MolecularVfxLab {
         }
     }
 
-    private async runSmartsSearch(smarts: string) {        const input = byId<HTMLInputElement>('smarts-input');
+    private async runSmartsSearch(smarts: string) {
+        const input = byId<HTMLInputElement>('smarts-input');
         const status = byId<HTMLElement>('smarts-status');
         if (!input || !status) return;
         if (!this.workbench) return;

@@ -96,8 +96,8 @@ current schema history.
 ## Client application
 
 `src/app/shell/registries.ts` is the one registry for eight Workspaces, thirty Views and
-composable modules. Gated Views exist for information architecture but only implemented
-Views are surfaced. `AppShell` owns routing and deep-link restoration;
+composable modules. Every View has a stable route and product shell; `implemented` remains
+the separate truth for connected scientific capability. `AppShell` owns routing and deep-link restoration;
 `ScientificContextStore` owns Program, focus, selection and the application's only
 staleness generation; `SceneService` owns one mol* instance that survives navigation.
 
@@ -147,7 +147,8 @@ rebuilds. The model can therefore calibrate observed command latency and outcome
 addition to detecting drift, ranking static hotspots and estimating dependency radius.
 It still cannot predict unseen inputs or autonomously change the architecture; that is
 the L4 boundary. The platform substrate is complete against its approved DoD; the
-product is explicitly partial (currently 3/8 Workspaces and 7/30 Views implemented).
+product capability is explicitly partial (currently 3/8 Workspaces and 7/30 Views connected)
+even though the navigable product shell is complete at 8/8 and 30/30.
 
 `scripts/digital_twin_scope.json` is the ownership boundary. The watcher recursively
 discovers tracked and untracked files under all first-party roots and automatically

@@ -106,6 +106,12 @@ def errors(document: dict, html: str) -> list[str]:
         findings.append('platform substrate verdict missing')
     if product.get('product_implementation') != 'partial':
         findings.append('product reality must remain explicitly partial')
+    if product.get('product_shell') != 'complete':
+        findings.append('product shell verdict missing')
+    if product.get('workspaces_shell_ready') != product.get('workspaces_total'):
+        findings.append('not every Workspace has a navigable product shell')
+    if product.get('views_shell_ready') != product.get('views_total'):
+        findings.append('not every View has a navigable product shell')
     if analysis.get('maturity', {}).get('level') != 'L3':
         findings.append('twin maturity must be explicit and currently L3')
     commands = [node for node in document.get('nodes', []) if node.get('type') == 'command']

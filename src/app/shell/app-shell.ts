@@ -1,5 +1,5 @@
 import { scientificContext, type ScientificContextStore } from '../context/scientific-context-store';
-import { availableViews, VIEWS, WORKSPACES, type ViewDefinition, type WorkspaceId } from './registries';
+import { navigableViews, VIEWS, WORKSPACES, type ViewDefinition, type WorkspaceId } from './registries';
 import { sceneService, type SceneService } from './scene-service';
 import { objectRef } from '../domain/object-ref';
 
@@ -14,12 +14,12 @@ export class AppShell {
                 readonly scene: SceneService = sceneService) {}
 
     current(): ShellRoute { return this.route; }
-    workspaces() { return WORKSPACES.filter(w => availableViews(w.id).length > 0); }
-    views(workspace: WorkspaceId) { return availableViews(workspace); }
+    workspaces() { return WORKSPACES.filter(w => w.shellReady); }
+    views(workspace: WorkspaceId) { return navigableViews(workspace); }
 
     navigate(next: ShellRoute, replace = false): void {
         const definition = VIEWS.find(v => v.id === next.view && v.workspace === next.workspace);
-        if (!definition?.implemented) throw new Error(`view ${next.view} is not available`);
+        if (!definition?.shellReady) throw new Error(`view ${next.view} has no product shell`);
         this.route = next;
         if (next.programId && next.programId !== 'current') {
             this.context.patch({ programRef: objectRef('program', next.programId),
@@ -34,7 +34,7 @@ export class AppShell {
 
     restore(locationLike: Pick<Location, 'pathname' | 'search'> = location): ShellRoute {
         this.context.restore(new URLSearchParams(locationLike.search));
-        const match = VIEWS.find(v => v.implemented && this.matches(v.route, locationLike.pathname));
+        const match = VIEWS.find(v => v.shellReady && this.matches(v.route, locationLike.pathname));
         if (match) {
             const programId = this.programId(match.route, locationLike.pathname);
             this.route = { workspace: match.workspace, view: match.id, programId };

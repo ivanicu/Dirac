@@ -7,11 +7,11 @@ export type Placement = 'main' | 'left' | 'right' | 'bottom' | 'overlay';
 
 export interface WorkspaceDefinition {
     id: WorkspaceId; label: string; icon: string; defaultView: string;
-    availability: 'implemented' | 'gated';
+    availability: 'implemented' | 'gated'; shellReady: boolean;
 }
 export interface ViewDefinition {
     id: string; workspace: WorkspaceId; label: string; route: string;
-    implemented: boolean; acceptedContext: ObjectKind[];
+    implemented: boolean; shellReady: boolean; acceptedContext: ObjectKind[];
     modules: string[]; primaryObjectKinds: ObjectKind[]; actions: string[];
 }
 export interface ModuleDefinition {
@@ -21,20 +21,20 @@ export interface ModuleDefinition {
 }
 
 export const WORKSPACES: readonly WorkspaceDefinition[] = [
-    { id: 'programs', label: 'Programs', icon: '◉', defaultView: 'programs.overview', availability: 'gated' },
-    { id: 'design', label: 'Design', icon: '◇', defaultView: 'design.builder', availability: 'implemented' },
-    { id: 'structures', label: 'Structures', icon: '◈', defaultView: 'structures.complex', availability: 'implemented' },
-    { id: 'campaigns', label: 'Campaigns', icon: '⊞', defaultView: 'campaigns.compounds', availability: 'gated' },
-    { id: 'synthesis', label: 'Synthesis', icon: '⇝', defaultView: 'synthesis.routes', availability: 'gated' },
-    { id: 'experiments', label: 'Experiments', icon: '◫', defaultView: 'experiments.design', availability: 'gated' },
-    { id: 'knowledge', label: 'Knowledge', icon: '▦', defaultView: 'knowledge.search', availability: 'gated' },
-    { id: 'runs', label: 'Runs', icon: '▷', defaultView: 'runs.active', availability: 'implemented' },
+    { id: 'programs', label: 'Programs', icon: '◉', defaultView: 'programs.overview', availability: 'gated', shellReady: true },
+    { id: 'design', label: 'Design', icon: '◇', defaultView: 'design.builder', availability: 'implemented', shellReady: true },
+    { id: 'structures', label: 'Structures', icon: '◈', defaultView: 'structures.complex', availability: 'implemented', shellReady: true },
+    { id: 'campaigns', label: 'Campaigns', icon: '⊞', defaultView: 'campaigns.compounds', availability: 'gated', shellReady: true },
+    { id: 'synthesis', label: 'Synthesis', icon: '⇝', defaultView: 'synthesis.routes', availability: 'gated', shellReady: true },
+    { id: 'experiments', label: 'Experiments', icon: '◫', defaultView: 'experiments.design', availability: 'gated', shellReady: true },
+    { id: 'knowledge', label: 'Knowledge', icon: '▦', defaultView: 'knowledge.search', availability: 'gated', shellReady: true },
+    { id: 'runs', label: 'Runs', icon: '▷', defaultView: 'runs.active', availability: 'implemented', shellReady: true },
 ] as const;
 
 const view = (id: string, workspace: WorkspaceId, label: string, route: string,
     implemented = false, modules: string[] = [], primaryObjectKinds: ObjectKind[] = [],
     actions: string[] = []): ViewDefinition => ({ id, workspace, label, route, implemented,
-    modules, primaryObjectKinds, actions, acceptedContext: primaryObjectKinds });
+    shellReady: true, modules, primaryObjectKinds, actions, acceptedContext: primaryObjectKinds });
 
 export const VIEWS: readonly ViewDefinition[] = [
     view('programs.overview', 'programs', 'Overview', '/p/:programId', false),
@@ -95,6 +95,11 @@ export function availableViews(workspace: WorkspaceId): readonly ViewDefinition[
     return VIEWS.filter(v => v.workspace === workspace && v.implemented);
 }
 
+/** Views whose durable product route and honest UI shell exist, independent of capability depth. */
+export function navigableViews(workspace: WorkspaceId): readonly ViewDefinition[] {
+    return VIEWS.filter(v => v.workspace === workspace && v.shellReady);
+}
+
 export function modulesForView(viewId: string): readonly ModuleDefinition[] {
     const definition = VIEWS.find(v => v.id === viewId && v.implemented);
     if (!definition) return [];
@@ -116,9 +121,11 @@ export function assertRegistryIntegrity(
     if (viewIds.size !== 30) throw new Error(`expected 30 views, got ${viewIds.size}`);
     for (const workspace of workspaces) {
         if (!viewIds.has(workspace.defaultView)) throw new Error(`${workspace.id}: missing default view`);
+        if (!workspace.shellReady) throw new Error(`${workspace.id}: product shell is not ready`);
     }
     for (const v of views) {
         if (!workspaceIds.has(v.workspace)) throw new Error(`${v.id}: missing workspace`);
+        if (!v.shellReady) throw new Error(`${v.id}: product shell is not ready`);
         for (const id of v.modules) if (!moduleIds.has(id)) throw new Error(`${v.id}: missing module ${id}`);
     }
     for (const module of modules) {

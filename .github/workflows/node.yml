@@ -10,14 +10,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-node@v2
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
       with:
         node-version: 22
     - run: npm ci
     - run: sudo apt-get install xvfb
-    - name: Lint
-      run: npm run lint
+    - name: Lint debt ratchet + clean product shell
+      run: node scripts/check_lint_ratchet.mjs
     - name: Test
       run: npm install --no-save "gl@^6.0.2" && xvfb-run --auto-servernum npm run jest
     - name: Build

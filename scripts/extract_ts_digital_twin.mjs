@@ -196,7 +196,8 @@ if (registryFile) {
                     const a = element.arguments.map(literal);
                     const primary = a[6] || [];
                     return { id: a[0], workspace: a[1], label: a[2], route: a[3],
-                        implemented: a[4] ?? false, modules: a[5] || [], primaryObjectKinds: primary,
+                        implemented: a[4] ?? false, shellReady: true,
+                        modules: a[5] || [], primaryObjectKinds: primary,
                         actions: a[7] || [], acceptedContext: primary };
                 });
             }

@@ -1,15 +1,20 @@
 import { ScientificContextStore } from '../../context/scientific-context-store';
 import { objectRef } from '../../domain/object-ref';
 import { AppShell } from '../app-shell';
-import { assertRegistryIntegrity, availableViews, MODULES, VIEWS, WORKSPACES } from '../registries';
+import { assertRegistryIntegrity, availableViews, MODULES, navigableViews, VIEWS, WORKSPACES } from '../registries';
 import { SceneService } from '../scene-service';
+import { assertExperienceCatalog, VIEW_EXPERIENCES } from '../workspace-catalog';
 
 describe('canonical AppShell architecture', () => {
-    it('defines exactly eight workspaces and thirty views but exposes only implemented views', () => {
+    it('defines a navigable shell for all eight workspaces and thirty views', () => {
         expect(WORKSPACES).toHaveLength(8);
         expect(VIEWS).toHaveLength(30);
         expect(() => assertRegistryIntegrity()).not.toThrow();
+        expect(WORKSPACES.flatMap(w => navigableViews(w.id))).toHaveLength(30);
+        expect(WORKSPACES.every(w => w.shellReady)).toBe(true);
         expect(WORKSPACES.flatMap(w => availableViews(w.id)).every(v => v.implemented)).toBe(true);
+        expect(Object.keys(VIEW_EXPERIENCES)).toHaveLength(30);
+        expect(() => assertExperienceCatalog(VIEWS.map(v => v.id))).not.toThrow();
     });
 
     it('convicts a module that names an unknown command', () => {
@@ -30,11 +35,26 @@ describe('canonical AppShell architecture', () => {
         expect(context.current().targetRef).toEqual(objectRef('target', 't-1'));
     });
 
+    it('restores every shell-ready View route', () => {
+        const shell = new AppShell(new ScientificContextStore(), new SceneService());
+        for (const view of VIEWS) {
+            const pathname = view.route.replace(':programId', 'program-30');
+            expect(shell.restore({ pathname, search: '' } as Location).view).toBe(view.id);
+        }
+    });
+
     it('writes navigation program identity into the global scientific context', () => {
         const context = new ScientificContextStore();
         const shell = new AppShell(context, new SceneService());
         shell.navigate({ workspace: 'design', view: 'design.builder', programId: 'KRAS-G12D' });
         expect(context.current().programRef).toEqual(objectRef('program', 'KRAS-G12D'));
+    });
+
+    it('navigates to a scaffold view without pretending its capability is implemented', () => {
+        const shell = new AppShell(new ScientificContextStore(), new SceneService());
+        shell.navigate({ workspace: 'programs', view: 'programs.overview', programId: 'KRAS-G12D' });
+        expect(shell.current().view).toBe('programs.overview');
+        expect(VIEWS.find(v => v.id === shell.current().view)?.implemented).toBe(false);
     });
 
     it('keeps one molstar instance across navigation and rejects replacement', () => {

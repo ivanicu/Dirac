@@ -727,17 +727,20 @@ def architecture_analysis(twin: Twin, ts_data: dict, runtime: dict) -> dict:
     views = ts_data['registries']['views']
     product = {
         'platform_substrate': 'complete',
+        'product_shell': 'complete',
         'product_implementation': 'partial',
         'workspaces_total': len(workspaces),
+        'workspaces_shell_ready': sum(bool(w.get('shellReady')) for w in workspaces),
         'workspaces_implemented': sum(w.get('availability') == 'implemented' for w in workspaces),
         'workspaces_gated': sum(w.get('availability') != 'implemented' for w in workspaces),
         'views_total': len(views),
+        'views_shell_ready': sum(bool(v.get('shellReady')) for v in views),
         'views_implemented': sum(bool(v.get('implemented')) for v in views),
         'views_gated': sum(not v.get('implemented') for v in views),
         'workspaces': workspaces,
         'views': views,
-        'meaning': ('The architecture substrate satisfies its approved DoD. The product is not feature-complete; '
-                    'gated registry entries are design intent, not shipped capability.'),
+        'meaning': ('Every registered Workspace and View has a navigable product shell. Scientific capability remains '
+                    'partial; a shell-ready entry is an interface contract, not a shipped scientific workflow.'),
     }
     command_count = sum(n['type'] == 'command' for n in twin.nodes.values())
     handler_count = len({e['source'] for e in twin.edges.values() if e['relation'] == 'handled-by'})
@@ -775,6 +778,11 @@ def architecture_analysis(twin: Twin, ts_data: dict, runtime: dict) -> dict:
         {'id': 'product-reality', 'status': 'warn', 'label': 'Product capability coverage',
          'value': f'{product["views_implemented"]}/{product["views_total"]} views',
          'why': 'Registry completeness is not implementation completeness.'},
+        {'id': 'product-shell',
+         'status': 'pass' if product['views_shell_ready'] == product['views_total'] else 'fail',
+         'label': 'Navigable product shell',
+         'value': f'{product["views_shell_ready"]}/{product["views_total"]} views',
+         'why': 'Every declared View must have a stable route and an honest human-readable shell.'},
         {'id': 'attention-quality', 'status': 'pass' if attention_is_actionable else 'fail',
          'label': 'Attention signal quality', 'value': f'{attention} items',
          'why': ('Attention contains only operational/scientific failures and approval waits; '
@@ -815,11 +823,14 @@ def architecture_analysis(twin: Twin, ts_data: dict, runtime: dict) -> dict:
          'action': 'Keep each new invariant paired with a positive control that proves the checker can convict.',
          'nodes': ['registry:commands', 'registry:methods', 'system:scientific-context', 'system:scene']},
         {'id': 'product-scope', 'priority': 'SCOPE', 'kind': 'product-reality',
-         'title': 'Do not confuse the complete substrate with the incomplete product',
-         'evidence': (f'{product["workspaces_implemented"]}/{product["workspaces_total"]} Workspaces and '
-                      f'{product["views_implemented"]}/{product["views_total"]} Views are implemented.'),
-         'impact': 'Planning based on registry counts alone would report empty future capability as shipped software.',
-         'action': 'Track implemented, gated and observed usage separately; expand product views only through real vertical slices.',
+         'title': 'Shell completeness and capability completeness are separate facts',
+         'evidence': (f'{product["workspaces_shell_ready"]}/{product["workspaces_total"]} Workspace shells and '
+                      f'{product["views_shell_ready"]}/{product["views_total"]} View shells are navigable; '
+                      f'{product["workspaces_implemented"]}/{product["workspaces_total"]} Workspaces and '
+                      f'{product["views_implemented"]}/{product["views_total"]} Views have connected capability.'),
+         'impact': ('The full product can be walked and optimized without presenting planned scientific modules as '
+                    'working software.'),
+         'action': 'Keep shell-ready, capability-connected and observed usage as three independent dimensions.',
          'nodes': ['system:app-shell']},
     ]
     return {

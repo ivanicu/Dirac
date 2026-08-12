@@ -13,7 +13,7 @@ Last re-derived: **2026-08-12**, from the running local system and repository ga
 | Durable execution | PostgreSQL JobStore, bounded ThreadExecutor, plus Inline/Process/Remote executor contracts |
 | Results | content-addressed artifacts; method-current field cache and generic deterministic result cache |
 | Application context | one ScientificContextStore generation; LigandStore and async facets delegate to it |
-| AppShell | exactly 8 Workspaces and 30 Views; only implemented Design, Structures and Runs views surfaced; ModuleHost composes runtime modules from the registry |
+| AppShell | exactly 8 Workspaces and 30 Views; all have navigable, human-readable shells while connected capability remains explicit; ModuleHost composes runtime modules from the registry |
 | 3D scene | one SceneService-owned mol* instance survives route navigation |
 | Durable domain | Program, Campaign, Hypothesis, Evidence, Decision, Mission, Run, Run↔Job and controlled relations |
 | Attention | derived from actionable Job outcomes and approval-waiting Runs; exposed through the same `attention.list` command boundary |
@@ -46,7 +46,8 @@ Last re-derived: **2026-08-12**, from the running local system and repository ga
 
 - All 18 architecture gate checks green, including build, contracts, migrations, parity,
   layering, security and the digital twin.
-- TypeScript typecheck and focused AppShell/ScientificContext/ModuleHost specs: green.
+- TypeScript typecheck and focused AppShell/ScientificContext/ModuleHost specs: green; all
+  30 View routes are restorable and skeleton Views unmount operational modules cleanly.
 - Production `dirac` bundle and real deep-link browser flow: green; `/p/KRAS-G12D/structures/complex`
   restored Program + Complex + Molecule and a live Mol* scene.
 - Real browser navigation `Structures → Design → Structures → Runs` preserved the exact
@@ -70,12 +71,13 @@ Last re-derived: **2026-08-12**, from the running local system and repository ga
 
 The default local/LAN profile intentionally remains unauthenticated. Public operation must
 explicitly activate the documented remote profile behind HTTPS with real operator-issued
-credentials. Product expansion Workspaces remain gated until their scientist-facing views
-are implemented; the platform architecture they will use is now present.
+credentials. All 8 Workspaces and 30 Views now have stable routes and honest product shells;
+planned modules show their real backing state instead of placeholder scientific results.
 
 ## Scope verdict
 
-The approved **platform substrate phase is complete**. The whole Dirac product is not:
-3 of 8 Workspaces and 7 of 30 Views currently expose implemented vertical slices. The
-remaining registry entries are product intent protected by capability gates, not shipped
-features. The Architecture Optimization Twin reports this distinction directly.
+The approved **platform substrate and product-shell phases are complete**. The whole Dirac
+product is not: 8 of 8 Workspaces and 30 of 30 Views are navigable, while 3 of 8 Workspaces
+and 7 of 30 Views currently expose connected scientific vertical slices. The remaining
+Views are implementation contracts with explicit foundation/planned states, not shipped
+scientific capability. The Architecture Optimization Twin reports both dimensions.

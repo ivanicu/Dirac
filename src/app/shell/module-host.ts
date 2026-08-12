@@ -1,5 +1,5 @@
 import type { ScientificContext } from '../context/scientific-context-store';
-import { modulesForView, type ModuleDefinition } from './registries';
+import { modulesForView, VIEWS, type ModuleDefinition } from './registries';
 
 /** Lifecycle boundary for a reusable module; Views declare composition, never imports. */
 export interface ModuleAdapter {
@@ -14,8 +14,10 @@ export class ModuleHost {
     constructor(private readonly adapters: ReadonlyMap<string, ModuleAdapter>) {}
 
     activate(viewId: string, context: ScientificContext): readonly ModuleDefinition[] {
+        if (!VIEWS.some(view => view.id === viewId && view.shellReady)) {
+            throw new Error(`view ${viewId} has no product shell`);
+        }
         const desired = modulesForView(viewId);
-        if (!desired.length) throw new Error(`view ${viewId} has no implemented modules`);
         const ids = new Set(desired.map(module => module.id));
         for (const [id, definition] of [...this.active]) {
             if (!ids.has(id)) {
