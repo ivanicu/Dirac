@@ -22,6 +22,11 @@ import { focusSphereKeepingSlab } from '../../camera-slab';
 import { buildSurroundingsRequest } from './surroundings';
 import { bakedField } from './baked';
 import { fieldOverlay } from './volume-overlay';
+// THE SDK, and the frontend eating it is the point of PR-13. Every URL, every envelope
+// shape, every artifact digest check and the v1/v2 choice live in ONE module now, shared
+// with the CLI's and the MCP adapter's semantics. Before this, the URL and the refusal
+// shape were rebuilt at five call sites and the sixth would have differed.
+import { DiracClient, DiracError, fetchField as sdkFetchField } from '../../../app/services/dirac-client';
 
 // A renderer that fails silently is indistinguishable from one that works but
 // has nothing to draw. The handle costs nothing and every harness can read it.
@@ -31,6 +36,12 @@ import { fieldOverlay } from './volume-overlay';
 // a hardcoded 127.0.0.1 would point a Mac's browser at the Mac itself and
 // read as "backend offline" from every machine but this one.
 const BACKEND = `http://${window.location.hostname || '127.0.0.1'}:8901`;
+/**
+ * One client per module. Holds the v2-availability memo, so a v1-only daemon costs one
+ * 404 for the whole session rather than one per interaction — on the click the user is
+ * waiting for.
+ */
+const dirac = new DiracClient({ baseUrl: BACKEND });
 const REF_DATA = 'field-wells-data';
 const REF_VOLUME = 'field-wells-volume';
 
@@ -132,7 +143,17 @@ let overlayFallback: string | null = null;
  * stays alive rather than rotting as dead code behind a fallback nobody hits.
  */
 export type FieldRenderer = 'composite' | 'shells' | 'both';
-let renderer: FieldRenderer = 'composite';
+// DEFAULT IS THE LEGACY SHELLS, deliberately, and this is not the plan being
+// abandoned — it is a measured fact about the composite's current state. The
+// compositing path is now proven correct end to end (a flat probe fills
+// 985,504 of 985,504 viewport pixels), but the FIELD it composites is still
+// wrong: it renders as an unstructured mass filling the volume's footprint,
+// the sign channel never produces a positive lobe, and all four styles come
+// out indistinguishable. Shipping that as the default would replace a working
+// renderer with a broken one. Composite stays one dropdown away so the work
+// is visible and testable; it becomes the default when it draws a field a
+// chemist would recognise.
+let renderer: FieldRenderer = 'shells';
 export function setFieldRenderer(next: FieldRenderer) { renderer = next; }
 export function getFieldRenderer(): FieldRenderer { return renderer; }
 
@@ -257,154 +278,39 @@ const Kinds: Record<FieldKind, KindSpec> = {
     mlp: { label: 'Lipophilicity', iso: 0.25, cubeScale: 1, diverging: true, unit: 'MLP', posToken: '--viz-mlp-pos', negToken: '--viz-mlp-neg', posColor: 0xd5b979, negColor: 0x74ccdd, quantum: false },
 };
 
+
 /**
- * Where a field's cube came from. 'browser' never appears in a backend
- * payload — normalize_meta() (backend/envelope.py) writes 'memory'|'db'|
- * 'computed' here; this facet's own `cubeCache` hit path re-serves the SAME
- * meta object it originally fetched rather than relabelling it.
+ * What the panel and the renderer read: the CANONICAL output tree plus the envelope's own
+ * metadata, and nothing hand-mirrored.
+ *
+ * The 26-field `FieldMeta` interface that used to live here is gone. It was a second home
+ * for facts the backend already declares, kept in step by a gate that compared it key by
+ * key — and it drifted twice in one day regardless, because policing two homes is not the
+ * same as having one. `data` is typed by the generated
+ * contracts/generated/typescript/methods.ts, so its shape is the descriptor's shape by
+ * construction and the only staleness check needed is whether the generated file is
+ * current.
+ *
+ * `regionExtras` is the ONE remaining legacy pocket, and it is named so it cannot hide:
+ * /field/region has not been folded into the kernel yet, so its two facts (waters_excluded,
+ * waters_note) still arrive outside the contract. It is deleted when that route joins the
+ * catalog, and its presence here is the reminder that it has not.
  */
-type CacheSource = 'browser' | 'memory' | 'db' | 'computed';
-
-interface FieldMeta {
-  method_version?: string | null;   // the running SOURCE digest of the method
-  toolkit_wrote_at?: string | null; // pyscf stamps the wall clock INSIDE the cube;
-                                    // moved into meta so the bytes stay a function
-                                    // of the input (backend/cube.py)
-    kind: string;
-    basis?: string;                  // quantum kinds only
-    method?: string;
-    /**
-     * Element symbols carrying a pseudopotential (quantum only, Z>=37 where
-     * the basis defines one). `normalize_meta()` backfills this with null on
-     * a DB cache row from before this key existed — a schema-declared key
-     * that is merely absent would be indistinguishable from "not recorded".
-     */
-    ecp?: string[] | null;
-    scf_energy_ha?: number;
-    homo_ev?: number;
-    lumo_ev?: number;
-    scf_seconds?: number;
-    /** DIIS cycles consumed (quantum only). Null = not tracked, or a cache
-     * row that predates this key. */
-    scf_cycles?: number | null;
-    /** cubegen wall time, [s] (quantum only). */
-    cube_seconds?: number | null;
-    /** cube admission-gate prediction, [s] (quantum only). */
-    cube_predicted_seconds?: number | null;
-    /** Formal charge the SCF actually ran at (quantum only). Null on a DB
-     * cache row — "a cache row genuinely does not know charge/spin/ecp
-     * today" (envelope.py). */
-    charge?: number | null;
-    /** Unpaired electrons the SCF actually ran at (quantum only). */
-    spin?: number | null;
-    /**
-     * Why the frontier orbital energies must not be quoted at this
-     * basis/charge (null = quotable). STO-3G ranks nitrobenzene as MORE
-     * electron-rich than benzene while def2-SVP ranks it last, and water's
-     * LUMO moves ~12 eV between the two levels — a number with no referent,
-     * printed to one decimal, is worse than no number.
-     */
-    frontier_caveat?: string | null;
-    total_seconds?: number;
-    /**
-     * Which cache tier served this field. Present on every kind
-     * `normalize_meta()` covers (mep/mlp/mep_qm/homo/lumo/density); genuinely
-     * ABSENT (not null) on `/field/region`, which does not yet normalize its
-     * own exit.
-     */
-    cache?: CacheSource;
-    /** True = a background persist to the DB was SCHEDULED, not confirmed
-     * complete. Null on any kind the backend never persists (e.g. `mlp`). */
-    stored?: boolean | null;
-    /** ISO-8601; set on both cache hits and fresh computes. */
-    computed_at?: string | null;
-    converged?: boolean;
-    net_charge?: number;
-    units?: string;
-    natoms?: number;
-    nbasis?: number;
-
-    // ── grid fields (field_mep / field_mlp / their _region variants) ──────
-    /** [nx, ny, nz] grid dimensions. Null on a DB cache hit for `mep` — the
-     * cube text carries its own axes, but today's read path does not return
-     * the grid-shape half of the meta at all. */
-    dims?: number[] | null;
-    /** [Angstrom] the spacing asked for. */
-    spacing_requested?: number | null;
-    /** [Angstrom] actual per-axis spacing; may exceed spacing_requested when
-     * grid_capped. */
-    spacing?: number[] | null;
-    /** True = dims hit the 128-voxel cap and the grid silently coarsened
-     * past the request. */
-    grid_capped?: boolean | null;
-    vmin?: number | null;
-    vmax?: number | null;
-    /** The fixed contour the backend grew the box around. */
-    iso_fixed?: number;
-    pad_used_angstrom?: number;
-    wall_max?: number;
-    /**
-     * The isovalue the BOX was SIZED for, beside `iso_fixed` — the one
-     * actually DRAWN. Two numbers because they can disagree: a box grown to
-     * close a contour at one level is not evidence about another.
-     * `field_mep`/`field_mlp` size the box for the isovalue-slider FLOOR
-     * (`iso_fixed * 0.1`) so the surface stays closed across the whole
-     * slider range; `/field/region` never sets this — its frame is the
-     * caller's, not grown.
-     */
-    iso_sized_for?: number | null;
-    /** False = the surface runs off the grid and is drawn as a flat face. */
-    contour_closes_in_box?: boolean;
-
-    // ── field_mep only ──────────────────────────────────────────────────────
-    charges?: string;                // 'gasteiger'
-    /** False = a halogen/chalcogen is present; a point-charge model reports
-     * the OPPOSITE SIGN there, not merely a less accurate one. Measured:
-     * bromobenzene -6.2 kcal/mol (Gasteiger) vs +9.9 (QM surface route) at
-     * the cap. */
-    sigma_hole_representable?: boolean;
-    /** What a Gasteiger point-charge map cannot show at all. */
-    model_caveat?: string;
-    /** What a point-charge pocket map structurally cannot contain. */
-    physics_caveat?: string;
-    dielectric?: string;
-
-    // ── field_mlp only ───────────────────────────────────────────────────────
-    /** Crippen atomic contributions, summed. */
-    total_logp?: number;
-    /** MLP is one-signed for most drug-like molecules; measured, not assumed. */
-    single_signed?: boolean;
-
-    // ── field_region only (SOURCE⊥FRAME: an arbitrary caller-supplied atom
-    // set, not tied to a molfile or the focused ligand) ────────────────────
-    n_sources_sent?: number;
-    n_sources_used?: number;
-    cutoff_angstrom?: number;
-    /** True = the box is the caller's frame, not grown to close the contour
-     * (contrast field_mep). */
-    frame_is_callers?: boolean;
-    /**
-     * Where the charges came from. A truncated pocket charged per-molecule
-     * is not the intact protein — a residue-template source and a
-     * caller-supplied one are different claims and must not both render as
-     * an unqualified number.
-     */
-    charge_model?: string | null;
-    /** [count] crystallographic waters left OUT — their hydrogens were
-     * never resolved, so a bare oxygen would contribute a fictitious
-     * monopole and an invented orientation would point the dipole
-     * confidently wrong. */
-    waters_excluded?: number | null;
-    /** Why they were left out; null when there were none. */
-    waters_note?: string | null;
-}
+export type FieldView = {
+    data: Record<string, any>;
+    warnings: Array<{ code: string; message: string; affects?: string[] }>;
+    meta: Record<string, any> | null;
+    digestVerified?: boolean;
+    digestUnverifiedReason?: string;
+    regionExtras?: { waters_excluded?: number | null; waters_note?: string | null };
+};
 
 let plugin: PluginContext | null = null;
 let molfile: string | null = null;
 let ligandLabel: string | null = null;
 let activeKind: FieldKind | null = null;
 let activeVolume: Volume | null = null;
-let lastMeta: FieldMeta | null = null;
+let lastView: FieldView | null = null;
 let busy = false;
 
 /**
@@ -413,8 +319,70 @@ let busy = false;
  * network roundtrip. The database is an EXPORT the user asks for (store=true),
  * not a write-through. Keyed kind|basis, cleared when the molfile changes.
  */
-const cubeCache = new Map<string, { cube: string, meta: FieldMeta }>();
-const pendingFetch = new Map<string, Promise<{ cube: string, meta: FieldMeta } | null>>();
+const cubeCache = new Map<string, { cube: string, view: FieldView }>();
+
+/**
+ * The baked fallback's legacy flat meta, lifted into the canonical view.
+ *
+ * ONE translator, and it lives here rather than in the SDK because the legacy shape is a
+ * property of the BAKED FILES on disk — they were generated before the output contract
+ * existed and they are static assets, so nothing can migrate them in place. Putting the
+ * adapter in the SDK would have implied the wire still speaks this shape, which it does
+ * not.
+ *
+ * Deleted when the bake is regenerated from /v2/invoke. Until then a baked field is a
+ * genuinely poorer answer than a live one, and `bakedFallback: true` in the view says so
+ * rather than letting it pass as equivalent.
+ */
+function viewFromBaked(m: any, kind: FieldKind): FieldView {
+    const meta = m || {};
+    const warnings: Array<{ code: string; message: string }> = [];
+    for (const [key, code] of [['frontier_caveat', 'BASIS_NOT_QUOTABLE'],
+                               ['model_caveat', 'MODEL_CAVEAT'],
+                               ['physics_caveat', 'MODEL_CAVEAT']] as const) {
+        if (meta[key]) warnings.push({ code, message: String(meta[key]) });
+    }
+    return {
+        data: {
+            field: {
+                kind: meta.kind ?? kind,
+                native_units: meta.units,
+                grid: { dimensions: meta.dims, spacing_angstrom: meta.spacing },
+                extrema: { min: meta.vmin, max: meta.vmax },
+                single_signed: meta.single_signed ?? null,
+                box: {
+                    iso_fixed: meta.iso_fixed ?? null,
+                    iso_sized_for: meta.iso_sized_for ?? null,
+                    contour_closes_in_box: meta.contour_closes_in_box ?? null,
+                    wall_seconds: meta.wall_max ?? null,
+                },
+            },
+            ...(meta.converged !== undefined ? {
+                wavefunction: {
+                    converged: meta.converged, method: meta.method, basis: meta.basis,
+                    n_basis_functions: meta.nbasis,
+                    scf_energy_hartree: meta.scf_energy_ha,
+                    homo_ev: meta.homo_ev, lumo_ev: meta.lumo_ev,
+                },
+            } : {}),
+            model: {
+                charge_model: meta.charges ?? meta.charge_model ?? null,
+                net_charge: meta.net_charge ?? null,
+                total_logp: meta.total_logp ?? null,
+                sigma_hole_representable: meta.sigma_hole_representable ?? null,
+            },
+        },
+        warnings,
+        meta: { version: meta.method_version ?? null, cache: 'baked',
+                seconds: meta.total_seconds ?? null, bakedFallback: true,
+                provenance: { n_atoms: meta.natoms ?? null } },
+        digestVerified: false,
+        digestUnverifiedReason: 'this field came from the pre-baked static assets, which '
+            + 'carry no digest — it is a fallback for an offline backend, not a computed '
+            + 'result',
+    };
+}
+const pendingFetch = new Map<string, Promise<{ cube: string, view: FieldView } | null>>();
 const PREFETCH_CLASSICAL: FieldKind[] = ['mep', 'mlp'];
 const PREFETCH_QUANTUM: FieldKind[] = ['homo', 'lumo', 'density'];
 /** Quantum prefetch only below this heavy-atom count — a background prefetch
@@ -498,7 +466,7 @@ export function setFieldStructureId(id: string | null) { structureId = id; }
 /** Fetch one field into the browser cache (deduplicated). Throws FieldRefusal;
  * returns null if the focused ligand changed while in flight. */
 async function fetchField(kind: FieldKind, store = false,
-    budget = QM_BUDGET_SECONDS): Promise<{ cube: string, meta: FieldMeta } | null> {
+    budget = QM_BUDGET_SECONDS): Promise<{ cube: string, view: FieldView } | null> {
     const key = cacheKey(kind);
     if (!store) {
         const hit = cubeCache.get(key);
@@ -516,7 +484,7 @@ async function fetchField(kind: FieldKind, store = false,
         const baked = await bakedField(requestMolfile, kind, structureId ?? undefined);
         if (baked && 'refused' in baked) throw new FieldRefusal(baked.refused, 'unsupported');
         if (baked) {
-            const entry = { cube: baked.cube, meta: baked.meta as unknown as FieldMeta };
+            const entry = { cube: baked.cube, view: viewFromBaked(baked.meta, kind) };
             cubeCache.set(key, entry);
             return entry;
         }
@@ -528,23 +496,42 @@ async function fetchField(kind: FieldKind, store = false,
     const timer = setTimeout(() => controller.abort(), clientTimeoutMs(budget));
     const p = (async () => {
         try {
-            const resp = await fetch(`${BACKEND}/field`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    molfile: requestMolfile, kind, basis, store,
-                    max_seconds: budget,
-                }),
+            const got = await sdkFetchField(dirac, kind, {
+                molfile: requestMolfile!, basis, maxSeconds: budget,
                 signal: controller.signal,
             });
-            const payload = await resp.json();
             if (molfile !== requestMolfile) return null;
-            if (!payload.ok) throw new FieldRefusal(payload.error, payload.reason ?? 'internal');
-            const entry = { cube: payload.cube as string, meta: payload.meta as FieldMeta };
+            // The digest check is REPORTED, not assumed. On this origin (plain http on a
+            // LAN address) crypto.subtle does not exist, so the browser cannot verify —
+            // and that is recorded in the meta rather than passed off as verified. A
+            // check that is quietly absent looks exactly like one that passed.
+            const view: FieldView = {
+                data: got.data, warnings: got.warnings, meta: got.envelope.meta ?? null,
+                digestVerified: got.digestVerified,
+                digestUnverifiedReason: got.digestUnverifiedReason,
+            };
+            const entry = { cube: got.cube, view };
             cubeCache.set(key, entry);
             return entry;
         } catch (e) {
             if (e instanceof FieldRefusal) throw e;
+            if (e instanceof DiracError) {
+                // Mapped by CODE. The panel's four reason buckets are coarser than the
+                // twelve-code vocabulary, so the mapping is explicit and lossy in a
+                // stated direction: anything the panel has no bucket for reads as
+                // 'unsupported', which shows the message and does not offer a retry.
+                const bucket = ({
+                    BUDGET: 'budget', TOO_LARGE: 'unsupported', PARSE: 'unsupported',
+                    UNSUPPORTED: 'unsupported', UNPARAMETERIZED: 'unsupported',
+                    OPEN_SHELL_SPIN_REQUIRED: 'unsupported', UNCONVERGED: 'unsupported',
+                    DB_UNAVAILABLE: 'network', NOT_FOUND: 'network',
+                    DIGEST_MISMATCH: 'network', INTERNAL: 'internal',
+                } as Record<string, 'budget' | 'unsupported' | 'internal' | 'network'>)[e.code]
+                    ?? 'unsupported';
+                throw new FieldRefusal(
+                    e.callerAction ? `${e.message} — ${e.callerAction}` : e.message,
+                    bucket);
+            }
             if (controller.signal.aborted) {
                 throw new FieldRefusal(
                     `cancelled after ${budget * 2 + 20} s — the daemon should have `
@@ -556,7 +543,7 @@ async function fetchField(kind: FieldKind, store = false,
             if (requestMolfile) {
                 const baked = await bakedField(requestMolfile, kind, structureId ?? undefined);
                 if (baked && !('refused' in baked)) {
-                    const entry = { cube: baked.cube, meta: baked.meta as unknown as FieldMeta };
+                    const entry = { cube: baked.cube, view: viewFromBaked(baked.meta, kind) };
                     cubeCache.set(key, entry);
                     return entry;
                 }
@@ -711,12 +698,12 @@ function updateIsoReadout() {
     // backend sized the box for. The slider multiplies the contour by
     // 10^[-1,1], so a box that closes at the default can still be exited at
     // the low end — that is where the cut-off lobes came from.
-    const wall = lastMeta?.wall_max;
+    const wall = lastView?.data?.field?.box?.wall_seconds;
     const open = typeof wall === 'number' && currentIso() <= wall;
     if (open) {
         note = ` · OPEN SURFACE — field reaches ${wall} at the box edge, `
              + `so the lobes are cut off. Raise the isovalue.`;
-    } else if (lastMeta && lastMeta.single_signed) {
+    } else if (lastView?.data?.field?.single_signed) {
         note = ' · field is single-signed — no negative lobe exists';
     }
     el.textContent =
@@ -766,78 +753,115 @@ export interface MetaRow { label: string; value: string; }
  * explicitly-null key is omitted, never printed as the literal string
  * "null" (that shipped once, and was caught only by a screenshot).
  */
-export function buildMetaDisplay(meta: FieldMeta | null): { rows: MetaRow[], caveats: string[] } {
+/**
+ * The panel, reading the CANONICAL output tree.
+ *
+ * WHAT THIS REPLACES: a 26-field hand-written `FieldMeta` interface and thirty reads out
+ * of a flat dict that no schema governed. A gate compared that interface to the backend
+ * key by key — and it still drifted twice in one day, because two homes for one fact drift
+ * whatever polices them. The type now comes from
+ * contracts/generated/typescript/methods.ts, generated from the descriptors, so the drift
+ * check is "is the generated file stale" rather than one comparison per key.
+ *
+ * AND THE CAVEATS NOW SWITCH ON A CODE. They used to be four differently-named prose keys
+ * (`frontier_caveat`, `model_caveat`, `physics_caveat`, `waters_note`) whose presence was
+ * the signal — so a backend that renamed one silently stopped warning anybody, and nothing
+ * would have gone red. `warnings[]` is typed: the panel matches `code`, and an unfamiliar
+ * code is still SHOWN (as a caveat with its message) rather than dropped, because a
+ * warning this client does not recognise is exactly the one worth reading.
+ */
+export function buildMetaDisplay(view: FieldView | null): { rows: MetaRow[], caveats: string[] } {
     const rows: MetaRow[] = [];
     const caveats: string[] = [];
-    if (!meta) return { rows, caveats };
+    if (!view) return { rows, caveats };
+    const f = view.data.field ?? {};
+    const wf = view.data.wavefunction ?? {};
+    const model = view.data.model ?? {};
+    const box = f.box ?? {};
+    const prov = (view.meta?.provenance ?? {}) as Record<string, any>;
+    const units = f.native_units;
+    const codes = new Set(view.warnings.map(w => w.code));
 
-    if (present(meta.method)) rows.push({ label: 'Method', value: meta.basis ? `${meta.method}/${meta.basis}` : meta.method });
-    if (present(meta.units)) rows.push({ label: 'Units', value: meta.units });
-    if (present(meta.total_logp)) rows.push({ label: 'Crippen logP', value: meta.total_logp.toFixed(2) });
-    if (present(meta.scf_energy_ha)) rows.push({ label: 'SCF energy', value: `${meta.scf_energy_ha.toFixed(4)} Ha` });
-    // One decimal, deliberately: Koopmans + minimal-basis errors are ~0.5-1 eV,
-    // and a second decimal would put false precision in front of a chemist
-    // (the physics session's absolute_uncertainty_pct lesson, applied here).
-    // An orbital energy is printed ONLY when the level of theory can carry it.
-    // At STO-3G the HOMO ordering of a substituted-benzene series inverts —
-    // nitrobenzene reads as more electron-rich than benzene — and the LUMO
-    // moves ~12 eV to def2-SVP. A number with no referent, printed to one
-    // decimal, is worse than no number: the decimal is itself a claim.
-    if (meta.frontier_caveat) {
+    const methodName = wf.method ?? model.charge_model ?? model.logp_model;
+    if (present(methodName)) {
+        rows.push({ label: 'Method',
+                    value: wf.basis ? `${methodName}/${wf.basis}` : String(methodName) });
+    }
+    if (present(units)) rows.push({ label: 'Units', value: String(units) });
+    if (present(model.total_logp)) rows.push({ label: 'Crippen logP', value: model.total_logp.toFixed(2) });
+    if (present(wf.scf_energy_hartree)) rows.push({ label: 'SCF energy', value: `${wf.scf_energy_hartree.toFixed(4)} Ha` });
+    // One decimal, deliberately: Koopmans + minimal-basis errors are ~0.5-1 eV, and a
+    // second decimal would put false precision in front of a chemist. An orbital energy is
+    // printed ONLY when the level of theory can carry it — at STO-3G the HOMO ordering of
+    // a substituted-benzene series inverts and the LUMO moves ~12 eV to def2-SVP, so the
+    // decimal is itself a claim. The signal is now the WARNING CODE, not the presence of a
+    // prose string.
+    if (codes.has('BASIS_NOT_QUOTABLE')) {
         rows.push({ label: 'HOMO / LUMO', value: 'not quotable at this level' });
     } else {
-        if (present(meta.homo_ev)) rows.push({ label: 'HOMO', value: `≈${meta.homo_ev.toFixed(1)} eV` });
-        if (present(meta.lumo_ev)) rows.push({ label: 'LUMO', value: `≈${meta.lumo_ev.toFixed(1)} eV` });
+        if (present(wf.homo_ev)) rows.push({ label: 'HOMO', value: `≈${wf.homo_ev.toFixed(1)} eV` });
+        if (present(wf.lumo_ev)) rows.push({ label: 'LUMO', value: `≈${wf.lumo_ev.toFixed(1)} eV` });
     }
-    if (present(meta.net_charge)) rows.push({ label: 'Net charge', value: String(meta.net_charge) });
-    if (present(meta.natoms)) rows.push({ label: 'Atoms (with H)', value: String(meta.natoms) });
-    if (present(meta.nbasis)) rows.push({ label: 'Basis functions', value: String(meta.nbasis) });
-    if (present(meta.total_seconds)) rows.push({ label: 'Compute time', value: `${meta.total_seconds} s` });
-    // Region route: WHERE the charges came from, and how much of the source
-    // was deliberately left out. Both are facts about the number above, not
-    // decoration — a group field is additive but the charge model is not, so
-    // a residue-template source and a caller-supplied one are different
-    // claims (envelope.py's `_REGION` comment).
-    if (present(meta.charge_model)) rows.push({ label: 'Charge model', value: meta.charge_model });
-    if (present(meta.waters_excluded)) rows.push({ label: 'Waters excluded', value: String(meta.waters_excluded) });
+    if (present(model.net_charge)) rows.push({ label: 'Net charge', value: String(model.net_charge) });
+    if (present(prov.n_atoms)) rows.push({ label: 'Atoms (with H)', value: String(prov.n_atoms) });
+    if (present(wf.n_basis_functions)) rows.push({ label: 'Basis functions', value: String(wf.n_basis_functions) });
+    if (present(view.meta?.seconds)) rows.push({ label: 'Compute time', value: `${view.meta!.seconds} s` });
+    // WHICH SOURCE RAN. New here, and it is the one row a chemist comparing two maps
+    // actually needs: two fields with different method versions came from different code
+    // and are not comparable however similar they look.
+    if (present(view.meta?.version)) rows.push({ label: 'Method version', value: String(view.meta!.version) });
+    // Region route: WHERE the charges came from, and how much of the source was
+    // deliberately left out. A group field is additive but the charge model is not, so a
+    // residue-template source and a caller-supplied one are different claims.
+    if (present(model.charge_model) && !present(wf.method)) {
+        rows.push({ label: 'Charge model', value: String(model.charge_model) });
+    }
+    if (present(view.regionExtras?.waters_excluded)) {
+        rows.push({ label: 'Waters excluded', value: String(view.regionExtras!.waters_excluded) });
+    }
 
-    if (meta.frontier_caveat) caveats.push(meta.frontier_caveat);
-    if (meta.model_caveat) caveats.push(meta.model_caveat);
-    if (meta.physics_caveat) caveats.push(meta.physics_caveat);
-    if (meta.waters_note) caveats.push(meta.waters_note);
-    if (meta.sigma_hole_representable === false) {
-        caveats.push('This molecule has a halogen or chalcogen. A point-charge '
-            + 'model is spherical, so a σ-hole is structurally impossible in it '
-            + '— measured, it reports the opposite sign. Use the Physics tab, '
-            + 'which computes the potential on the isodensity surface.');
+    // EVERY warning is shown, recognised or not. A code this build has never seen is the
+    // most interesting one there is, and dropping it would make a new caveat invisible
+    // until somebody remembered to add a branch.
+    for (const w of view.warnings) caveats.push(w.message);
+    if (model.sigma_hole_representable === false && !codes.has('SIGMA_HOLE_NOT_REPRESENTABLE')) {
+        caveats.push('This molecule has a halogen or chalcogen. A point-charge model is '
+            + 'spherical, so a σ-hole is structurally impossible in it — measured, it '
+            + 'reports the opposite sign. Use the Physics tab, which computes the '
+            + 'potential on the isodensity surface.');
     }
-    // Only fires when there was something excluded — `waters_note` is null
-    // (never the string "null") when n_water was 0, per field_region().
-    if (present(meta.waters_note)) caveats.push(meta.waters_note);
-    // iso_sized_for is the isovalue the BOX was grown to keep closed at the
-    // isovalue-slider FLOOR; iso_fixed is the contour actually drawn at the
-    // slider's default. field_mep/field_mlp size for iso_fixed * 0.1, so the
-    // two numbers differ by design on every freshly-computed grid field — the
-    // difference is what tells a chemist how much slider room the box has,
-    // not an anomaly to hide. Absent on /field/region (never grown) and null
-    // on both sides for a DB cache hit that predates either key, so the guard
-    // is `present` on both, not just a `!==`.
-    if (present(meta.iso_sized_for) && present(meta.iso_fixed)
-        && numbersDiffer(meta.iso_sized_for, meta.iso_fixed)) {
-        const unit = present(meta.units) ? ` ${meta.units}` : '';
+    if (present(view.regionExtras?.waters_note)) caveats.push(view.regionExtras!.waters_note);
+    // iso_sized_for is the isovalue the BOX was grown to keep closed at the slider FLOOR;
+    // iso_fixed is the contour actually drawn at the slider's default. The two differ by
+    // design on every freshly-computed grid field, and the difference is what tells a
+    // chemist how much slider room the box has. Both are now DECLARED in the output
+    // contract (field.box) instead of arriving in an ungoverned dict.
+    if (present(box.iso_sized_for) && present(box.iso_fixed)
+        && numbersDiffer(box.iso_sized_for, box.iso_fixed)) {
+        const unit = present(units) ? ` ${units}` : '';
         caveats.push(`Box grown to keep the surface closed down to `
-            + `${meta.iso_sized_for}${unit} on the isovalue slider; the contour `
-            + `drawn at the default position is ${meta.iso_fixed}${unit} — `
-            + `lowering the slider past the smaller number can reopen it.`);
+            + `${box.iso_sized_for}${unit} on the isovalue slider; the contour drawn at `
+            + `the default position is ${box.iso_fixed}${unit} — lowering the slider past `
+            + `the smaller number can reopen it.`);
+    }
+    if (box.contour_closes_in_box === false) {
+        caveats.push('The isosurface is CLIPPED by the grid box: it does not close inside '
+            + 'the volume, so a lobe that looks small here may simply be cut off.');
+    }
+    // The digest check, surfaced. Not a caveat about the chemistry — a caveat about how
+    // much this client was able to verify, which is a different kind of fact and belongs
+    // on screen rather than only in a console.
+    if (view.digestVerified === false && view.digestUnverifiedReason) {
+        caveats.push(`Artifact digest not verified: ${view.digestUnverifiedReason}`);
     }
     return { rows, caveats };
 }
 
-function renderMeta(meta: FieldMeta | null) {
+function renderMeta(view: FieldView | null) {
     const el = byId('field-meta');
     if (!el) return;
-    if (!meta) { el.innerHTML = ''; return; }
-    const { rows, caveats } = buildMetaDisplay(meta);
+    if (!view) { el.innerHTML = ''; return; }
+    const { rows, caveats } = buildMetaDisplay(view);
     el.innerHTML = rows.map(({ label, value }) =>
         `<div class="field-meta-row"><span>${label}</span><span>${value}</span></div>`).join('')
         + caveats.map(c => `<div class="field-caveat">${escapeHtml(c)}</div>`).join('');
@@ -876,11 +900,11 @@ async function clearField() {
     setButtonsEnabled();
 }
 
-async function renderCube(cubeText: string, kind: FieldKind, meta?: FieldMeta) {
+async function renderCube(cubeText: string, kind: FieldKind, view?: FieldView) {
     // Adopt the backend's measured isovalue when it sent one; fall back to the
     // kind's constant otherwise. Set BEFORE the representations are built, or
     // the first frame is drawn at the old scale and corrected a tick later.
-    lastMeta = meta ?? null;
+    lastView = view ?? null;
     if (!plugin) return;
     if (plugin.state.data.cells.has(REF_DATA)) {
         await plugin.build().delete(REF_DATA).commit();
@@ -1038,12 +1062,47 @@ async function requestPocketField() {
             if (meta?.contour_closes_in_box !== false) break;
         }
         if (!payload.ok) { setStatus(String(payload.error), 'error'); return; }
-        const pmeta = payload.meta as FieldMeta & {
-            n_sources_used?: number, charge_model?: string, net_charge?: number,
-            pad_used_angstrom?: number,
+        // /field/region is the LAST route still outside the kernel: it is not an
+        // executable method in the catalog, so it answers in the flat v1 shape and is
+        // lifted into the canonical view here. `regionExtras` carries the two facts the
+        // output contract has no home for yet (waters), named so they cannot be mistaken
+        // for contract-declared data. This block is deleted when the region route becomes
+        // a method — and the fact that it is still here is the reminder that it has not.
+        const pmeta = payload.meta as Record<string, any>;
+        const pview: FieldView = {
+            data: {
+                field: {
+                    kind: 'pocket_mep', native_units: pmeta.units,
+                    grid: { dimensions: pmeta.dims, spacing_angstrom: pmeta.spacing },
+                    extrema: { min: pmeta.vmin, max: pmeta.vmax },
+                    single_signed: pmeta.single_signed ?? null,
+                    box: {
+                        iso_fixed: pmeta.iso_fixed ?? null,
+                        iso_sized_for: pmeta.iso_sized_for ?? null,
+                        contour_closes_in_box: pmeta.contour_closes_in_box ?? null,
+                        pad_angstrom: pmeta.pad_used_angstrom ?? null,
+                        wall_seconds: pmeta.wall_max ?? null,
+                    },
+                },
+                model: {
+                    charge_model: pmeta.charge_model ?? null,
+                    net_charge: pmeta.net_charge ?? null,
+                },
+            },
+            warnings: [pmeta.physics_caveat, pmeta.model_caveat]
+                .filter(Boolean)
+                .map((m: string) => ({ code: 'MODEL_CAVEAT', message: String(m) })),
+            meta: { cache: pmeta.cache ?? null, seconds: pmeta.total_seconds ?? null,
+                    version: pmeta.method_version ?? null,
+                    provenance: { n_atoms: pmeta.natoms ?? null } },
+            regionExtras: { waters_excluded: pmeta.waters_excluded ?? null,
+                            waters_note: pmeta.waters_note ?? null },
+            digestVerified: false,
+            digestUnverifiedReason: '/field/region is still a v1 route: it returns the '
+                + 'bytes inline with no artifact row, so there is no digest to check',
         };
-        await renderCube(payload.cube as string, 'pocket_mep', pmeta);
-        renderMeta(pmeta);
+        await renderCube(payload.cube as string, 'pocket_mep', pview);
+        renderMeta(pview);
         // present() before interpolation — the same class of bug as the
         // meta-panel rows: a status line built with a bare template literal
         // cannot tell an absent/null charge_model from the literal word.
@@ -1084,8 +1143,8 @@ async function requestField(kind: FieldKind, budget = budgetFor(kind)) {
         busy = true;
         setButtonsEnabled();
         try {
-            await renderCube(cached.cube, kind, cached.meta);
-            renderMeta(cached.meta);
+            await renderCube(cached.cube, kind, cached.view);
+            renderMeta(cached.view);
             setStatus(`${spec.label} rendered (browser cache).`, 'ok');
         } finally {
             busy = false;
@@ -1106,10 +1165,10 @@ async function requestField(kind: FieldKind, budget = budgetFor(kind)) {
             setStatus('Ligand changed while computing — stale field discarded.', 'idle');
             return;
         }
-        await renderCube(entry.cube, kind, entry.meta);
-        renderMeta(entry.meta);
-        if (spec.quantum && typeof entry.meta.total_seconds === 'number') {
-            lastQuantumSeconds = Math.round(entry.meta.total_seconds);
+        await renderCube(entry.cube, kind, entry.view);
+        renderMeta(entry.view);
+        if (spec.quantum && typeof entry.view.meta?.seconds === 'number') {
+            lastQuantumSeconds = Math.round(entry.view.meta.seconds);
         }
         setStatus(`${spec.label} rendered for ${ligandLabel ?? 'ligand'}.`, 'ok');
     } catch (e) {
@@ -1200,6 +1259,9 @@ export function initFieldWellsPanel(p: PluginContext) {
         });
     });
     byId<HTMLInputElement>('field-iso')?.addEventListener('input', () => void updateIsoSurfaces());
+    byId<HTMLSelectElement>('field-style')?.addEventListener('change', (e) => {
+        fieldOverlay.setStyle(+(e.target as HTMLSelectElement).value);
+    });
     byId<HTMLSelectElement>('field-renderer')?.addEventListener('change', (e) => {
         renderer = (e.target as HTMLSelectElement).value as FieldRenderer;
         // Re-render rather than mutate: switching renderer changes which state

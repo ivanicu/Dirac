@@ -70,6 +70,8 @@ uniform vec4  uChan;         // shape · steepness · direction · sign
 uniform float uLight;        // 0 = dark scene (screen), 1 = light scene (multiply)
 uniform vec3  uNeg;
 uniform vec3  uPos;
+uniform float uProbe;
+uniform int   uStyle;   // 0 ink · 1 wash · 2 contour · 3 blueprint · 4 glow(dark)
 
 float val(vec3 t) { return texture(uVol, t).r; }
 
@@ -104,6 +106,10 @@ bool hitBox(vec3 ro, vec3 rd, out float t0, out float t1) {
 }
 
 void main() {
+    // probe 1 = paint the whole canvas: does the GL pipeline reach the screen
+    // at all? probe 2 = paint only where a ray enters the box: is the ray/box
+    // math right? Two different failures that look identical from outside.
+    if (uProbe > 0.5 && uProbe < 1.5) { fragColor = vec4(0.10, 0.75, 0.30, 0.40); return; }
     vec2 ndc = (gl_FragCoord.xy / uRes) * 2.0 - 1.0;
     float aspect = uRes.x / uRes.y;
 
@@ -123,13 +129,29 @@ void main() {
     vec3 trd = (uWorldToTex * vec4(rd, 0.0)).xyz;
 
     float t0, t1;
-    if (!hitBox(tro, trd, t0, t1)) { fragColor = vec4(uLight > 0.5 ? 1.0 : 0.0); return; }
+    // A RAY THAT MISSES THE BOX MUST WRITE NOTHING. This line survived from
+    // the multiply-filter model, where "no field here" meant WHITE (multiply's
+    // identity). Under alpha compositing white is opaque, so the overlay was
+    // painting the entire viewport outside the volume — the protein vanished
+    // and only the box-shaped hole showed mol* underneath. That hole is the
+    // "brown blob" I spent three shader rewrites trying to fix: it was never
+    // my renderer, it was the ligand seen through a gap in my own white sheet.
+    // Proven, not guessed: all-channels-ON and all-channels-OFF differed by
+    // exactly ZERO pixels.
+    if (!hitBox(tro, trd, t0, t1)) { fragColor = vec4(0.0); return; }
+    if (uProbe > 1.5) { fragColor = vec4(0.90, 0.10, 0.10, 0.45); return; }
     t0 = max(t0, 0.0);
 
     float span = t1 - t0;
     float dt = span / float(uSteps);
-    // world length of one step, for a march-rate-independent accumulation
-    float worldDt = uStepWorld * dt * float(uSteps) / max(span, 1e-6) * span / float(uSteps);
+    // Accumulate per FRACTION OF THE TRAVERSAL, so a full pass through the box
+    // is O(1) whatever the step count or the cube's physical size. The previous
+    // expression multiplied a world step by a texture-space dt and collapsed to
+    // ~0.003, so the steepness and direction channels arrived at roughly 5%
+    // alpha — present, correct, and invisible. A quantity that is merely too
+    // small does not announce itself; it looks exactly like a quantity that is
+    // absent, which is why this hid behind the opaque-white bug above.
+    float dtn = 1.0 / float(uSteps);
 
     float steep = 0.0, grain = 0.0;
     vec3 rim = vec3(0.0);
@@ -151,7 +173,17 @@ void main() {
             // space too — mixing the two is a silent, plausible, wrong picture
             vec3 rdt = normalize(trd);
             float r = pow(1.0 - abs(dot(n, rdt)), 3.0);
-            rim += mix(vec3(1.0), (v < 0.0 ? uNeg : uPos), 0.55) * r * 1.35;
+            // MAX, NOT SUM. A rim is a SILHOUETTE — "is this pixel near an edge
+            // of the surface" — and summing turns it into "how many times did
+            // this ray cross the surface", which is a different quantity that
+            // happens to look similar on a dark ground where it reads as glow.
+            // On paper it reads as INK: an MEP ray crosses the +-iso surface
+            // many times through a lobed molecule, rim pinned at its ceiling
+            // over the whole box footprint, and near-maximum neutral ink over
+            // warm paper is precisely the brown smear Ivan was looking at.
+            // Bounded by construction, and it is now the quantity it claims.
+            vec3 contrib = mix(vec3(1.0), (v < 0.0 ? uNeg : uPos), 0.55) * r;
+            rim = max(rim, contrib);
             if (!gotSign) {
                 gotSign = true;
                 sgn = clamp(v / uScale, -1.0, 1.0);
@@ -160,58 +192,111 @@ void main() {
         }
         prev = v; first = false;
 
-        if (k < 0.985 || abs(v) > uIso) continue;    // steepness lives OUTSIDE
+        // Steepness lives OUTSIDE the contour — but "outside the contour" also
+        // means "everywhere in the empty half of the box", and integrating
+        // there filled the whole bounding box with uniform ink: a rectangle,
+        // not a molecule. Require the field to be actually PRESENT, not merely
+        // below the contour.
+        if (k < 0.985 || abs(v) > uIso || abs(v) < uIso * 0.10) continue;
         vec3 g = gradAt(t, e);
         float gm = length(g) / max(uGradScale, 1e-9);
-        steep += gm * worldDt * 0.42;
+        steep += gm * dtn * 2.6;
 
         if (gm > 0.02) {
             vec3 dir = g / max(length(g), 1e-6);
             float sm = 0.0;
             for (int q = -3; q <= 3; q++) sm += hash(floor((t + dir * float(q) * 0.011) * 150.0));
-            grain += pow(sm / 7.0, 3.0) * clamp(gm * 8.0, 0.0, 1.0) * worldDt * 2.2;
+            grain += pow(sm / 7.0, 3.0) * clamp(gm * 4.0, 0.0, 1.0) * dtn * 5.0;
         }
     }
 
-    // EVERY CHANNEL ENTERS THE MIX ALREADY BOUNDED IN [0,1].
-    //
-    // steep was clamped; rim and grain were raw ray ACCUMULATIONS with no
-    // ceiling — a ray crossing the contour many times added 1.35 per crossing.
-    // On the dark ground of the design study that saturates to white and looks
-    // like glow. On the app's paper it saturates the SUBTRACTIVE path, emits
-    // zero, and multiply paints the box black over the entire scene. Measured:
-    // shape, steepness and direction each bottomed out at RGB ~ (20,14,8)
-    // while sign, the one channel that was bounded by construction, sat at a
-    // healthy (130,133,144).
-    //
-    // Saturating exponentially rather than clamping keeps the ordering: twice
-    // the crossings still reads as more, it just cannot run away.
+    // EVERY CHANNEL ENTERS BOUNDED IN [0,1]. rim and grain were raw ray
+    // accumulations with no ceiling — a ray crossing the contour many times
+    // added 1.35 per crossing — so they ran away and saturated. Saturating
+    // exponentially keeps the ordering: more crossings still reads as more.
     steep = clamp(steep, 0.0, 1.0);
-    vec3  rimB   = vec3(1.0) - exp(-rim);
-    float grainB = 1.0 - exp(-grain);
+    float rimD   = clamp(length(rim) * 0.85, 0.0, 1.0);
+    float grainD = 1.0 - exp(-grain);
+    float steepD = pow(steep, 0.75);
+    float signD  = abs(sgn) * face;
 
-    vec3 shapeC = rimB * uChan.x;
-    vec3 steepC = vec3(0.62, 0.72, 0.95) * pow(steep, 0.75) * 1.20 * uChan.y;
-    vec3 grainC = vec3(0.80, 0.84, 0.95) * grainB * 0.80 * uChan.z;
-    vec3 signC  = (sgn < 0.0 ? uNeg : uPos) * abs(sgn) * face * uChan.w;
+    vec3 rimHue = length(rim) > 1e-5 ? normalize(rim) * 1.732 : vec3(1.0);
+    vec3 signHue = sgn < 0.0 ? uNeg : uPos;
 
-    // TONE MAP, do not simply add. Four additive channels summed past 1.0 clip
-    // to white, which destroys the one channel whose entire content is hue.
-    vec3 lin = shapeC * 0.55 + steepC * 0.80 + grainC * 0.62 + signC * 1.45;
-    vec3 light = vec3(1.0) - exp(-lin * 1.25);
+    // COLOUR + ALPHA, COMPOSITED NORMALLY — not a CSS blend mode.
+    //
+    // The first version emitted a multiplicative filter and asked CSS to
+    // mix-blend-mode:multiply it onto the scene (no backticks in here: this
+    // whole shader is a template literal and one would end it). That is
+    // only correct if
+    // mol*'s canvas is in the SAME STACKING CONTEXT as this one, because a
+    // blend mode blends with the backdrop *within* its context. It is not, so
+    // the backdrop was the parent's own background: multiply against white
+    // returns the filter unchanged, and the canvas then painted that opaque
+    // over the viewport. The symptom was total — the whole scene went white
+    // with a single brown blob in it, and the protein vanished — which reads
+    // as "the renderer is broken" rather than "the compositing model is
+    // wrong", and sent me tuning the shader three times.
+    //
+    // Straight alpha has no such dependency: alpha 0 is exactly "nothing here"
+    // no matter what is underneath or how the DOM is nested.
+    float dRim   = rimD   * 0.55 * uChan.x;
+    float dSteep = steepD * 0.34 * uChan.y;
+    float dGrain = grainD * 0.22 * uChan.z;
+    float dSign  = signD  * 0.62 * uChan.w;
 
-    if (uLight > 0.5) {
-        // The scene is on paper. Ink REMOVES light where phosphor adds it, and
-        // both composite order-independently, so the architecture inverts even
-        // though the palette does not: emit what multiply should keep.
-        // A HARD CEILING ON INK. The field is an annotation over a scene the
-        // user still has to read; it may never take the viewport to black, and
-        // that is a property to enforce rather than a value to tune. 0.80 max
-        // density leaves the molecule legible through the densest lobe.
-        fragColor = vec4(clamp(vec3(1.0) - light * 0.80, 0.0, 1.0), 1.0);
-    } else {
-        fragColor = vec4(light, 1.0);
+    // EVERY CHANNEL IS A SATURATED COLOUR. None of them is grey, and none is
+    // allowed near black.
+    //
+    // The rim ink was a neutral (0.20,0.19,0.17) and the other two were
+    // desaturated blue-greys. Neutral dark over a warm paper is mud — that is
+    // arithmetic, not taste — and with four channels layered the result was a
+    // brown smear with no hue left to read. A dark neutral cannot encode
+    // anything either: it is one number pretending to be a colour.
+    //
+    // So each channel gets its OWN hue, distinguishable at a glance, and the
+    // sign channel keeps the theme's own diverging pair. If a channel is hard
+    // to see, the answer is a different colour of light, never a darker one.
+    // The rim is ACHROMATIC on purpose. Tinting it with the sign made every
+    // ink in the picture warm whenever the first crossing happened to be
+    // negative, so the whole volume read as one brown mass and the sign
+    // channel had nothing left to say. One quantity, one channel.
+    vec3 cRim   = uLight > 0.5 ? vec3(0.22, 0.21, 0.20) : vec3(1.0);
+    vec3 cSteep = uLight > 0.5 ? vec3(0.16, 0.45, 0.74)     // cyan-blue
+                               : vec3(0.62, 0.72, 0.95);
+    vec3 cGrain = uLight > 0.5 ? vec3(0.52, 0.30, 0.70)     // violet
+                               : vec3(0.80, 0.84, 0.95);
+
+    // ── STYLES ─────────────────────────────────────────────────────────
+    // Same four measured channels; different arguments about which of them
+    // the reader should be looking at. These are not palettes: each style
+    // reweights the CHANNELS, so switching style changes what the picture is
+    // claiming, not just how it is coloured.
+    if (uStyle == 1) {          // WASH — sign dominant, structure implied
+        dRim *= 0.22; dSteep *= 0.55; dGrain = 0.0; dSign *= 1.45;
+    } else if (uStyle == 2) {   // CONTOUR — the boundary, and little else
+        dRim *= 1.65; dSteep *= 0.12; dGrain = 0.0; dSign *= 0.55;
+    } else if (uStyle == 3) {   // BLUEPRINT — one ink, drafting-table
+        dRim *= 1.25; dSteep *= 0.75; dGrain *= 0.45; dSign *= 0.30;
     }
+
+    float wsum = dRim + dSteep + dGrain + dSign;
+    if (wsum < 1e-4) { fragColor = vec4(0.0); return; }
+
+    vec3 col;
+    if (uStyle == 3) {
+        // one ink: value is carried by DENSITY, sign only by a slight warm or
+        // cool shift within the same drafting blue
+        vec3 base = vec3(0.13, 0.30, 0.52);
+        col = mix(base, sgn < 0.0 ? vec3(0.34, 0.26, 0.42) : vec3(0.10, 0.36, 0.58), 0.5);
+    } else {
+        col = (cRim * dRim + cSteep * dSteep + cGrain * dGrain + signHue * dSign) / wsum;
+    }
+    float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+    if (uLight > 0.5 && lum < 0.24) col *= 0.24 / max(lum, 1e-4);
+
+    float a = (1.0 - exp(-wsum * 1.35)) * (uStyle == 2 ? 0.85 : 0.72);
+    fragColor = vec4(col * a, a);   // premultiplied, as the context expects
 }`;
 
 export interface OverlayChannels { shape: boolean; steepness: boolean; direction: boolean; sign: boolean; }
@@ -242,6 +327,24 @@ export class FieldVolumeOverlay {
     // the first call to do the work.
     private light = -1;
     private steps = 128;
+    private style = 0;
+    /** debug: paint the volume's box flat, to separate a geometry/compositing
+     *  failure from an accumulation that is merely too faint to see. */
+    private _probe = 0;
+    get probe() { return this._probe; }
+    /** requestDraw() was not enough: mol* coalesces and the counter showed the
+     *  probe never rendered at all (drawsBefore 3 -> draws 3). Draw directly. */
+    set probe(v: number | boolean) {
+        this._probe = typeof v === 'number' ? v : (v ? 2 : 0);
+        this.plugin?.canvas3d?.requestDraw();
+        this.draw();
+    }
+    /** how many times draw() has actually run, and how many of those had a
+     *  volume to draw. 'the canvas is empty' has two very different causes. */
+    drawCount = 0;
+    lastGlError: number | null = null;
+    centrePixel: number[] | null = null;
+    liveDrawCount = 0;
     private live = false;
     /** set when the volume was too big for MAX_DIM, so the panel can say so */
     downsampledFrom: number[] | null = null;
@@ -260,16 +363,26 @@ export class FieldVolumeOverlay {
         c.className = 'dirac-field-overlay';
         Object.assign(c.style, {
             position: 'absolute', inset: '0', width: '100%', height: '100%',
-            pointerEvents: 'none', zIndex: '2',
+            pointerEvents: 'none',
+            // mol* gives its own canvas a stacking position, and at z-index 2
+            // this overlay was painted UNDER it: fully visible in the DOM,
+            // correct rect, correct parent, drawing every frame — and
+            // contributing exactly zero pixels to the screen. Proven by
+            // painting the entire canvas flat green and finding 1,072 green
+            // pixels out of 985,504.
+            zIndex: '40',
         } as CSSStyleDeclaration);
         if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
         // Never composite normally, not even for one frame: this canvas is
         // opaque and would black out the scene until the first theme sync.
-        c.style.mixBlendMode = this.light === 1 ? 'multiply' : 'screen';
+        c.dataset.ground = this.light === 0 ? 'dark' : 'light';
+
         parent.appendChild(c);
 
-        const gl = c.getContext('webgl2', { alpha: true, premultipliedAlpha: false,
-                                            antialias: false, depth: false });
+        const gl = c.getContext('webgl2', { alpha: true, premultipliedAlpha: true,
+                                            antialias: false, depth: false,
+                                            // so a harness can read the buffer back at all
+                                            preserveDrawingBuffer: true });
         if (!gl) { c.remove(); this.lastError = 'WebGL2 unavailable'; return false; }
         this.canvas = c; this.gl = gl;
 
@@ -315,7 +428,7 @@ export class FieldVolumeOverlay {
         gl.useProgram(p);
         for (const n of ['uVol', 'uWorldToTex', 'uInvView', 'uEye', 'uRes', 'uTanHalfFov',
                          'uOrtho', 'uOrthoHeight', 'uIso', 'uScale', 'uGradScale',
-                         'uStepWorld', 'uSteps', 'uChan', 'uLight', 'uNeg', 'uPos']) {
+                         'uStepWorld', 'uSteps', 'uChan', 'uLight', 'uNeg', 'uPos', 'uProbe', 'uStyle']) {
             this.u[n] = gl.getUniformLocation(p, n);
         }
         return p;
@@ -455,9 +568,15 @@ export class FieldVolumeOverlay {
         const next = lum > 0.18 ? 1 : 0;
         if (next === this.light) return;
         this.light = next;
-        if (this.canvas) this.canvas.style.mixBlendMode = next ? 'multiply' : 'screen';
+        if (this.canvas) this.canvas.dataset.ground = next ? 'light' : 'dark';
         this.plugin?.canvas3d?.requestDraw();
     }
+
+    /** 0 ink · 1 wash · 2 contour · 3 blueprint. The dark-theme glow is not a
+     *  style here: it is what every style becomes when the scene is dark, and
+     *  it stays available because the dark theme is still being built. */
+    setStyle(i: number) { this.style = i; this.plugin?.canvas3d?.requestDraw(); }
+    getStyle() { return this.style; }
 
     setQuality(steps: number) {
         this.steps = Math.max(24, Math.min(384, Math.round(steps)));
@@ -480,7 +599,8 @@ export class FieldVolumeOverlay {
         this.live = false;
     }
 
-    private draw() {
+    draw() {
+        this.drawCount++;
         const gl = this.gl, c = this.canvas, p = this.prog, plugin = this.plugin;
         if (!gl || !c || !p || !plugin?.canvas3d) return;
         const host = plugin.canvas3d.webgl.gl.canvas as HTMLCanvasElement;
@@ -492,6 +612,7 @@ export class FieldVolumeOverlay {
             gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); return;
         }
 
+        this.liveDrawCount++;
         const cam = plugin.canvas3d.camera;
         const s = cam.state;
         const fwd = Vec3.sub(Vec3(), s.target, s.position);
@@ -527,7 +648,21 @@ export class FieldVolumeOverlay {
         gl.uniform1f(this.u.uLight, this.light);
         gl.uniform3fv(this.u.uNeg, this.neg);
         gl.uniform3fv(this.u.uPos, this.pos);
+        gl.uniform1f(this.u.uProbe, this._probe);
+        gl.uniform1i(this.u.uStyle, this.style);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
+        // Report the pipeline's own verdict, once, instead of inferring it from
+        // an empty screen — an empty screen has half a dozen causes and they
+        // all look identical.
+        if (this.lastGlError === null) {
+            const e = gl.getError();
+            this.lastGlError = e;
+            const px = new Uint8Array(4);
+            gl.readPixels((c.width / 2) | 0, (c.height / 2) | 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+            this.centrePixel = Array.from(px);
+        }
     }
 }
 

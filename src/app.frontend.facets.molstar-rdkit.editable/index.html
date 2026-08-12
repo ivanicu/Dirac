@@ -391,8 +391,12 @@
            because an inline assignment reads back as empty if anything ever
            resets the element, and the failure mode is silent — the canvas then
            composites NORMALLY and paints opaquely over the whole viewport. */
-        canvas.dirac-field-overlay { mix-blend-mode: multiply; }
-        canvas.dirac-field-overlay[data-ground="dark"] { mix-blend-mode: screen; }
+        /* NO blend mode. See volume-overlay.ts: a CSS blend only blends with
+           the backdrop inside its own stacking context, and mol*'s canvas is
+           not in this one — so `multiply` composited against the parent's
+           white and painted the whole viewport opaque. The overlay emits
+           premultiplied alpha instead, which is exact regardless of nesting. */
+        canvas.dirac-field-overlay { mix-blend-mode: normal; }
         .field-channels { display: flex; flex-wrap: wrap; gap: 4px; }
         .field-chan {
             font: inherit; font-size: 10px; letter-spacing: .04em;
@@ -1467,10 +1471,25 @@
                                  field in the wrong place. Drawn together the
                                  two must agree, because they are the same
                                  level set of the same volume. -->
+                            <!-- Not palettes. Each style reweights the four
+                                 measured CHANNELS, so switching it changes
+                                 what the picture argues, not just its colour.
+                                 All four are tuned for the light scene; on a
+                                 dark theme every one of them becomes additive
+                                 glow, which is why no separate dark entry is
+                                 needed here. -->
+                            <label class="field-control">Style
+                                <select id="field-style">
+                                    <option value="0" selected>Ink · all four channels</option>
+                                    <option value="1">Wash · sign dominant</option>
+                                    <option value="2">Contour · boundary only</option>
+                                    <option value="3">Blueprint · one ink</option>
+                                </select>
+                            </label>
                             <label class="field-control">Renderer
                                 <select id="field-renderer">
-                                    <option value="composite" selected>Composite · light</option>
-                                    <option value="shells">Isosurface shells</option>
+                                    <option value="composite">Composite · light (in progress)</option>
+                                    <option value="shells" selected>Isosurface shells</option>
                                     <option value="both">Both · check alignment</option>
                                 </select>
                             </label>

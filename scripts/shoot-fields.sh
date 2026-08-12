@@ -51,6 +51,7 @@ SMILES=${SMILES:-}
 # of shipping them as switches is that a saturating channel can be ISOLATED
 # rather than guessed at; this makes that reachable from the harness.
 CHANNELS=${CHANNELS:-}
+QS=${QS:-}
 
 mkdir -p "$OUT"
 rm -rf "$STAGE"; cp -r "$ROOT/build/dirac" "$STAGE"
@@ -132,6 +133,17 @@ cat > "$STAGE/index.html.driver" <<EOF
         }
       }
     }
+    if (window.__diracFieldOverlay && location.search.indexOf('probe') >= 0) {
+      window.__diracFieldOverlay.probe = true;
+      await wait(1200);
+    }
+    var STY = new URLSearchParams(location.search).get('style');
+    if (STY !== null && window.__diracFieldOverlay) {
+      var ss = document.getElementById('field-style');
+      if (ss) { ss.value = STY; ss.dispatchEvent(new Event('change', {bubbles:true})); }
+      else window.__diracFieldOverlay.setStyle(+STY);
+      await wait(1200);
+    }
     if (CHANNELS) {
       var want = CHANNELS.split(',');
       document.querySelectorAll('.field-chan').forEach(function (b) {
@@ -163,7 +175,7 @@ cat > "$STAGE/index.html.driver" <<EOF
     var render = ov
       ? ('overlay:' + (ov.active ? 'ON' : 'off')
          + (ov.lastError ? '(' + ov.lastError + ')' : '')
-         + ' canvas:' + (ovc ? ovc.width + 'x' + ovc.height + '/' + (ovc.style.mixBlendMode || 'normal') : 'none')
+         + ' canvas:' + (ovc ? ovc.width + 'x' + ovc.height + '/' + getComputedStyle(ovc).mixBlendMode + '/' + (ovc.dataset.ground || '?') : 'none')
          + ' chans:' + (chans && !chans.hidden ? 'shown' : 'hidden'))
       : 'overlay:NO-HANDLE';
     bar.textContent = FIELD + ' | ' + MOLECULE + ' | ' + txt('#fields-summary')
@@ -184,7 +196,7 @@ EOF
       --use-angle=swiftshader --window-size=1600,1000 \
       --virtual-time-budget=120000 \
       --screenshot="$OUT/field_$FIELD.png" \
-      "http://127.0.0.1:$PORT/index.html" >/dev/null 2>&1
+      "http://127.0.0.1:$PORT/index.html$QS" >/dev/null 2>&1
   kill "$(cat "$OUT/.srv")" 2>/dev/null
   sleep 1
   cleanup_chrome
