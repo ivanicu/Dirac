@@ -83,37 +83,103 @@ if [[ "${1:-}" == "--selftest" ]]; then
     echo 'SELFTEST FAIL'; exit 1
 fi
 
-RANGE="${2:-}"
-if [[ "${1:-}" == "--range" && -n "$RANGE" ]]; then
-    :
-elif git rev-parse --verify --quiet origin/main >/dev/null; then
-    RANGE='origin/main..HEAD'
-else
-    RANGE='-40'
+# ── two modes, because one of them was vacuous ─────────────────────────────
+# The first version defaulted to origin/main..HEAD. That is right for PREVENTION
+# (scrub before the push) and it is EMPTY the moment a push succeeds — so in CI,
+# where origin/main == HEAD, it scanned nothing and passed. A gate that cannot fail
+# in the place it runs automatically is the defect this repo has spent a day
+# hunting, and I shipped it in the gate written to enforce a rule about my own
+# discipline.
+#
+# So: --pending scans the unpushed range and prevents the next leak. --audit
+# (default, and what gates.sh runs) scans the recent history and RATCHETS against a
+# recorded baseline: the existing leak is a fact, its size is written down, and the
+# gate fails when it GROWS. That refuses to paper over history without holding the
+# suite red on a decision only Ivan can make.
+BASELINE_FILE='scripts/.commit_hygiene_baseline'
+# FULL history, not a fixed depth. A depth window is wrong in a way that hides the
+# thing the ratchet exists to catch: as clean commits accumulate, old dirty ones
+# fall OUT of the window, the count drops on its own, and the gate reports "the
+# leak shrank" for a history that never changed. The count must only move when
+# history moves.
+MODE='audit'
+RANGE=''
+case "${1:-}" in
+    --pending) MODE='pending' ;;
+    --range)   MODE='range'; RANGE="${2:-}" ;;
+    --audit|'') MODE='audit' ;;
+esac
+if [[ "$MODE" == 'pending' ]]; then
+    if git rev-parse --verify --quiet origin/main >/dev/null; then
+        RANGE='origin/main..HEAD'
+    else
+        echo 'check_commit_hygiene: origin/main does not resolve, so "unpushed" is'
+        echo 'undefined. Refusing to report clean.' >&2
+        exit 2
+    fi
+elif [[ "$MODE" == 'audit' ]]; then
+    RANGE='HEAD'
+fi
+if [[ -z "$RANGE" ]]; then
+    echo 'check_commit_hygiene: no range' >&2; exit 2
 fi
 
 # `git log <range>` with an empty range prints nothing and exits 0, which would be
 # a clean bill of health for a scan that examined nothing. So the count is checked
 # and an empty range says so instead of passing.
-mapfile -t shas < <(git log --format=%H "$RANGE" 2>/dev/null)
-if [[ ${#shas[@]} -eq 0 ]]; then
+# One pass. Records separated by RS (0x1e), fields by US (0x1f), because a commit
+# body contains newlines and any line-based split would mis-attribute a trailer to
+# the wrong commit.
+records="$(git log --format='%H%x1f%h%x1f%an%x1f%ae%x1f%s%x1f%b%x1e' "$RANGE" 2>/dev/null)"
+total=0
+problems=0
+while IFS= read -r -d $'\x1e' rec; do
+    [[ -z "${rec//[[:space:]]/}" ]] && continue
+    total=$((total + 1))
+    # SCAN THE WHOLE RECORD, and do not try to split it into fields first. The
+    # previous version did `IFS=$'\x1f' read -r sha short an ae subj body` and
+    # reported 0 dirty over the entire history — because `read` stops at the first
+    # NEWLINE, so `body` held only its first line and every trailer, which lives at
+    # the END of a body, was invisible. Third instrument bug in this one gate: the
+    # inverted selftest, the vacuous empty range, and now a parser that truncated
+    # exactly the region the strings live in. The gate is 40 lines and its
+    # measurement apparatus has been wrong three times; the code being small is not
+    # the same as the measurement being right.
+    if out="$(scan "$rec")"; then :; else
+        short="$(awk -F'\x1f' '{print $2; exit}' <<<"$rec")"
+        subj="$(awk -F'\x1f' '{print $5; exit}' <<<"$rec")"
+        echo "DIRTY   $(printf '%s %s' "$short" "$subj" | cut -c1-78)"
+        problems=$((problems + 1))
+    fi
+done <<<"$records"
+
+if [[ $total -eq 0 ]]; then
     echo "check_commit_hygiene: range '$RANGE' contains NO commits — nothing was"
     echo "scanned, which is not the same as clean."
     exit 0
 fi
 
-problems=0
-for sha in "${shas[@]}"; do
-    body="$(git log -1 --format='%an%n%ae%n%s%n%b' "$sha")"
-    if out="$(scan "$body")"; then :; else
-        echo "DIRTY   $(git log -1 --format='%h %s' "$sha" | cut -c1-78)"
-        echo "$out"
-        problems=$((problems + 1))
-    fi
-done
-
 echo "─────────────────────────────────────────────────────────────"
-echo "${#shas[@]} commit(s) scanned in '$RANGE' · $problems with a forbidden string"
+echo "$total commit(s) scanned in '$RANGE' · $problems with a forbidden string"
+
+if [[ "$MODE" == 'audit' ]]; then
+    baseline=0
+    [[ -f "$BASELINE_FILE" ]] && baseline="$(grep -oE '^[0-9]+' "$BASELINE_FILE" | head -1)"
+    echo "recorded baseline: $baseline (see $BASELINE_FILE)"
+    if [[ $problems -gt $baseline ]]; then
+        echo
+        echo "THE LEAK GREW: $problems > $baseline. A new commit named the tooling."
+        echo "Fix the commit before it is pushed (git commit --amend), or if it is"
+        echo "already public, raise the baseline DELIBERATELY and say why."
+        exit 1
+    fi
+    if [[ $problems -lt $baseline ]]; then
+        echo "the leak SHRANK ($problems < $baseline) — history was cleaned; lower"
+        echo "the baseline to $problems so the ratchet cannot slip back."
+    fi
+    exit 0
+fi
+
 if [[ $problems -gt 0 ]]; then
     cat <<'MSG'
 

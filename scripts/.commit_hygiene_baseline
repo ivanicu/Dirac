@@ -1,0 +1,22 @@
+33
+# Commits in the FULL history that name the tooling or link a private session.
+# Measured 2026-08-11 by two independent implementations that agree: the bash gate
+# and a python cross-check, 33 of 161.
+#
+# NOT a target and NOT an acceptance: a RATCHET. The gate fails when this number
+# GROWS. It does not fail on the existing 33, because cleaning them needs a history
+# rewrite and a force push — that destroys every other clone and is Ivan's
+# decision, not a gate's.
+#
+# WHAT THE 33 ARE: the harness's default commit convention appends
+# `Co-Authored-By: Claude <model>` and `Claude-Session: https://claude.ai/code/...`
+# to every commit unless something stops it. Nothing stopped it. The standing rule
+# — no tooling names in public history — lived in memory, and a rule in memory
+# competes with a default that fires automatically.
+#
+# WHY FULL HISTORY AND NOT A WINDOW: with a fixed depth, clean commits push old
+# dirty ones out of the window and the count falls on its own, so the ratchet would
+# report "the leak shrank" for a history that never changed.
+#
+# When history is cleaned, set this to the new count. The gate says so explicitly
+# when it sees the number fall.

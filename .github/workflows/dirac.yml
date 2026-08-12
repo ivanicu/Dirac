@@ -22,6 +22,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # gate 9 audits the FULL history; the default depth-1 clone would let it
+          # scan one commit and report clean.
+          fetch-depth: 0
 
       # package.json engines says node >=22.0.0. Pinned to the major rather than
       # resolved from the range: a range silently follows the newest release, so
@@ -92,6 +96,17 @@ jobs:
       # The selftest runs FIRST and its failure is the gate's failure: this one
       # is green against the real files, so a crafted broken source is the only
       # evidence it has resolution at all.
+      # Full history is needed for the hygiene ratchet, and actions/checkout
+      # defaults to a shallow clone of depth 1 — on which the audit would scan ONE
+      # commit and pass. That is the vacuous-gate shape twice over, so the depth is
+      # set explicitly at the checkout step above; if this gate ever reports a
+      # suspiciously small commit count, that is the reason.
+      - name: 'Gate 9 — no tooling names in public commit history (ratchet)'
+        if: ${{ !cancelled() }}
+        run: |
+          bash scripts/check_commit_hygiene.sh --selftest
+          bash scripts/check_commit_hygiene.sh
+
       - name: 'Gate 8 — every physics SCF route carries all four protections'
         if: ${{ !cancelled() }}
         run: |
