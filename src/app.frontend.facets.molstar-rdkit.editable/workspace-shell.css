@@ -8,6 +8,17 @@
  * not-yet-connected View is rendered as an honest, light-only instrument surface.
  */
 
+/* Connected 3D Views keep the original Dirac workbench intact. The complete
+ * Workspace/View navigator belongs to scaffold pages; on a scientific scene it
+ * previously consumed three rows above the existing Focus/Ligand/Properties
+ * navigation and made an architecture layer look like a replacement product. */
+#app.scene-workbench .workspace-nav,
+#app.scene-workbench .view-nav,
+#app.scene-workbench .global-context-bar { display: none; }
+
+#app.scene-workbench .scene-workspace-entry { display: inline-flex; }
+#app.shell-scaffold .scene-workspace-entry { display: none; }
+
 #app.shell-scaffold {
     color-scheme: light;
 

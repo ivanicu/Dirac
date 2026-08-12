@@ -1,9 +1,9 @@
 {
   "schema": "https://dirac.local/schemas/software-architecture-twin/v2",
   "title": "Dirac Architecture Optimization Twin",
-  "generated_at": "2026-08-12T23:01:30.054894+00:00",
-  "source_base_commit": "083fff0d89a576399d30baa7c425742ef24de9ee",
-  "source_fingerprint_sha256": "ee3e945efb8f4cce9756646f1d6abaa405e7ecb27043ccadcc1e4591c97c9a84",
+  "generated_at": "2026-08-12T23:37:03.809909+00:00",
+  "source_base_commit": "d9197ed3d358cb590778a2e9eaabba4e988c5c3d",
+  "source_fingerprint_sha256": "0c2ea52564720dd211a2572d2f83deb6b4db21bf5f02b8c5068ef8d3a549b9f6",
   "scope": {
     "included": [
       "all first-party Python, JavaScript, and Shell functions in backend, SDK, tooling, gates, and operations",
@@ -18,7 +18,7 @@
   },
   "summary": {
     "nodes": 3759,
-    "edges": 6534,
+    "edges": 6536,
     "flows": 6,
     "source_files": 329,
     "by_type": {
@@ -56,11 +56,11 @@
     "typescript_diagnostics": []
   },
   "runtime_snapshot": {
-    "captured_at": "2026-08-12T23:01:29.935608+00:00",
+    "captured_at": "2026-08-12T23:37:03.640612+00:00",
     "source": "best-effort live probes",
     "refresh_policy_seconds": 60,
     "freshness_state": "fresh-at-generation",
-    "git_commit": "083fff0d89a576399d30baa7c425742ef24de9ee",
+    "git_commit": "d9197ed3d358cb590778a2e9eaabba4e988c5c3d",
     "systemd": [
       "Id=dirac-fields.service",
       "ActiveState=active",
@@ -91,9 +91,9 @@
       "schemas": 6
     },
     "operational_metrics": {
-      "jobs_total": 1150,
+      "jobs_total": 1153,
       "job_states": {
-        "done": 858,
+        "done": 861,
         "failed": 263,
         "cancelled": 29
       },
@@ -107,31 +107,31 @@
         "cancelled": 29,
         "operational_failure": 34,
         "expected_refusal": 229,
-        "success": 858
+        "success": 861
       },
       "artifacts": 98,
       "cached_results": 7,
       "registered_method_rows": 51,
       "attention_items": 34,
       "approval_waits": 0,
-      "command_traces": 1215,
+      "command_traces": 1229,
       "observed_commands": 14
     },
     "command_observations": [
       {
         "command_id": "attention.list",
         "command_version": 1,
-        "invocation_count": 322,
-        "success_count": 322,
+        "invocation_count": 327,
+        "success_count": 327,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
         "mean_dispatch_seconds": 0.003975,
-        "p95_dispatch_seconds": 0.006221,
+        "p95_dispatch_seconds": 0.006207,
         "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-        "last_observed_at": "2026-08-12T16:00:41.409693-07:00"
+        "last_observed_at": "2026-08-12T16:35:19.893464-07:00"
       },
       {
         "command_id": "conformer.generate",
@@ -196,17 +196,17 @@
       {
         "command_id": "job.wait",
         "command_version": 1,
-        "invocation_count": 269,
-        "success_count": 269,
+        "invocation_count": 272,
+        "success_count": 272,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.95342,
-        "p95_dispatch_seconds": 0.817237,
+        "mean_dispatch_seconds": 0.944115,
+        "p95_dispatch_seconds": 0.798996,
         "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-        "last_observed_at": "2026-08-12T16:00:43.573982-07:00"
+        "last_observed_at": "2026-08-12T16:15:26.08503-07:00"
       },
       {
         "command_id": "method.list",
@@ -226,17 +226,17 @@
       {
         "command_id": "structure.field.compute",
         "command_version": 1,
-        "invocation_count": 446,
-        "success_count": 263,
-        "expected_refusal_count": 183,
+        "invocation_count": 451,
+        "success_count": 266,
+        "expected_refusal_count": 185,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "job_count": 263,
+        "job_count": 266,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.005249,
-        "p95_dispatch_seconds": 0.012425,
+        "mean_dispatch_seconds": 0.005264,
+        "p95_dispatch_seconds": 0.012468,
         "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-        "last_observed_at": "2026-08-12T16:00:43.350631-07:00"
+        "last_observed_at": "2026-08-12T16:15:25.949203-07:00"
       },
       {
         "command_id": "structure.interactions",
@@ -301,8 +301,8 @@
       {
         "command_id": "system.health",
         "command_version": 1,
-        "invocation_count": 106,
-        "success_count": 106,
+        "invocation_count": 107,
+        "success_count": 107,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
@@ -311,7 +311,7 @@
         "mean_dispatch_seconds": 9e-05,
         "p95_dispatch_seconds": 0.000102,
         "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-        "last_observed_at": "2026-08-12T16:00:41.460254-07:00"
+        "last_observed_at": "2026-08-12T16:15:19.928186-07:00"
       },
       {
         "command_id": "system.version",
@@ -332,30 +332,30 @@
     "method_observations": [
       {
         "method_id": "fields.qm.density",
-        "invocation_count": 85,
-        "success_count": 85,
+        "invocation_count": 86,
+        "success_count": 86,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "mean_dispatch_seconds": 0.008637
+        "mean_dispatch_seconds": 0.008633
       },
       {
         "method_id": "fields.qm.homo",
-        "invocation_count": 92,
-        "success_count": 92,
+        "invocation_count": 93,
+        "success_count": 93,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "mean_dispatch_seconds": 0.008787
+        "mean_dispatch_seconds": 0.008803
       },
       {
         "method_id": "fields.qm.lumo",
-        "invocation_count": 85,
-        "success_count": 85,
+        "invocation_count": 86,
+        "success_count": 86,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "mean_dispatch_seconds": 0.008991
+        "mean_dispatch_seconds": 0.009049
       },
       {
         "method_id": "fields.qm.mep_qm",
@@ -1072,7 +1072,7 @@
         "id": "dynamic-observation",
         "status": "pass",
         "label": "Node-keyed execution telemetry",
-        "value": "1215 traces · 14/18 commands observed",
+        "value": "1229 traces · 14/18 commands observed",
         "why": "Persistent traces bind real outcomes and latency to command and method nodes."
       },
       {
@@ -1103,7 +1103,7 @@
         "priority": "DONE",
         "kind": "twin-fidelity",
         "title": "Observed command traces are bound to architecture nodes",
-        "evidence": "1215 durable traces currently cover 14/18 commands; linked Jobs resolve to their eventual terminal outcome.",
+        "evidence": "1229 durable traces currently cover 14/18 commands; linked Jobs resolve to their eventual terminal outcome.",
         "impact": "Command and method inspectors now expose empirical traffic, latency, cache and failure-path data.",
         "action": "Let coverage accumulate from real use; do not manufacture traffic merely to turn coverage green.",
         "nodes": [
@@ -1401,7 +1401,7 @@
         "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
         "line": 33,
         "layer": "presentation",
-        "lines": 363,
+        "lines": 365,
         "fan_in": 0,
         "fan_out": 2,
         "boundary_calls": 0,
@@ -1552,10 +1552,10 @@
         "change_risk_score": 46
       },
       {
-        "node": "function:ts:src/app/shell/workspace-canvas.ts:112:5:WorkspaceCanvas.renderCanvas",
+        "node": "function:ts:src/app/shell/workspace-canvas.ts:116:5:WorkspaceCanvas.renderCanvas",
         "name": "WorkspaceCanvas.renderCanvas",
         "path": "src/app/shell/workspace-canvas.ts",
-        "line": 112,
+        "line": 116,
         "layer": "application-shell",
         "lines": 131,
         "fan_in": 1,
@@ -1759,7 +1759,7 @@
         "path": "src/app/shell/workspace-canvas.ts",
         "layer": "application-shell",
         "functions": 34,
-        "lines_in_functions": 422,
+        "lines_in_functions": 426,
         "fan_in": 23,
         "fan_out": 30,
         "boundary_calls": 5,
@@ -3020,17 +3020,17 @@
       "runtime_observation": {
         "command_id": "attention.list",
         "command_version": 1,
-        "invocation_count": 322,
-        "success_count": 322,
+        "invocation_count": 327,
+        "success_count": 327,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
         "mean_dispatch_seconds": 0.003975,
-        "p95_dispatch_seconds": 0.006221,
+        "p95_dispatch_seconds": 0.006207,
         "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-        "last_observed_at": "2026-08-12T16:00:41.409693-07:00"
+        "last_observed_at": "2026-08-12T16:35:19.893464-07:00"
       }
     },
     {
@@ -3197,17 +3197,17 @@
       "runtime_observation": {
         "command_id": "job.wait",
         "command_version": 1,
-        "invocation_count": 269,
-        "success_count": 269,
+        "invocation_count": 272,
+        "success_count": 272,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
         "job_count": 0,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.95342,
-        "p95_dispatch_seconds": 0.817237,
+        "mean_dispatch_seconds": 0.944115,
+        "p95_dispatch_seconds": 0.798996,
         "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-        "last_observed_at": "2026-08-12T16:00:43.573982-07:00"
+        "last_observed_at": "2026-08-12T16:15:26.08503-07:00"
       }
     },
     {
@@ -3352,17 +3352,17 @@
       "runtime_observation": {
         "command_id": "structure.field.compute",
         "command_version": 1,
-        "invocation_count": 446,
-        "success_count": 263,
-        "expected_refusal_count": 183,
+        "invocation_count": 451,
+        "success_count": 266,
+        "expected_refusal_count": 185,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "job_count": 263,
+        "job_count": 266,
         "cache_hit_count": 0,
-        "mean_dispatch_seconds": 0.005249,
-        "p95_dispatch_seconds": 0.012425,
+        "mean_dispatch_seconds": 0.005264,
+        "p95_dispatch_seconds": 0.012468,
         "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-        "last_observed_at": "2026-08-12T16:00:43.350631-07:00"
+        "last_observed_at": "2026-08-12T16:15:25.949203-07:00"
       }
     },
     {
@@ -3534,8 +3534,8 @@
       "runtime_observation": {
         "command_id": "system.health",
         "command_version": 1,
-        "invocation_count": 106,
-        "success_count": 106,
+        "invocation_count": 107,
+        "success_count": 107,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
@@ -3544,7 +3544,7 @@
         "mean_dispatch_seconds": 9e-05,
         "p95_dispatch_seconds": 0.000102,
         "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-        "last_observed_at": "2026-08-12T16:00:41.460254-07:00"
+        "last_observed_at": "2026-08-12T16:15:19.928186-07:00"
       }
     },
     {
@@ -6578,8 +6578,8 @@
       "layer": "tooling",
       "path": "scripts/build.mjs",
       "extension": ".mjs",
-      "bytes": 15113,
-      "sha256": "df00c142610fc97a813abbb26e874aa4a4e78b9350b277cd77335b14c71e9724",
+      "bytes": 15148,
+      "sha256": "0f1ca53605325cad303f328e257ee3d52b3aa1d9ea77a8fd155b9003a1f8464f",
       "generated": false,
       "id": "file:scripts/build.mjs",
       "type": "source-file",
@@ -7194,8 +7194,8 @@
       "layer": "runtime",
       "path": "src/app.frontend.facets.molstar-rdkit.editable/index.html",
       "extension": ".html",
-      "bytes": 93016,
-      "sha256": "3c587eb46832bf7eb04aa8fd817edff400dc71262da17a0de785c07714c36d70",
+      "bytes": 93951,
+      "sha256": "68c0c3e45d98e90a9ce1250ca9f832efb4a7f45cc633ef62fad6ce66e5e5475d",
       "generated": false,
       "id": "file:src/app.frontend.facets.molstar-rdkit.editable/index.html",
       "type": "source-file",
@@ -7216,8 +7216,8 @@
       "layer": "runtime",
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "extension": ".js",
-      "bytes": 22785,
-      "sha256": "d86e6c64bd23a76bc588a2f871f4c73f73f04ba85fcabd573a824b6495aa1f65",
+      "bytes": 22903,
+      "sha256": "c04b00426491ec25c99592a3f39567885bea759559e04f78581b5cc0f66eb11b",
       "generated": false,
       "id": "file:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "type": "source-file",
@@ -7315,8 +7315,8 @@
       "layer": "runtime",
       "path": "src/app.frontend.facets.molstar-rdkit.editable/workspace-shell.css",
       "extension": ".css",
-      "bytes": 47225,
-      "sha256": "b40e879d0b0f9dcd5485ad3e0e02ce00d9a74917cc482f7087c930ba79a496d3",
+      "bytes": 47803,
+      "sha256": "f60158d1610bc786a2fedf152af2c2a206ee5548fac6091e0aa7dede4deab0cc",
       "generated": false,
       "id": "file:src/app.frontend.facets.molstar-rdkit.editable/workspace-shell.css",
       "type": "source-file",
@@ -7524,8 +7524,8 @@
       "layer": "runtime",
       "path": "src/app/shell/workspace-canvas.ts",
       "extension": ".ts",
-      "bytes": 20116,
-      "sha256": "31ea68a7593277b6f5ddfefa75540c2547c9e5911198e1c0331d530c00ed9e86",
+      "bytes": 20398,
+      "sha256": "4c9afde4a39929e758564897ef55c97d7d78fe896bb6301187140c4fa6b82bf3",
       "generated": false,
       "id": "file:src/app/shell/workspace-canvas.ts",
       "type": "source-file",
@@ -40706,11 +40706,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 145,
+      "line": 147,
       "column": 18,
-      "end_line": 145,
+      "end_line": 147,
       "end_column": 45,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:145:18:<anonymous>",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:147:18:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -40724,11 +40724,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 146,
+      "line": 148,
       "column": 63,
-      "end_line": 146,
+      "end_line": 148,
       "end_column": 91,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:146:63:<anonymous>",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:148:63:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -40743,11 +40743,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 174,
+      "line": 176,
       "column": 5,
-      "end_line": 178,
+      "end_line": 180,
       "end_column": 6,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:174:5:classify",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:176:5:classify",
       "type": "function",
       "name": "classify"
     },
@@ -40762,11 +40762,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 179,
+      "line": 181,
       "column": 5,
-      "end_line": 231,
+      "end_line": 233,
       "end_column": 6,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:179:5:classifyInner",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:181:5:classifyInner",
       "type": "function",
       "name": "classifyInner"
     },
@@ -40778,11 +40778,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 234,
+      "line": 236,
       "column": 5,
-      "end_line": 237,
+      "end_line": 239,
       "end_column": 6,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:234:5:plugin",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:236:5:plugin",
       "type": "function",
       "name": "plugin"
     },
@@ -40794,11 +40794,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 242,
+      "line": 244,
       "column": 5,
-      "end_line": 244,
+      "end_line": 246,
       "end_column": 6,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:242:5:active",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:244:5:active",
       "type": "function",
       "name": "active"
     },
@@ -40812,11 +40812,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 245,
+      "line": 247,
       "column": 5,
-      "end_line": 251,
+      "end_line": 253,
       "end_column": 6,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:245:5:setActive",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:247:5:setActive",
       "type": "function",
       "name": "setActive"
     },
@@ -40831,11 +40831,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 254,
+      "line": 256,
       "column": 5,
-      "end_line": 296,
+      "end_line": 298,
       "end_column": 6,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:254:5:ensureTheme",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:256:5:ensureTheme",
       "type": "function",
       "name": "ensureTheme"
     },
@@ -40849,11 +40849,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 258,
+      "line": 260,
       "column": 28,
-      "end_line": 258,
+      "end_line": 260,
       "end_column": 66,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:258:28:<anonymous>",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:260:28:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -40868,11 +40868,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 261,
+      "line": 263,
       "column": 22,
-      "end_line": 291,
+      "end_line": 293,
       "end_column": 14,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:261:22:factory",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:263:22:factory",
       "type": "function",
       "name": "factory"
     },
@@ -40886,11 +40886,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 274,
+      "line": 276,
       "column": 31,
-      "end_line": 279,
+      "end_line": 281,
       "end_column": 18,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:274:31:chainOf",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:276:31:chainOf",
       "type": "function",
       "name": "chainOf"
     },
@@ -40904,11 +40904,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 282,
+      "line": 284,
       "column": 28,
-      "end_line": 288,
+      "end_line": 290,
       "end_column": 22,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:282:28:color",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:284:28:color",
       "type": "function",
       "name": "color"
     },
@@ -40920,11 +40920,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 292,
+      "line": 294,
       "column": 24,
-      "end_line": 292,
+      "end_line": 294,
       "end_column": 50,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:292:24:getParams",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:294:24:getParams",
       "type": "function",
       "name": "getParams"
     },
@@ -40936,11 +40936,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 292,
+      "line": 294,
       "column": 85,
-      "end_line": 292,
+      "end_line": 294,
       "end_column": 113,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:292:85:isApplicable",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:294:85:isApplicable",
       "type": "function",
       "name": "isApplicable"
     },
@@ -40954,11 +40954,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 298,
+      "line": 300,
       "column": 5,
-      "end_line": 329,
+      "end_line": 331,
       "end_column": 6,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:298:5:apply",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:300:5:apply",
       "type": "function",
       "name": "apply"
     },
@@ -40972,11 +40972,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 307,
+      "line": 309,
       "column": 39,
-      "end_line": 307,
+      "end_line": 309,
       "end_column": 75,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:307:39:<anonymous>",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:309:39:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -40990,11 +40990,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 319,
+      "line": 321,
       "column": 28,
-      "end_line": 328,
+      "end_line": 330,
       "end_column": 10,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:319:28:<anonymous>",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:321:28:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -41008,11 +41008,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 320,
+      "line": 322,
       "column": 34,
-      "end_line": 327,
+      "end_line": 329,
       "end_column": 14,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:320:34:<anonymous>",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:322:34:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -41026,11 +41026,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 321,
+      "line": 323,
       "column": 60,
-      "end_line": 324,
+      "end_line": 326,
       "end_column": 18,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:321:60:<anonymous>",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:323:60:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -41042,11 +41042,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 336,
+      "line": 338,
       "column": 5,
-      "end_line": 366,
+      "end_line": 368,
       "end_column": 6,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:336:5:render",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:338:5:render",
       "type": "function",
       "name": "render"
     },
@@ -41060,7 +41060,7 @@
       "layer": "presentation",
       "line": 33,
       "column": 2,
-      "end_line": 395,
+      "end_line": 397,
       "end_column": 2,
       "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:33:2:<anonymous>",
       "type": "function",
@@ -41076,11 +41076,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 347,
+      "line": 349,
       "column": 30,
-      "end_line": 353,
+      "end_line": 355,
       "end_column": 14,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:347:30:<anonymous>",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:349:30:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -41092,11 +41092,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 354,
+      "line": 356,
       "column": 44,
-      "end_line": 354,
+      "end_line": 356,
       "end_column": 81,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:354:44:<anonymous>",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:356:44:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -41108,11 +41108,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 370,
+      "line": 372,
       "column": 5,
-      "end_line": 377,
+      "end_line": 379,
       "end_column": 6,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:370:5:wire",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:372:5:wire",
       "type": "function",
       "name": "wire"
     },
@@ -41124,11 +41124,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 374,
+      "line": 376,
       "column": 51,
-      "end_line": 374,
+      "end_line": 376,
       "end_column": 90,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:374:51:<anonymous>",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:376:51:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -41140,11 +41140,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 380,
+      "line": 382,
       "column": 28,
-      "end_line": 384,
+      "end_line": 386,
       "end_column": 6,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:380:28:<anonymous>",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:382:28:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -41156,11 +41156,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 385,
+      "line": 387,
       "column": 17,
-      "end_line": 385,
+      "end_line": 387,
       "end_column": 54,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:385:17:<anonymous>",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:387:17:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -41172,11 +41172,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 388,
+      "line": 390,
       "column": 15,
-      "end_line": 388,
+      "end_line": 390,
       "end_column": 82,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:388:15:list",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:390:15:list",
       "type": "function",
       "name": "list"
     },
@@ -41190,11 +41190,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 388,
+      "line": 390,
       "column": 49,
-      "end_line": 388,
+      "end_line": 390,
       "end_column": 78,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:388:49:<anonymous>",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:390:49:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -41206,11 +41206,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 390,
+      "line": 392,
       "column": 16,
-      "end_line": 390,
+      "end_line": 392,
       "end_column": 49,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:390:16:stats",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:392:16:stats",
       "type": "function",
       "name": "stats"
     },
@@ -41224,11 +41224,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 46,
+      "line": 48,
       "column": 29,
-      "end_line": 46,
+      "end_line": 48,
       "end_column": 58,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:46:29:<anonymous>",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:48:29:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -41245,11 +41245,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 76,
+      "line": 78,
       "column": 5,
-      "end_line": 80,
+      "end_line": 82,
       "end_column": 6,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:76:5:coarsePal",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:78:5:coarsePal",
       "type": "function",
       "name": "coarsePal"
     },
@@ -41263,11 +41263,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 89,
+      "line": 91,
       "column": 14,
-      "end_line": 89,
+      "end_line": 91,
       "end_column": 63,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:89:14:<anonymous>",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:91:14:<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -41284,11 +41284,11 @@
       "exported": false,
       "path": "src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "layer": "presentation",
-      "line": 91,
+      "line": 93,
       "column": 5,
-      "end_line": 95,
+      "end_line": 97,
       "end_column": 6,
-      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:91:5:pal",
+      "id": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:93:5:pal",
       "type": "function",
       "name": "pal"
     },
@@ -46323,11 +46323,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 100,
+      "line": 104,
       "column": 46,
-      "end_line": 106,
+      "end_line": 110,
       "end_column": 14,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:100:46:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:104:46:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -46343,11 +46343,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 112,
+      "line": 116,
       "column": 5,
-      "end_line": 242,
+      "end_line": 246,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:112:5:WorkspaceCanvas.renderCanvas",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:116:5:WorkspaceCanvas.renderCanvas",
       "type": "method",
       "name": "renderCanvas"
     },
@@ -46362,11 +46362,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 115,
+      "line": 119,
       "column": 43,
-      "end_line": 115,
+      "end_line": 119,
       "end_column": 83,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:115:43:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:119:43:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -46401,11 +46401,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 133,
+      "line": 137,
       "column": 59,
-      "end_line": 133,
+      "end_line": 137,
       "end_column": 100,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:133:59:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:137:59:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -46420,11 +46420,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 134,
+      "line": 138,
       "column": 58,
-      "end_line": 134,
+      "end_line": 138,
       "end_column": 94,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:134:58:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:138:58:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -46437,11 +46437,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 135,
+      "line": 139,
       "column": 37,
-      "end_line": 137,
+      "end_line": 141,
       "end_column": 11,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:135:37:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:139:37:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -46454,11 +46454,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 144,
+      "line": 148,
       "column": 54,
-      "end_line": 144,
+      "end_line": 148,
       "end_column": 104,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:144:54:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:148:54:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -46471,11 +46471,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 154,
+      "line": 158,
       "column": 23,
-      "end_line": 154,
+      "end_line": 158,
       "end_column": 73,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:154:23:WorkspaceCanvas.onAction",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:158:23:WorkspaceCanvas.onAction",
       "type": "function",
       "name": "onAction"
     },
@@ -46488,11 +46488,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 175,
+      "line": 179,
       "column": 31,
-      "end_line": 185,
+      "end_line": 189,
       "end_column": 10,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:175:31:WorkspaceCanvas.renderModules",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:179:31:WorkspaceCanvas.renderModules",
       "type": "function",
       "name": "renderModules"
     },
@@ -46507,11 +46507,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 178,
+      "line": 182,
       "column": 55,
-      "end_line": 179,
+      "end_line": 183,
       "end_column": 82,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:178:55:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:182:55:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -46527,11 +46527,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 180,
+      "line": 184,
       "column": 55,
-      "end_line": 181,
+      "end_line": 185,
       "end_column": 51,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:180:55:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:184:55:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -46546,11 +46546,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 197,
+      "line": 201,
       "column": 75,
-      "end_line": 197,
+      "end_line": 201,
       "end_column": 108,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:197:75:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:201:75:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -46582,11 +46582,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 220,
+      "line": 224,
       "column": 44,
-      "end_line": 229,
+      "end_line": 233,
       "end_column": 10,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:220:44:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:224:44:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -46599,11 +46599,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 223,
+      "line": 227,
       "column": 36,
-      "end_line": 228,
+      "end_line": 232,
       "end_column": 14,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:223:36:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:227:36:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -46637,11 +46637,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 244,
+      "line": 248,
       "column": 5,
-      "end_line": 281,
+      "end_line": 285,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:244:5:WorkspaceCanvas.renderConnectedCanvas",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:248:5:WorkspaceCanvas.renderConnectedCanvas",
       "type": "method",
       "name": "renderConnectedCanvas"
     },
@@ -46673,11 +46673,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 270,
+      "line": 274,
       "column": 43,
-      "end_line": 270,
+      "end_line": 274,
       "end_column": 110,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:270:43:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:274:43:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -46692,11 +46692,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 283,
+      "line": 287,
       "column": 5,
-      "end_line": 294,
+      "end_line": 298,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:283:5:WorkspaceCanvas.stateStrip",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:287:5:WorkspaceCanvas.stateStrip",
       "type": "method",
       "name": "stateStrip"
     },
@@ -46712,11 +46712,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 285,
+      "line": 289,
       "column": 22,
-      "end_line": 290,
+      "end_line": 294,
       "end_column": 10,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:285:22:WorkspaceCanvas.item",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:289:22:WorkspaceCanvas.item",
       "type": "function",
       "name": "item"
     },
@@ -46732,11 +46732,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 296,
+      "line": 300,
       "column": 5,
-      "end_line": 346,
+      "end_line": 350,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:296:5:WorkspaceCanvas.openSourceDialog",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:300:5:WorkspaceCanvas.openSourceDialog",
       "type": "method",
       "name": "openSourceDialog"
     },
@@ -46749,11 +46749,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 316,
+      "line": 320,
       "column": 66,
-      "end_line": 316,
+      "end_line": 320,
       "end_column": 86,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:316:66:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:320:66:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -46768,11 +46768,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 321,
+      "line": 325,
       "column": 41,
-      "end_line": 341,
+      "end_line": 345,
       "end_column": 10,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:321:41:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:325:41:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -46785,11 +46785,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 344,
+      "line": 348,
       "column": 42,
-      "end_line": 344,
+      "end_line": 348,
       "end_column": 63,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:344:42:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:348:42:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -46805,11 +46805,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 348,
+      "line": 352,
       "column": 5,
-      "end_line": 360,
+      "end_line": 364,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:348:5:WorkspaceCanvas.moduleCard",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:352:5:WorkspaceCanvas.moduleCard",
       "type": "method",
       "name": "moduleCard"
     },
@@ -46867,7 +46867,7 @@
       "layer": "application-shell",
       "line": 52,
       "column": 5,
-      "end_line": 76,
+      "end_line": 80,
       "end_column": 6,
       "id": "function:ts:src/app/shell/workspace-canvas.ts:52:5:WorkspaceCanvas.render",
       "type": "method",
@@ -46923,11 +46923,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 78,
+      "line": 82,
       "column": 5,
-      "end_line": 110,
+      "end_line": 114,
       "end_column": 6,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:78:5:WorkspaceCanvas.renderOutline",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:82:5:WorkspaceCanvas.renderOutline",
       "type": "method",
       "name": "renderOutline"
     },
@@ -46942,11 +46942,11 @@
       "exported": false,
       "path": "src/app/shell/workspace-canvas.ts",
       "layer": "application-shell",
-      "line": 79,
+      "line": 83,
       "column": 43,
-      "end_line": 79,
+      "end_line": 83,
       "end_column": 79,
-      "id": "function:ts:src/app/shell/workspace-canvas.ts:79:43:WorkspaceCanvas.<anonymous>",
+      "id": "function:ts:src/app/shell/workspace-canvas.ts:83:43:WorkspaceCanvas.<anonymous>",
       "type": "function",
       "name": "<anonymous>"
     },
@@ -54692,12 +54692,12 @@
       "name": "fields.qm.density",
       "runtime_observation": {
         "method_id": "fields.qm.density",
-        "invocation_count": 85,
-        "success_count": 85,
+        "invocation_count": 86,
+        "success_count": 86,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "mean_dispatch_seconds": 0.008637
+        "mean_dispatch_seconds": 0.008633
       }
     },
     {
@@ -54712,12 +54712,12 @@
       "name": "fields.qm.homo",
       "runtime_observation": {
         "method_id": "fields.qm.homo",
-        "invocation_count": 92,
-        "success_count": 92,
+        "invocation_count": 93,
+        "success_count": 93,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "mean_dispatch_seconds": 0.008787
+        "mean_dispatch_seconds": 0.008803
       }
     },
     {
@@ -54732,12 +54732,12 @@
       "name": "fields.qm.lumo",
       "runtime_observation": {
         "method_id": "fields.qm.lumo",
-        "invocation_count": 85,
-        "success_count": 85,
+        "invocation_count": 86,
+        "success_count": 86,
         "expected_refusal_count": 0,
         "scientific_failure_count": 0,
         "operational_failure_count": 0,
-        "mean_dispatch_seconds": 0.008991
+        "mean_dispatch_seconds": 0.009049
       }
     },
     {
@@ -56440,7 +56440,7 @@
       "layer": "presentation",
       "line": 33,
       "column": 1,
-      "end_line": 396,
+      "end_line": 398,
       "end_column": 1,
       "id": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
       "type": "module",
@@ -56716,7 +56716,7 @@
       "layer": "application-shell",
       "line": 1,
       "column": 1,
-      "end_line": 362,
+      "end_line": 366,
       "end_column": 1,
       "id": "module:ts:src/app/shell/workspace-canvas.ts",
       "type": "module",
@@ -58919,11 +58919,11 @@
       "type": "service",
       "name": "dirac-fields.service :8901",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T23:01:29.935608+00:00",
+        "captured_at": "2026-08-12T23:37:03.640612+00:00",
         "source": "best-effort live probes",
         "refresh_policy_seconds": 60,
         "freshness_state": "fresh-at-generation",
-        "git_commit": "083fff0d89a576399d30baa7c425742ef24de9ee",
+        "git_commit": "d9197ed3d358cb590778a2e9eaabba4e988c5c3d",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -58954,9 +58954,9 @@
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 1150,
+          "jobs_total": 1153,
           "job_states": {
-            "done": 858,
+            "done": 861,
             "failed": 263,
             "cancelled": 29
           },
@@ -58970,31 +58970,31 @@
             "cancelled": 29,
             "operational_failure": 34,
             "expected_refusal": 229,
-            "success": 858
+            "success": 861
           },
           "artifacts": 98,
           "cached_results": 7,
           "registered_method_rows": 51,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 1215,
+          "command_traces": 1229,
           "observed_commands": 14
         },
         "command_observations": [
           {
             "command_id": "attention.list",
             "command_version": 1,
-            "invocation_count": 322,
-            "success_count": 322,
+            "invocation_count": 327,
+            "success_count": 327,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
             "mean_dispatch_seconds": 0.003975,
-            "p95_dispatch_seconds": 0.006221,
+            "p95_dispatch_seconds": 0.006207,
             "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-            "last_observed_at": "2026-08-12T16:00:41.409693-07:00"
+            "last_observed_at": "2026-08-12T16:35:19.893464-07:00"
           },
           {
             "command_id": "conformer.generate",
@@ -59059,17 +59059,17 @@
           {
             "command_id": "job.wait",
             "command_version": 1,
-            "invocation_count": 269,
-            "success_count": 269,
+            "invocation_count": 272,
+            "success_count": 272,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.95342,
-            "p95_dispatch_seconds": 0.817237,
+            "mean_dispatch_seconds": 0.944115,
+            "p95_dispatch_seconds": 0.798996,
             "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-            "last_observed_at": "2026-08-12T16:00:43.573982-07:00"
+            "last_observed_at": "2026-08-12T16:15:26.08503-07:00"
           },
           {
             "command_id": "method.list",
@@ -59089,17 +59089,17 @@
           {
             "command_id": "structure.field.compute",
             "command_version": 1,
-            "invocation_count": 446,
-            "success_count": 263,
-            "expected_refusal_count": 183,
+            "invocation_count": 451,
+            "success_count": 266,
+            "expected_refusal_count": 185,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "job_count": 263,
+            "job_count": 266,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.005249,
-            "p95_dispatch_seconds": 0.012425,
+            "mean_dispatch_seconds": 0.005264,
+            "p95_dispatch_seconds": 0.012468,
             "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-            "last_observed_at": "2026-08-12T16:00:43.350631-07:00"
+            "last_observed_at": "2026-08-12T16:15:25.949203-07:00"
           },
           {
             "command_id": "structure.interactions",
@@ -59164,8 +59164,8 @@
           {
             "command_id": "system.health",
             "command_version": 1,
-            "invocation_count": 106,
-            "success_count": 106,
+            "invocation_count": 107,
+            "success_count": 107,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
@@ -59174,7 +59174,7 @@
             "mean_dispatch_seconds": 9e-05,
             "p95_dispatch_seconds": 0.000102,
             "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-            "last_observed_at": "2026-08-12T16:00:41.460254-07:00"
+            "last_observed_at": "2026-08-12T16:15:19.928186-07:00"
           },
           {
             "command_id": "system.version",
@@ -59195,30 +59195,30 @@
         "method_observations": [
           {
             "method_id": "fields.qm.density",
-            "invocation_count": 85,
-            "success_count": 85,
+            "invocation_count": 86,
+            "success_count": 86,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008637
+            "mean_dispatch_seconds": 0.008633
           },
           {
             "method_id": "fields.qm.homo",
-            "invocation_count": 92,
-            "success_count": 92,
+            "invocation_count": 93,
+            "success_count": 93,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008787
+            "mean_dispatch_seconds": 0.008803
           },
           {
             "method_id": "fields.qm.lumo",
-            "invocation_count": 85,
-            "success_count": 85,
+            "invocation_count": 86,
+            "success_count": 86,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008991
+            "mean_dispatch_seconds": 0.009049
           },
           {
             "method_id": "fields.qm.mep_qm",
@@ -59271,11 +59271,11 @@
       "type": "service",
       "name": "dirac-digital-twin.service",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T23:01:29.935608+00:00",
+        "captured_at": "2026-08-12T23:37:03.640612+00:00",
         "source": "best-effort live probes",
         "refresh_policy_seconds": 60,
         "freshness_state": "fresh-at-generation",
-        "git_commit": "083fff0d89a576399d30baa7c425742ef24de9ee",
+        "git_commit": "d9197ed3d358cb590778a2e9eaabba4e988c5c3d",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -59306,9 +59306,9 @@
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 1150,
+          "jobs_total": 1153,
           "job_states": {
-            "done": 858,
+            "done": 861,
             "failed": 263,
             "cancelled": 29
           },
@@ -59322,31 +59322,31 @@
             "cancelled": 29,
             "operational_failure": 34,
             "expected_refusal": 229,
-            "success": 858
+            "success": 861
           },
           "artifacts": 98,
           "cached_results": 7,
           "registered_method_rows": 51,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 1215,
+          "command_traces": 1229,
           "observed_commands": 14
         },
         "command_observations": [
           {
             "command_id": "attention.list",
             "command_version": 1,
-            "invocation_count": 322,
-            "success_count": 322,
+            "invocation_count": 327,
+            "success_count": 327,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
             "mean_dispatch_seconds": 0.003975,
-            "p95_dispatch_seconds": 0.006221,
+            "p95_dispatch_seconds": 0.006207,
             "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-            "last_observed_at": "2026-08-12T16:00:41.409693-07:00"
+            "last_observed_at": "2026-08-12T16:35:19.893464-07:00"
           },
           {
             "command_id": "conformer.generate",
@@ -59411,17 +59411,17 @@
           {
             "command_id": "job.wait",
             "command_version": 1,
-            "invocation_count": 269,
-            "success_count": 269,
+            "invocation_count": 272,
+            "success_count": 272,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.95342,
-            "p95_dispatch_seconds": 0.817237,
+            "mean_dispatch_seconds": 0.944115,
+            "p95_dispatch_seconds": 0.798996,
             "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-            "last_observed_at": "2026-08-12T16:00:43.573982-07:00"
+            "last_observed_at": "2026-08-12T16:15:26.08503-07:00"
           },
           {
             "command_id": "method.list",
@@ -59441,17 +59441,17 @@
           {
             "command_id": "structure.field.compute",
             "command_version": 1,
-            "invocation_count": 446,
-            "success_count": 263,
-            "expected_refusal_count": 183,
+            "invocation_count": 451,
+            "success_count": 266,
+            "expected_refusal_count": 185,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "job_count": 263,
+            "job_count": 266,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.005249,
-            "p95_dispatch_seconds": 0.012425,
+            "mean_dispatch_seconds": 0.005264,
+            "p95_dispatch_seconds": 0.012468,
             "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-            "last_observed_at": "2026-08-12T16:00:43.350631-07:00"
+            "last_observed_at": "2026-08-12T16:15:25.949203-07:00"
           },
           {
             "command_id": "structure.interactions",
@@ -59516,8 +59516,8 @@
           {
             "command_id": "system.health",
             "command_version": 1,
-            "invocation_count": 106,
-            "success_count": 106,
+            "invocation_count": 107,
+            "success_count": 107,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
@@ -59526,7 +59526,7 @@
             "mean_dispatch_seconds": 9e-05,
             "p95_dispatch_seconds": 0.000102,
             "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-            "last_observed_at": "2026-08-12T16:00:41.460254-07:00"
+            "last_observed_at": "2026-08-12T16:15:19.928186-07:00"
           },
           {
             "command_id": "system.version",
@@ -59547,30 +59547,30 @@
         "method_observations": [
           {
             "method_id": "fields.qm.density",
-            "invocation_count": 85,
-            "success_count": 85,
+            "invocation_count": 86,
+            "success_count": 86,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008637
+            "mean_dispatch_seconds": 0.008633
           },
           {
             "method_id": "fields.qm.homo",
-            "invocation_count": 92,
-            "success_count": 92,
+            "invocation_count": 93,
+            "success_count": 93,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008787
+            "mean_dispatch_seconds": 0.008803
           },
           {
             "method_id": "fields.qm.lumo",
-            "invocation_count": 85,
-            "success_count": 85,
+            "invocation_count": 86,
+            "success_count": 86,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008991
+            "mean_dispatch_seconds": 0.009049
           },
           {
             "method_id": "fields.qm.mep_qm",
@@ -59623,11 +59623,11 @@
       "type": "service",
       "name": "dirac-web.service :1360",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T23:01:29.935608+00:00",
+        "captured_at": "2026-08-12T23:37:03.640612+00:00",
         "source": "best-effort live probes",
         "refresh_policy_seconds": 60,
         "freshness_state": "fresh-at-generation",
-        "git_commit": "083fff0d89a576399d30baa7c425742ef24de9ee",
+        "git_commit": "d9197ed3d358cb590778a2e9eaabba4e988c5c3d",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -59658,9 +59658,9 @@
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 1150,
+          "jobs_total": 1153,
           "job_states": {
-            "done": 858,
+            "done": 861,
             "failed": 263,
             "cancelled": 29
           },
@@ -59674,31 +59674,31 @@
             "cancelled": 29,
             "operational_failure": 34,
             "expected_refusal": 229,
-            "success": 858
+            "success": 861
           },
           "artifacts": 98,
           "cached_results": 7,
           "registered_method_rows": 51,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 1215,
+          "command_traces": 1229,
           "observed_commands": 14
         },
         "command_observations": [
           {
             "command_id": "attention.list",
             "command_version": 1,
-            "invocation_count": 322,
-            "success_count": 322,
+            "invocation_count": 327,
+            "success_count": 327,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
             "mean_dispatch_seconds": 0.003975,
-            "p95_dispatch_seconds": 0.006221,
+            "p95_dispatch_seconds": 0.006207,
             "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-            "last_observed_at": "2026-08-12T16:00:41.409693-07:00"
+            "last_observed_at": "2026-08-12T16:35:19.893464-07:00"
           },
           {
             "command_id": "conformer.generate",
@@ -59763,17 +59763,17 @@
           {
             "command_id": "job.wait",
             "command_version": 1,
-            "invocation_count": 269,
-            "success_count": 269,
+            "invocation_count": 272,
+            "success_count": 272,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.95342,
-            "p95_dispatch_seconds": 0.817237,
+            "mean_dispatch_seconds": 0.944115,
+            "p95_dispatch_seconds": 0.798996,
             "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-            "last_observed_at": "2026-08-12T16:00:43.573982-07:00"
+            "last_observed_at": "2026-08-12T16:15:26.08503-07:00"
           },
           {
             "command_id": "method.list",
@@ -59793,17 +59793,17 @@
           {
             "command_id": "structure.field.compute",
             "command_version": 1,
-            "invocation_count": 446,
-            "success_count": 263,
-            "expected_refusal_count": 183,
+            "invocation_count": 451,
+            "success_count": 266,
+            "expected_refusal_count": 185,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "job_count": 263,
+            "job_count": 266,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.005249,
-            "p95_dispatch_seconds": 0.012425,
+            "mean_dispatch_seconds": 0.005264,
+            "p95_dispatch_seconds": 0.012468,
             "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-            "last_observed_at": "2026-08-12T16:00:43.350631-07:00"
+            "last_observed_at": "2026-08-12T16:15:25.949203-07:00"
           },
           {
             "command_id": "structure.interactions",
@@ -59868,8 +59868,8 @@
           {
             "command_id": "system.health",
             "command_version": 1,
-            "invocation_count": 106,
-            "success_count": 106,
+            "invocation_count": 107,
+            "success_count": 107,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
@@ -59878,7 +59878,7 @@
             "mean_dispatch_seconds": 9e-05,
             "p95_dispatch_seconds": 0.000102,
             "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-            "last_observed_at": "2026-08-12T16:00:41.460254-07:00"
+            "last_observed_at": "2026-08-12T16:15:19.928186-07:00"
           },
           {
             "command_id": "system.version",
@@ -59899,30 +59899,30 @@
         "method_observations": [
           {
             "method_id": "fields.qm.density",
-            "invocation_count": 85,
-            "success_count": 85,
+            "invocation_count": 86,
+            "success_count": 86,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008637
+            "mean_dispatch_seconds": 0.008633
           },
           {
             "method_id": "fields.qm.homo",
-            "invocation_count": 92,
-            "success_count": 92,
+            "invocation_count": 93,
+            "success_count": 93,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008787
+            "mean_dispatch_seconds": 0.008803
           },
           {
             "method_id": "fields.qm.lumo",
-            "invocation_count": 85,
-            "success_count": 85,
+            "invocation_count": 86,
+            "success_count": 86,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008991
+            "mean_dispatch_seconds": 0.009049
           },
           {
             "method_id": "fields.qm.mep_qm",
@@ -59987,11 +59987,11 @@
       "type": "store",
       "name": "PostgreSQL · dirac",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T23:01:29.935608+00:00",
+        "captured_at": "2026-08-12T23:37:03.640612+00:00",
         "source": "best-effort live probes",
         "refresh_policy_seconds": 60,
         "freshness_state": "fresh-at-generation",
-        "git_commit": "083fff0d89a576399d30baa7c425742ef24de9ee",
+        "git_commit": "d9197ed3d358cb590778a2e9eaabba4e988c5c3d",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -60022,9 +60022,9 @@
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 1150,
+          "jobs_total": 1153,
           "job_states": {
-            "done": 858,
+            "done": 861,
             "failed": 263,
             "cancelled": 29
           },
@@ -60038,31 +60038,31 @@
             "cancelled": 29,
             "operational_failure": 34,
             "expected_refusal": 229,
-            "success": 858
+            "success": 861
           },
           "artifacts": 98,
           "cached_results": 7,
           "registered_method_rows": 51,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 1215,
+          "command_traces": 1229,
           "observed_commands": 14
         },
         "command_observations": [
           {
             "command_id": "attention.list",
             "command_version": 1,
-            "invocation_count": 322,
-            "success_count": 322,
+            "invocation_count": 327,
+            "success_count": 327,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
             "mean_dispatch_seconds": 0.003975,
-            "p95_dispatch_seconds": 0.006221,
+            "p95_dispatch_seconds": 0.006207,
             "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-            "last_observed_at": "2026-08-12T16:00:41.409693-07:00"
+            "last_observed_at": "2026-08-12T16:35:19.893464-07:00"
           },
           {
             "command_id": "conformer.generate",
@@ -60127,17 +60127,17 @@
           {
             "command_id": "job.wait",
             "command_version": 1,
-            "invocation_count": 269,
-            "success_count": 269,
+            "invocation_count": 272,
+            "success_count": 272,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.95342,
-            "p95_dispatch_seconds": 0.817237,
+            "mean_dispatch_seconds": 0.944115,
+            "p95_dispatch_seconds": 0.798996,
             "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-            "last_observed_at": "2026-08-12T16:00:43.573982-07:00"
+            "last_observed_at": "2026-08-12T16:15:26.08503-07:00"
           },
           {
             "command_id": "method.list",
@@ -60157,17 +60157,17 @@
           {
             "command_id": "structure.field.compute",
             "command_version": 1,
-            "invocation_count": 446,
-            "success_count": 263,
-            "expected_refusal_count": 183,
+            "invocation_count": 451,
+            "success_count": 266,
+            "expected_refusal_count": 185,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "job_count": 263,
+            "job_count": 266,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.005249,
-            "p95_dispatch_seconds": 0.012425,
+            "mean_dispatch_seconds": 0.005264,
+            "p95_dispatch_seconds": 0.012468,
             "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-            "last_observed_at": "2026-08-12T16:00:43.350631-07:00"
+            "last_observed_at": "2026-08-12T16:15:25.949203-07:00"
           },
           {
             "command_id": "structure.interactions",
@@ -60232,8 +60232,8 @@
           {
             "command_id": "system.health",
             "command_version": 1,
-            "invocation_count": 106,
-            "success_count": 106,
+            "invocation_count": 107,
+            "success_count": 107,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
@@ -60242,7 +60242,7 @@
             "mean_dispatch_seconds": 9e-05,
             "p95_dispatch_seconds": 0.000102,
             "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-            "last_observed_at": "2026-08-12T16:00:41.460254-07:00"
+            "last_observed_at": "2026-08-12T16:15:19.928186-07:00"
           },
           {
             "command_id": "system.version",
@@ -60263,30 +60263,30 @@
         "method_observations": [
           {
             "method_id": "fields.qm.density",
-            "invocation_count": 85,
-            "success_count": 85,
+            "invocation_count": 86,
+            "success_count": 86,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008637
+            "mean_dispatch_seconds": 0.008633
           },
           {
             "method_id": "fields.qm.homo",
-            "invocation_count": 92,
-            "success_count": 92,
+            "invocation_count": 93,
+            "success_count": 93,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008787
+            "mean_dispatch_seconds": 0.008803
           },
           {
             "method_id": "fields.qm.lumo",
-            "invocation_count": 85,
-            "success_count": 85,
+            "invocation_count": 86,
+            "success_count": 86,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008991
+            "mean_dispatch_seconds": 0.009049
           },
           {
             "method_id": "fields.qm.mep_qm",
@@ -60345,11 +60345,11 @@
       "type": "store",
       "name": "Architecture Twin JSON + HTML",
       "runtime_evidence": {
-        "captured_at": "2026-08-12T23:01:29.935608+00:00",
+        "captured_at": "2026-08-12T23:37:03.640612+00:00",
         "source": "best-effort live probes",
         "refresh_policy_seconds": 60,
         "freshness_state": "fresh-at-generation",
-        "git_commit": "083fff0d89a576399d30baa7c425742ef24de9ee",
+        "git_commit": "d9197ed3d358cb590778a2e9eaabba4e988c5c3d",
         "systemd": [
           "Id=dirac-fields.service",
           "ActiveState=active",
@@ -60380,9 +60380,9 @@
           "schemas": 6
         },
         "operational_metrics": {
-          "jobs_total": 1150,
+          "jobs_total": 1153,
           "job_states": {
-            "done": 858,
+            "done": 861,
             "failed": 263,
             "cancelled": 29
           },
@@ -60396,31 +60396,31 @@
             "cancelled": 29,
             "operational_failure": 34,
             "expected_refusal": 229,
-            "success": 858
+            "success": 861
           },
           "artifacts": 98,
           "cached_results": 7,
           "registered_method_rows": 51,
           "attention_items": 34,
           "approval_waits": 0,
-          "command_traces": 1215,
+          "command_traces": 1229,
           "observed_commands": 14
         },
         "command_observations": [
           {
             "command_id": "attention.list",
             "command_version": 1,
-            "invocation_count": 322,
-            "success_count": 322,
+            "invocation_count": 327,
+            "success_count": 327,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
             "mean_dispatch_seconds": 0.003975,
-            "p95_dispatch_seconds": 0.006221,
+            "p95_dispatch_seconds": 0.006207,
             "first_observed_at": "2026-08-12T08:27:40.559042-07:00",
-            "last_observed_at": "2026-08-12T16:00:41.409693-07:00"
+            "last_observed_at": "2026-08-12T16:35:19.893464-07:00"
           },
           {
             "command_id": "conformer.generate",
@@ -60485,17 +60485,17 @@
           {
             "command_id": "job.wait",
             "command_version": 1,
-            "invocation_count": 269,
-            "success_count": 269,
+            "invocation_count": 272,
+            "success_count": 272,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
             "job_count": 0,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.95342,
-            "p95_dispatch_seconds": 0.817237,
+            "mean_dispatch_seconds": 0.944115,
+            "p95_dispatch_seconds": 0.798996,
             "first_observed_at": "2026-08-12T07:35:05.812312-07:00",
-            "last_observed_at": "2026-08-12T16:00:43.573982-07:00"
+            "last_observed_at": "2026-08-12T16:15:26.08503-07:00"
           },
           {
             "command_id": "method.list",
@@ -60515,17 +60515,17 @@
           {
             "command_id": "structure.field.compute",
             "command_version": 1,
-            "invocation_count": 446,
-            "success_count": 263,
-            "expected_refusal_count": 183,
+            "invocation_count": 451,
+            "success_count": 266,
+            "expected_refusal_count": 185,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "job_count": 263,
+            "job_count": 266,
             "cache_hit_count": 0,
-            "mean_dispatch_seconds": 0.005249,
-            "p95_dispatch_seconds": 0.012425,
+            "mean_dispatch_seconds": 0.005264,
+            "p95_dispatch_seconds": 0.012468,
             "first_observed_at": "2026-08-12T07:35:05.803769-07:00",
-            "last_observed_at": "2026-08-12T16:00:43.350631-07:00"
+            "last_observed_at": "2026-08-12T16:15:25.949203-07:00"
           },
           {
             "command_id": "structure.interactions",
@@ -60590,8 +60590,8 @@
           {
             "command_id": "system.health",
             "command_version": 1,
-            "invocation_count": 106,
-            "success_count": 106,
+            "invocation_count": 107,
+            "success_count": 107,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
@@ -60600,7 +60600,7 @@
             "mean_dispatch_seconds": 9e-05,
             "p95_dispatch_seconds": 0.000102,
             "first_observed_at": "2026-08-12T07:39:48.658275-07:00",
-            "last_observed_at": "2026-08-12T16:00:41.460254-07:00"
+            "last_observed_at": "2026-08-12T16:15:19.928186-07:00"
           },
           {
             "command_id": "system.version",
@@ -60621,30 +60621,30 @@
         "method_observations": [
           {
             "method_id": "fields.qm.density",
-            "invocation_count": 85,
-            "success_count": 85,
+            "invocation_count": 86,
+            "success_count": 86,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008637
+            "mean_dispatch_seconds": 0.008633
           },
           {
             "method_id": "fields.qm.homo",
-            "invocation_count": 92,
-            "success_count": 92,
+            "invocation_count": 93,
+            "success_count": 93,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008787
+            "mean_dispatch_seconds": 0.008803
           },
           {
             "method_id": "fields.qm.lumo",
-            "invocation_count": 85,
-            "success_count": 85,
+            "invocation_count": 86,
+            "success_count": 86,
             "expected_refusal_count": 0,
             "scientific_failure_count": 0,
             "operational_failure_count": 0,
-            "mean_dispatch_seconds": 0.008991
+            "mean_dispatch_seconds": 0.009049
           },
           {
             "method_id": "fields.qm.mep_qm",
@@ -60734,7 +60734,7 @@
       "type": "system",
       "name": "CommandDispatcher",
       "runtime_observation": {
-        "traces": 1215,
+        "traces": 1229,
         "observed_commands": 14
       }
     },
@@ -65698,12 +65698,22 @@
     },
     {
       "source": "file:src/app.frontend.facets.molstar-rdkit.editable/index.html",
+      "target": "file:src/app.frontend.facets.molstar-rdkit.editable/theme-dark.css",
+      "relation": "references-file"
+    },
+    {
+      "source": "file:src/app.frontend.facets.molstar-rdkit.editable/index.html",
       "target": "file:src/app.frontend.facets.molstar-rdkit.editable/theme-fascia.css",
       "relation": "references-file"
     },
     {
       "source": "file:src/app.frontend.facets.molstar-rdkit.editable/index.html",
       "target": "file:src/app.frontend.facets.molstar-rdkit.editable/theme-fascia.js",
+      "relation": "references-file"
+    },
+    {
+      "source": "file:src/app.frontend.facets.molstar-rdkit.editable/index.html",
+      "target": "file:src/app.frontend.facets.molstar-rdkit.editable/theme-toggle.js",
       "relation": "references-file"
     },
     {
@@ -74012,103 +74022,103 @@
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:174:5:classify",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:179:5:classifyInner",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:176:5:classify",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:181:5:classifyInner",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:245:5:setActive",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:298:5:apply",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:247:5:setActive",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:300:5:apply",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:245:5:setActive",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:336:5:render",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:247:5:setActive",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:338:5:render",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:261:22:factory",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:174:5:classify",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:263:22:factory",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:176:5:classify",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:282:28:color",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:274:31:chainOf",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:284:28:color",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:276:31:chainOf",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:298:5:apply",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:234:5:plugin",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:300:5:apply",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:236:5:plugin",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:298:5:apply",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:242:5:active",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:300:5:apply",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:244:5:active",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:298:5:apply",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:254:5:ensureTheme",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:300:5:apply",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:256:5:ensureTheme",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:336:5:render",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:242:5:active",
-      "relation": "calls"
-    },
-    {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:33:2:<anonymous>",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:76:5:coarsePal",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:338:5:render",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:244:5:active",
       "relation": "calls"
     },
     {
       "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:33:2:<anonymous>",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:91:5:pal",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:78:5:coarsePal",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:354:44:<anonymous>",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:245:5:setActive",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:33:2:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:93:5:pal",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:370:5:wire",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:234:5:plugin",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:356:44:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:247:5:setActive",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:374:51:<anonymous>",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:298:5:apply",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:372:5:wire",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:236:5:plugin",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:374:51:<anonymous>",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:336:5:render",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:376:51:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:300:5:apply",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:380:28:<anonymous>",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:298:5:apply",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:376:51:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:338:5:render",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:380:28:<anonymous>",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:336:5:render",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:382:28:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:300:5:apply",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:380:28:<anonymous>",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:370:5:wire",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:382:28:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:338:5:render",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:385:17:<anonymous>",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:298:5:apply",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:382:28:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:372:5:wire",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:385:17:<anonymous>",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:370:5:wire",
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:387:17:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:300:5:apply",
+      "relation": "calls"
+    },
+    {
+      "source": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:387:17:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:372:5:wire",
       "relation": "calls"
     },
     {
@@ -75157,152 +75167,152 @@
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:112:5:WorkspaceCanvas.renderCanvas",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:116:5:WorkspaceCanvas.renderCanvas",
       "target": "function:ts:src/app/context/scientific-context-store.ts:31:5:ScientificContextStore.current",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:112:5:WorkspaceCanvas.renderCanvas",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:116:5:WorkspaceCanvas.renderCanvas",
       "target": "function:ts:src/app/shell/view-state.ts:15:1:deriveViewState",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:112:5:WorkspaceCanvas.renderCanvas",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:116:5:WorkspaceCanvas.renderCanvas",
       "target": "function:ts:src/app/shell/workspace-canvas.ts:12:17:element",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:112:5:WorkspaceCanvas.renderCanvas",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:175:31:WorkspaceCanvas.renderModules",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:116:5:WorkspaceCanvas.renderCanvas",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:179:31:WorkspaceCanvas.renderModules",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:112:5:WorkspaceCanvas.renderCanvas",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:116:5:WorkspaceCanvas.renderCanvas",
       "target": "function:ts:src/app/shell/workspace-canvas.ts:20:20:storageKey",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:112:5:WorkspaceCanvas.renderCanvas",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:116:5:WorkspaceCanvas.renderCanvas",
       "target": "function:ts:src/app/shell/workspace-canvas.ts:22:1:readLocal",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:112:5:WorkspaceCanvas.renderCanvas",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:283:5:WorkspaceCanvas.stateStrip",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:116:5:WorkspaceCanvas.renderCanvas",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:287:5:WorkspaceCanvas.stateStrip",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:112:5:WorkspaceCanvas.renderCanvas",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:116:5:WorkspaceCanvas.renderCanvas",
       "target": "function:ts:src/app/shell/workspace-visuals.ts:181:1:renderWorkspaceVisual",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:144:54:WorkspaceCanvas.<anonymous>",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:296:5:WorkspaceCanvas.openSourceDialog",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:148:54:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:300:5:WorkspaceCanvas.openSourceDialog",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:154:23:WorkspaceCanvas.onAction",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:296:5:WorkspaceCanvas.openSourceDialog",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:158:23:WorkspaceCanvas.onAction",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:300:5:WorkspaceCanvas.openSourceDialog",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:175:31:WorkspaceCanvas.renderModules",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:179:31:WorkspaceCanvas.renderModules",
       "target": "function:ts:src/app/shell/workspace-canvas.ts:12:17:element",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:180:55:WorkspaceCanvas.<anonymous>",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:348:5:WorkspaceCanvas.moduleCard",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:184:55:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:352:5:WorkspaceCanvas.moduleCard",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:223:36:WorkspaceCanvas.<anonymous>",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:227:36:WorkspaceCanvas.<anonymous>",
       "target": "function:ts:src/app/shell/workspace-canvas.ts:20:20:storageKey",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:223:36:WorkspaceCanvas.<anonymous>",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:227:36:WorkspaceCanvas.<anonymous>",
       "target": "function:ts:src/app/shell/workspace-canvas.ts:26:1:writeLocal",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:244:5:WorkspaceCanvas.renderConnectedCanvas",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:248:5:WorkspaceCanvas.renderConnectedCanvas",
       "target": "function:ts:src/app/context/scientific-context-store.ts:31:5:ScientificContextStore.current",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:244:5:WorkspaceCanvas.renderConnectedCanvas",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:248:5:WorkspaceCanvas.renderConnectedCanvas",
       "target": "function:ts:src/app/shell/view-state.ts:15:1:deriveViewState",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:244:5:WorkspaceCanvas.renderConnectedCanvas",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:248:5:WorkspaceCanvas.renderConnectedCanvas",
       "target": "function:ts:src/app/shell/workspace-canvas.ts:12:17:element",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:244:5:WorkspaceCanvas.renderConnectedCanvas",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:283:5:WorkspaceCanvas.stateStrip",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:248:5:WorkspaceCanvas.renderConnectedCanvas",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:287:5:WorkspaceCanvas.stateStrip",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:283:5:WorkspaceCanvas.stateStrip",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:287:5:WorkspaceCanvas.stateStrip",
       "target": "function:ts:src/app/shell/workspace-canvas.ts:12:17:element",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:283:5:WorkspaceCanvas.stateStrip",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:285:22:WorkspaceCanvas.item",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:287:5:WorkspaceCanvas.stateStrip",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:289:22:WorkspaceCanvas.item",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:285:22:WorkspaceCanvas.item",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:289:22:WorkspaceCanvas.item",
       "target": "function:ts:src/app/shell/workspace-canvas.ts:12:17:element",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:296:5:WorkspaceCanvas.openSourceDialog",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:300:5:WorkspaceCanvas.openSourceDialog",
       "target": "function:ts:src/app/shell/workspace-canvas.ts:12:17:element",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:321:41:WorkspaceCanvas.<anonymous>",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:325:41:WorkspaceCanvas.<anonymous>",
       "target": "function:ts:src/app/context/scientific-context-store.ts:31:5:ScientificContextStore.current",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:321:41:WorkspaceCanvas.<anonymous>",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:325:41:WorkspaceCanvas.<anonymous>",
       "target": "function:ts:src/app/context/scientific-context-store.ts:58:5:ScientificContextStore.patch",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:348:5:WorkspaceCanvas.moduleCard",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:352:5:WorkspaceCanvas.moduleCard",
       "target": "function:ts:src/app/shell/workspace-canvas.ts:12:17:element",
       "relation": "calls"
     },
     {
       "source": "function:ts:src/app/shell/workspace-canvas.ts:52:5:WorkspaceCanvas.render",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:112:5:WorkspaceCanvas.renderCanvas",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:116:5:WorkspaceCanvas.renderCanvas",
       "relation": "calls"
     },
     {
       "source": "function:ts:src/app/shell/workspace-canvas.ts:52:5:WorkspaceCanvas.render",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:244:5:WorkspaceCanvas.renderConnectedCanvas",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:248:5:WorkspaceCanvas.renderConnectedCanvas",
       "relation": "calls"
     },
     {
       "source": "function:ts:src/app/shell/workspace-canvas.ts:52:5:WorkspaceCanvas.render",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:78:5:WorkspaceCanvas.renderOutline",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:82:5:WorkspaceCanvas.renderOutline",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:78:5:WorkspaceCanvas.renderOutline",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:82:5:WorkspaceCanvas.renderOutline",
       "target": "function:ts:src/app/shell/registries.ts:106:1:navigableViews",
       "relation": "calls"
     },
     {
-      "source": "function:ts:src/app/shell/workspace-canvas.ts:78:5:WorkspaceCanvas.renderOutline",
+      "source": "function:ts:src/app/shell/workspace-canvas.ts:82:5:WorkspaceCanvas.renderOutline",
       "target": "function:ts:src/app/shell/workspace-canvas.ts:12:17:element",
       "relation": "calls"
     },
@@ -87763,102 +87773,102 @@
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:145:18:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:147:18:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:146:63:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:148:63:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:174:5:classify",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:176:5:classify",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:179:5:classifyInner",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:181:5:classifyInner",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:234:5:plugin",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:236:5:plugin",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:242:5:active",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:244:5:active",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:245:5:setActive",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:247:5:setActive",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:254:5:ensureTheme",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:256:5:ensureTheme",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:258:28:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:260:28:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:261:22:factory",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:263:22:factory",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:274:31:chainOf",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:276:31:chainOf",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:282:28:color",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:284:28:color",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:292:24:getParams",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:294:24:getParams",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:292:85:isApplicable",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:294:85:isApplicable",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:298:5:apply",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:300:5:apply",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:307:39:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:309:39:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:319:28:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:321:28:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:320:34:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:322:34:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:321:60:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:323:60:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:336:5:render",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:338:5:render",
       "relation": "contains"
     },
     {
@@ -87868,67 +87878,67 @@
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:347:30:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:349:30:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:354:44:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:356:44:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:370:5:wire",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:372:5:wire",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:374:51:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:376:51:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:380:28:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:382:28:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:385:17:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:387:17:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:388:15:list",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:390:15:list",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:388:49:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:390:49:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:390:16:stats",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:392:16:stats",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:46:29:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:48:29:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:76:5:coarsePal",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:78:5:coarsePal",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:89:14:<anonymous>",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:91:14:<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js",
-      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:91:5:pal",
+      "target": "function:ts:src/app.frontend.facets.molstar-rdkit.editable/palette.js:93:5:pal",
       "relation": "contains"
     },
     {
@@ -89513,17 +89523,17 @@
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:100:46:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:104:46:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:112:5:WorkspaceCanvas.renderCanvas",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:116:5:WorkspaceCanvas.renderCanvas",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:115:43:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:119:43:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
@@ -89533,47 +89543,47 @@
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:133:59:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:137:59:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:134:58:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:138:58:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:135:37:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:139:37:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:144:54:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:148:54:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:154:23:WorkspaceCanvas.onAction",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:158:23:WorkspaceCanvas.onAction",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:175:31:WorkspaceCanvas.renderModules",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:179:31:WorkspaceCanvas.renderModules",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:178:55:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:182:55:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:180:55:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:184:55:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:197:75:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:201:75:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
@@ -89583,12 +89593,12 @@
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:220:44:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:224:44:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:223:36:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:227:36:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
@@ -89598,7 +89608,7 @@
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:244:5:WorkspaceCanvas.renderConnectedCanvas",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:248:5:WorkspaceCanvas.renderConnectedCanvas",
       "relation": "contains"
     },
     {
@@ -89608,42 +89618,42 @@
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:270:43:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:274:43:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:283:5:WorkspaceCanvas.stateStrip",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:287:5:WorkspaceCanvas.stateStrip",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:285:22:WorkspaceCanvas.item",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:289:22:WorkspaceCanvas.item",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:296:5:WorkspaceCanvas.openSourceDialog",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:300:5:WorkspaceCanvas.openSourceDialog",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:316:66:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:320:66:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:321:41:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:325:41:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:344:42:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:348:42:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:348:5:WorkspaceCanvas.moduleCard",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:352:5:WorkspaceCanvas.moduleCard",
       "relation": "contains"
     },
     {
@@ -89673,12 +89683,12 @@
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:78:5:WorkspaceCanvas.renderOutline",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:82:5:WorkspaceCanvas.renderOutline",
       "relation": "contains"
     },
     {
       "source": "module:ts:src/app/shell/workspace-canvas.ts",
-      "target": "function:ts:src/app/shell/workspace-canvas.ts:79:43:WorkspaceCanvas.<anonymous>",
+      "target": "function:ts:src/app/shell/workspace-canvas.ts:83:43:WorkspaceCanvas.<anonymous>",
       "relation": "contains"
     },
     {

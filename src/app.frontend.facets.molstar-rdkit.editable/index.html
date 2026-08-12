@@ -1320,6 +1320,7 @@
         }
     </style>
     <link rel="stylesheet" href="./theme-fascia.css">
+    <link rel="stylesheet" href="./theme-dark.css">
     <link rel="stylesheet" href="./workspace-shell.css">
     <!-- addons.css carries the two chrome additions that are not part of the fascia theme
          itself: the palette picker's column in .topbar-scene, and the save button. Kept out
@@ -1845,6 +1846,7 @@
 
     <script src="./assets/rdkit/RDKit_minimal.js"></script>
     <script src="./dirac.js"></script>
+    <script src="./theme-toggle.js"></script>
     <script src="./theme-fascia.js"></script>
     <!-- The substructure palettes. Self-contained: it waits for the mol* plugin, inserts its
          own <select> into .topbar-scene next to Representation, and re-applies on every state
@@ -1852,6 +1854,22 @@
          the plugin from OUTSIDE the app's own state machine — it colours what is already on
          screen and owns no scene state of its own. -->
     <script src="./palette.js"></script>
+    <script>
+        // Scene Views retain the original workbench. The full Workspace map is
+        // one deliberate step away instead of occupying three permanent rows.
+        (function mountWorkspaceEntry() {
+            const tail = document.querySelector('.topbar-tail');
+            if (!tail || document.getElementById('scene-workspace-entry')) return;
+            const entry = document.createElement('button');
+            entry.id = 'scene-workspace-entry';
+            entry.className = 'btn-ghost scene-workspace-entry';
+            entry.type = 'button';
+            entry.textContent = 'Workspaces';
+            entry.title = 'Open the Workspace map';
+            entry.addEventListener('click', () => { location.href = '/p/current'; });
+            tail.insertBefore(entry, tail.firstChild);
+        })();
+    </script>
     <script>
         // master-tab navigation: show one section at a time
         document.addEventListener('click', e => {

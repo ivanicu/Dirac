@@ -31,7 +31,9 @@
  * `--red` (#c24842) is not used by any palette. It stays reserved for EXCEEDED/FAULT.
  */
 (function () {
-    var LS = 'dirac.palette.v1';
+    // v2 intentionally resets the former forced d5 default. A molecular paint
+    // scheme is an explicit scientific-view choice, not a product-wide theme.
+    var LS = 'dirac.palette.v2';
 
     // ── classes, in reading order ────────────────────────────────────────────
     var CLASSES = [
@@ -236,9 +238,9 @@
         return l && l.workbench && l.workbench.plugin;
     }
 
-    // Default is a PALETTE now, not graphite. Ivan chose it off the d5 render.
-    // localStorage still wins, so anyone who has already picked one keeps theirs.
-    var DEFAULT = 'd5';
+    // Preserve the native representation until the user explicitly asks the
+    // molecule to carry a semantic palette.
+    var DEFAULT = 'off';
     function active() {
         try { return localStorage.getItem(LS) || DEFAULT; } catch (e) { return DEFAULT; }
     }
