@@ -1,0 +1,14 @@
+[Unit]
+Description=Dirac Architecture Optimization Twin auto-synchronizer
+After=dirac-fields.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ivan/dirac
+ExecStart=/usr/bin/node /home/ivan/dirac/scripts/watch_digital_twin.mjs
+Restart=on-failure
+RestartSec=2
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

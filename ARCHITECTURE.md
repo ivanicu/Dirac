@@ -123,17 +123,39 @@ objects and relations, then expose the command through SDK/UI and the safe MCP p
 No new Workspace or adapter may introduce a private scientific API, cache key, Job state,
 error vocabulary, staleness clock, or mol* instance.
 
-## Executable Digital Twin
+## Architecture Optimization Twin
 
 `docs/architecture/dirac-digital-twin.html` is the offline interactive projection of
 this architecture. It embeds `dirac-digital-twin.json`, a source-derived graph covering
-every in-scope first-party Python, JavaScript, Shell and custom TypeScript function/method, their real
+every in-scope first-party Python, JavaScript, Shell and custom TypeScript
+function/method, their real
 import/call edges, semantic contracts, AppShell registries, SQL objects, runtime
-services and the system's principal information flows. Upstream Mol* and other
-third-party internals remain explicit external boundaries rather than copied source.
+services and the system's principal information flows. Its default views are guided
+system narratives, architecture fitness checks, evidence-backed optimization findings
+and a change-impact simulator; function-level detail remains searchable on demand.
+Upstream Mol* and other third-party internals remain explicit external boundaries rather
+than copied source.
+
+The truthful maturity is **L2 diagnostic**, not a predictive twin. Source structure is
+continuously synchronized while `dirac-digital-twin.service` is active; runtime evidence
+is a snapshot refreshed during each rebuild, not streaming telemetry. The twin can
+detect declared/observed drift, rank static hotspots and estimate dependency-radius
+impact. L3 requires node-keyed command traces and calibrated latency/failure outcome
+models. The platform substrate is complete against its approved DoD; the product is
+explicitly partial (currently 3/8 Workspaces and 7/30 Views implemented).
+
+`scripts/digital_twin_scope.json` is the ownership boundary. The watcher recursively
+discovers tracked and untracked files under all first-party roots and automatically
+includes new code roots unless they are explicitly classified as upstream/external.
+Python AST, the TypeScript compiler, Shell and SQL parsers add files, functions, imports,
+calls, schema objects and references. Outputs are written atomically after a 900 ms
+debounce. `gate-14-architecture-twin` fails on a new/deleted file, a source fingerprint
+change, dangling graph data, a stale embedded model or leakage of generated RDKit code.
 
 Regenerate both artifacts from the repository and a best-effort live runtime snapshot:
 
 ```bash
 python3 scripts/build_digital_twin.py
+node scripts/watch_digital_twin.mjs --selftest
+bash scripts/gates.sh twin
 ```

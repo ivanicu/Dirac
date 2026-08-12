@@ -2,31 +2,23 @@
 /** Extract function-level TypeScript structure using the compiler, not regex. */
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import ts from 'typescript';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
-const ROOTS = [
-    'src/app',
-    'src/app.frontend.facets.molstar-rdkit.editable',
-    'src/chemistry.backend.perception.rdkit-wasm.editable',
-    'src/mol-plugin-chem',
-    'scripts',
-];
-const SKIP = /(?:^|\/)(?:node_modules|build|lib|examples\.reference\.mini-demos\.vendored-readonly)(?:\/|$)/;
-
-function walk(dir, out = []) {
-    if (!fs.existsSync(dir)) return out;
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-        const abs = path.join(dir, entry.name);
-        const rel = path.relative(ROOT, abs).replaceAll(path.sep, '/');
-        if (SKIP.test(rel)) continue;
-        if (entry.isDirectory()) walk(abs, out);
-        else if (/\.(?:tsx?|m?js)$/.test(entry.name) && !/\.d\.ts$/.test(entry.name)) out.push(abs);
-    }
-    return out;
-}
-
-const files = ROOTS.flatMap(r => walk(path.join(ROOT, r)));
+const scope = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/digital_twin_scope.json'), 'utf8'));
+const roots = scope.include_roots.map(x => x.replace(/\/$/, ''));
+const externalRoots = scope.external_roots.map(x => x.replace(/\/$/, ''));
+const rootFiles = new Set(scope.include_root_files);
+const inScope = rel => (rootFiles.has(rel) || roots.some(root => rel === root || rel.startsWith(`${root}/`))
+        || (scope.auto_include_code_extensions.includes(path.extname(rel))
+            && !externalRoots.some(root => rel === root || rel.startsWith(`${root}/`))))
+    && !scope.exclude_fragments.some(fragment => `/${rel}`.includes(fragment))
+    && !scope.exclude_suffixes.some(suffix => rel.endsWith(suffix));
+const discovered = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
+    { cwd: ROOT, encoding: 'utf8' }).split('\0').filter(Boolean);
+const files = discovered.filter(rel => inScope(rel) && /\.(?:tsx?|m?js)$/.test(rel) && !/\.d\.ts$/.test(rel))
+    .map(rel => path.join(ROOT, rel)).filter(file => fs.existsSync(file));
 const config = ts.readConfigFile(path.join(ROOT, 'tsconfig.json'), ts.sys.readFile);
 const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, ROOT);
 const program = ts.createProgram(files, { ...parsed.options, allowJs: true, checkJs: false, noEmit: true });

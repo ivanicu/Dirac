@@ -46,7 +46,7 @@ run_gate() {
 }
 
 # ---- gate selection -------------------------------------------------------
-ALL=(tsc build palette css migrations docs contracts physics commits portability layering golden parity)
+ALL=(tsc build palette css migrations docs contracts physics commits portability layering golden parity twin)
 if [ "$#" -eq 0 ]; then
     WANT=("${ALL[@]}")
 else
@@ -161,6 +161,17 @@ fi
 
 if wanted portability; then
     run_gate 'gate-10-portability' python3 scripts/test_portability.py
+fi
+
+# Gate 14 · architecture twin freshness and coherence. The twin is an optimization
+# instrument only if it cannot silently drift away from the source it describes.
+if wanted twin; then
+    if python3 scripts/check_digital_twin.py --selftest >/dev/null 2>&1; then
+        run_gate 'gate-14-architecture-twin' python3 scripts/check_digital_twin.py
+    else
+        printf '%s\n' "${RED}FAIL${OFF} gate-14-architecture-twin — selftest did not convict a dangling edge"
+        FAILED+=('gate-14-architecture-twin-selftest')
+    fi
 fi
 
 if wanted commits; then

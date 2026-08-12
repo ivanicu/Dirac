@@ -136,3 +136,10 @@ jobs:
         run: |
           node scripts/check_physics_contract.mjs --selftest
           node scripts/check_physics_contract.mjs
+
+      - name: 'Gate 14 — architecture twin source discovery and freshness'
+        if: ${{ !cancelled() && steps.npm_ci.outcome == 'success' }}
+        run: |
+          node scripts/watch_digital_twin.mjs --selftest
+          python3 scripts/check_digital_twin.py --selftest
+          python3 scripts/check_digital_twin.py

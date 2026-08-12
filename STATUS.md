@@ -17,6 +17,7 @@ Last re-derived: **2026-08-12**, from the running local system and repository ga
 | 3D scene | one SceneService-owned mol* instance survives route navigation |
 | Durable domain | Program, Campaign, Hypothesis, Evidence, Decision, Mission, Run, Run↔Job and controlled relations |
 | Attention | derived from failed Jobs and approval-waiting Runs |
+| Architecture twin | L2 diagnostic; event-driven source synchronization plus generation-time runtime snapshot, health findings and static change-impact simulation |
 
 ## Current frontend modules
 
@@ -36,6 +37,7 @@ Last re-derived: **2026-08-12**, from the running local system and repository ga
 | `dirac-fields.service` / `:8901` | active; unified command, method, Job, cache and artifact control plane |
 | `dirac-web.service` / `:1360` | active; serves `build/dirac` |
 | `dirac-ops.service` / `:1355` | active; read-only ops projection |
+| `dirac-digital-twin.service` | active; recursive first-party source watcher and atomic DT regeneration |
 | legacy `:8902` | absent; service disabled and hand-run process terminated after migration |
 | PostgreSQL `dirac` | migrations 000–016 applied; content hashes clean |
 
@@ -56,3 +58,10 @@ Last re-derived: **2026-08-12**, from the running local system and repository ga
 The local/LAN service has no authentication. Do not treat it as a public multi-user
 deployment. Product expansion Workspaces remain gated until their scientist-facing views
 are implemented; the platform architecture they will use is now present.
+
+## Scope verdict
+
+The approved **platform substrate phase is complete**. The whole Dirac product is not:
+3 of 8 Workspaces and 7 of 30 Views currently expose implemented vertical slices. The
+remaining registry entries are product intent protected by capability gates, not shipped
+features. The Architecture Optimization Twin reports this distinction directly.

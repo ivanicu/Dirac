@@ -11,6 +11,7 @@ import re
 import subprocess
 import urllib.request
 from collections import Counter, defaultdict
+from math import log2
 from typing import Any
 
 
@@ -19,6 +20,8 @@ OUT_DIR = ROOT / 'docs' / 'architecture'
 JSON_OUT = OUT_DIR / 'dirac-digital-twin.json'
 HTML_OUT = OUT_DIR / 'dirac-digital-twin.html'
 TEMPLATE = ROOT / 'scripts' / 'digital_twin_template.html'
+SCOPE_FILE = ROOT / 'scripts' / 'digital_twin_scope.json'
+SCOPE = json.loads(SCOPE_FILE.read_text())
 
 
 class Twin:
@@ -66,6 +69,12 @@ def run(command: list[str], timeout: int = 10) -> tuple[bool, str]:
         return False, str(exc)
 
 
+def atomic_write(path: pathlib.Path, content: str) -> None:
+    temporary = path.with_name(f'.{path.name}.tmp')
+    temporary.write_text(content)
+    temporary.replace(path)
+
+
 def layer_for(path: str) -> str:
     if '/_spec/' in path or '/test' in path or pathlib.Path(path).name.startswith('test_'):
         return 'verification'
@@ -82,18 +91,84 @@ def layer_for(path: str) -> str:
     return 'runtime'
 
 
-def python_files() -> list[pathlib.Path]:
-    roots = [ROOT / 'backend', ROOT / 'python' / 'src' / 'dirac', ROOT / 'scripts']
-    paths: list[pathlib.Path] = []
-    for base in roots:
-        if not base.exists():
+def discovered_files() -> list[pathlib.Path]:
+    """Discover tracked and not-yet-tracked first-party files from one ownership policy."""
+    ok, raw = run(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'])
+    if not ok:
+        ok, raw = run(['rg', '--files', '-0'])
+    if not ok:
+        raise RuntimeError(f'cannot discover workspace files: {raw}')
+    roots = tuple(item.rstrip('/') for item in SCOPE['include_roots'])
+    root_files = set(SCOPE['include_root_files'])
+    extensions = set(SCOPE['extensions'])
+    auto_extensions = set(SCOPE['auto_include_code_extensions'])
+    external_roots = tuple(item.rstrip('/') for item in SCOPE['external_roots'])
+    excluded = tuple(SCOPE['exclude_fragments'])
+    suffixes = tuple(SCOPE['exclude_suffixes'])
+    found = []
+    for item in raw.split('\0'):
+        if not item:
             continue
-        for path in base.rglob('*.py'):
-            rel = path.relative_to(ROOT).as_posix()
-            if any(part in rel.split('/') for part in ('env', '__pycache__', 'site-packages')):
-                continue
-            paths.append(path)
-    return sorted(set(paths))
+        rel = item.replace('\\', '/')
+        wrapped = f'/{rel}'
+        extension = pathlib.PurePosixPath(rel).suffix
+        explicit = rel in root_files or any(rel == root or rel.startswith(f'{root}/')
+                                            for root in roots)
+        external = any(rel == root or rel.startswith(f'{root}/') for root in external_roots)
+        if not explicit and (extension not in auto_extensions or external):
+            continue
+        if extension not in extensions:
+            continue
+        if any(fragment in wrapped for fragment in excluded) or rel.endswith(suffixes):
+            continue
+        path = ROOT / rel
+        if path.is_file():
+            found.append(path)
+    return sorted(set(found))
+
+
+def python_files() -> list[pathlib.Path]:
+    return [path for path in discovered_files() if path.suffix == '.py']
+
+
+def add_file_inventory(twin: Twin, files: list[pathlib.Path]) -> None:
+    for path in files:
+        rel = path.relative_to(ROOT).as_posix()
+        data = path.read_bytes()
+        twin.node(f'file:{rel}', 'source-file', path.name, layer=layer_for(rel),
+                  path=rel, extension=path.suffix or '<none>', bytes=len(data),
+                  sha256=hashlib.sha256(data).hexdigest(),
+                  generated=('/generated/' in rel or rel in SCOPE['generated_outputs']))
+
+
+def add_file_references(twin: Twin, files: list[pathlib.Path]) -> None:
+    """Add explicit path references in configs, docs, scripts and source text."""
+    known = {path.relative_to(ROOT).as_posix(): path for path in files}
+    token_re = re.compile(r'(?<![\w.-])(?:\.?\.?/)?[A-Za-z0-9_@.-]+(?:/[A-Za-z0-9_@.-]+)+')
+    for path in files:
+        rel = path.relative_to(ROOT).as_posix()
+        try:
+            text = path.read_text(errors='strict')
+        except (UnicodeDecodeError, OSError):
+            continue
+        source = f'file:{rel}'
+        for token in set(token_re.findall(text)):
+            cleaned = token.rstrip('.,:;)]}\'"')
+            candidates = [cleaned.lstrip('./')]
+            if cleaned.startswith('.'):
+                try:
+                    candidates.append((path.parent / cleaned).resolve().relative_to(ROOT).as_posix())
+                except ValueError:
+                    pass
+            for candidate in candidates:
+                if candidate in known and candidate != rel:
+                    twin.edge(source, f'file:{candidate}', 'references-file')
+                    break
+    for node in list(twin.nodes.values()):
+        rel = node.get('path')
+        file_id = f'file:{rel}'
+        if node['type'] == 'module' and rel and file_id in twin.nodes:
+            twin.edge(file_id, node['id'], 'parsed-as')
 
 
 def module_name(path: pathlib.Path) -> str:
@@ -246,22 +321,29 @@ SHELL_FUNCTION_RE = re.compile(
 
 def add_shell(twin: Twin) -> None:
     """Represent declared first-party shell functions used by gates and operations."""
-    roots = [ROOT / 'scripts', ROOT / 'backend' / 'db', ROOT / 'deploy']
-    for base in roots:
-        if not base.exists():
-            continue
-        for path in sorted(base.rglob('*.sh')):
-            rel = path.relative_to(ROOT).as_posix()
-            text = path.read_text(errors='replace')
-            mid = twin.node(f'module:sh:{rel}', 'module', path.name,
-                            language='shell', path=rel, line=1, layer=layer_for(rel))
-            for match in SHELL_FUNCTION_RE.finditer(text):
-                line = text.count('\n', 0, match.start()) + 1
-                name = match.group(1)
-                fid = twin.node(f'function:sh:{rel}:{line}:{name}', 'function', name,
-                                language='shell', path=rel, line=line,
-                                qualified_name=name, layer=layer_for(rel))
-                twin.edge(mid, fid, 'contains')
+    def is_shell(path: pathlib.Path) -> bool:
+        if path.suffix == '.sh':
+            return True
+        if path.suffix:
+            return False
+        try:
+            return path.read_text(errors='ignore').startswith(('#!/bin/bash', '#!/usr/bin/env bash',
+                                                               '#!/bin/sh', '#!/usr/bin/env sh'))
+        except OSError:
+            return False
+
+    for path in (path for path in discovered_files() if is_shell(path)):
+        rel = path.relative_to(ROOT).as_posix()
+        text = path.read_text(errors='replace')
+        mid = twin.node(f'module:sh:{rel}', 'module', path.name,
+                        language='shell', path=rel, line=1, layer=layer_for(rel))
+        for match in SHELL_FUNCTION_RE.finditer(text):
+            line = text.count('\n', 0, match.start()) + 1
+            name = match.group(1)
+            fid = twin.node(f'function:sh:{rel}:{line}:{name}', 'function', name,
+                            language='shell', path=rel, line=line,
+                            qualified_name=name, layer=layer_for(rel))
+            twin.edge(mid, fid, 'contains')
 
 
 def add_contracts(twin: Twin, py_symbols: dict[str, str]) -> None:
@@ -399,6 +481,9 @@ def add_system_and_flows(twin: Twin) -> None:
         ('external:xtb', 'external-system', 'xTB quantum chemistry', 'external'),
         ('service:fields', 'service', 'dirac-fields.service :8901', 'runtime'),
         ('service:web', 'service', 'dirac-web.service :1360', 'runtime'),
+        ('service:twin-watcher', 'service', 'dirac-digital-twin.service', 'runtime'),
+        ('system:file-discovery', 'system', 'First-party source discovery', 'tooling'),
+        ('store:twin-model', 'store', 'Architecture Twin JSON + HTML', 'tooling'),
     ]
     for node_id, kind, name, layer in systems:
         twin.node(node_id, kind, name, layer=layer)
@@ -425,6 +510,8 @@ def add_system_and_flows(twin: Twin) -> None:
     twin.edge('system:scene', 'external:molstar', 'hosts')
     twin.edge('service:web', 'surface:gui', 'serves')
     twin.edge('service:fields', 'transport:http-v2', 'serves')
+    twin.edge('service:twin-watcher', 'system:file-discovery', 'runs')
+    twin.edge('system:file-discovery', 'store:twin-model', 'regenerates')
 
     twin.flow('semantic-command', 'Semantic command · one meaning everywhere',
               'All human and machine surfaces converge on the same versioned command contract.', [
@@ -453,6 +540,11 @@ def add_system_and_flows(twin: Twin) -> None:
                   ('object-kind:mission', 'sets objective'), ('object-kind:run', 'records attempt'),
                   ('object-kind:job', 'records execution'), ('object-kind:artifact', 'addresses result'),
                   ('store:postgres', 'retains relations + actors + versions')])
+    twin.flow('source-sync', 'Automatic source synchronization',
+              'Every in-scope first-party file change regenerates structural nodes, references, diagnostics and the offline twin.', [
+                  ('service:twin-watcher', 'observes recursive first-party roots'),
+                  ('system:file-discovery', 'enumerates tracked and untracked files from ownership policy'),
+                  ('store:twin-model', 'replaces JSON and embedded HTML atomically at generation completion')])
 
 
 def runtime_snapshot(twin: Twin) -> dict:
@@ -461,8 +553,11 @@ def runtime_snapshot(twin: Twin) -> dict:
     ok, sha = run(['git', 'rev-parse', 'HEAD'])
     snapshot['git_commit'] = sha if ok else None
     ok, status = run(['systemctl', '--user', 'show', 'dirac-fields.service', 'dirac-web.service',
+                      'dirac-digital-twin.service',
                       '-p', 'Id', '-p', 'ActiveState', '-p', 'SubState', '-p', 'MainPID', '--no-pager'])
     snapshot['systemd'] = status.splitlines() if ok else {'available': False, 'reason': status}
+    snapshot['twin_watcher_active'] = bool(ok and re.search(
+        r'Id=dirac-digital-twin\.service\nActiveState=active', status))
     ok, ports = run(['ss', '-ltn'])
     snapshot['listening_ports'] = sorted(set(re.findall(r':(1355|1360|8901|8902)\b', ports))) if ok else []
     try:
@@ -481,10 +576,212 @@ def runtime_snapshot(twin: Twin) -> dict:
     ok, database = run(['psql', '-d', 'dirac', '-Atqc', query])
     snapshot['postgres'] = json.loads(database) if ok and database.startswith('{') else {
         'available': False, 'reason': database}
-    for node_id in ('service:fields', 'service:web', 'store:postgres'):
+    metrics_query = """
+    WITH states AS (
+        SELECT coalesce(json_object_agg(state, n), '{}'::json) value
+        FROM (SELECT state::text state, count(*) n FROM app.job GROUP BY state) q
+    ), errors AS (
+        SELECT coalesce(json_object_agg(error_code, n), '{}'::json) value
+        FROM (SELECT error_code::text error_code, count(*) n FROM app.job
+              WHERE state='failed' GROUP BY error_code) q
+    )
+    SELECT json_build_object(
+        'jobs_total', (SELECT count(*) FROM app.job),
+        'job_states', (SELECT value FROM states),
+        'failure_codes', (SELECT value FROM errors),
+        'artifacts', (SELECT count(*) FROM app.artifact),
+        'cached_results', (SELECT count(*) FROM app.result_cache),
+        'registered_method_rows', (SELECT count(*) FROM meta.method),
+        'attention_items', (SELECT count(*) FROM app.v_attention));
+    """
+    ok, metrics = run(['psql', '-d', 'dirac', '-Atqc', metrics_query])
+    snapshot['operational_metrics'] = json.loads(metrics) if ok and metrics.startswith('{') else {
+        'available': False, 'reason': metrics}
+    expected_ports = {'1355', '1360', '8901'}
+    actual_ports = set(snapshot['listening_ports'])
+    snapshot['drift'] = {
+        'missing_expected_ports': sorted(expected_ports - actual_ports),
+        'unexpected_legacy_port_8902': '8902' in actual_ports,
+        'command_registry_matches_runtime': snapshot.get('http_v2_command_count') == 17,
+        'runtime_healthy': (not expected_ports - actual_ports
+                            and '8902' not in actual_ports
+                            and snapshot.get('http_v2_command_count') == 17),
+    }
+    for node_id in ('service:fields', 'service:web', 'service:twin-watcher',
+                    'store:postgres', 'store:twin-model'):
         if node_id in twin.nodes:
             twin.nodes[node_id]['runtime_evidence'] = snapshot
     return snapshot
+
+
+def architecture_analysis(twin: Twin, ts_data: dict, runtime: dict) -> dict:
+    """Derive optimization signals; keep every heuristic explicit and inspectable."""
+    incoming: Counter[str] = Counter()
+    outgoing: Counter[str] = Counter()
+    boundary: Counter[str] = Counter()
+    call_edges = [e for e in twin.edges.values() if e['relation'] == 'calls']
+    for edge in call_edges:
+        incoming[edge['target']] += 1
+        outgoing[edge['source']] += 1
+        source = twin.nodes[edge['source']]
+        target = twin.nodes[edge['target']]
+        if source.get('layer') != target.get('layer'):
+            boundary[edge['source']] += 1
+            boundary[edge['target']] += 1
+
+    function_rows = []
+    for node in twin.nodes.values():
+        if node['type'] not in ('function', 'method'):
+            continue
+        lines = max(1, int(node.get('end_line', node.get('line', 1))) - int(node.get('line', 1)) + 1)
+        raw = (2 * log2(1 + incoming[node['id']]) + log2(1 + outgoing[node['id']])
+               + min(lines / 80, 5) + .75 * log2(1 + boundary[node['id']]))
+        function_rows.append({
+            'node': node['id'], 'name': node.get('qualified_name', node['name']),
+            'path': node.get('path'), 'line': node.get('line'), 'layer': node.get('layer'),
+            'lines': lines, 'fan_in': incoming[node['id']], 'fan_out': outgoing[node['id']],
+            'boundary_calls': boundary[node['id']], 'raw_score': raw,
+        })
+    optimization_rows = [row for row in function_rows
+                         if row['layer'] not in ('verification', 'tooling')
+                         and '/assets/' not in (row['path'] or '')]
+    max_score = max((row['raw_score'] for row in optimization_rows), default=1)
+    for row in function_rows:
+        row['change_risk_score'] = round(row.pop('raw_score') / max_score * 100)
+    hotspots = sorted(optimization_rows,
+                      key=lambda r: (-r['change_risk_score'], -r['lines'], r['node']))[:20]
+    largest = sorted(optimization_rows, key=lambda r: (-r['lines'], r['node']))[:20]
+
+    module_rows = []
+    by_path: dict[str, list[dict]] = defaultdict(list)
+    for row in function_rows:
+        if row['path']:
+            by_path[row['path']].append(row)
+    for path, rows in by_path.items():
+        module_rows.append({
+            'path': path, 'layer': rows[0]['layer'], 'functions': len(rows),
+            'lines_in_functions': sum(r['lines'] for r in rows),
+            'fan_in': sum(r['fan_in'] for r in rows),
+            'fan_out': sum(r['fan_out'] for r in rows),
+            'boundary_calls': sum(r['boundary_calls'] for r in rows),
+            'max_change_risk': max(r['change_risk_score'] for r in rows),
+        })
+    module_hotspots = sorted(
+        [row for row in module_rows if row['layer'] not in ('verification', 'tooling')
+         and '/assets/' not in row['path']],
+        key=lambda r: (-(r['functions'] + r['boundary_calls'] + r['lines_in_functions'] / 100), r['path']))[:15]
+
+    workspaces = ts_data['registries']['workspaces']
+    views = ts_data['registries']['views']
+    product = {
+        'platform_substrate': 'complete',
+        'product_implementation': 'partial',
+        'workspaces_total': len(workspaces),
+        'workspaces_implemented': sum(w.get('availability') == 'implemented' for w in workspaces),
+        'workspaces_gated': sum(w.get('availability') != 'implemented' for w in workspaces),
+        'views_total': len(views),
+        'views_implemented': sum(bool(v.get('implemented')) for v in views),
+        'views_gated': sum(not v.get('implemented') for v in views),
+        'workspaces': workspaces,
+        'views': views,
+        'meaning': ('The architecture substrate satisfies its approved DoD. The product is not feature-complete; '
+                    'gated registry entries are design intent, not shipped capability.'),
+    }
+    command_count = sum(n['type'] == 'command' for n in twin.nodes.values())
+    handler_count = len({e['source'] for e in twin.edges.values() if e['relation'] == 'handled-by'})
+    method_count = sum(n['type'] == 'scientific-method' for n in twin.nodes.values())
+    implemented_methods = len({e['source'] for e in twin.edges.values()
+                               if e['relation'] == 'implemented-by'})
+    operational = runtime.get('operational_metrics', {})
+    failures = operational.get('failure_codes', {}) if isinstance(operational, dict) else {}
+    expected_refusals = sum(int(failures.get(code, 0))
+                            for code in ('UNSUPPORTED', 'BUDGET', 'UNPARAMETERIZED'))
+    internal_failures = int(failures.get('INTERNAL', 0))
+    attention = int(operational.get('attention_items', 0)) if isinstance(operational, dict) else 0
+
+    checks = [
+        {'id': 'command-handler-coverage', 'status': 'pass' if command_count == handler_count else 'fail',
+         'label': 'Command → handler coverage', 'value': f'{handler_count}/{command_count}',
+         'why': 'Every semantic command must resolve without transport-specific business logic.'},
+        {'id': 'method-implementation-coverage', 'status': 'pass' if method_count == implemented_methods else 'fail',
+         'label': 'Method → implementation coverage', 'value': f'{implemented_methods}/{method_count}',
+         'why': 'A registered scientific method must map to inspectable source.'},
+        {'id': 'runtime-topology', 'status': 'pass' if runtime.get('drift', {}).get('runtime_healthy') else 'fail',
+         'label': 'Expected runtime topology', 'value': 'aligned' if runtime.get('drift', {}).get('runtime_healthy') else 'drift',
+         'why': 'The observed ports and command count must match the intended deployment.'},
+        {'id': 'source-auto-sync', 'status': 'pass' if runtime.get('twin_watcher_active') else 'warn',
+         'label': 'Architecture source auto-sync',
+         'value': f'{sum(n["type"] == "source-file" for n in twin.nodes.values())} files',
+         'why': 'The watcher must be active and every discovered first-party file must have an inventory node.'},
+        {'id': 'product-reality', 'status': 'warn', 'label': 'Product capability coverage',
+         'value': f'{product["views_implemented"]}/{product["views_total"]} views',
+         'why': 'Registry completeness is not implementation completeness.'},
+        {'id': 'attention-quality', 'status': 'warn' if attention else 'pass',
+         'label': 'Attention signal quality', 'value': f'{attention} items',
+         'why': 'Attention currently treats every failed Job as actionable, including expected scientific refusals.'},
+        {'id': 'dynamic-observation', 'status': 'warn', 'label': 'Observed execution coverage',
+         'value': 'aggregate only',
+         'why': 'The twin has runtime aggregates but no per-command trace-to-function telemetry yet.'},
+    ]
+
+    findings = [
+        {'id': 'attention-semantics', 'priority': 'P0', 'kind': 'signal-quality',
+         'title': 'Separate expected scientific refusals from operational failures',
+         'evidence': (f'The current local DB (including verification traffic) yields {attention} Attention items; '
+                      f'{expected_refusals} are expected refusal codes and {internal_failures} are INTERNAL failures.'),
+         'impact': ('The view has no outcome class with which to suppress expected refusals; in real workflows this '
+                    'would create noise while genuine infrastructure failures remain unranked.'),
+         'action': ('Persist outcome_class, actor and command identity with Job/Run; derive Attention only from '
+                    'unexpected failures, approval waits and policy-selected scientific refusals.'),
+         'nodes': ['store:jobs', 'db:view:app.v_attention', 'system:dispatcher']},
+        {'id': 'trace-fidelity', 'priority': 'P1', 'kind': 'twin-fidelity',
+         'title': 'Bind observed command traces back to architecture nodes',
+         'evidence': 'Current runtime truth is service/port/DB aggregate state; call edges are static AST evidence.',
+         'impact': 'The twin can estimate change impact but cannot calibrate it with actual traffic, latency or failure paths.',
+         'action': ('Emit command_id, method_version, job_id, cache source, latency and terminal outcome as structured '
+                    'traces; ingest aggregates keyed by existing twin node IDs.'),
+         'nodes': ['system:dispatcher', 'system:invocation', 'store:jobs']},
+        {'id': 'fitness-gates', 'priority': 'P1', 'kind': 'architecture-control',
+         'title': 'Turn twin invariants into CI architecture fitness functions',
+         'evidence': f'{command_count}/{command_count} commands and {method_count}/{method_count} methods are structurally linked today.',
+         'impact': 'Without a gate, future adapters can silently bypass the dispatcher or add a second state clock/store.',
+         'action': ('Fail CI on unhandled commands, unmapped methods, forbidden adapter→compute/store edges, duplicate '
+                    'context clocks, a second scene owner, and new module cycles above the ratchet.'),
+         'nodes': ['registry:commands', 'registry:methods', 'system:scientific-context', 'system:scene']},
+        {'id': 'product-scope', 'priority': 'SCOPE', 'kind': 'product-reality',
+         'title': 'Do not confuse the complete substrate with the incomplete product',
+         'evidence': (f'{product["workspaces_implemented"]}/{product["workspaces_total"]} Workspaces and '
+                      f'{product["views_implemented"]}/{product["views_total"]} Views are implemented.'),
+         'impact': 'Planning based on registry counts alone would report empty future capability as shipped software.',
+         'action': 'Track implemented, gated and observed usage separately; expand product views only through real vertical slices.',
+         'nodes': ['system:app-shell']},
+    ]
+    return {
+        'maturity': {
+            'level': 'L2', 'name': 'Diagnostic software-architecture twin',
+            'is_continuously_synchronized': True,
+            'synchronization': ('event-driven recursive source synchronization; runtime observations refresh '
+                                'on each regeneration rather than streaming continuously'),
+            'source_sync': 'continuous while dirac-digital-twin.service is active',
+            'runtime_sync': 'snapshot refreshed on source-triggered or manual regeneration',
+            'can_do': ['explain architecture', 'detect declared/observed drift', 'rank static hotspots',
+                       'simulate dependency-radius change impact', 'preserve function-level traceability'],
+            'cannot_yet_do': ['predict latency or failure probability', 'replay real traces',
+                              'calibrate impact from production traffic', 'close the optimization loop automatically'],
+            'next_level': 'L3 requires node-keyed runtime traces and calibrated outcome models.',
+        },
+        'product_reality': product,
+        'health_checks': checks,
+        'findings': findings,
+        'hotspots': hotspots,
+        'largest_functions': largest,
+        'module_hotspots': module_hotspots,
+        'heuristic': {
+            'change_risk_score': ('normalized 0–100 from static fan-in (2×), fan-out, function length capped at '
+                                  '400 lines, and cross-layer calls; it is a prioritization signal, not failure probability.'),
+            'call_graph_limit': 'Static AST resolution undercounts dynamic dispatch, reflection, callbacks and runtime framework wiring.',
+        },
+    }
 
 
 def validate(twin: Twin, ts_data: dict) -> dict:
@@ -511,6 +808,12 @@ def validate(twin: Twin, ts_data: dict) -> dict:
         if not any(e['source'] == command['id'] and e['relation'] == 'handled-by'
                    for e in twin.edges.values()):
             errors.append(f'command lacks handler: {command["name"]}')
+    discovered = {path.relative_to(ROOT).as_posix() for path in discovered_files()}
+    inventoried = {node['path'] for node in twin.nodes.values()
+                   if node['type'] == 'source-file'}
+    if discovered != inventoried:
+        errors.append(f'file inventory drift: missing={sorted(discovered - inventoried)[:5]} '
+                      f'extra={sorted(inventoried - discovered)[:5]}')
     if errors:
         raise RuntimeError('Digital Twin invariant failure:\n' + '\n'.join(errors))
     return dict(sorted(counts.items()))
@@ -518,6 +821,8 @@ def validate(twin: Twin, ts_data: dict) -> dict:
 
 def main() -> None:
     twin = Twin()
+    files = discovered_files()
+    add_file_inventory(twin, files)
     py_symbols = add_python(twin)
     ts_data = add_typescript(twin)
     add_shell(twin)
@@ -525,18 +830,20 @@ def main() -> None:
     add_app_shell(twin, ts_data['registries'])
     add_database(twin)
     add_system_and_flows(twin)
+    add_file_references(twin, files)
     runtime = runtime_snapshot(twin)
     counts = validate(twin, ts_data)
+    analysis = architecture_analysis(twin, ts_data, runtime)
     ok, git_sha = run(['git', 'rev-parse', 'HEAD'])
     source_files = sorted({n['path'] for n in twin.nodes.values() if n.get('path')})
     fingerprint = hashlib.sha256('\n'.join(
         f'{path}:{hashlib.sha256((ROOT / path).read_bytes()).hexdigest()}'
         for path in source_files if (ROOT / path).is_file()).encode()).hexdigest()
     document = {
-        'schema': 'https://dirac.local/schemas/software-digital-twin/v1',
-        'title': 'Dirac Software Engineering Digital Twin',
+        'schema': 'https://dirac.local/schemas/software-architecture-twin/v2',
+        'title': 'Dirac Architecture Optimization Twin',
         'generated_at': dt.datetime.now(dt.timezone.utc).isoformat(),
-        'source_commit': git_sha if ok else None,
+        'source_base_commit': git_sha if ok else None,
         'source_fingerprint_sha256': fingerprint,
         'scope': {
             'included': ['all first-party Python, JavaScript, and Shell functions in backend, SDK, tooling, gates, and operations',
@@ -544,22 +851,26 @@ def main() -> None:
                          'command, method, ObjectRef, AppShell, SQL migration, service, store, and information-flow contracts'],
             'boundary': 'Vendored/upstream Mol* and third-party library internals are represented as external systems, not copied function-by-function.',
             'function_definition': 'AST-declared functions, async functions, constructors, accessors, methods, arrows, function expressions, and named Shell functions.',
+            'discovery_policy': 'scripts/digital_twin_scope.json',
+            'automatic_discovery': True,
+            'discovered_files': len(files),
         },
         'summary': {'nodes': len(twin.nodes), 'edges': len(twin.edges), 'flows': len(twin.flows),
                     'source_files': len(source_files), 'by_type': counts,
                     'typescript_diagnostics': ts_data['diagnostics']},
         'runtime_snapshot': runtime,
+        'analysis': analysis,
         'nodes': sorted(twin.nodes.values(), key=lambda n: n['id']),
         'edges': sorted(twin.edges.values(), key=lambda e: (e['source'], e['relation'], e['target'])),
         'flows': twin.flows,
     }
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    JSON_OUT.write_text(json.dumps(document, indent=2, ensure_ascii=False) + '\n')
+    atomic_write(JSON_OUT, json.dumps(document, indent=2, ensure_ascii=False) + '\n')
     template = TEMPLATE.read_text()
     if '__DIRAC_TWIN_DATA__' not in template:
         raise RuntimeError('Digital Twin HTML template lacks data placeholder')
     embedded = json.dumps(document, ensure_ascii=False, separators=(',', ':')).replace('</', '<\\/')
-    HTML_OUT.write_text(template.replace('__DIRAC_TWIN_DATA__', embedded))
+    atomic_write(HTML_OUT, template.replace('__DIRAC_TWIN_DATA__', embedded))
     print(json.dumps({'json': str(JSON_OUT), 'html': str(HTML_OUT),
                       'nodes': len(twin.nodes), 'edges': len(twin.edges),
                       'flows': len(twin.flows), 'counts': counts,

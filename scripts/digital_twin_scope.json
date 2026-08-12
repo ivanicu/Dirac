@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0.0",
+  "ownership_rule": "Everything under include_roots is Dirac first-party unless excluded. New code roots are first-party by default unless classified under external_roots. Upstream Mol* trees appear only as external subsystem nodes.",
+  "include_roots": [
+    ".github/workflows",
+    "backend",
+    "bin",
+    "contracts",
+    "deploy/systemd",
+    "design",
+    "docs/product",
+    "ops",
+    "python",
+    "scripts",
+    "src/app",
+    "src/app.frontend.facets.molstar-rdkit.editable",
+    "src/chemistry.backend.perception.rdkit-wasm.editable",
+    "src/mol-plugin-chem"
+  ],
+  "include_root_files": [
+    ".gitattributes",
+    ".gitignore",
+    "AGENTS.md",
+    "ARCHITECTURE.md",
+    "DESIGN.md",
+    "NORTHSTAR.md",
+    "README.md",
+    "ROADMAP.md",
+    "SPEC.md",
+    "STATUS.md",
+    "STYLE.md",
+    "package.json",
+    "package-lock.json",
+    "eslint.config.mjs",
+    "tsconfig.json",
+    "tsconfig.commonjs.json",
+    "tsconfig.eslint.json"
+  ],
+  "extensions": [
+    "", ".py", ".pyi", ".ts", ".tsx", ".js", ".mjs", ".sh", ".sql",
+    ".json", ".html", ".css", ".scss", ".md", ".toml", ".yaml", ".yml",
+    ".service"
+  ],
+  "auto_include_code_extensions": [
+    ".py", ".pyi", ".ts", ".tsx", ".js", ".mjs", ".sh", ".sql"
+  ],
+  "external_roots": [
+    ".git", ".vscode", "_archive", "build", "data", "examples", "lib", "node_modules",
+    "src/apps.reference.viewer-demos.vendored-readonly",
+    "src/cli.tools.command-line.vendored-readonly",
+    "src/examples.reference.mini-demos.vendored-readonly",
+    "src/servers.backend.services.vendored-readonly",
+    "src/tests.qa.benchmarks.vendored-readonly",
+    "src/tests.qa.unit.vendored-readonly",
+    "src/extensions", "src/mol-canvas3d", "src/mol-data", "src/mol-geo",
+    "src/mol-gl", "src/mol-io", "src/mol-math", "src/mol-model",
+    "src/mol-model-formats", "src/mol-model-props", "src/mol-plugin",
+    "src/mol-plugin-state", "src/mol-plugin-ui", "src/mol-repr",
+    "src/mol-script", "src/mol-state", "src/mol-task", "src/mol-theme",
+    "src/mol-util"
+  ],
+  "exclude_fragments": [
+    "/__pycache__/",
+    "/node_modules/",
+    "/backend/env/",
+    "/build/",
+    "/lib/",
+    "/assets/rdkit/",
+    "/examples.reference.mini-demos.vendored-readonly/"
+  ],
+  "exclude_suffixes": [
+    ".pyc",
+    ".min.js",
+    ".map"
+  ],
+  "generated_outputs": [
+    "docs/architecture/dirac-digital-twin.json",
+    "docs/architecture/dirac-digital-twin.html"
+  ]
+}
