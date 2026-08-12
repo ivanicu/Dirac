@@ -167,17 +167,58 @@ def evaluate() -> list[dict]:
                    'RATCHET', f'{n_untyped} raise ValueError( site(s) in field_server',
                    n_untyped))
 
-    # ── N/A: laws whose subject does not exist yet ───────────────────────────
-    for subject, path, text in (
-            ('SDK imports no DOM/Mol*', ROOT / 'python' / 'src', 'python SDK'),
-            ('MCP does not spawn the CLI', ROOT / 'python' / 'src', 'MCP adapter'),
-            ('CLI does not import the server Handler', ROOT / 'python' / 'src', 'CLI')):
-        exists = path.exists()
-        out.append(law(subject, 'FAIL' if False else ('RATCHET' if exists else 'N/A'),
-                       'the subject does not exist yet — reported as NOT APPLICABLE '
-                       'rather than PASS, because a law that passes for lack of a '
-                       'subject is indistinguishable from one being obeyed'
-                       if not exists else f'{text} present; add the check'))
+    # ── the SDK's laws. N/A until 2026-08-11; the subject now exists, so they are
+    #    ENFORCED and the N/A wording is gone. That transition is the whole reason the
+    #    three-state design exists: a law that had been reported as PASS while its
+    #    subject was missing would have silently become a real, unchecked law today.
+    sdk = ROOT / 'python' / 'src' / 'dirac'
+    if not sdk.exists():
+        out.append(law('SDK is import-light at module scope', 'N/A',
+                       'the subject does not exist yet — NOT APPLICABLE rather than '
+                       'PASS, because a law that passes for lack of a subject is '
+                       'indistinguishable from one being obeyed'))
+    else:
+        # The property: `import dirac` must work on a bare interpreter. A single
+        # module-scope `import numpy` in any SDK file breaks that for every consumer,
+        # and it breaks it at IMPORT time — before any error handling can explain why.
+        offenders = []
+        for f in sorted(sdk.glob('*.py')):
+            bad = imports_of(f) & (SCIENCE_MODULES | DB_MODULES | {'requests', 'httpx'})
+            # transport.py resolves the kernel through importlib inside a method, which
+            # imports_of() deliberately counts as knowing about it. Only urllib is
+            # allowed as a transport, and it is stdlib.
+            if bad:
+                offenders.append(f'{f.name} → {sorted(bad)}')
+        out.append(law('SDK imports no science, DB or HTTP library',
+                       'PASS' if not offenders else 'FAIL',
+                       'stdlib only' if not offenders else '; '.join(offenders)))
+
+        cli = sdk / 'cli.py'
+        bad = imports_of(cli) & {'field_server', 'invocation', 'catalog', 'handlers',
+                                 'artifacts_pg', 'psycopg', 'rdkit', 'pyscf'}
+        out.append(law('CLI reaches the kernel only through the SDK',
+                       'PASS' if not bad else 'FAIL',
+                       'via DiracClient only' if not bad
+                       else f'imports {sorted(bad)} directly — the CLI and an MCP '
+                            f'adapter would then have two different routes to the same '
+                            f'science, and only one of them would be tested'))
+
+        mcp = sdk / 'mcp.py'
+        if not mcp.exists():
+            out.append(law('MCP does not spawn the CLI', 'N/A',
+                           'no MCP adapter exists yet — NOT APPLICABLE rather than '
+                           'PASS. This is the law the audit named explicitly, and it '
+                           'must not read as satisfied before there is anything to '
+                           'satisfy it'))
+        else:
+            src = mcp.read_text(encoding='utf-8')
+            spawns = [t for t in ('subprocess', 'Popen', 'os.system', 'shutil.which')
+                      if t in src]
+            out.append(law('MCP does not spawn the CLI',
+                           'PASS' if not spawns else 'FAIL',
+                           'calls the SDK in-process' if not spawns
+                           else f'contains {spawns} — `MCP → spawn CLI → parse stdout` '
+                                f'is the exact shape the audit rejected'))
     return out
 
 

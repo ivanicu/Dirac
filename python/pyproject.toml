@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dirac-sdk"
+version = "0.1.0"
+description = "Typed Python client for Dirac molecular field methods"
+requires-python = ">=3.10"
+# NO RUNTIME DEPENDENCIES, and that is a decision rather than an omission: an SDK whose
+# import fails on a machine without `requests` is an SDK that cannot be used in the place
+# it is most needed — somebody else's environment. The whole client is stdlib. The
+# science stack is needed only by LocalTransport, which is why it is optional.
+dependencies = []
+
+[project.optional-dependencies]
+local = ["rdkit", "pyscf", "numpy", "psycopg[binary]", "jsonschema"]
+
+[project.scripts]
+dirac = "dirac.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
