@@ -40,6 +40,7 @@ ledger and gets a working invocation with honest provenance saying so.
 """
 from __future__ import annotations
 
+import sys
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol
@@ -104,6 +105,9 @@ class HandlerResult:
     warnings: list[dict[str, Any]] = field(default_factory=list)
     parameters_used: dict[str, Any] = field(default_factory=dict)
     cache: str = 'computed'
+    # Private producer material for an injected cache writer. It is deliberately
+    # outside the envelope: clients may depend only on the validated public result.
+    cache_record: dict[str, Any] | None = None
 
 
 class Ledger(Protocol):
@@ -212,6 +216,12 @@ class InvocationService:
                 hit = self.cache.lookup(method_id, payload)
             if hit is not None:
                 self.counters['cache_hit'] += 1
+                # VALIDATED, exactly like a computed result. Written without this first, and
+                # the very first hit returned native_units 'amp' where the descriptor declares
+                # 'amplitude' — undetected, because the contract was being enforced only on
+                # the COMPUTED path while cache hits are the majority of responses. A rule
+                # that applies to the minority of answers is not a rule.
+                self.catalog.validate_output(method_id, hit.result)
                 return self._envelope(spec, hit, t0, cache='db',
                                       inline_max=inline_max, request_id=request_id,
                                       job_id=None)
@@ -235,6 +245,16 @@ class InvocationService:
             # validated, so a handler could quietly return a shape no client was told to
             # expect — and the only symptom was a renderer showing `undefined`.
             self.catalog.validate_output(method_id, out.result)
+            # Persistence follows validation and never gates a valid scientific result.
+            # The collaborator owns whether the write is queued or synchronous.
+            if spec.cacheable and self.cache is not None and hasattr(self.cache, 'store'):
+                try:
+                    self.cache.store(method_id, payload, out,
+                                     seconds=round(time.time() - t0, 3), job_id=job_id)
+                except Exception as e:                              # noqa: BLE001
+                    print(f'[invoke] cache write unavailable ({type(e).__name__}: {e}) — '
+                          f'the result is valid but was not persisted', file=sys.stderr,
+                          flush=True)
             env = self._envelope(spec, out, t0, cache=out.cache,
                                  inline_max=inline_max, request_id=request_id,
                                  job_id=job_id)
@@ -299,7 +319,8 @@ class InvocationService:
             return job_id
         except Exception as e:                                     # noqa: BLE001
             print(f'[invoke] ledger unavailable ({type(e).__name__}: {e}) — running '
-                  f'anyway, and provenance will say job_id: null', flush=True)
+                  f'anyway, and provenance will say job_id: null', file=sys.stderr,
+                  flush=True)
             return None
 
     def _require_declared_artifacts(self, spec: C.MethodSpec,

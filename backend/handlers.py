@@ -158,6 +158,25 @@ def field_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
     computed_at = CU.timestamp_in(cube)
     cube = CU.canonicalise(cube)
 
+    return field_result(
+        ctx, kind, basis, cube, meta,
+        mol_n_atoms=mol.GetNumAtoms(), toolkit_wrote_at=computed_at,
+        parameters_used=parameters_used,
+        cache_record={'meta': dict(meta)})
+
+
+def field_result(ctx: InvocationContext, kind: str, basis: str, cube: str, meta: dict,
+                 *, mol_n_atoms: int | None = None,
+                 toolkit_wrote_at: str | None = None,
+                 parameters_used: dict[str, Any] | None = None,
+                 cache_record: dict[str, Any] | None = None,
+                 cache: str = 'computed') -> HandlerResult:
+    """Project producer-native field data into the one canonical result shape.
+
+    Fresh calculations and durable cache hits both pass through this function. Units,
+    warnings, optional model facts and wavefunction names therefore have one home instead
+    of two implementations that merely hope to keep agreeing.
+    """
     grid = parse_cube_header(cube)
     vmin, vmax = cube_extrema(cube)
 
@@ -232,7 +251,14 @@ def field_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
         warnings.append({'code': 'BASIS_NOT_QUOTABLE',
                          'message': meta['frontier_caveat'],
                          'affects': ['wavefunction.homo_ev', 'wavefunction.lumo_ev']})
-    for k in ('sigma_hole_representable', 'model_caveat', 'physics_caveat'):
+    if meta.get('sigma_hole_representable') is False:
+        warnings.append({
+            'code': 'SIGMA_HOLE_NOT_REPRESENTABLE',
+            'message': 'A spherical point-charge model cannot represent sigma-hole '
+                       'anisotropy; this field cannot answer a halogen-bonding question.',
+            'affects': ['field'],
+        })
+    for k in ('model_caveat', 'physics_caveat'):
         if meta.get(k):
             warnings.append({'code': 'MODEL_CAVEAT', 'message': str(meta[k]),
                              'affects': ['field']})
@@ -241,17 +267,19 @@ def field_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
         result=result,
         artifacts=[('field.cube', cube.encode())],
         provenance={
-            'n_atoms': meta.get('natoms') or mol.GetNumAtoms(),
+            'n_atoms': meta.get('natoms') or mol_n_atoms,
             'charge': meta.get('charge'),
             'spin': meta.get('spin'),
             'scf_seconds': meta.get('scf_seconds'),
             'cube_seconds': meta.get('cube_seconds'),
             'ecp': meta.get('ecp') or [],
-            'toolkit_wrote_at': computed_at,
+            'computed_at': meta.get('computed_at'),
+            'toolkit_wrote_at': toolkit_wrote_at or meta.get('toolkit_wrote_at'),
         },
         warnings=warnings,
-        parameters_used=parameters_used,
-        cache='computed')
+        parameters_used=parameters_used or {},
+        cache=cache,
+        cache_record=cache_record)
 
 
 def declared_units(ctx: InvocationContext, kind: str) -> str:

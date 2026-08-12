@@ -447,7 +447,8 @@ def conformer_hash_for(mol_with_h: Chem.Mol) -> tuple[bytes, str]:
 def db_init() -> bool:
     global _db_ok, _producer_id, _method_ids, _method_versions
     if psycopg is None:
-        print('[db] psycopg not importable — persistent cache OFF', flush=True)
+        print('[db] psycopg not importable — persistent cache OFF', file=sys.stderr,
+              flush=True)
         return False
     try:
         import pyscf
@@ -485,7 +486,7 @@ def db_init() -> bool:
                                                   u['fns'], u['consts'])[0]
                 for mid, u in method_registry.UNITS.items()}
             print(f'[db] {len(_method_ids)} compute units registered '
-                  f'({len(_method_versions)} source digests)', flush=True)
+                  f'({len(_method_versions)} source digests)', file=sys.stderr, flush=True)
             global _jobs
             _jobs = jobs.JobLedger(
                 _db, jobs.make_worker_name(os.getpid(), _producer_version()))
@@ -500,17 +501,17 @@ def db_init() -> bool:
                 # and a single number would hide whichever is rarer.
                 print(f"[job] reaped {reaped['dead_worker']} row(s) from dead "
                       f"workers and {reaped['overran']} past the hard ceiling",
-                      flush=True)
+                      file=sys.stderr, flush=True)
         except Exception as e:
             # A method registry that cannot be written must not take the cache
             # down with it: rows keep their producer stamp, which is what the
             # read path still uses today. Loud, not fatal.
             print(f'[db] method registration failed ({e}) — rows will carry '
-                  'producer_id only', flush=True)
+                  'producer_id only', file=sys.stderr, flush=True)
             _method_ids = {}
         _db_ok = True
         print(f'[db] persistent cube cache ON (producer {PRODUCER_SERVICE}/'
-              f'{PRODUCER_VERSION} — derived from source)', flush=True)
+              f'{PRODUCER_VERSION} — derived from source)', file=sys.stderr, flush=True)
     except Exception as e:
         # TWO DIFFERENT FAILURES WERE WEARING ONE HANDLER, and it cost me the
         # decisive test of the whole method-registry line: I edited this file
@@ -530,19 +531,25 @@ def db_init() -> bool:
         #                                print() does not prevent it.
         if psycopg is not None and isinstance(e, psycopg.OperationalError):
             print(f'[db] unreachable ({e}) — persistent cache OFF, compute continues',
-                  flush=True)
+                  file=sys.stderr, flush=True)
             _db_ok = False
             return _db_ok
-        print(f'[db] FATAL: {e}', flush=True)
+        print(f'[db] FATAL: {e}', file=sys.stderr, flush=True)
         print('[db] refusing to start: bump PRODUCER_VERSION for the source change, '
               'or revert it. A stale producer identity would keep serving rows '
-              'the new code would not produce.', flush=True)
+              'the new code would not produce.', file=sys.stderr, flush=True)
         raise SystemExit(1)
     return _db_ok
 
 
-def db_get_cube(molfile_sha: bytes, kind: str, basis: str):
-    """Return (cube_text, meta) on a cache hit, else None."""
+def db_get_cube(molfile_sha: bytes, kind: str, basis: str, *,
+                include_internal: bool = False):
+    """Return (cube_text, meta) on a cache hit, else None.
+
+    ``include_internal`` adds facts needed by the canonical kernel but not declared on
+    the legacy v1 wire. Keeping that distinction here preserves the v1 golden instead of
+    making an internal provenance repair look like a public compatibility change.
+    """
     if not _db_ok:
         return None
     try:
@@ -576,16 +583,25 @@ def db_get_cube(molfile_sha: bytes, kind: str, basis: str):
         meta.update({'kind': kind, 'cache': 'db',
                      'computed_at': row[9].isoformat()})
         if row[8] != 'gasteiger':
+            # homo_ev/lumo_ev typed columns are numeric(10,4), intentionally lossy for
+            # display. Migration 011 added producer-native JSON precisely so the cache
+            # can return the computation's full precision. Prefer it when present and
+            # fall back to typed columns for older rows.
+            homo_ev = meta.get('homo_ev') if include_internal else None
+            lumo_ev = meta.get('lumo_ev') if include_internal else None
             meta.update({
                 'basis': basis, 'method': row[8], 'converged': row[2],
                 'scf_energy_ha': float(row[1]) if row[1] is not None else None,
                 'natoms': row[3], 'nbasis': row[4],
-                'homo_ev': float(row[5]) if row[5] is not None else None,
-                'lumo_ev': float(row[6]) if row[6] is not None else None,
+                'homo_ev': (float(homo_ev) if homo_ev is not None else
+                            (float(row[5]) if row[5] is not None else None)),
+                'lumo_ev': (float(lumo_ev) if lumo_ev is not None else
+                            (float(row[6]) if row[6] is not None else None)),
                 'scf_seconds': float(row[7]) if row[7] is not None else None,
             })
         else:
-            meta.update({'units': 'kcal/mol', 'charges': 'gasteiger', 'method': 'gasteiger'})
+            meta.update({'units': 'kcal/mol', 'charges': 'gasteiger',
+                         'method': 'gasteiger'})
         # ONE meta shape for both exits. A cache hit used to return a
         # SMALLER dict than a fresh compute of the same kind, so rows the panel
         # renders per-key ("Net charge", "Compute time") vanished when the
@@ -603,9 +619,12 @@ def db_get_cube(molfile_sha: bytes, kind: str, basis: str):
         # rewriting 200 stored blobs, and it is idempotent, so rows written from now
         # on pass through untouched.
         import cube as _cube_mod
-        return _cube_mod.canonicalise(cube), normalize_meta(meta, source='db')
+        normalized = normalize_meta(meta, source='db')
+        if include_internal:
+            normalized['_n_atoms'] = row[3]
+        return _cube_mod.canonicalise(cube), normalized
     except Exception as e:
-        print(f'[db] read failed ({e}) — serving from compute', flush=True)
+        print(f'[db] read failed ({e}) — serving from compute', file=sys.stderr, flush=True)
         return None
 
 
@@ -617,14 +636,19 @@ def cacheable_meta(meta: dict) -> dict:
       stored         — describes the persistence of THIS response
       total_seconds  — how long THAT request took, not a property of the cube
       computed_at    — the row already carries its own computed_at column
-    Everything else is what the golden capture showed a cache hit losing: the grid
-    dims, the isovalue the box was sized for, net_charge, vmin/vmax, wall_max, the
-    caveats. Twelve values that the computed path knew and the cached path replaced
-    with None, because the row had columns for the SCF numbers and none for the
-    geometry.
+    Only keys declared for the field kind are persisted. The canonical invocation
+    projection carries a few writer-only helpers (for example ``natoms`` on a classical
+    field and ``basis`` on every field) because db_put_cube needs them for typed columns.
+    Persisting those helpers in the JSON made the next strict normalize_meta() reject the
+    row, turning every successful write into a permanent cache miss.
+
+    The retained keys are what the golden capture showed a cache hit losing: the grid
+    dims, the isovalue the box was sized for, net_charge, vmin/vmax, wall_max, and the
+    caveats. The typed columns are merged back by db_get_cube before normalization.
     """
     volatile = {'cache', 'stored', 'total_seconds', 'computed_at'}
-    return {k: v for k, v in meta.items() if k not in volatile}
+    allowed = envelope.FIELD_META_SCHEMA.get(meta.get('kind'), frozenset())
+    return {k: v for k, v in meta.items() if k in allowed and k not in volatile}
 
 
 def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict,
@@ -699,7 +723,8 @@ def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict
                  # background thread failing silently while every response still said
                  # stored:true.
                  json.dumps(cacheable_meta(meta)), label))
-        print(f'[db] cached kind={kind} basis={basis} coarse={"yes" if conf_hash else "no"}', flush=True)
+        print(f'[db] cached kind={kind} basis={basis} coarse={"yes" if conf_hash else "no"}',
+              file=sys.stderr, flush=True)
         with _persist_lock:
             _persist['ok'] += 1
         # ── register the cube as an ADDRESSABLE artifact (PR-04) ─────────────
@@ -727,7 +752,8 @@ def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict
         except Exception as e:                                       # noqa: BLE001
             print(f'[artifact] registration FAILED for {kind}: {e} — the cube is '
                   f'cached and servable, but it has no address, so /v2/artifacts '
-                  f'will report NOT_FOUND for bytes that exist', flush=True)
+                  f'will report NOT_FOUND for bytes that exist', file=sys.stderr,
+                  flush=True)
             with _persist_lock:
                 _persist['artifact_failed'] = _persist.get('artifact_failed', 0) + 1
                 _persist['last_artifact_error'] = f'{type(e).__name__}: {e}'
@@ -736,7 +762,7 @@ def db_put_cube(molfile_sha: bytes, kind: str, basis: str, cube: str, meta: dict
         # the only remaining honesty available is that the discrepancy is
         # visible to whoever asks the service how it is doing.
         print(f'[db] WRITE FAILED ({e}) — result was served with stored:true and is '
-              f'NOT persisted', flush=True)
+              f'NOT persisted', file=sys.stderr, flush=True)
         with _persist_lock:
             _persist['failed'] += 1
             _persist['last_error'] = f'{type(e).__name__}: {e}'
