@@ -46,7 +46,7 @@ run_gate() {
 }
 
 # ---- gate selection -------------------------------------------------------
-ALL=(tsc build palette css migrations docs contracts physics)
+ALL=(tsc build palette css migrations docs contracts physics commits)
 if [ "$#" -eq 0 ]; then
     WANT=("${ALL[@]}")
 else
@@ -107,6 +107,19 @@ wanted docs    && run_gate 'gate-6-docs-facts'  node scripts/check_docs_facts.mj
 # own selftest first: a gate that has never convicted has not been shown to
 # have resolution, and this one starts green against the real files, so its
 # only evidence of working is the crafted broken source it must convict.
+# Gate 9 · commit hygiene. This repo is PUBLIC and Ivan's standing rule forbids
+# naming the tooling in its history; the harness's default convention appends
+# exactly that, so the rule has to be mechanised or the default wins. Selftest
+# first, same as 7 and 8.
+if wanted commits; then
+    if bash scripts/check_commit_hygiene.sh --selftest >/dev/null 2>&1; then
+        run_gate 'gate-9-commit-hygiene' bash scripts/check_commit_hygiene.sh
+    else
+        printf '%s\n' "${RED}FAIL${OFF} gate-9-commit-hygiene — its own selftest did not convict"
+        FAILED+=('gate-9-commit-hygiene-selftest')
+    fi
+fi
+
 if wanted physics; then
     if node scripts/check_physics_contract.mjs --selftest >/dev/null 2>&1; then
         run_gate 'gate-8-physics' node scripts/check_physics_contract.mjs
