@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Volumetric languages for one molecular field</title>
+<style>
+  :root {
+    --paper:#efece5; --card:#f7f5f0; --ink:#16150f; --ink-2:#5d5a4f; --ink-3:#8d8a7e;
+    --rule:#d6d2c6; --accent:#8a3b2e;
+    --mono: ui-monospace, "SF Mono", "IBM Plex Mono", Menlo, monospace;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; background:var(--paper); color:var(--ink); }
+  body { font-family:var(--mono); -webkit-font-smoothing:antialiased; padding:0 0 100px; }
+
+  header { max-width:1400px; margin:0 auto; padding:70px 40px 0; border-bottom:1px solid var(--rule); }
+  .eyebrow { font-size:9px; letter-spacing:.34em; text-transform:uppercase; color:var(--ink-3); margin:0 0 22px; }
+  h1 { font-family:var(--serif); font-weight:400; font-style:italic;
+       font-size:clamp(30px,5.2vw,60px); line-height:1.02; letter-spacing:-.02em;
+       margin:0 0 24px; max-width:17ch; }
+  .standfirst { max-width:64ch; font-size:12.5px; line-height:1.75; color:var(--ink-2); margin:0 0 30px; }
+  .standfirst strong { color:var(--ink); font-weight:600; }
+
+  .specimen { display:flex; flex-wrap:wrap; gap:0; margin:0; border-top:1px solid var(--rule); }
+  .specimen div { padding:13px 24px 13px 0; margin-right:24px; border-right:1px solid var(--rule); }
+  .specimen div:last-child { border-right:0; }
+  .specimen dt { font-size:8.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-3); margin:0 0 5px; }
+  .specimen dd { margin:0; font-size:12px; }
+
+  /* ── the console ─────────────────────────────────────────────────────── */
+  .console { position:sticky; top:0; z-index:20; background:var(--paper);
+             border-bottom:1px solid var(--rule); }
+  .console-in { max-width:1400px; margin:0 auto; padding:11px 40px;
+                display:flex; gap:26px; align-items:center; flex-wrap:wrap; }
+  .console button {
+    font:inherit; font-size:10px; letter-spacing:.09em; text-transform:uppercase;
+    background:transparent; color:var(--ink); border:1px solid var(--rule);
+    padding:6px 13px; cursor:pointer; }
+  .console button:hover { border-color:var(--ink); }
+  .console button[aria-pressed="true"] { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .ctl { display:flex; align-items:center; gap:9px; font-size:10px; color:var(--ink-2); }
+  .ctl label { letter-spacing:.09em; text-transform:uppercase; font-size:9px; color:var(--ink-3); }
+  .ctl input[type=range] { width:118px; accent-color:var(--accent); }
+  .ctl output { font-variant-numeric:tabular-nums; min-width:5.5ch; color:var(--ink); }
+  .perf { margin-left:auto; font-size:10px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+  .perf b { color:var(--accent); font-weight:600; }
+
+  main { max-width:1400px; margin:0 auto; padding:0 40px; }
+  section { padding:52px 0 4px; }
+  .family { margin-bottom:20px; max-width:96ch; }
+  .family .cols { display:flex; gap:34px; align-items:baseline; }
+  .family h2 { font-family:var(--serif); font-weight:400; font-size:21px; margin:0; letter-spacing:-.01em; }
+  .family .n { font-size:9px; letter-spacing:.24em; color:var(--accent); text-transform:uppercase; margin:0 0 8px; }
+  .family p { font-size:11px; line-height:1.7; color:var(--ink-2); margin:0; }
+
+  .grid { display:grid; gap:24px; grid-template-columns:repeat(var(--cols),minmax(0,1fr)); }
+  @media (max-width:1180px){ .grid{grid-template-columns:repeat(3,minmax(0,1fr));} }
+  @media (max-width:780px) { .grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
+
+  figure { margin:0; background:var(--card); border:1px solid var(--rule); display:flex; flex-direction:column; }
+  .frame { position:relative; aspect-ratio:1; background:var(--card); cursor:grab; }
+  .frame:active { cursor:grabbing; }
+  canvas { width:100%; height:100%; display:block; }
+  .idx { position:absolute; top:8px; left:9px; z-index:2; font-size:8.5px; letter-spacing:.1em;
+         color:rgba(255,255,255,.92); mix-blend-mode:difference; font-variant-numeric:tabular-nums; }
+  .ms { position:absolute; top:8px; right:9px; z-index:2; font-size:8.5px;
+        color:rgba(255,255,255,.85); mix-blend-mode:difference; font-variant-numeric:tabular-nums; }
+  figcaption { padding:12px 13px 14px; border-top:1px solid var(--rule); }
+  figcaption h3 { margin:0 0 6px; font-size:11.5px; font-weight:600; }
+  figcaption p { margin:0; font-size:10px; line-height:1.62; color:var(--ink-2); }
+  figcaption .cost { display:block; margin-top:8px; padding-top:7px; border-top:1px dotted var(--rule);
+                     font-size:9px; color:var(--ink-3); }
+  figcaption .cost b { color:var(--accent); font-weight:600; }
+  figure.broken .frame { background:repeating-linear-gradient(45deg,#f3e6e2,#f3e6e2 6px,#ecd8d2 6px,#ecd8d2 12px); }
+
+  footer { max-width:1400px; margin:60px auto 0; padding:28px 40px 0; border-top:1px solid var(--rule);
+           font-size:10px; line-height:1.8; color:var(--ink-3); }
+  footer p { max-width:78ch; }
+  footer code, .specimen code { color:var(--ink-2); }
+  footer strong { color:var(--ink-2); }
+
+  @media (prefers-color-scheme:dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#141310; --card:#1b1a16; --ink:#eae7dd; --ink-2:#a5a094;
+      --ink-3:#757166; --rule:#2f2d27; --accent:#d08a72;
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="eyebrow">Dirac · design study · fields in three dimensions</p>
+  <h1 id="title">Volumetric languages for one molecular field</h1>
+  <p class="standfirst">
+    Every tile raymarches <strong>the same real volume</strong>: aspirin's electrostatic
+    potential from an <strong>RHF/STO-3G</strong> calculation in PySCF, with the
+    self-consistent electron density on a second channel so any language that wants a
+    molecular surface has one. One WebGL2 context, one uploaded texture, one shared
+    camera — <strong>drag any tile and all of them turn together</strong>.
+    <br><br>
+    The flat study asked what <em>mark</em> to use. Three dimensions asks a harder
+    question, because here every language must also decide <strong>what to
+    occlude</strong>. A slice shows one plane and hides sixty-three. An isosurface shows
+    one level and hides both sides of it. A volume integral shows everything and locates
+    nothing. <strong>There is no honest 3D display of a scalar field that throws nothing
+    away</strong> — so the comparison is not which is prettiest, but which loss a
+    particular reader can afford.
+  </p>
+  <dl class="specimen" id="spec"></dl>
+</header>
+
+<div class="console"><div class="console-in">
+  <button id="spin" aria-pressed="true">Spin</button>
+  <button id="reset">Reset view</button>
+  <div class="ctl"><label for="iso">Isovalue</label>
+    <input type="range" id="iso" min="0.04" max="0.85" step="0.01" value="0.22">
+    <output id="isoOut"></output></div>
+  <div class="ctl"><label for="steps">Ray steps</label>
+    <input type="range" id="steps" min="24" max="256" step="8" value="112">
+    <output id="stepsOut">112</output></div>
+  <div class="ctl"><label for="skel">Skeleton</label>
+    <input type="checkbox" id="skel" checked></div>
+  <div class="perf" id="perf">—</div>
+</div></div>
+
+<main id="main"></main>
+
+<footer>
+  <p>
+    <strong>The specimen is a real calculation, and its numbers are stated because they
+    bound every picture above.</strong> The potential is clamped to ±35 kcal/mol — not a
+    percentile, a chemistry decision: outside the 0.001 a.u. density surface, where the
+    potential is the quantity anyone acts on, the field spans −36.5 to +34.9 kcal/mol, so
+    the display uses its whole range there. Inside the surface it clips, and it should:
+    the raw maximum is <strong>+66,808 kcal/mol</strong> at a carbon nucleus, and a ramp
+    honest to that number would render every chemically meaningful value as the same
+    shade of neutral.
+  </p>
+  <p>
+    <strong>The box is faded, and that is a display choice.</strong> The cube is where
+    the calculation exists; past its faces nothing was computed. Stopping hard at the
+    face draws that ignorance as a solid hexagonal solid, and every volume-integrating
+    tile rendered the bounding box as though the box were part of the molecule. The
+    outer 7% of each axis is therefore windowed to zero — stated here for the same
+    reason the clamp is: it is the display, not the physics.
+  </p>
+  <p>
+    <strong>The volume is 8-bit.</strong> 64³ voxels, two channels, quantised at 0.275
+    kcal/mol per level and deflated to 390 KB so the page carries its own data. That is
+    finer than the difference between any two of these renderings, but it is a real floor
+    and it is stated rather than implied. The density channel is stored as log₁₀ρ over
+    six decades, which puts the standard 0.001 a.u. surface at byte 85 — comfortably
+    inside the resolved range rather than at the end of it.
+  </p>
+  <p>
+    <strong>Each tile reports its own measured cost in milliseconds</strong>, top right,
+    as a rolling median at the current ray-step count. In the flat study "cost" was a
+    rhetorical device. Here it is a number, it differs by more than an order of magnitude
+    across the families, and a language that cannot hold a frame budget is not available
+    to an interactive panel no matter how well it reads.
+  </p>
+</footer>
+
+<script src="data3d.js"></script>
+<script src="engine.js"></script>
+<script src="modes3d.js"></script>
+<script>
+(async function () {
+  const D = window.FIELD3D, MODES = window.MODES3D, FAMS = window.FAMILIES3D;
+  const TILE = 236, DPR = Math.min(2, window.devicePixelRatio || 1);
+  const RENDER = Math.round(TILE * Math.min(DPR, 1.5));
+
+  // ── masthead facts, read out of the data rather than typed ──────────────
+  document.getElementById('spec').innerHTML = [
+    ['Specimen', `${D.name} · ${D.formula}`],
+    ['Field', `${D.method} MEP · ${D.engine}`],
+    ['Volume', `${D.n}³ from ${D.srcN.join('×')} (ρ from ${D.srcDensN.join('×')})`],
+    ['Box', `${D.boxA.join(' × ')} Å`],
+    ['Clamp', `±${D.vmax} kcal/mol · ${D.quantStep} per level`],
+    ['Raw peak', `+${D.rawMax.toLocaleString()} kcal/mol at a nucleus`],
+  ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+
+  let engine;
+  try { engine = await FieldEngine.create(D, RENDER); }
+  catch (e) {
+    document.getElementById('main').innerHTML =
+      `<p style="padding:40px 0;color:var(--accent)">Could not start WebGL2: ${e.message}</p>`;
+    return;
+  }
+
+  // ── build the page ──────────────────────────────────────────────────────
+  const main = document.getElementById('main');
+  const tiles = [];
+  let idx = 0;
+  const byFam = {};
+  for (const m of MODES) (byFam[m.fam] = byFam[m.fam] || []).push(m);
+
+  for (const key of Object.keys(FAMS)) {
+    const items = byFam[key] || [];
+    if (!items.length) continue;
+    const [title, blurb] = FAMS[key];
+    const sec = document.createElement('section');
+    const head = document.createElement('div');
+    head.className = 'family';
+    head.innerHTML = `<div class="cols"><div style="flex:0 0 auto">
+        <p class="n">Family ${key}</p><h2>${title}</h2></div>
+        <p style="flex:1 1 auto">${blurb}</p></div>`;
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+    grid.style.setProperty('--cols', Math.min(6, items.length));
+    for (const m of items) {
+      idx++;
+      const fig = document.createElement('figure');
+      fig.innerHTML = `<div class="frame"><span class="idx">${String(idx).padStart(2,'0')}</span>
+          <span class="ms"></span><canvas width="${RENDER}" height="${RENDER}"></canvas></div>
+        <figcaption><h3>${m.t}</h3><p>${m.d}</p>
+          <span class="cost">${m.c.replace(/^(Cost|Proposes):/, '<b>$1:</b>')}</span></figcaption>`;
+      grid.appendChild(fig);
+      tiles.push({ m, fig, cv: fig.querySelector('canvas'),
+                   ctx: fig.querySelector('canvas').getContext('2d'),
+                   ms: fig.querySelector('.ms'), samples: [] });
+    }
+    sec.appendChild(head); sec.appendChild(grid); main.appendChild(sec);
+  }
+  document.getElementById('title').textContent =
+    `${idx} volumetric languages for one molecular field`;
+
+  // ── shared camera ───────────────────────────────────────────────────────
+  const view = { yaw: 0.55, pitch: 0.28, dist: D._dist, spin: true };
+  let iso = 0.22, steps = 112, skeleton = true;
+
+  const $ = id => document.getElementById(id);
+  const isoOut = $('isoOut');
+  function showIso() { isoOut.textContent = (iso * D.vmax).toFixed(1) + ' kcal'; }
+  showIso();
+  $('iso').oninput   = e => { iso = +e.target.value; showIso(); };
+  $('steps').oninput = e => { steps = +e.target.value; $('stepsOut').textContent = steps; };
+  $('skel').onchange = e => { skeleton = e.target.checked; };
+  $('spin').onclick  = e => { view.spin = !view.spin; e.target.setAttribute('aria-pressed', view.spin); };
+  $('reset').onclick = () => { view.yaw = 0.55; view.pitch = 0.28; };
+
+  // drag ANY tile, they all turn — one camera is the whole point of the page
+  let drag = null;
+  for (const t of tiles) {
+    const f = t.fig.querySelector('.frame');
+    f.addEventListener('pointerdown', ev => {
+      drag = { x: ev.clientX, y: ev.clientY, yaw: view.yaw, pitch: view.pitch };
+      f.setPointerCapture(ev.pointerId); view.spin = false;
+      $('spin').setAttribute('aria-pressed', 'false');
+    });
+    f.addEventListener('pointermove', ev => {
+      if (!drag) return;
+      view.yaw   = drag.yaw   + (ev.clientX - drag.x) * 0.0085;
+      view.pitch = Math.max(-1.4, Math.min(1.4, drag.pitch - (ev.clientY - drag.y) * 0.0085));
+    });
+    const up = () => { drag = null; };
+    f.addEventListener('pointerup', up); f.addEventListener('pointercancel', up);
+  }
+
+  // ── the skeleton, drawn in 2D over the blit ─────────────────────────────
+  const ELCOL = { C:'#3a3833', O:'#a8433c', N:'#3d5f9e', H:'#8e8a80' };
+  function drawSkeleton(ctx, pts, S, dark) {
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (const [i, j] of D.bonds) {
+      const a = pts[i], b = pts[j];
+      if (!a || !b) continue;
+      ctx.strokeStyle = dark ? 'rgba(255,255,255,.30)' : 'rgba(24,22,18,.32)';
+      ctx.lineWidth = 1.15;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    for (const p of pts) {
+      if (!p || p.e === 'H') continue;
+      ctx.fillStyle = ELCOL[p.e] || '#666';
+      ctx.globalAlpha = dark ? 0.72 : 0.60;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.e === 'C' ? 1.7 : 2.4, 0, 6.2832); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ── the loop ────────────────────────────────────────────────────────────
+  const gl = engine.gl;
+  let last = performance.now(), frames = 0, acc = 0;
+
+  function frame(now) {
+    const dtms = now - last; last = now;
+    if (view.spin) view.yaw += dtms * 0.00021;
+    const rot = orbit(view.yaw, view.pitch);
+    const pts = projectAtoms(D, rot, view.dist, TILE);
+
+    let total = 0;
+    for (const t of tiles) {
+      const t0 = performance.now();
+      const ok = engine.render(t.m.k, t.m.s, t.m.bg, rot, view.dist, iso, steps, now * 0.001);
+      if (!ok) {
+        if (!t.fig.classList.contains('broken')) {
+          t.fig.classList.add('broken');
+          t.ms.textContent = 'shader';
+          t.ctx.clearRect(0, 0, RENDER, RENDER);
+        }
+        continue;
+      }
+      t.ctx.drawImage(engine.canvas, 0, 0, RENDER, RENDER);
+      if (skeleton) {
+        const dark = /vec3\(0\.0/.test(t.m.bg) || t.m.bg.includes('0.016') || t.m.bg.includes('0.086');
+        t.ctx.save();
+        t.ctx.scale(RENDER / TILE, RENDER / TILE);
+        drawSkeleton(t.ctx, pts, TILE, dark);
+        t.ctx.restore();
+      }
+      const el = performance.now() - t0;
+      total += el;
+      t.samples.push(el);
+      if (t.samples.length > 24) t.samples.shift();
+    }
+
+    frames++; acc += dtms;
+    if (acc > 700) {
+      for (const t of tiles) {
+        if (!t.samples.length) continue;
+        const s = [...t.samples].sort((a, b) => a - b);
+        t.ms.textContent = s[s.length >> 1].toFixed(1) + 'ms';
+      }
+      const fps = frames / (acc / 1000);
+      $('perf').innerHTML =
+        `${tiles.length} tiles · <b>${fps.toFixed(1)} fps</b> · ${total.toFixed(0)} ms/frame · ` +
+        `${RENDER}px · ${steps} steps · ${(tiles.length*RENDER*RENDER*steps/1e6).toFixed(0)}M samples/frame`;
+      frames = 0; acc = 0;
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  const bad = [...engine.failed.keys()];
+  console.log(`rendered ${tiles.length} volumetric languages` +
+              (bad.length ? ` · ${bad.length} FAILED: ${bad.join(', ')}` : ' · all compiled'));
+})();
+</script>
+</body>
+</html>
