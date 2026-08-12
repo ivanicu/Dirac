@@ -105,7 +105,7 @@ jobs:
       # today, and that ratio is the point: a suite testing SQL text or a state
       # machine has no business needing a chemistry toolkit, and gate 10 is the
       # ratchet that makes the kernel extraction's progress a number.
-      - name: 'Gate 11 — import-light Python suites (no RDKit/pyscf on the runner)'
+      - name: 'Python suites that run without the science stack'
         if: ${{ !cancelled() }}
         run: |
           python3 backend/tests/test_envelope.py
@@ -114,6 +114,10 @@ jobs:
       - name: 'Gate 10 — test portability ratchet'
         if: ${{ !cancelled() }}
         run: python3 scripts/test_portability.py
+
+      - name: 'Gate 11 — dependency laws (4 enforced, 2 ratchets, 3 N/A)'
+        if: ${{ !cancelled() }}
+        run: python3 scripts/check_layering.py
 
       - name: 'Gate 9 — no tooling names in public commit history (ratchet)'
         if: ${{ !cancelled() }}

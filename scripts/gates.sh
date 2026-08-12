@@ -46,7 +46,7 @@ run_gate() {
 }
 
 # ---- gate selection -------------------------------------------------------
-ALL=(tsc build palette css migrations docs contracts physics commits portability)
+ALL=(tsc build palette css migrations docs contracts physics commits portability layering)
 if [ "$#" -eq 0 ]; then
     WANT=("${ALL[@]}")
 else
@@ -114,6 +114,14 @@ wanted docs    && run_gate 'gate-6-docs-facts'  node scripts/check_docs_facts.mj
 # Gate 10 · test portability ratchet. Measures how much of the suite can be
 # imported without the science stack — the invocation-kernel extraction's progress
 # stated as a number rather than as a diagram. Fails when coupling GROWS.
+# Gate 11 · the dependency laws. Four are ENFORCED, two are RATCHETS on the
+# violations that exist today, and three report N/A because their subject (SDK,
+# CLI, MCP) does not exist yet — deliberately not counted as passing, since a law
+# that passes for lack of a subject reads exactly like one being obeyed.
+if wanted layering; then
+    run_gate 'gate-11-layering' python3 scripts/check_layering.py
+fi
+
 if wanted portability; then
     run_gate 'gate-10-portability' python3 scripts/test_portability.py
 fi

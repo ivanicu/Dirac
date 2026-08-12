@@ -1,0 +1,6 @@
+# Dependency-law ratchets. Measured 2026-08-11 by scripts/check_layering.py.
+# These are the two laws the codebase VIOLATES today. The number may only go DOWN.
+# Recording them is not acceptance — it is the difference between "we intend to
+# consolidate the seams" and a figure that makes the intention falsifiable.
+HTTP handlers do not call scientific functions directly = 6
+facets do not call fetch() on scientific routes = 8
