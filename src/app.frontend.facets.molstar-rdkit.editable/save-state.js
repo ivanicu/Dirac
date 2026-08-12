@@ -138,7 +138,7 @@
 
     // ── buttons ──────────────────────────────────────────────────────────────
     function label(sec, saved) {
-        return saved ? '已保存 · 重存' : 'SAVE';
+        return saved ? 'Saved · re-save' : 'SAVE';
     }
 
     function mount() {
@@ -156,7 +156,7 @@
             b.type = 'button';
             b.className = BTN;
             b.textContent = label(sec, !!saved[name]);
-            b.title = '记住这一栏当前的设置。切换分子或 representation 之后自动恢复。';
+            b.title = 'Remember this panel\'s current settings. They come back automatically after a molecule or representation change.';
             b.addEventListener('click', function (ev) {
                 ev.preventDefault(); ev.stopPropagation();
                 var s = load();
@@ -166,22 +166,22 @@
                 b.setAttribute('data-saved', '1');
                 clr.hidden = false;
                 var n = Object.keys(s[name].cb).length + Object.keys(s[name].sel).length + Object.keys(s[name].rng).length;
-                toast('已保存「' + name.slice(0, 18) + '」的 ' + n + ' 个控件');
+                toast('Saved ' + n + ' control' + (n === 1 ? '' : 's') + ' for \u201c' + name.slice(0, 18) + '\u201d');
             });
 
             var clr = document.createElement('button');
             clr.type = 'button';
             clr.className = BTN + '-clr';
-            clr.textContent = '清除';
+            clr.textContent = 'Clear';
             clr.hidden = !saved[name];
-            clr.title = '忘掉这一栏保存的设置';
+            clr.title = 'Forget the settings saved for this panel';
             clr.addEventListener('click', function (ev) {
                 ev.preventDefault(); ev.stopPropagation();
                 var s = load(); delete s[name]; store(s);
                 b.textContent = label(sec, false);
                 b.removeAttribute('data-saved');
                 clr.hidden = true;
-                toast('已清除「' + name.slice(0, 18) + '」');
+                toast('Cleared \u201c' + name.slice(0, 18) + '\u201d');
             });
 
             if (saved[name]) b.setAttribute('data-saved', '1');
@@ -203,7 +203,7 @@
             var c = restore(sec, saved[n]);
             if (c) { total += c; hit.push(n.slice(0, 14) + ' ' + c); }
         });
-        if (total) toast('已恢复 ' + total + ' 个控件 · ' + hit.join(' / ') + (why ? ' · ' + why : ''));
+        if (total) toast('Restored ' + total + ' control' + (total === 1 ? '' : 's') + ' · ' + hit.join(' / ') + (why ? ' · ' + why : ''));
     }
 
     // The two things that wipe the scene are the structure select and the
@@ -221,7 +221,7 @@
         // than guessing one delay. restore() is a no-op when nothing differs, so the
         // extra passes cost nothing once the scene has settled.
         [900, 2200, 4500, 8000].forEach(function (d) {
-            setTimeout(function () { mount(); restoreAll(d === 900 ? '切换后自动恢复' : ''); }, d);
+            setTimeout(function () { mount(); restoreAll(d === 900 ? 'auto-restored after switch' : ''); }, d);
         });
     }, true);
 

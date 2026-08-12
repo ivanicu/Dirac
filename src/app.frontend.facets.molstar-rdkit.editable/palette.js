@@ -35,17 +35,17 @@
 
     // ── classes, in reading order ────────────────────────────────────────────
     var CLASSES = [
-        ['bb', '主链'], ['gly', '甘氨酸'], ['ali', '脂肪侧链'], ['pro', '脯氨酸环'],
-        ['coo', '羧酸盐'], ['gua', '胍基'], ['nh3', '铵'], ['imi', '咪唑'], ['amd', '酰胺'],
-        ['oh', '羟基'], ['phe_oh', '酚'], ['ind', '吲哚'], ['ph', '苯环'],
-        ['sh', '硫醇'], ['sme', '硫醚'],
-        ['pho', '磷酸'], ['sug', '糖'], ['pur', '嘌呤'], ['pyr', '嘧啶'],
-        ['lringC', '配体环碳'], ['lchainC', '配体链碳'], ['lN', '配体 N'], ['lO', '配体 O'],
-        ['lS', '配体 S'], ['hal', '卤素'], ['ion', '离子'], ['wat', '水'],
+        ['bb', 'backbone'], ['gly', 'glycine'], ['ali', 'aliphatic'], ['pro', 'proline ring'],
+        ['coo', 'carboxylate'], ['gua', 'guanidinium'], ['nh3', 'ammonium'], ['imi', 'imidazole'], ['amd', 'amide'],
+        ['oh', 'hydroxyl'], ['phe_oh', 'phenol'], ['ind', 'indole'], ['ph', 'phenyl'],
+        ['sh', 'thiol'], ['sme', 'thioether'],
+        ['pho', 'phosphate'], ['sug', 'sugar'], ['pur', 'purine'], ['pyr', 'pyrimidine'],
+        ['lringC', 'ligand ring C'], ['lchainC', 'ligand chain C'], ['lN', 'ligand N'], ['lO', 'ligand O'],
+        ['lS', 'ligand S'], ['hal', 'halogen'], ['ion', 'ion'], ['wat', 'water'],
     ];
     var ORDER = CLASSES.map(function (c) { return c[0]; });
     // long-form names, shown in the option tooltip rather than in the option text
-    var FULLNAME = {'off': '统一石墨', 'd2': '包豪斯 · 白地', 'd3': '北欧 · 冷灰与鼠尾草', 'd5': '中世纪现代 · 芥末与孔雀', 'c7': 'Okabe-Ito · 双色盲安全'};
+    var FULLNAME = {'off': 'Uniform graphite', 'd2': 'Bauhaus · white ground', 'd3': 'Nordic · cool grey and sage', 'd5': 'Mid-century modern · mustard and peacock', 'c7': 'Okabe-Ito · safe for both colour deficiencies'};
 
     // ── the coarse layer ─────────────────────────────────────────────────────
     // Ivan, on the MolecularNodes capsid render: 没有必要是每一个都单独标注,可以按大类标注.
@@ -70,8 +70,8 @@
         ion: 'ion', wat: 'wat',
     };
     var COARSE_ORDER = ['back', 'phob', 'arom', 'polr', 'nega', 'posi', 'nuc', 'lig', 'ion', 'wat'];
-    var COARSE_NAMES = { back: '主链', phob: '疏水', arom: '芳香', polr: '极性', nega: '负电',
-                         posi: '正电', nuc: '核酸', lig: '配体', ion: '离子', wat: '水' };
+    var COARSE_NAMES = { back: 'backbone', phob: 'hydrophobic', arom: 'aromatic', polr: 'polar', nega: 'negative',
+                         posi: 'positive', nuc: 'nucleic', lig: 'ligand', ion: 'ion', wat: 'water' };
 
     function coarsePal(id, name, note, list) {
         var m = {};
@@ -95,9 +95,9 @@
     }
 
     var PALETTES = [
-        { id: 'off', name: '石墨 · 默认', note: '今天的做法:整场一块灰。留作对照。', m: null },
+        { id: 'off', name: 'Graphite · off', note: 'What the app does today: one grey for the whole scene. Kept as the control.', m: null },
 
-        pal('d2', '包豪斯', '地几乎是白,只有蓝、黄和一个深梅携带色相,其余落在灰阶上。画面上任何有颜色的东西都是被强调的。',
+        pal('d2', 'Bauhaus', 'The ground is nearly white; only blue, yellow and one deep plum carry hue, and everything else falls on the grey scale. Anything coloured on screen is therefore something being emphasised.',
             ['#eae7df', '#e2ded4', '#d5d1c6', '#c6c2b6',
              '#b0473a', '#2f5590', '#4a72ab', '#7a6aa5', '#9a9a8e',
              '#8d9aa5', '#6f6fa2', '#7d6690', '#8f8c93',
@@ -105,7 +105,7 @@
              '#b0473a', '#cfcabc', '#2f5590', '#6d8fb8',
              '#232321', '#4f4e49', '#1f4d94', '#b0392c', '#e0bc1f', '#0f8f6e', '#8b9094', '#efece4']),
 
-        pal('d3', '北欧冷灰', '冷灰做地,鼠尾草绿、雾蓝、陶土做全部中景,只留一个暖点。最安静,长时间盯不累。',
+        pal('d3', 'Nordic cool grey', 'Cool grey ground; sage, mist blue and terracotta carry the whole mid-ground, with a single warm accent. The quietest of the four — the one you can stare at for an hour.',
             ['#dfdedb', '#d8d7d2', '#cdccc5', '#c0bfb7',
              '#a9645a', '#4f6f88', '#6d8fa3', '#8b83a0', '#8fa08c',
              '#7fa0a4', '#77809c', '#7c6f88', '#8d8d94',
@@ -113,7 +113,7 @@
              '#a07260', '#c9c6ba', '#6f9078', '#8fae9c',
              '#33332f', '#5a5a53', '#3a6a9c', '#a95246', '#c2a134', '#1c8f7d', '#8d9296', '#e9e9e4']),
 
-        pal('d5', '中世纪现代', 'Eames / Girard 那一路:暖灰做地,芥末黄、孔雀蓝、柿子红、橄榄绿四个方向。最有性格。',
+        pal('d5', 'Mid-century modern', 'The Eames / Girard line: warm grey ground with mustard, peacock, persimmon and olive pulling in four directions. The one with the most character.',
             ['#ded9cd', '#d6d0c2', '#c9c2b0', '#bcb49f',
              '#b05540', '#2f6f82', '#4f8f9c', '#8a6f9c', '#8a9a5f',
              '#6f9fa8', '#63699c', '#8a5f7a', '#94868f',
@@ -122,14 +122,14 @@
              '#2b2a26', '#565349', '#2a5f9c', '#b04a30', '#d8ae1c', '#0f9478', '#8a9094', '#eae6db']),
 
         // by big category, not by functional group
-        coarsePal('grp', '大类 · 八色', '把 27 个官能团折成 8 个大类:主链/疏水/芳香/极性/负电/正电/核酸/配体。远看能认出来的粒度,不是显微镜粒度。',
+        coarsePal('grp', 'Coarse · eight classes', 'The 27 functional groups folded into 8: backbone / hydrophobic / aromatic / polar / negative / positive / nucleic / ligand. The grain you can read from across the room, not the grain of a microscope.',
             ['#cfcabd', '#b9c3ae', '#a9a3c4', '#8fb8bc', '#a9647a', '#5f7fa8', '#c0a86a', '#8a9aa4', '#9a8c74', '#e2e6e4']),
 
-        { id: 'sub', name: '亚基 · 每链一色', kind: 'chain',
-          note: '每条链一个柔和的色,像衣壳那种画法。它不陈述化学,它陈述"这些原子是同一个亚基" —— 在组装体上,那才是携带结构的事实。',
+        { id: 'sub', name: 'Subunit · one colour per chain', kind: 'chain',
+          note: 'One soft colour per chain, the way a capsid is drawn. It makes no claim about chemistry; it says these atoms are one subunit — which, on an assembly, is the fact that carries the structure.',
           m: null },
 
-        pal('c7', '色盲安全', '从公认的色盲安全色出发,按暖纸底重调,红色盲和绿色盲两种模拟同时验证过 —— 安全性最强的一版。',
+        pal('c7', 'Colour-vision safe', 'Built from the established colour-blind-safe set, re-tuned for the warm paper ground, and checked under both protanopia and deuteranopia simulation — the safest of the four.',
             ['#bbb7ad', '#a69e8b', '#a69e8b', '#8a7f65',
              '#a9592b', '#2863ab', '#008fad', '#9a86bf', '#9b8a62',
              '#84a894', '#438463', '#66508b', '#b4935a',
