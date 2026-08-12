@@ -1,0 +1,68 @@
+/* Dirac — styles for the two runtime add-ons: save-state.js and palette.js.
+ *
+ * These live in their OWN file rather than at the end of theme-fascia.css because
+ * that file is under concurrent edit — 62 lines added there at 15:0x were silently
+ * reverted by another writer at 17:38, and nothing in git status showed it because
+ * the file had simply gone back to matching HEAD. A contested file is a bad home
+ * for anything you need to survive. */
+
+/* ── SAVE, per control panel ────────────────────────────────────────────────
+   A panel's settings are wiped whenever the structure or the representation
+   changes; see save-state.js for why re-asserting after the reset is the fix
+   rather than blocking the reset. */
+.dirac-save-btn-wrap { margin-left: auto; display: inline-flex; gap: 4px; align-items: center; flex: 0 0 auto; }
+.dirac-save-btn,
+.dirac-save-btn-clr {
+    font: 600 8.5px/1 var(--mono, ui-monospace, monospace);
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-2, #6d6c65);
+    background: var(--paper, #f7f6f2);
+    border: 1px solid var(--line, #c9c8c2);
+    border-radius: 3px;
+    padding: 5px 7px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color .12s ease, color .12s ease, background .12s ease;
+}
+.dirac-save-btn:hover,
+.dirac-save-btn-clr:hover { border-color: var(--ink, #1d1d1a); color: var(--ink, #1d1d1a); }
+/* saved is a STATE, so it reads as pressed rather than as a different button */
+.dirac-save-btn[data-saved] {
+    color: var(--paper, #f7f6f2);
+    background: var(--ink, #1d1d1a);
+    border-color: var(--ink, #1d1d1a);
+}
+.dirac-save-btn[data-saved]:hover { background: var(--ink-2, #6d6c65); }
+.dirac-save-btn-clr { font-size: 8px; opacity: .75; }
+.dirac-save-btn-clr[hidden] { display: none; }
+section.layer-panel > header { display: flex; align-items: flex-start; gap: 10px; }
+
+#dirac-save-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 26px;
+    transform: translate(-50%, 14px);
+    z-index: 90;
+    max-width: min(680px, 92vw);
+    font: 400 11px/1.6 var(--mono, ui-monospace, monospace);
+    color: var(--paper, #f7f6f2);
+    background: var(--ink, #1d1d1a);
+    border-radius: 5px;
+    padding: 9px 14px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .16s ease, transform .16s ease;
+}
+#dirac-save-toast[data-on] { opacity: .96; transform: translate(-50%, 0); }
+
+/* ── molecule palette dropdown ──────────────────────────────────────────────
+   Lives in the app's own control row, shaped like the Molecule / Representation
+   controls beside it. It switches how the MOLECULE is painted — it is not a UI
+   theme and must not look like one. */
+/* The control row is a three-column grid. Adding a fourth control wrapped it onto a
+   second line and grew the fixed-height topbar from 46px to 103px — measured with and
+   without this add-on, which is the only way to tell "my regression" from "already
+   like that". Widen to four tracks; the selects truncate rather than overflow. */
+.topbar-scene.has-dirac-palette { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.topbar-scene.has-dirac-palette > label > select { min-width: 0; max-width: 100%; }
