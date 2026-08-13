@@ -160,6 +160,8 @@ class KubernetesInvocationExecutor:
         seed = int(payload.get("seed", 0))
         output_digest = sha256_digest(json.dumps(
             spec.output_schema, sort_keys=True, separators=(",", ":")))
+        scale_profile = spec.execution.get("scale_profile") or {}
+        cpu_cores = float(scale_profile.get("cpu_cores", 4))
         return {
             "schema_version": "1.0",
             "execution_id": str(uuid4()),
@@ -175,7 +177,7 @@ class KubernetesInvocationExecutor:
             "input_manifest_artifact_id": input_id,
             "output_contract_digest": output_digest,
             "resource_request": {
-                "cpu_cores": 4,
+                "cpu_cores": cpu_cores,
                 "memory_bytes": 8 << 30,
                 "gpus": 1,
                 "gpu_arch": ["blackwell"],

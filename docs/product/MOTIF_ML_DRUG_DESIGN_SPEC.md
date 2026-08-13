@@ -2,7 +2,7 @@
 
 **状态：** Local algorithm stack implemented / scientific validation pending
 **版本：** 2.0
-**基线：** 2026-08-12 的 Dirac 仓库、运行服务与 PostgreSQL 架构
+**基线：** 2026-08-13 的 Dirac 仓库、运行服务与 PostgreSQL 架构
 **产品定位：** 小分子药物发现的闭环、多目标、证据驱动设计引擎
 **核心入口：** `design.generate`、`campaigns.optimize`、`campaigns.landscape`
 **产品名：** Dirac Motif
@@ -17,25 +17,31 @@ Motif 是运行在 Dirac 之上的**闭环药物设计决策系统**：它读取
 
 最终交付物不是“AI 生成的分子”，而是一个能反复选择更好实验、从完整结果中学习，并让下一次药化决策更快、更可解释、更可追溯的操作系统。
 
-### 0.1 当前实现证据（2026-08-12）
+### 0.1 当前实现证据（2026-08-13）
 
 当前仓库已落地 Motif 的生产级基础层，而不是宣称已完成药物发现：
 
 - Dirac 现有 Command、Method、Job、Artifact、cache 与 PostgreSQL 控制面被保留，未建立第二套公共 API 或真值源；
-- migrations 020–024 已先在临时数据库完整重放，再应用到 live `dirac` 数据库；25 个迁移哈希检查通过；024 允许 model release 如实声明 digest-pinned container 或 immutable local-runtime manifest，禁止用伪造 container digest 代替本机环境；
-- Motif 当前已注册 27 个 compute Methods；新增 predictor mesh、Bayesian acquisition、conformer、Vina、OpenMM 与 RBFE network 均服从原有 Command/Method/Job/Artifact 控制面；
+- migrations 020–035 已应用到 live `dirac` 数据库；36 个迁移内容哈希检查通过；034–035 持久化闭环阶段、各阶段 Job、结果、attention 与重试次数；
+- Motif 当前已注册 28 个 compute Methods、Dirac 共暴露 74 个 Commands；predictor mesh、Bayesian acquisition、conformer、Vina、OpenMM、RBFE network 与 OpenFE edge 均服从原有 Command/Method/Job/Artifact 控制面；
 - predictor mesh 已包含 Morgan/RDKit descriptor release、ridge/1NN、random forest、XGBoost、删失 Tobit、pairwise rank、Chemprop D-MPNN ensemble、conditional conformal、适用域、bootstrap CI 与完整 specification curve；
 - proposal chemistry gate 已加入 property window、required/forbidden SMARTS、未指派立体化学、PAINS 与显式 reactive-group 规则；采集层包含硬约束 Pareto、BoTorch qLogEHVI、information value 与 sensitivity，不使用隐藏总分；
-- ETKDGv3 conformer、AutoDock Vina、OpenMM MD checkpoint/restart 和 RBFE network/aggregation 已形成正式 Method 与 Artifact；docking score 明确不是 binding free energy，RBFE 未完成边不会被补造成结果；
+- ETKDGv3 conformer、AutoDock Vina、OpenMM MD checkpoint/restart、RBFE network/aggregation 与 `physics.motif.openfe_edge` 已形成正式 Method 与 Artifact；OpenFE 1.11.1 runtime 固定到安装器 SHA-256，官方 CUDA alchemical MD slow test 已在 RTX 5080 通过；docking score 明确不是 binding free energy，单条 OpenFE leg 也不会被包装成已验证 RBFE；
 - `dataset.snapshot.create` 的完成屏障会在 Job 标记 `done` 前原子注册 governed Dataset Snapshot、Endpoint linkage、四类必需 Artifact、lineage 与 outbox；`model.train` 同样在完成前注册 candidate Model Release、checkpoint、validation、local runtime manifest 和训练 Dataset linkage；投影失败会使 Job 失败，不能留下“Artifact 成功但领域 release 缺失”的假完成；
 - live synthetic release smoke 已创建 valid Dataset Snapshot `83c18208-aa6a-4080-9147-09a4e75ecbdc` 和 candidate Model Release `8db47cac-0953-4026-a782-fa04544f5bb9`；精确重放复用同一领域身份并各保持一个 outbox 事件；训练行与 snapshot 数据 Artifact 的 canonical SHA-256 不一致时会 fail closed，且不创建 model release；
 - Attempt 的 lease、takeover、fencing、stale completion rejection、idempotent completion 与 outbox 已在 PostgreSQL 集成验证；
 - `endpoint.register`、`objective.save` 与 `result.ingest` 已通过 live CommandDispatcher 验证；规范文档、领域记录、Artifact 和 outbox 在同一 PostgreSQL 事务写入，重复提交按内容幂等；
+- `result.ingest.closed_loop` 会验证 Program、Campaign、Target、Endpoint、单位、测量类型和优化方向一致，再异步推进 `snapshot → train → predict → acquire`；各阶段是可单独审计的普通 Dirac Job；`campaign.closed-loop.get` 提供状态读取，`campaign.closed-loop.retry` 能从失败阶段生成新的幂等尝试而复用已完成产物；
+- live 闭环 run `f26b36f3-7106-442e-9581-233db86ed65f` 在部署故障后从 train 阶段恢复，完成 valid Dataset Snapshot、candidate Model Release、预测 Artifact 和下一轮 2 个候选；两个域外候选由默认 `model_domain_accepted` 硬门拒绝；
 - `policy.release.register` 已为 generation、identity gate、fidelity、acquisition、diversity 与 explanation 建立真实 candidate releases；Objective 保存前会验证引用存在、policy kind 匹配、Program/Campaign/Target 一致以及 Objective/Endpoint 方向一致；
 - protocol-resolved measurement v2 ledger 能原样保存 `not_tested`、`missing`、上下界删失和 QC 状态；这些记录不会被强制投影成 `bio.result.value_num = 0`；
 - 本机 pueue GPU task 845 已在 RTX 5080/CUDA 12.8 完成两成员 Chemprop D-MPNN 训练、验证和预测；task 847 已用 OpenMM CUDA 写入 checkpoint 并恢复续跑；
 - public `model.mesh.train` 链已持久化含两成员 Chemprop 的 valid Dataset Snapshot `35be1d08-6b27-43ea-b9c5-be0412ea7dde` 与 candidate Model Release `873a5bfe-539b-4a85-9691-508f203049c9`。它们是 synthetic control-plane fixture，只证明软件链，不证明模型科学效果；
-- DiffDock 与 OpenFE edge simulation 的 license/checkpoint/image/golden-fixture fail-closed gate 已落地，但尚未提供可验证外部执行包；Slurm/Kubernetes 和 prospective wet-lab validation 也仍保留外部门禁。
+- Kubernetes/Kueue 已作为 GPU Job 上位调度器接入本机 RTX 5080，Worker 使用固定 OCI digest、单 GPU 独占请求、默认拒绝网络、只读 runtime PV、可写 fenced exchange 和远程硬取消；DiffDock 仍只有外部执行门禁，Slurm 与 prospective wet-lab validation 仍未落地。
+- 真实公共链验收 Job `7179e507-71ff-4a20-bb06-1d9319157db0` 已从 `/v2/jobs` 穿过 Kubernetes/Kueue，在 RTX 5080/CUDA 12.8 上由 OpenFE 1.11.1 执行 benzene self-transformation vacuum alchemical MD，主数据库终态为 `done`，持久化 `rbfe.openfe.result`、`rbfe.openfe.run_report`、`rbfe.openfe.log` 三个内容寻址 Artifact。该 smoke 显式声明 20 次 MBAR bootstrap；生产默认仍为 1000，每次运行都在 report 记录实际值。
+- 暴力验证同时暴露一个未关闭的运维缺口：如果 API 控制面在远程 Worker 完成与 Artifact 回收之间被强制重启，当前 startup reaper 会将公共 Job 标成 `worker restarted while job was in flight`，即使 fenced worker-result 已落盘。正常运行和远程硬取消已验证，但“控制面重启后重附着并完成回收”仍是 production-readiness blocker，不得宣称已证明。
+
+本节的 live 闭环仍是 `MOTIF-SMOKE-20260812` synthetic Program：靶点 organism 为 `synthetic`，Campaign 目标明确写着 `Synthetic control-plane verification only`，测试 IC50 也是构造值。它证明平台、恢复、科学门禁和下一轮编排，不证明任何真实生物靶点上的效力提升。真实项目必须提供具名 Target（如 UniProt）、受控蛋白结构、真实 protocol-resolved measurements、预注册验证拆分和 prospective 实验结果。
 
 上述边界是融资和产品叙事必须遵守的证据边界：软件基础层已运行，不等于模型获得 prospective scientific validation，也不等于发现了临床候选物。
 
@@ -298,6 +304,24 @@ Model prediction
 - 预计计算、采购、合成与实验成本；
 - “为什么选”“为什么不选”“什么结果会改变决定”；
 - 人工 review 状态和最终 disposition。
+
+### 4.3 可执行的优化契约：先说清“针对什么”，再说“好不好”
+
+Motif 不接受没有科学上下文的“把分数做高”。每个闭环必须同时冻结四类不同对象：
+
+- **Target context**：具名生物靶点、organism、sequence/UniProt、蛋白构象、binding site、cofactor/water/protonation 状态与结构版本；
+- **Experimental endpoint**：例如 biochemical IC50、cellular EC50、selectivity ratio、clearance 或 hERG，必须带 protocol、measurement type、canonical unit、qualifier、QC 和 `minimize`/`maximize` 方向；
+- **Decision constraints**：效力、选择性、ADME、安全、合成可行性、成本、时间、实验容量和 applicability domain；其中硬约束不得被任何综合分数补偿；
+- **Estimand**：默认不是预测值本身，而是“每单位实验成本带来的前瞻性 Pareto improvement”，辅以达到 milestone 的轮数、失败率、信息增益和 cycle time。
+
+当前已落地的自动回路按以下方式优化：
+
+1. `result.ingest` 仅接纳与 Program、Campaign、Target 和 Endpoint 语义一致的 protocol-resolved measurements；`missing`、`not_tested` 和未通过 QC 的记录不得偷渡成训练标签。
+2. 系统生成不可变 Dataset Snapshot，在预定义 split 上训练 predictor mesh，并保留 ensemble mean、epistemic uncertainty、calibration 和 applicability-domain 判断。
+3. 对候选分子预测后，把主 endpoint 的均值和可选的不确定性目标注入 acquisition；默认将 `out_of_domain` 作为硬拒绝，再按多目标 Pareto、证据缺口、信息价值和实验 capacity 选出下一轮 portfolio。
+4. 只有当高成本物理计算有机会改变决策时才升级到 OpenFE；每个 RBFE edge 必须回到同一 target context，并在 complex/solvent 成对、独立 repeats、convergence 和 cycle closure 通过后才能作为 RBFE 证据。
+
+因此，“这个系统好不好”必须分三层回答：工程回路是否可靠；在时间外/系列外数据上是否比强基线更好；在预注册 prospective DMTA campaign 中是否以更低成本获得更大的实验 Pareto improvement。前一层通过不代表后两层通过。
 
 ---
 

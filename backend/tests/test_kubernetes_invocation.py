@@ -12,6 +12,7 @@ from executors.kubernetes_invocation import KubernetesInvocationExecutor
 from invocation import InvocationContext
 from invocation import InvocationService
 from jobs import MemoryJobStore
+import kernel
 
 
 class FakeAdapter:
@@ -41,6 +42,22 @@ class FakeAdapter:
 
 
 class KubernetesInvocationExecutorTests(unittest.TestCase):
+    def test_default_worker_uses_one_non_overlapping_runtime_mount(self):
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.dict(
+                "os.environ", {
+                    "DIRAC_EXECUTOR": "kubernetes",
+                    "DIRAC_KUBERNETES_EXCHANGE_HOST": temporary,
+                }, clear=False):
+            executor = kernel.default_executor()
+            try:
+                mounts = {item.name: item.mount_path
+                          for item in executor.adapter.static_pvc_mounts}
+                self.assertEqual(mounts["dirac-runtime"], "/home/ivan/dirac")
+                self.assertEqual(mounts["dirac-posix-shell"], "/bin/sh")
+                self.assertNotIn("openfe-runtime-prefix", mounts)
+            finally:
+                executor.shutdown()
+
     def test_gpu_handler_crosses_execution_request_and_fenced_result(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -87,6 +104,24 @@ class KubernetesInvocationExecutorTests(unittest.TestCase):
             self.assertEqual(adapter.request["resource_request"]["gpus"], 1)
             self.assertEqual(adapter.request["execution_digest"], ctx.execution_digest)
             local_handler.assert_not_called()
+
+    def test_openfe_declares_analysis_cpu_in_immutable_request(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            executor = KubernetesInvocationExecutor(
+                adapter=mock.Mock(), exchange_root=Path(temporary),
+                container_image="registry/worker@sha256:" + "a" * 64)
+            spec = MethodCatalog.load().get("physics.motif.openfe_edge")
+            request = executor._request(
+                InvocationContext(
+                    method_id=spec.method_id, version="sha256:" + "b" * 64,
+                    execution_digest="sha256:" + "c" * 64,
+                    budget_seconds=30,
+                    job_id="00000000-0000-4000-8000-000000000001", spec=spec),
+                {}, attempt_id="00000000-0000-4000-8000-000000000002",
+                input_id="sha256:" + "d" * 64, input_sha="sha256:" + "e" * 64,
+                budget=30, now=__import__('datetime').datetime.now(
+                    __import__('datetime').timezone.utc))
+            self.assertEqual(request["resource_request"]["cpu_cores"], 20)
 
     def test_cpu_handler_stays_inside_controller_process(self):
         with tempfile.TemporaryDirectory() as temporary:

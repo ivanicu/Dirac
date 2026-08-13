@@ -243,6 +243,7 @@
           "properties": {
             "shardable": {"type": "boolean"},
             "distributed": {"type": "boolean"},
+            "cpu_cores": {"type": "number", "exclusiveMinimum": 0, "maximum": 256},
             "min_gpus": {"type": "integer", "minimum": 0, "maximum": 10000},
             "max_gpus": {"type": "integer", "minimum": 0, "maximum": 10000}
           }

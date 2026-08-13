@@ -90,6 +90,10 @@ def run(request_path: Path, exchange_root: Path) -> int:
         handler = spec.handler()
         gpu = _gpu_evidence(request)
         deadline = time.time() + request["resource_request"]["walltime_seconds"]
+        os.environ["DIRAC_MOTIF_ATTEMPT_DIR"] = str(output_dir.resolve())
+        os.environ.setdefault(
+            "DIRAC_OPENFE_EXECUTABLE",
+            "/home/ivan/dirac/openfe-runtime-v2/bin/openfe")
         context = InvocationContext(
             method_id=spec.method_id,
             version=document.get("method_version"),

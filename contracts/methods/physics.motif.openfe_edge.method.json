@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "2.0.0",
+  "method_id": "physics.motif.openfe_edge",
+  "summary": "Execute one serialized OpenFE alchemical Transformation on a governed GPU worker with resumable quickrun state.",
+  "implementation": {"module": "backend.motif.openfe_runner", "functions": ["_digest", "execute_openfe_edge"], "constants": ["OPENFE_VERSION", "OPENFE_INSTALLER_SHA256", "POSIX_SHELL_SHA256"]},
+  "input": {"schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object", "additionalProperties": false,
+    "required": ["edge_id", "leg", "transformation"],
+    "properties": {
+      "edge_id": {"type": "string", "minLength": 1, "maxLength": 256},
+      "leg": {"enum": ["complex", "solvent", "vacuum"]},
+      "transformation": {"oneOf": [
+        {"type": "object", "minProperties": 1},
+        {"type": "array", "minItems": 1}
+      ]},
+      "transformation_digest": {"type": "string", "format": "sha256-digest"},
+      "target_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {
+        "kind": {"const": "target"}, "id": {"type": "string", "format": "uuid"}
+      }},
+      "protein_structure_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {
+        "kind": {"const": "protein_structure"}, "id": {"type": "string", "minLength": 1}
+      }},
+      "thermodynamic_cycle_id": {"type": "string", "format": "uuid"},
+      "repeat_index": {"type": "integer", "minimum": 0},
+      "analysis_bootstraps": {"type": "integer", "minimum": 0, "maximum": 10000, "default": 1000},
+      "resume": {"type": "boolean"}
+    },
+    "allOf": [
+      {"if": {"properties": {"leg": {"enum": ["complex", "solvent"]}}, "required": ["leg"]},
+       "then": {"required": ["target_ref", "thermodynamic_cycle_id"]}},
+      {"if": {"properties": {"leg": {"const": "complex"}}, "required": ["leg"]},
+       "then": {"required": ["protein_structure_ref"]}}
+    ]
+  }},
+  "output": {"schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object", "additionalProperties": false,
+    "required": ["edge_id", "leg", "engine", "engine_version", "transformation_digest", "estimate", "uncertainty", "unit", "scientific_status", "result_digest"],
+    "properties": {
+      "edge_id": {"type": "string"}, "leg": {"enum": ["complex", "solvent", "vacuum"]},
+      "engine": {"const": "OpenFE"}, "engine_version": {"const": "1.11.1"},
+      "transformation_digest": {"type": "string", "format": "sha256-digest"},
+      "target_ref": {"type": ["object", "null"]}, "protein_structure_ref": {"type": ["object", "null"]},
+      "thermodynamic_cycle_id": {"type": ["string", "null"]}, "repeat_index": {"type": "integer"},
+      "estimate": {"type": ["number", "null"]}, "uncertainty": {"type": ["number", "null"]},
+      "unit": {"type": ["string", "null"]}, "scientific_status": {"const": "completed_unvalidated"},
+      "result_digest": {"type": "string", "format": "sha256-digest"}
+    }
+  }},
+  "refusals": [
+    {"code": "INVALID_PARAMETERS", "condition": "Transformation digest or serialized OpenFE input is invalid"},
+    {"code": "UNSUPPORTED", "condition": "Pinned OpenFE runtime is absent"},
+    {"code": "CANCELLED", "condition": "Remote cancellation retains resumable quickrun state"}
+  ],
+  "execution": {
+    "supported_modes": ["job"], "default_mode": "job", "resource_class": "gpu",
+    "determinism": "statistical", "checkpointable": true, "cancellation": "cooperative",
+    "artifact_access": ["read:rbfe", "write:rbfe", "write:checkpoint"],
+    "supported_adapters": ["local_gpu", "slurm", "kubernetes"],
+    "scale_profile": {"shardable": true, "distributed": false, "cpu_cores": 20, "min_gpus": 1, "max_gpus": 1},
+    "cacheable": false, "deterministic": false, "side_effects": "immutable_artifacts"
+  },
+  "exposure": {"sdk": true, "cli": true, "mcp": "hidden"},
+  "invocation": {
+    "handler": "motif.openfe_runner:openfe_edge_handler",
+    "estimate": "motif.openfe_runner:openfe_edge_estimate",
+    "artifacts": [
+      {"role": "rbfe.openfe.result", "media_type": "application/json", "required": true},
+      {"role": "rbfe.openfe.run_report", "media_type": "application/json", "required": true},
+      {"role": "rbfe.openfe.log", "media_type": "text/plain", "required": true}
+    ]
+  }
+}

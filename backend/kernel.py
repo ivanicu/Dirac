@@ -87,6 +87,9 @@ def default_executor():
         static_pvc_mounts=[
             StaticPvcMount('dirac-runtime', 'dirac-motif-runtime',
                            str(worker_repository), True),
+            StaticPvcMount(
+                'dirac-posix-shell', 'dirac-motif-runtime', '/bin/sh', True,
+                sub_path='runtime-bin/dash'),
             StaticPvcMount('dirac-exchange', 'dirac-motif-exchange',
                            str(worker_exchange), False),
         ])
@@ -340,4 +343,14 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
     svc.job_store_kind = getattr(js, 'kind', 'injected')  # type: ignore[attr-defined]
     svc.job_durability = getattr(js, 'durability', 'unknown')  # type: ignore[attr-defined]
     svc.executor_kind = getattr(ex, 'kind', 'injected')  # type: ignore[attr-defined]
+    try:
+        import psycopg
+        from motif.closed_loop import ClosedLoopController
+        controller = ClosedLoopController(
+            svc, lambda: psycopg.connect(dsn, autocommit=True))
+    except Exception as error:  # noqa: BLE001
+        print(f'[kernel] closed-loop controller unavailable '
+              f'({type(error).__name__}: {error})', file=sys.stderr, flush=True)
+        controller = None
+    svc.closed_loop_controller = controller  # type: ignore[attr-defined]
     return svc

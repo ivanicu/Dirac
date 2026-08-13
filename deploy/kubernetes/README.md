@@ -86,8 +86,28 @@ Artifacts and terminal Job state.
 The local profile mounts:
 
 - PVC `dirac-motif-runtime` read-only at `/home/ivan/dirac`;
+- the audited `runtime-bin/dash` file from that PVC at `/bin/sh` through a
+  read-only `subPath` mount (required by AmberTools child processes in the
+  otherwise shell-less restricted worker image);
 - PVC `dirac-motif-exchange` read/write at
   `/home/ivan/dirac/.runtime/kubernetes-exchange`.
+
+The installed OpenFE profile is deliberately content-pinned:
+
+- OpenFE `1.11.1`, installed from `OpenFEforge-1.11.1-0-Linux-x86_64.sh` with
+  installer SHA-256
+  `28be1bdd69c99d4224af45cc8b7fdfe081ebc2a5a1ded56a66b37df0f506dcd6`;
+- the installer prefix is exactly `/home/ivan/dirac/openfe-runtime-v2` because
+  generated entrypoint shebangs preserve that absolute prefix; the local PV
+  stores the tree at `.runtime/pv/runtime/openfe-runtime-v2` and the repository
+  path is an ignored operational symlink to it;
+- `/bin/sh` is the deployment-owned `dash` companion with SHA-256
+  `c626229526bb58ec2d0f585f3c3ae1412e6f973b4353385042d11c38d8426917`.
+
+`physics.motif.openfe_edge` verifies both hashes/versions at the worker
+boundary. It also constructs an attempt-local AmberTools overlay so compiled
+AmberTools programs can run without making the runtime PVC writable. A hash or
+path mismatch is `UNSUPPORTED`, not a best-effort fallback to another runtime.
 
 The runtime PVC is an operational bridge for this single-node installation, not
 the final multi-node packaging story. A production rollout should build the

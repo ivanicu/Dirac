@@ -181,6 +181,12 @@ def physics_openmm_md(input: dict, ctx) -> dict:
         actor=ctx.actor, command_id=ctx.command_id)
 
 
+def physics_openfe_edge(input: dict, ctx) -> dict:
+    return ctx.kernel.submit(
+        'physics.motif.openfe_edge', input, request_id=ctx.request_id,
+        actor=ctx.actor, command_id=ctx.command_id)
+
+
 def physics_rbfe_network(input: dict, ctx) -> dict:
     return ctx.kernel.submit(
         'physics.motif.rbfe_network', input, request_id=ctx.request_id,
@@ -228,7 +234,37 @@ def policy_release_register(input: dict, ctx) -> dict:
 
 
 def result_ingest(input: dict, ctx) -> dict:
-    return _motif_governance(ctx).ingest_measurements(input["measurements"], ctx.actor)
+    controller = getattr(ctx.kernel, "closed_loop_controller", None)
+    loop_spec = input.get("closed_loop")
+    if loop_spec is not None:
+        if controller is None:
+            raise failures.DiracFailure(
+                "DB_UNAVAILABLE", "closed-loop controller is unavailable")
+        controller.validate_spec(loop_spec, input["measurements"])
+        controller.validate_context(loop_spec)
+    result = _motif_governance(ctx).ingest_measurements(
+        input["measurements"], ctx.actor)
+    if loop_spec is not None:
+        result["closed_loop"] = controller.enqueue(
+            spec=loop_spec, measurements=input["measurements"],
+            ingest_result=result, actor=ctx.actor)
+    return result
+
+
+def campaign_closed_loop_get(input: dict, ctx) -> dict:
+    controller = getattr(ctx.kernel, "closed_loop_controller", None)
+    if controller is None:
+        raise failures.DiracFailure(
+            "DB_UNAVAILABLE", "closed-loop controller is unavailable")
+    return controller.get(input["run_ref"]["id"])
+
+
+def campaign_closed_loop_retry(input: dict, ctx) -> dict:
+    controller = getattr(ctx.kernel, "closed_loop_controller", None)
+    if controller is None:
+        raise failures.DiracFailure(
+            "DB_UNAVAILABLE", "closed-loop controller is unavailable")
+    return controller.retry(input["run_ref"]["id"])
 
 
 def _programs(ctx):

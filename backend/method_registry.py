@@ -223,6 +223,8 @@ _MOTIF_UNITS = {
                              ['dock_vina', '_ligand_pdbqt', '_digest']),
     'physics.motif.openmm_md': ('motif.physics',
                                ['run_openmm_md', '_sha', '_digest']),
+    'physics.motif.openfe_edge': ('motif.openfe_runner',
+                                  ['execute_openfe_edge', '_digest']),
     'physics.motif.rbfe_network': ('motif.rbfe',
                                   ['plan_rbfe_network', '_chemistry', '_digest']),
     'physics.motif.rbfe_aggregate': ('motif.rbfe',
@@ -234,9 +236,7 @@ for _method_id, (_module, _functions) in _MOTIF_UNITS.items():
     UNITS[_method_id] = {
         'module': _module,
         'fns': _functions,
-        'consts': (['PREDICTOR_SOURCE_DIGESTS'] if _module == 'motif.mesh' else
-                   ['ACQUISITION_SOURCE_DIGESTS']
-                   if _module == 'motif.advanced_acquisition' else []),
+        'consts': list((_descriptor.get('implementation') or {}).get('constants', [])),
         'descriptor_path': str(_descriptor_path),
         'exec_class': 'job',
         'in_schema': _descriptor['input']['schema'],

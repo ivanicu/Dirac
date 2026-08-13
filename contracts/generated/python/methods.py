@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-MethodId = Literal["data.motif.snapshot", "design.motif.acquire", "design.motif.bayesian_acquire", "design.motif.local_edits", "design.motif.reaction_enumerate", "fields.mep", "fields.mlp", "fields.qm.density", "fields.qm.homo", "fields.qm.lumo", "fields.qm.mep_qm", "fields.region.mep", "fields.region.mlp", "ml.motif.calibrate", "ml.motif.mesh.predict", "ml.motif.mesh.train", "ml.motif.predict", "ml.motif.train", "molecule.embed", "physics.motif.openmm_md", "physics.motif.rbfe_aggregate", "physics.motif.rbfe_network", "structure.motif.conformers", "structure.motif.vina", "surface.mep", "surface.mep_at", "torsion.strain"]
+MethodId = Literal["data.motif.snapshot", "design.motif.acquire", "design.motif.bayesian_acquire", "design.motif.local_edits", "design.motif.reaction_enumerate", "fields.mep", "fields.mlp", "fields.qm.density", "fields.qm.homo", "fields.qm.lumo", "fields.qm.mep_qm", "fields.region.mep", "fields.region.mlp", "ml.motif.calibrate", "ml.motif.mesh.predict", "ml.motif.mesh.train", "ml.motif.predict", "ml.motif.train", "molecule.embed", "physics.motif.openfe_edge", "physics.motif.openmm_md", "physics.motif.rbfe_aggregate", "physics.motif.rbfe_network", "structure.motif.conformers", "structure.motif.vina", "surface.mep", "surface.mep_at", "torsion.strain"]
 
 # data.motif.snapshot — Freeze measurement-lineage rows, endpoint definitions, splits and leakage evidence into a content-addressed dataset snapshot.
 DATAMOTIFSNAPSHOT_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'bitwise', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['write:dataset'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': True, 'distributed': False, 'min_gpus': 0, 'max_gpus': 0}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
@@ -133,6 +133,11 @@ MOLECULEEMBED_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 
 MOLECULEEMBED_REFUSALS = ['PARSE', 'UNPARAMETERIZED']
 MOLECULEEMBED_WARNINGS = []
 
+# physics.motif.openfe_edge — Execute one serialized OpenFE alchemical Transformation on a governed GPU worker with resumable quickrun state.
+PHYSICSMOTIFOPENFEEDGE_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'gpu', 'determinism': 'statistical', 'checkpointable': True, 'cancellation': 'cooperative', 'artifact_access': ['read:rbfe', 'write:rbfe', 'write:checkpoint'], 'supported_adapters': ['local_gpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': True, 'distributed': False, 'cpu_cores': 20, 'min_gpus': 1, 'max_gpus': 1}, 'cacheable': False, 'deterministic': False, 'side_effects': 'immutable_artifacts'}
+PHYSICSMOTIFOPENFEEDGE_REFUSALS = ['CANCELLED', 'INVALID_PARAMETERS', 'UNSUPPORTED']
+PHYSICSMOTIFOPENFEEDGE_WARNINGS = []
+
 # physics.motif.openmm_md — Run or restart caller-parameterized OpenMM minimization and molecular dynamics.
 PHYSICSMOTIFOPENMMMD_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'gpu', 'determinism': 'numeric_tolerant', 'checkpointable': True, 'cancellation': 'cooperative', 'artifact_access': ['read:system', 'write:trajectory', 'write:checkpoint'], 'supported_adapters': ['local_cpu', 'local_gpu', 'slurm', 'kubernetes'], 'cacheable': False, 'deterministic': False, 'side_effects': 'immutable_artifacts'}
 PHYSICSMOTIFOPENMMMD_REFUSALS = ['INVALID_PARAMETERS']
@@ -191,4 +196,4 @@ TORSIONSTRAIN_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': '
 TORSIONSTRAIN_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
 TORSIONSTRAIN_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
 
-METHOD_IDS = ['data.motif.snapshot', 'design.motif.acquire', 'design.motif.bayesian_acquire', 'design.motif.local_edits', 'design.motif.reaction_enumerate', 'fields.mep', 'fields.mlp', 'fields.qm.density', 'fields.qm.homo', 'fields.qm.lumo', 'fields.qm.mep_qm', 'fields.region.mep', 'fields.region.mlp', 'ml.motif.calibrate', 'ml.motif.mesh.predict', 'ml.motif.mesh.train', 'ml.motif.predict', 'ml.motif.train', 'molecule.embed', 'physics.motif.openmm_md', 'physics.motif.rbfe_aggregate', 'physics.motif.rbfe_network', 'structure.motif.conformers', 'structure.motif.vina', 'surface.mep', 'surface.mep_at', 'torsion.strain']
+METHOD_IDS = ['data.motif.snapshot', 'design.motif.acquire', 'design.motif.bayesian_acquire', 'design.motif.local_edits', 'design.motif.reaction_enumerate', 'fields.mep', 'fields.mlp', 'fields.qm.density', 'fields.qm.homo', 'fields.qm.lumo', 'fields.qm.mep_qm', 'fields.region.mep', 'fields.region.mlp', 'ml.motif.calibrate', 'ml.motif.mesh.predict', 'ml.motif.mesh.train', 'ml.motif.predict', 'ml.motif.train', 'molecule.embed', 'physics.motif.openfe_edge', 'physics.motif.openmm_md', 'physics.motif.rbfe_aggregate', 'physics.motif.rbfe_network', 'structure.motif.conformers', 'structure.motif.vina', 'surface.mep', 'surface.mep_at', 'torsion.strain']

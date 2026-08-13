@@ -153,6 +153,8 @@ class KubernetesKueueAdapterTests(unittest.TestCase):
             policy_init_image=IMAGE, runner=self.runner,
             static_pvc_mounts=[
                 StaticPvcMount("runtime", "dirac-runtime", "/srv/dirac", True),
+                StaticPvcMount("shell", "dirac-runtime", "/bin/sh", True,
+                               sub_path="runtime-bin/dash"),
                 StaticPvcMount("exchange", "dirac-exchange", "/exchange", False),
             ])
         adapter.submit(self.request)
@@ -166,6 +168,11 @@ class KubernetesKueueAdapterTests(unittest.TestCase):
             "claimName": "dirac-runtime", "readOnly": True})
         self.assertEqual(claims["exchange"], {
             "claimName": "dirac-exchange", "readOnly": False})
+        mounts = {item["name"]: item for item in pod["containers"][0]["volumeMounts"]}
+        self.assertEqual(mounts["shell"]["subPath"], "runtime-bin/dash")
+        with self.assertRaisesRegex(ValueError, "relative normalized"):
+            StaticPvcMount("bad", "dirac-runtime", "/bin/sh", True,
+                           sub_path="../dash")
 
     def test_state_mapping_cancel_and_events(self):
         self.adapter.submit(self.request)

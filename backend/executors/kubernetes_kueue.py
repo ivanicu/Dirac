@@ -79,6 +79,7 @@ class StaticPvcMount:
     claim_name: str
     mount_path: str
     read_only: bool = True
+    sub_path: str | None = None
 
     def __post_init__(self) -> None:
         for field in ("name", "claim_name"):
@@ -88,6 +89,11 @@ class StaticPvcMount:
         path = PurePosixPath(self.mount_path)
         if not self.mount_path.startswith("/") or ".." in path.parts:
             raise ValueError("mount_path must be an absolute normalized path")
+        if self.sub_path is not None:
+            child = PurePosixPath(self.sub_path)
+            if (not self.sub_path or self.sub_path.startswith("/")
+                    or ".." in child.parts or str(child) != self.sub_path):
+                raise ValueError("sub_path must be a relative normalized path")
 
 
 class KubernetesKueueAdapter:
@@ -416,6 +422,8 @@ class KubernetesKueueAdapter:
                                     "name": mount.name,
                                     "mountPath": mount.mount_path,
                                     "readOnly": mount.read_only,
+                                    **({"subPath": getattr(mount, "sub_path")}
+                                       if getattr(mount, "sub_path", None) is not None else {}),
                                 } for mount in (*self.static_host_mounts,
                                                 *self.static_pvc_mounts)],
                             ],

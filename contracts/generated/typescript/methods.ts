@@ -52,6 +52,7 @@ export type MethodId =
     | 'ml.motif.predict'
     | 'ml.motif.train'
     | 'molecule.embed'
+    | 'physics.motif.openfe_edge'
     | 'physics.motif.openmm_md'
     | 'physics.motif.rbfe_aggregate'
     | 'physics.motif.rbfe_network'
@@ -1060,6 +1061,56 @@ export const MoleculeEmbedExecution = {
     "side_effects": "none"
 } as const;
 
+/** physics.motif.openfe_edge output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type PhysicsMotifOpenfe_edgeOutput = {
+    edge_id: string;
+    leg: 'complex' | 'solvent' | 'vacuum';
+    engine: 'OpenFE';
+    engine_version: '1.11.1';
+    transformation_digest: string;
+    target_ref?: Record<string, unknown> | null;
+    protein_structure_ref?: Record<string, unknown> | null;
+    thermodynamic_cycle_id?: string | null;
+    repeat_index?: number;
+    estimate: number | null;
+    uncertainty: number | null;
+    unit: string | null;
+    scientific_status: 'completed_unvalidated';
+    result_digest: string;
+};
+
+/** physics.motif.openfe_edge — Execute one serialized OpenFE alchemical Transformation on a governed GPU worker with resumable quickrun state. */
+export const PhysicsMotifOpenfe_edgeExecution = {
+    "supported_modes": [
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "gpu",
+    "determinism": "statistical",
+    "checkpointable": true,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "read:rbfe",
+        "write:rbfe",
+        "write:checkpoint"
+    ],
+    "supported_adapters": [
+        "local_gpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "scale_profile": {
+        "shardable": true,
+        "distributed": false,
+        "cpu_cores": 20,
+        "min_gpus": 1,
+        "max_gpus": 1
+    },
+    "cacheable": false,
+    "deterministic": false,
+    "side_effects": "immutable_artifacts"
+} as const;
+
 /** physics.motif.openmm_md output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type PhysicsMotifOpenmm_mdOutput = {
     run_digest: string;
@@ -1320,6 +1371,7 @@ export const METHOD_IDS: readonly MethodId[] = [
     "ml.motif.predict",
     "ml.motif.train",
     "molecule.embed",
+    "physics.motif.openfe_edge",
     "physics.motif.openmm_md",
     "physics.motif.rbfe_aggregate",
     "physics.motif.rbfe_network",
