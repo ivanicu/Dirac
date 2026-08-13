@@ -44,6 +44,7 @@ if 'pytest' in sys.modules and not os.environ.get('DIRAC_TEST_DSN'):
     pytest.skip('requires isolated PostgreSQL DIRAC_TEST_DSN', allow_module_level=True)
 PASS, FAIL = [], []
 MARKER = b'dirac-artifact-pg-test-'
+RUN_TOKEN = os.urandom(8).hex().encode()
 WRITTEN: list[str] = []            # digests to clean up
 
 
@@ -93,7 +94,7 @@ def any_method_row() -> str:
 
 
 def payload(tag: str, size: int = 4096) -> bytes:
-    body = MARKER + tag.encode() + b'\n' + (bytes(range(256)) * (size // 256))
+    body = MARKER + RUN_TOKEN + b'-' + tag.encode() + b'\n' + (bytes(range(256)) * (size // 256))
     return body
 
 
@@ -293,6 +294,18 @@ def cleanup() -> None:
             cur.execute('DELETE FROM app.blob WHERE sha256 = decode(%s, %s)',
                         (digest, 'hex'))
         cur.execute("DELETE FROM app.job WHERE worker = 'artifact-pg-test'")
+
+
+if 'pytest' in sys.modules:
+    import pytest
+
+    @pytest.fixture(scope='module', autouse=True)
+    def cleanup_pytest_artifacts():
+        """The standalone runner already cleans up; pytest must preserve that contract."""
+        try:
+            yield
+        finally:
+            cleanup()
 
 
 if __name__ == '__main__':

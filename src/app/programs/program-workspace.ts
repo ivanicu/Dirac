@@ -9,7 +9,8 @@ type Program = Record<string, any> & { ref: ObjectRef<'program'>; version: numbe
 type FieldOption = string | { value: string; label: string };
 type Field = { name: string; label: string; value?: string; required?: boolean;
     multiline?: boolean; options?: readonly FieldOption[]; placeholder?: string;
-    multiple?: boolean; readonly?: boolean; type?: 'text' | 'date' | 'number' };
+    multiple?: boolean; readonly?: boolean; type?: 'text' | 'date' | 'number';
+    min?: number; max?: number; step?: number };
 
 class ProgramPrerequisiteError extends Error {}
 
@@ -86,6 +87,15 @@ export class ProgramWorkspaceController {
             const routeId = document.querySelector<HTMLElement>('.program-page')?.dataset.programId;
             const contextId = scientificContext.current().programRef?.id;
             const requested = routeId && routeId !== 'current' ? routeId : contextId;
+            if (routeId && routeId !== 'current'
+                && !programs.some(item => item.ref.id === routeId)) {
+                this.current = undefined;
+                this.showEmpty(true);
+                const message = `Program ${routeId} was not found. Choose an existing Program; Dirac will not substitute another project.`;
+                this.status(message, 'error'); this.renderWorkflow(undefined, message);
+                this.renderGlobalWork(undefined); this.publish(undefined, message);
+                return;
+            }
             const activeId = requested && programs.some(item => item.ref.id === requested)
                 ? requested : programs[0]?.ref.id;
             if (!activeId) {
@@ -513,7 +523,8 @@ export class ProgramWorkspaceController {
             { name: 'key', label: 'Stable key', required: true }, { name: 'title', label: 'Hypothesis title', required: true },
             { name: 'statement', label: 'Testable statement', required: true, multiline: true },
             { name: 'falsification_criterion', label: 'What would falsify it?', required: true, multiline: true },
-            { name: 'confidence', label: 'Confidence 0–1', required: true, value: '0.5' },
+            { name: 'confidence', label: 'Confidence 0–1', required: true, value: '0.5',
+                type: 'number', min: 0, max: 1, step: 0.01 },
         ], values => this.atom('hypothesis', { ...values, confidence: Number(values.confidence) }));
     }
 
@@ -589,9 +600,10 @@ export class ProgramWorkspaceController {
                 value: item?.lane || 'understand', readonly: !!item },
             { name: 'status', label: 'Work status', options: ['backlog', 'ready', 'active', 'blocked', 'done', 'cancelled'],
                 value: item?.status || 'backlog' },
-            { name: 'priority', label: 'Priority', type: 'number', value: String(item?.priority || 3), required: true },
+            { name: 'priority', label: 'Priority', type: 'number', min: 1, max: 5, step: 1,
+                value: String(item?.priority || 3), required: true },
             { name: 'progress_percent', label: 'Completion (%)', type: 'number',
-                value: String(item?.progress_percent || 0), required: true },
+                min: 0, max: 100, step: 1, value: String(item?.progress_percent || 0), required: true },
             { name: 'owner_id', label: 'Owner', value: item?.owner?.id || '', placeholder: 'person or agent ID' },
             { name: 'start_on', label: 'Planned start', type: 'date', value: item?.start_on || '' },
             { name: 'due_on', label: 'Planned finish', type: 'date', value: item?.due_on || '' },
@@ -606,7 +618,7 @@ export class ProgramWorkspaceController {
                 program_ref: this.current!.ref, expected_version: this.current!.version,
                 work_package: { key, title: values.title, description: values.description,
                     lane: values.lane, status: values.status, priority: Number(values.priority),
-                    progress_percent: Math.max(0, Math.min(100, Number(values.progress_percent))),
+                    progress_percent: Number(values.progress_percent),
                     start_on: values.start_on || undefined, due_on: values.due_on || undefined,
                     depends_on_refs: this.lines(values.depends_on || '').map(id => ({ kind: 'work_item', id })),
                     owner: values.owner_id ? { kind: 'human', id: values.owner_id } : undefined },
@@ -653,7 +665,8 @@ export class ProgramWorkspaceController {
             { name: 'evidence_kind', label: 'Evidence kind', options: ['evidence', 'measurement', 'dataset', 'artifact', 'literature_reference', 'prediction', 'complex', 'pose', 'field', 'batch', 'sample'] },
             { name: 'evidence_id', label: 'Evidence canonical ID', required: true },
             { name: 'claim', label: 'Claim supported or challenged', required: true, multiline: true },
-            { name: 'strength', label: 'Strength 0–1', value: '0.5' },
+            { name: 'strength', label: 'Strength 0–1', value: '0.5',
+                type: 'number', min: 0, max: 1, step: 0.01 },
         ], values => this.execute('program.evidence.attach', {
             program_ref: this.current!.ref, expected_version: this.current!.version,
             binding: { subject_ref: { kind: values.subject_kind, id: values.subject_id }, relation: values.relation,
@@ -978,7 +991,12 @@ export class ProgramWorkspaceController {
                 const selected = new Set((field.value || '').split('\n').filter(Boolean));
                 for (const option of Array.from(control.options)) option.selected = selected.has(option.value);
             } else control.value = field.value || '';
-            if (control instanceof HTMLInputElement) control.type = field.type || 'text';
+            if (control instanceof HTMLInputElement) {
+                control.type = field.type || 'text';
+                if (field.min !== undefined) control.min = String(field.min);
+                if (field.max !== undefined) control.max = String(field.max);
+                if (field.step !== undefined) control.step = String(field.step);
+            }
             control.disabled = !!field.readonly;
             if (!(control instanceof HTMLSelectElement)) control.placeholder = field.placeholder || '';
             label.append(control); controls.append(label);

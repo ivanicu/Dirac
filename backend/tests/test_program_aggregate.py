@@ -205,6 +205,45 @@ class ProgramAggregateTest(unittest.TestCase):
                 "progress_percent": 101,
             }, ACTOR, "bad-progress")
 
+    def test_every_progress_value_round_trips_and_invalid_types_are_atomic(self) -> None:
+        version = 1
+        for progress in range(101):
+            result = self.repo.record_work_package(self.program_ref, version, {
+                "key": "progress-sweep", "title": "Progress sweep",
+                "description": "Exercise every persisted percentage",
+                "progress_percent": progress,
+            }, ACTOR, f"progress-{progress}")
+            version = result["program_version"]
+            self.assertEqual(result["work_item"]["progress_percent"], progress)
+            self.assertEqual(result["work_package"]["revision"], progress + 1)
+        for index, bad in enumerate((-1, 101, True, False, 1.5, "42", None)):
+            before = copy.deepcopy(self.repo.get(self.program_ref)["program"])
+            with self.assertRaises(failures.DiracInvalidParameters):
+                self.repo.record_work_package(self.program_ref, version, {
+                    "key": f"bad-progress-{index}", "title": "Invalid progress",
+                    "description": "Must leave no partial Work Item", "progress_percent": bad,
+                }, ACTOR, f"bad-progress-{index}")
+            after = self.repo.get(self.program_ref)["program"]
+            self.assertEqual(after["version"], before["version"])
+            self.assertEqual(after["counts"], before["counts"])
+
+    def test_failed_new_dependency_and_bad_dates_leave_no_ghost_work(self) -> None:
+        for index, payload in enumerate((
+            {"depends_on_refs": [{"kind": "work_item", "id": "outside-program"}]},
+            {"start_on": "2025-02-29", "due_on": "2025-03-01"},
+            {"start_on": "2026-04-02", "due_on": "2026-04-01"},
+        )):
+            before = copy.deepcopy(self.repo.get(self.program_ref)["program"])
+            with self.assertRaises(failures.DiracInvalidParameters):
+                self.repo.record_work_package(self.program_ref, before["version"], {
+                    "key": f"atomic-failure-{index}", "title": "Atomic failure",
+                    "description": "The rejected write must not leave a shell", **payload,
+                }, ACTOR, f"atomic-failure-{index}")
+            after = self.repo.get(self.program_ref)["program"]
+            self.assertEqual(after["version"], before["version"])
+            self.assertEqual(after["counts"]["work_items"], before["counts"]["work_items"])
+            self.assertEqual(after["counts"]["work_packages"], before["counts"]["work_packages"])
+
     def test_runtime_job_can_belong_to_only_one_work_item(self) -> None:
         first = self.repo.record_work_package(self.program_ref, 1, {
             "key": "first", "title": "First", "description": "First job",

@@ -198,14 +198,9 @@ class MemoryProgramRepository:
                          "title": item["title"], "lane": item["lane"],
                          "created_by": who, "created_at": datetime.now(timezone.utc).isoformat(),
                          "transitions": [], "executions": []}
-            row["work_items"].append(work_item)
-            transition = {"ref": _ref("artifact", uuid.uuid4()), "work_item_ref": work_item["ref"],
-                          "from_lane": None, "to_lane": item["lane"],
-                          "reason": "Created in this workflow lane", "transitioned_by": who,
-                          "transitioned_at": datetime.now(timezone.utc).isoformat()}
-            work_item["transitions"].append(transition); row["work_transitions"].append(transition)
         dependency_refs = copy.deepcopy(item["depends_on_refs"])
         known_items = {entry["ref"]["id"]: entry for entry in row["work_items"]}
+        known_items[work_item["ref"]["id"]] = work_item
         if any(dependency["id"] == work_item["ref"]["id"] for dependency in dependency_refs):
             raise failures.DiracInvalidParameters("A Work Item cannot depend on itself")
         if any(dependency["id"] not in known_items for dependency in dependency_refs):
@@ -220,6 +215,13 @@ class MemoryProgramRepository:
                        for ref in (candidate or {}).get("depends_on_refs", []))
         if any(reaches_current(dependency["id"]) for dependency in dependency_refs):
             raise failures.DiracInvalidParameters("Work Item dependencies must remain acyclic")
+        if created:
+            row["work_items"].append(work_item)
+            transition = {"ref": _ref("artifact", uuid.uuid4()), "work_item_ref": work_item["ref"],
+                          "from_lane": None, "to_lane": item["lane"],
+                          "reason": "Created in this workflow lane", "transitioned_by": who,
+                          "transitioned_at": datetime.now(timezone.utc).isoformat()}
+            work_item["transitions"].append(transition); row["work_transitions"].append(transition)
         current = next((package for package in reversed(row["work_packages"])
                         if package["work_item_ref"] == work_item["ref"]
                         and package.get("status") != "superseded"), None)

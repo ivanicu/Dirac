@@ -625,6 +625,14 @@ function initShellNavigation(): void {
     const canvasHost = document.getElementById('workspace-canvas');
     const breadcrumb = document.getElementById('shell-breadcrumb');
     if (!host || !viewHost || !canvasHost || !breadcrumb) return;
+    // <base href="/"> is required for deep-link assets, but it makes a bare
+    // #fragment resolve against the application root. Keep the skip link on the
+    // current SPA route and move focus explicitly for keyboard users.
+    document.querySelector<HTMLAnchorElement>('.skip-link')?.addEventListener('click', event => {
+        event.preventDefault();
+        const target = document.getElementById('current-content');
+        target?.focus(); target?.scrollIntoView({ block: 'start' });
+    });
     const moduleHost = createDomModuleHost();
     const navigate = (route: Parameters<typeof appShell.navigate>[0]) => {
         const target = VIEWS.find(view => view.id === route.view && view.workspace === route.workspace);

@@ -1259,7 +1259,7 @@
 .scientific-visual-controls button:hover, .scientific-visual-controls button:focus-visible { border-color: var(--ink); }
 .scientific-control-status { min-width: max-content; margin-left: auto; color: var(--ink-2); font: 500 8px/1.3 var(--mono); }
 .scientific-graph-canvas { width: 100%; height: calc(100% - 65px); min-height: 200px; background-color: var(--paper); background-image: radial-gradient(var(--line-dot) .7px, transparent .7px); background-size: 10px 10px; }
-.scientific-chart-canvas { width: 100%; height: calc(100% - 35px); min-height: 220px; }
+.scientific-chart-canvas { width: 100%; height: calc(100% - 65px); min-height: 220px; }
 .scientific-visual-empty { display: grid; min-height: 210px; margin: 0; padding: 24px; place-items: center; color: var(--ink-2); font: 500 10px/1.5 var(--sans); text-align: center; }
 .scientific-visual-fallback { min-height: 30px; border-top: 1px dotted var(--line); background: var(--surface); color: var(--ink-2); font: 500 8px/1.35 var(--mono); }
 .scientific-visual-fallback summary { min-height: 30px; padding: 10px 13px; cursor: pointer; text-transform: uppercase; }

@@ -236,6 +236,7 @@ export class WorkspaceCanvas {
             ...(projection ? [projection] : []),
             ...(connectedProgramSurface ? [] : [visual, readiness]));
         this.host.replaceChildren(page);
+        if (projection && this.program) this.renderProgramProjection(projection);
         if (workflow) queueMicrotask(() => document.dispatchEvent(new CustomEvent('dirac:refresh-program')));
     }
 
@@ -245,7 +246,9 @@ export class WorkspaceCanvas {
         if (!supported.has(definition.workspace)) return undefined;
         const section = element('section', 'workspace-program-projection');
         section.dataset.programProjection = definition.workspace;
-        this.renderProgramProjection(section);
+        // Graph layout needs a connected, measurable container. If Program state is
+        // already cached during SPA navigation, render only after the section mounts.
+        if (!this.program) this.renderProgramProjection(section);
         return section;
     }
 
@@ -408,6 +411,7 @@ export class WorkspaceCanvas {
         page.append(header, question, ...(workflow ? [workflow] : []),
             ...(projection ? [projection] : []), runs);
         this.host.replaceChildren(page);
+        if (projection && this.program) this.renderProgramProjection(projection);
         if (workflow || projection) queueMicrotask(() => document.dispatchEvent(new CustomEvent('dirac:refresh-program')));
     }
 

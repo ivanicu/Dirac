@@ -50,6 +50,7 @@ export function toWorkVisualItems(items: readonly Record<string, any>[],
     return items.flatMap(item => {
         if (!item.ref?.id || !WORK_LANES.includes(item.lane)) return [];
         const baseline = packagesById.get(item.current_package?.supersedes_ref?.id);
+        const rawProgress = Number(item.progress_percent);
         return [{
             id: String(item.ref.id), key: String(item.key || item.ref.id),
             title: String(item.title || item.key || item.ref.id), lane: item.lane,
@@ -59,7 +60,7 @@ export function toWorkVisualItems(items: readonly Record<string, any>[],
             end: item.due_on ? String(item.due_on) : undefined,
             baselineStart: baseline?.start_on ? String(baseline.start_on) : undefined,
             baselineEnd: baseline?.due_on ? String(baseline.due_on) : undefined,
-            progress: Number.isFinite(Number(item.progress_percent)) ? Number(item.progress_percent)
+            progress: Number.isFinite(rawProgress) ? Math.max(0, Math.min(100, rawProgress))
                 : item.status === 'done' ? 100 : item.status === 'active' ? 50 : 0,
             dependencyIds: ((item.depends_on_refs || []) as Array<{ id?: string }>)
                 .flatMap(ref => ref.id ? [String(ref.id)] : []),

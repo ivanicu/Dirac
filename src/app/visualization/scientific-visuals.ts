@@ -30,6 +30,7 @@ const localDateKey = (value: Date): string => [value.getFullYear(),
 const safeStorage = {
     read(key: string): string | undefined { try { return localStorage.getItem(key) || undefined; } catch { return undefined; } },
     write(key: string, value: string): void { try { localStorage.setItem(key, value); } catch { /* storage is optional */ } },
+    remove(key: string): void { try { localStorage.removeItem(key); } catch { /* storage is optional */ } },
 };
 
 function download(name: string, content: string, type: string): void {
@@ -70,6 +71,7 @@ function accessibleGraphList(model: ScientificGraphModel,
         const incoming = model.edges.filter(edge => edge.target === node.id);
         const outgoing = model.edges.filter(edge => edge.source === node.id);
         const action = document.createElement('button'); action.type = 'button';
+        action.dataset.graphNodeId = node.id;
         action.textContent = `${node.label} · ${humanize(node.kind)}`;
         action.disabled = !onSelect;
         if (onSelect) action.addEventListener('click', () => onSelect(node));
@@ -119,7 +121,7 @@ export function renderScientificGraph(root: HTMLElement, model: ScientificGraphM
     controls.append(search, kind, pathFrom, pathTo, layout, fit, neighbors, path, rank, reset, save, png, json, status);
     const canvas = document.createElement('div'); canvas.className = 'scientific-graph-canvas';
     canvas.setAttribute('role', 'img'); canvas.setAttribute('aria-label', options.ariaLabel);
-    root.append(controls, canvas, accessibleGraphList(model, options.onSelect));
+    root.append(controls, canvas);
     const cy = cytoscape({
         container: canvas, elements: graphElements(model),
         layout: options.preset === false ? { name: 'cose', animate: false, fit: true, padding: 28 }
@@ -151,6 +153,13 @@ export function renderScientificGraph(root: HTMLElement, model: ScientificGraphM
         else if (!pathTo.value && pathFrom.value !== event.target.id()) pathTo.value = event.target.id();
         if (node && options.onSelect) options.onSelect(node);
     });
+    root.append(accessibleGraphList(model, node => {
+        cy.nodes().unselect(); cy.$id(node.id).select();
+        if (!pathFrom.value) pathFrom.value = node.id;
+        else if (!pathTo.value && pathFrom.value !== node.id) pathTo.value = node.id;
+        options.onSelect?.(node);
+        status.textContent = `${node.label} selected`;
+    }));
     const saved = options.storageKey ? safeStorage.read(`dirac:graph:${options.storageKey}`) : undefined;
     if (saved) try {
         const state = JSON.parse(saved) as { layout?: string; positions?: Record<string, { x: number; y: number }> };
@@ -321,6 +330,7 @@ export function renderProgramGantt(root: HTMLElement, items: readonly WorkVisual
             document.addEventListener('mouseup', reconcileProgress, { once: true });
         }
     });
+    let selectedId = '';
     const details = document.createElement('details'); details.className = 'scientific-visual-fallback';
     const summary = document.createElement('summary'); summary.textContent = 'Accessible schedule table';
     const table = document.createElement('table');
@@ -332,7 +342,9 @@ export function renderProgramGantt(root: HTMLElement, items: readonly WorkVisual
     for (const item of scheduled) {
         const row = body.insertRow();
         const action = document.createElement('button'); action.type = 'button';
-        action.textContent = `${item.key} · ${item.title}`; action.addEventListener('click', () => options.onSelect(item.id));
+        action.textContent = `${item.key} · ${item.title}`; action.addEventListener('click', () => {
+            selectedId = item.id; options.onSelect(item.id); status.textContent = `${item.key} selected`;
+        });
         const taskCell = row.insertCell(); taskCell.append(action);
         for (const value of [item.start!, item.end!, item.owner,
             item.dependencyIds.length ? item.dependencyIds.join(', ') : '—']) row.insertCell().textContent = value;
@@ -365,7 +377,6 @@ export function renderProgramGantt(root: HTMLElement, items: readonly WorkVisual
     }
     if (!baselineRows.length) baselineList.textContent = 'No superseded dated plan exists; Dirac will not invent a baseline.';
     baseline.append(baselineList); root.append(baseline);
-    let selectedId = '';
     chart.addEventListener('click', event => {
         selectedId = (event.target as Element).closest<SVGGElement>('.bar-wrapper')?.dataset.id || selectedId;
     });
@@ -416,9 +427,11 @@ export function renderLaneLoadChart(root: HTMLElement, items: readonly WorkVisua
     mode.add(new Option('Stacked bars', 'bar')); mode.add(new Option('Status heatmap', 'heatmap'));
     mode.value = safeStorage.read(`dirac:chart:${storageKey}:work-mode`) || 'bar';
     const save = document.createElement('button'); save.type = 'button'; save.textContent = 'Save view';
+    const reset = document.createElement('button'); reset.type = 'button'; reset.textContent = 'Reset';
+    const svg = document.createElement('button'); svg.type = 'button'; svg.textContent = 'SVG';
     const json = document.createElement('button'); json.type = 'button'; json.textContent = 'JSON';
     const status = document.createElement('span'); status.className = 'scientific-control-status'; status.setAttribute('role', 'status');
-    controls.append(mode, save, json, status);
+    controls.append(mode, save, reset, svg, json, status);
     const canvas = document.createElement('div'); canvas.className = 'scientific-chart-canvas'; root.append(controls, canvas);
     const chart: EChartsType = init(canvas, undefined, { renderer: 'svg' }); chartInstances.set(root, chart);
     const colors: Record<string, string> = { active: '#292925', ready: '#557287', backlog: '#8b887e',
@@ -460,7 +473,24 @@ export function renderLaneLoadChart(root: HTMLElement, items: readonly WorkVisua
         safeStorage.write(`dirac:chart:${storageKey}:work-option`, JSON.stringify({ legend: option.legend, dataZoom: option.dataZoom }));
         status.textContent = 'Personal chart view saved';
     });
+    reset.addEventListener('click', () => {
+        safeStorage.remove(`dirac:chart:${storageKey}:work-option`); render();
+        status.textContent = 'Chart view reset';
+    });
+    svg.addEventListener('click', () => download('dirac-work-distribution.svg',
+        chart.getDataURL({ type: 'svg', backgroundColor: '#f7f6f2' }), 'image/svg+xml'));
     json.addEventListener('click', () => download('dirac-work-distribution.json', JSON.stringify(series, null, 2), 'application/json'));
+    const details = document.createElement('details'); details.className = 'scientific-visual-fallback';
+    const summary = document.createElement('summary'); summary.textContent = 'Accessible work distribution table';
+    const table = document.createElement('table'); const head = table.createTHead().insertRow();
+    for (const label of ['Stage', ...series.statuses.map(humanize)]) {
+        const cell = document.createElement('th'); cell.scope = 'col'; cell.textContent = label; head.append(cell);
+    }
+    const body = table.createTBody(); series.lanes.forEach((lane, index) => {
+        const row = body.insertRow(); const heading = document.createElement('th'); heading.scope = 'row'; heading.textContent = lane;
+        row.append(heading); for (const state of series.statuses) row.insertCell().textContent = String(series.values[state][index]);
+    });
+    details.append(summary, table); root.append(details);
     chart.group = `dirac-${storageKey}`; connect(chart.group);
     replaceObserver(chartObservers, root, () => chart.resize());
 }
@@ -477,9 +507,11 @@ export function renderKindDistribution(root: HTMLElement, model: ScientificGraph
     const mode = document.createElement('select'); mode.setAttribute('aria-label', 'Object distribution chart type');
     for (const [value, label] of [['bar', 'Ranked bars'], ['pie', 'Composition'], ['treemap', 'Treemap']]) mode.add(new Option(label, value));
     mode.value = safeStorage.read(`dirac:chart:${storageKey}:kind-mode`) || 'bar';
+    const reset = document.createElement('button'); reset.type = 'button'; reset.textContent = 'Reset';
+    const svg = document.createElement('button'); svg.type = 'button'; svg.textContent = 'SVG';
     const json = document.createElement('button'); json.type = 'button'; json.textContent = 'JSON';
     const status = document.createElement('span'); status.className = 'scientific-control-status';
-    controls.append(mode, json, status); const canvas = document.createElement('div'); canvas.className = 'scientific-chart-canvas';
+    controls.append(mode, reset, svg, json, status); const canvas = document.createElement('div'); canvas.className = 'scientific-chart-canvas';
     root.append(controls, canvas); const chart = init(canvas, undefined, { renderer: 'svg' }); chartInstances.set(root, chart);
     const render = () => {
         chart.clear(); const common = { animation: false, aria: { enabled: true, decal: { show: true } },
@@ -505,7 +537,23 @@ export function renderKindDistribution(root: HTMLElement, model: ScientificGraph
     chart.on('click', params => {
         const selected = String(params.name || ''); if (selected && onKindSelect) onKindSelect(selected.replace(/ /g, '_'));
     });
+    reset.addEventListener('click', () => {
+        safeStorage.remove(`dirac:chart:${storageKey}:kind-option`); render(); status.textContent = 'Chart view reset';
+    });
+    svg.addEventListener('click', () => download('dirac-object-distribution.svg',
+        chart.getDataURL({ type: 'svg', backgroundColor: '#f7f6f2' }), 'image/svg+xml'));
     json.addEventListener('click', () => download('dirac-object-distribution.json', JSON.stringify(values, null, 2), 'application/json'));
+    const details = document.createElement('details'); details.className = 'scientific-visual-fallback';
+    const summary = document.createElement('summary'); summary.textContent = 'Accessible object distribution table';
+    const table = document.createElement('table'); const head = table.createTHead().insertRow();
+    for (const label of ['Object kind', 'Count']) {
+        const cell = document.createElement('th'); cell.scope = 'col'; cell.textContent = label; head.append(cell);
+    }
+    const body = table.createTBody(); for (const item of values) {
+        const row = body.insertRow(); const heading = document.createElement('th'); heading.scope = 'row'; heading.textContent = item.name;
+        row.append(heading); row.insertCell().textContent = String(item.value);
+    }
+    details.append(summary, table); root.append(details);
     chart.group = `dirac-${storageKey}`; connect(chart.group);
     replaceObserver(chartObservers, root, () => chart.resize());
 }

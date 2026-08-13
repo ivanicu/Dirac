@@ -27,6 +27,28 @@ import field_server as fs                                          # noqa: E402
 PASS, FAIL = [], []
 
 
+if 'pytest' in sys.modules:
+    import pytest
+
+    @pytest.fixture(scope='module', autouse=True)
+    def restore_import_only_field_server_state():
+        """This module deliberately starts DB state; do not leak it into other tests."""
+        before = {
+            'db_ok': fs._db_ok, 'toolkit_ids': dict(fs._toolkit_ids),
+            'producer_id': fs._producer_id, 'method_ids': dict(fs._method_ids),
+            'method_versions': dict(fs._method_versions), 'jobs': fs._jobs,
+        }
+        try:
+            yield
+        finally:
+            fs._db_ok = before['db_ok']
+            fs._toolkit_ids = before['toolkit_ids']
+            fs._producer_id = before['producer_id']
+            fs._method_ids = before['method_ids']
+            fs._method_versions = before['method_versions']
+            fs._jobs = before['jobs']
+
+
 def check(name, fn):
     try:
         fn()
