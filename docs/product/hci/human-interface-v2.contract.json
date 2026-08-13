@@ -1,0 +1,593 @@
+{
+  "schema": "dirac.hci.contract",
+  "version": "2.1.0",
+  "status": "semantic-contract-plus-reference-slice",
+  "generatedArtifact": "docs/product/hci/human-interface-v2.contract.json",
+  "principles": {
+    "interactionModel": "question-centred-object-anchored",
+    "projectionClaim": "traceable-semantically-complete-human-projection",
+    "optimization": "zero-redundant-transcription-and-minimum-unnecessary-decisions",
+    "visualBoundary": "preserve-approved-dirac-visual-language"
+  },
+  "invariants": [
+    "authorization",
+    "canonical-identity",
+    "units-and-conditions",
+    "material-conservation",
+    "provenance",
+    "version-and-freshness",
+    "accountable-decision",
+    "safe-external-consequence"
+  ],
+  "stateAxes": {
+    "draft": [
+      "absent",
+      "local",
+      "syncing",
+      "durable",
+      "superseded",
+      "discarded"
+    ],
+    "connectivity": [
+      "online",
+      "degraded",
+      "offline"
+    ],
+    "availability": [
+      "available",
+      "partial",
+      "unavailable",
+      "unauthorized",
+      "unknown"
+    ],
+    "submission": [
+      "not_submitted",
+      "previewed",
+      "submitting",
+      "accepted",
+      "rejected"
+    ],
+    "execution": [
+      "not_started",
+      "queued",
+      "running",
+      "waiting",
+      "blocked",
+      "failed",
+      "cancelled",
+      "completed"
+    ],
+    "freshness": [
+      "current",
+      "changed",
+      "stale",
+      "superseded",
+      "retracted",
+      "unknown"
+    ],
+    "review": [
+      "not_required",
+      "pending",
+      "accepted",
+      "changes_requested",
+      "rejected",
+      "waived"
+    ]
+  },
+  "selectionKinds": [
+    "object",
+    "structure",
+    "molecular",
+    "material-quantity",
+    "plate-well",
+    "dataset-slice",
+    "derived-set"
+  ],
+  "handoffLifecycle": [
+    "draft",
+    "offered",
+    "accepted",
+    "rejected",
+    "returned",
+    "delivered",
+    "verified",
+    "cancelled",
+    "superseded"
+  ],
+  "workEdgeKinds": [
+    "depends_on",
+    "informs",
+    "blocks",
+    "delegates_to",
+    "supersedes",
+    "returns_to",
+    "shares_dependency",
+    "splits_to",
+    "merges_from",
+    "fans_out",
+    "fans_in"
+  ],
+  "projections": [
+    "human",
+    "cli",
+    "agent",
+    "automation"
+  ],
+  "workspaceBriefs": [
+    "programs",
+    "structures",
+    "design",
+    "campaigns",
+    "synthesis",
+    "experiments",
+    "knowledge",
+    "compute"
+  ],
+  "referenceSlice": {
+    "id": "structures-design-campaigns",
+    "actions": [
+      "structures.site.save@1",
+      "handoff.offer@1",
+      "handoff.accept@1",
+      "design.proposal.promote@2",
+      "campaigns.candidate.add@1"
+    ],
+    "status": "contracted-reference-protocol-tested",
+    "releaseClaim": false
+  },
+  "actionDefinitionRequired": [
+    "id",
+    "version",
+    "intent",
+    "input_schema",
+    "consequence_class",
+    "authorization_policy",
+    "precondition_policy",
+    "idempotency_policy",
+    "conflict_policy",
+    "transaction_policy",
+    "receipt_schema"
+  ],
+  "actionDefinitions": [
+    {
+      "id": "structures.site.save",
+      "version": 1,
+      "intent": "Preserve an exact versioned structural selection as a named site",
+      "input_schema": "StructureSelection@1",
+      "consequence_class": "scientific-record",
+      "authorization_policy": "structure-annotation-write-v1",
+      "precondition_policy": "structure-version-current-and-selection-resolvable-v1",
+      "idempotency_policy": "transport-key-plus-payload-digest",
+      "conflict_policy": "explicit-branch-or-supersede",
+      "transaction_policy": "single-repository-transaction",
+      "receipt_schema": "ActionReceipt@1"
+    },
+    {
+      "id": "handoff.offer",
+      "version": 1,
+      "intent": "Offer versioned work and an acceptance contract to a target scope",
+      "input_schema": "HandoffOfferInput@1",
+      "consequence_class": "workflow",
+      "authorization_policy": "handoff-offer-v1",
+      "precondition_policy": "acceptance-contract-ready-v1",
+      "idempotency_policy": "transport-key-plus-payload-digest",
+      "conflict_policy": "optimistic-handoff-version",
+      "transaction_policy": "single-repository-transaction",
+      "receipt_schema": "ActionReceipt@1"
+    },
+    {
+      "id": "handoff.accept",
+      "version": 1,
+      "intent": "Accept accountable ownership of a handoff under its permission envelope",
+      "input_schema": "HandoffAcceptInput@1",
+      "consequence_class": "workflow",
+      "authorization_policy": "handoff-target-accept-v1",
+      "precondition_policy": "handoff-offered-and-current-v1",
+      "idempotency_policy": "transport-key-plus-payload-digest",
+      "conflict_policy": "optimistic-handoff-version",
+      "transaction_policy": "single-repository-transaction",
+      "receipt_schema": "ActionReceipt@1"
+    },
+    {
+      "id": "design.proposal.promote",
+      "version": 2,
+      "intent": "Promote one exact molecular proposal under the active identity policy",
+      "input_schema": "DesignProposalPromotion@2",
+      "consequence_class": "scientific-identity",
+      "authorization_policy": "program-design-promote-v1",
+      "precondition_policy": "proposal-site-objective-and-identity-policy-current-v1",
+      "idempotency_policy": "transport-key-plus-payload-digest;new-attempt-for-scientific-retry",
+      "conflict_policy": "molecular-edits-branch",
+      "transaction_policy": "identity-and-program-link-transaction",
+      "receipt_schema": "ActionReceipt@1"
+    },
+    {
+      "id": "campaigns.candidate.add",
+      "version": 1,
+      "intent": "Add an existing canonical compound to a versioned campaign objective",
+      "input_schema": "CampaignCandidateAdd@1",
+      "consequence_class": "scientific-record",
+      "authorization_policy": "campaign-candidate-write-v1",
+      "precondition_policy": "compound-visible-and-objective-current-v1",
+      "idempotency_policy": "transport-key-plus-payload-digest",
+      "conflict_policy": "set-membership-idempotent-objective-version-explicit",
+      "transaction_policy": "single-repository-transaction",
+      "receipt_schema": "ActionReceipt@1"
+    }
+  ],
+  "acceptanceJourneys": [
+    {
+      "id": "AJ-STRUCTURE-DESIGN-CAMPAIGN-001",
+      "risk": "high",
+      "roles": [
+        "structural-scientist",
+        "medicinal-chemist"
+      ],
+      "devices": [
+        "desktop-keyboard-pointer",
+        "desktop-screen-reader"
+      ],
+      "context": [
+        "program",
+        "work-thread",
+        "question",
+        "structure-snapshot-v3"
+      ],
+      "actions": [
+        "structures.site.save@1",
+        "handoff.offer@1",
+        "handoff.accept@1",
+        "design.proposal.promote@2",
+        "campaigns.candidate.add@1"
+      ],
+      "expected": [
+        "exact-selection-receipt",
+        "frozen-handoff-input",
+        "canonical-compound-identity-preserved",
+        "objective-version-recorded"
+      ],
+      "negative": [
+        "stale-structure",
+        "permission-revoked",
+        "duplicate-identity",
+        "duplicate-transport",
+        "new-scientific-attempt",
+        "partial-effect",
+        "cross-tenant-context"
+      ],
+      "evidence": [
+        "capability",
+        "authoritative-integration",
+        "e2e",
+        "manual-accessibility",
+        "adversarial"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "HCI-AUTH-001",
+      "area": "authorization",
+      "condition": "any read, offer, preview, commit, share, export, cache, AI, or telemetry operation",
+      "actor": "any actor",
+      "behavior": "reauthorize at the application boundary with field and relationship filtering",
+      "authority": "application authorization service",
+      "failure": "return a non-leaking refusal or tombstone",
+      "evidence": "authoritative integration plus cross-tenant adversarial tests",
+      "owner": "security",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-ID-001",
+      "area": "identity",
+      "condition": "an entity appears in more than one workspace",
+      "actor": "any projection",
+      "behavior": "project the same canonical reference and version without recreation",
+      "authority": "domain repository",
+      "failure": "block ambiguous or duplicate creation and return safe identity outcome",
+      "evidence": "cross-workspace identity integration witness",
+      "owner": "domain",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-CTX-001",
+      "area": "context",
+      "condition": "tenant, Program, WorkThread, question, or parent object changes",
+      "actor": "projection",
+      "behavior": "apply typed transition and invalidation rules before rendering descendants",
+      "authority": "context policy plus authorization service",
+      "failure": "clear or tombstone invalid descendants without leaking labels",
+      "evidence": "context transition capability and revocation tests",
+      "owner": "application",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-CTX-002",
+      "area": "context",
+      "condition": "context is shared or restored",
+      "actor": "projection",
+      "behavior": "use an opaque expiring handle and reauthorize before labels are shown",
+      "authority": "context-link service",
+      "failure": "show a safe unavailable state",
+      "evidence": "share-link revocation and URL inspection tests",
+      "owner": "security",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-SEL-001",
+      "area": "selection",
+      "condition": "a user selects objects, substructures, material, wells, or data",
+      "actor": "human projection",
+      "behavior": "create the matching typed SelectionRef with versions, scope, lifecycle, and size",
+      "authority": "projection for transient state; application for named/shared state",
+      "failure": "refuse unsupported or stale selection semantics",
+      "evidence": "selection union and stale-selection tests",
+      "owner": "application",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-STATE-001",
+      "area": "state",
+      "condition": "a surface reports work or data state",
+      "actor": "any projection",
+      "behavior": "preserve draft, connectivity, availability, submission, execution, freshness, and review as orthogonal axes",
+      "authority": "owning application services",
+      "failure": "display unknown rather than inventing a combined status",
+      "evidence": "state matrix capability tests",
+      "owner": "application",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-ACT-001",
+      "area": "action",
+      "condition": "an actor asks what can be done",
+      "actor": "human, CLI, agent, or automation",
+      "behavior": "request authoritative ActionOffers for stable versioned application action IDs",
+      "authority": "application action service",
+      "failure": "return permission-safe absence or structured ineligibility",
+      "evidence": "projection-equivalence integration tests",
+      "owner": "application",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-ACT-002",
+      "area": "action",
+      "condition": "a consequential action is prepared",
+      "actor": "authorized actor",
+      "behavior": "return a server-computed preview, signed precondition token, source versions, effects, warnings, and acknowledgements",
+      "authority": "application action service",
+      "failure": "refuse preview when truth or authorization is incomplete",
+      "evidence": "preview token and authorization tests",
+      "owner": "application",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-ACT-003",
+      "area": "action",
+      "condition": "an actor commits a preview",
+      "actor": "authorized accountable actor",
+      "behavior": "reauthorize and compare token/source versions before transaction or declared saga",
+      "authority": "application action service",
+      "failure": "return stale semantic diff, refusal, or per-effect compensation receipt",
+      "evidence": "stale, partial-effect, and revocation integration tests",
+      "owner": "application",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-ACT-004",
+      "area": "idempotency",
+      "condition": "transport repeats the same request",
+      "actor": "any channel",
+      "behavior": "reuse one operation and receipt for the same idempotency key and payload digest",
+      "authority": "application action service",
+      "failure": "refuse key reuse with a different payload",
+      "evidence": "duplicate transport adversarial test",
+      "owner": "application",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-ACT-005",
+      "area": "retry",
+      "condition": "a scientist deliberately retries work",
+      "actor": "authorized actor",
+      "behavior": "create a new attempt ID linked to the prior attempt",
+      "authority": "application action service",
+      "failure": "do not collapse scientific retry into transport deduplication",
+      "evidence": "retry lineage integration test",
+      "owner": "application",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-WORK-001",
+      "area": "work-graph",
+      "condition": "scientific work splits, merges, delegates, supersedes, returns, or shares dependencies",
+      "actor": "program participant",
+      "behavior": "represent the transition as typed WorkThread graph nodes and edges",
+      "authority": "work graph service",
+      "failure": "refuse invalid cycles or unauthorized edge disclosure",
+      "evidence": "graph invariant and permission tests",
+      "owner": "program",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-HO-001",
+      "area": "handoff",
+      "condition": "work crosses role, team, service, partner, or stage",
+      "actor": "source and target actors",
+      "behavior": "use versioned lifecycle, frozen/live payloads, acceptance contract, permission envelope, SLA, escalation, and partial delivery",
+      "authority": "handoff service",
+      "failure": "derive structured missing clauses and allow reject/return/cancel/supersede",
+      "evidence": "handoff state-machine integration tests",
+      "owner": "workflow",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-ATTN-001",
+      "area": "attention",
+      "condition": "work needs a response",
+      "actor": "accountable role or queue",
+      "behavior": "create a permission-filtered AttentionItem with subject, reason, due window, actions, versions, and dedupe key",
+      "authority": "attention service",
+      "failure": "deduplicate or expire safely; never leak subject existence",
+      "evidence": "attention lifecycle and leak tests",
+      "owner": "workflow",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-AI-001",
+      "area": "delegation",
+      "condition": "work is delegated to an agent",
+      "actor": "accountable human or service",
+      "behavior": "issue a bounded DelegationEnvelope and require receipts, evidence, and calibrated/uncalibrated/unknown uncertainty",
+      "authority": "delegation service",
+      "failure": "refuse scope expansion and gated consequences",
+      "evidence": "agent boundary adversarial tests",
+      "owner": "AI governance",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-MAT-001",
+      "area": "material",
+      "condition": "material is reserved, split, transferred, consumed, or released",
+      "actor": "authorized material actor",
+      "behavior": "enforce unit-aware conservation, reservation version, custody, container, location, and QC",
+      "authority": "material repository transaction",
+      "failure": "atomically refuse double-spend, unit mismatch, quarantine, or stale version",
+      "evidence": "serializable race and conservation tests",
+      "owner": "synthesis",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-ACC-001",
+      "area": "accessibility",
+      "condition": "a primary journey is offered",
+      "actor": "keyboard, screen-reader, touch, or low-motion user",
+      "behavior": "provide component-specific semantic operation without drag, hover, colour, or animation dependence",
+      "authority": "projection",
+      "failure": "block release of that journey until equivalent operation and feedback exist",
+      "evidence": "manual protocol plus automated semantics tests",
+      "owner": "design",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-PERF-001",
+      "area": "performance",
+      "condition": "a performance claim or release budget is evaluated",
+      "actor": "release owner",
+      "behavior": "record workload, fixture, hardware, browser, network, cold/warm state, percentile, TTFUS, feedback, memory, and progress accuracy as applicable",
+      "authority": "performance harness",
+      "failure": "report not_recorded rather than a fabricated value",
+      "evidence": "versioned benchmark artifact",
+      "owner": "performance",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-TEL-001",
+      "area": "telemetry",
+      "condition": "a telemetry event is introduced or emitted",
+      "actor": "application or projection",
+      "behavior": "classify purpose, fields, tenant, retention, access, opt-out, and environment without scientific content by default",
+      "authority": "telemetry policy gate",
+      "failure": "drop unapproved fields/events and audit the refusal",
+      "evidence": "schema/privacy gate tests",
+      "owner": "privacy",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-PROG-001",
+      "area": "programs",
+      "condition": "a Program question is active",
+      "actor": "program lead",
+      "behavior": "project WorkThread graph as next-actions, graph, board, Gantt uncertainty, and decision evidence",
+      "authority": "program and work graph services",
+      "failure": "show permission-safe partialness and stale evidence",
+      "evidence": "Programs workspace journey",
+      "owner": "program",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-STRU-001",
+      "area": "structures",
+      "condition": "a structural interpretation is saved or handed off",
+      "actor": "structural scientist",
+      "behavior": "preserve exact structure version, model, assembly, chain, residue, atom, altloc, and snapshot semantics",
+      "authority": "structure observation service",
+      "failure": "return mapping ambiguity or stale diff rather than silently remapping",
+      "evidence": "Structures thin-slice journey",
+      "owner": "structures",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-DES-001",
+      "area": "design",
+      "condition": "a molecular proposal is promoted",
+      "actor": "medicinal chemist",
+      "behavior": "preserve draft version, stereochemistry, isotope, tautomer/protonation policy, form, lineage, and duplicate outcome",
+      "authority": "identity and design services",
+      "failure": "branch concurrent edits and safely report inaccessible duplicates",
+      "evidence": "Design thin-slice journey",
+      "owner": "design",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-CAMP-001",
+      "area": "campaigns",
+      "condition": "candidates are compared or advanced",
+      "actor": "portfolio owner",
+      "behavior": "bind scores to objective version and preview mixed eligibility for explicit or derived sets",
+      "authority": "campaign service",
+      "failure": "exclude/unknown groups remain visible and cannot be coerced to eligible",
+      "evidence": "Campaigns thin-slice and large-set tests",
+      "owner": "campaigns",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-EXP-001",
+      "area": "experiments",
+      "condition": "an experiment is planned or started",
+      "actor": "assay scientist",
+      "behavior": "preserve protocol/layout versions, wells, dilutions, randomization, blinding, schedule, sample quantities, deviations, and QC",
+      "authority": "experiment and material services",
+      "failure": "return well-level conflict or atomic resource refusal",
+      "evidence": "plate conflict and atomic-start tests",
+      "owner": "experiments",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-KNOW-001",
+      "area": "knowledge",
+      "condition": "evidence is searched, admitted, superseded, or retracted",
+      "actor": "scientist or curator",
+      "behavior": "use permission-safe graph queries and propagate freshness/invalidation to dependants",
+      "authority": "knowledge service",
+      "failure": "avoid count/timing leakage and show safe tombstones",
+      "evidence": "large graph, retraction, and leak tests",
+      "owner": "knowledge",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-COMP-001",
+      "area": "compute",
+      "condition": "compute is submitted, retried, cancelled, or returned",
+      "actor": "compute user or agent",
+      "behavior": "preserve Mission, Run, Attempt, Job, environment, quota, provenance, and result validity as distinct concepts",
+      "authority": "execution service",
+      "failure": "resolve cancellation race and invalid result with explicit receipt",
+      "evidence": "compute lifecycle and race tests",
+      "owner": "compute",
+      "waiver": "none"
+    },
+    {
+      "id": "HCI-EVID-001",
+      "area": "release",
+      "condition": "a requirement is claimed implemented",
+      "actor": "release owner",
+      "behavior": "link requirement ID to capability, authoritative integration, E2E, manual, and adversarial evidence required by its risk",
+      "authority": "acceptance harness",
+      "failure": "keep status designed/reference-tested/integrated instead of complete",
+      "evidence": "generated evidence matrix",
+      "owner": "quality",
+      "waiver": "none"
+    }
+  ]
+}
