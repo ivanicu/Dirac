@@ -600,8 +600,14 @@ function initShellNavigation(): void {
                 programId: appShell.current().programId || 'current' };
             button.href = appShell.urlFor(route);
             const icon = document.createElement('span');
+            icon.className = 'workspace-nav-icon';
             icon.textContent = workspace.icon; icon.setAttribute('aria-hidden', 'true');
-            button.append(icon, document.createTextNode(` ${workspace.label}`));
+            const navLabel = document.createElement('span');
+            navLabel.className = 'workspace-nav-label';
+            navLabel.textContent = workspace.id === 'runs' ? 'Compute' : workspace.label;
+            button.append(icon, navLabel);
+            button.setAttribute('aria-label', workspace.label);
+            button.title = workspace.label;
             button.dataset.capability = workspace.availability;
             if (workspace.id === active) button.setAttribute('aria-current', 'page');
             button.addEventListener('click', event => {

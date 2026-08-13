@@ -56,6 +56,7 @@ export class WorkspaceCanvas {
         const scaffold = !definition.requiresScene;
         const connected = definition.delivery === 'connected';
         const app = document.getElementById('app');
+        app?.classList.add('workspace-shell');
         app?.classList.toggle('shell-scaffold', scaffold);
         app?.classList.toggle('shell-connected', scaffold && connected);
         if (app) app.dataset.workspace = route.workspace;

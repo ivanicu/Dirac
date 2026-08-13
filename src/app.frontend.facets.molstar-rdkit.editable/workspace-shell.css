@@ -1497,3 +1497,309 @@
     .workspace-native-runs-heading { align-items: stretch; flex-direction: column; }
     .workspace-native-runs .run-job-list { grid-template-columns: 1fr; }
 }
+
+/* ── One left-side information architecture for every View. ─────────────
+ * The original four-row workbench grid was never updated after Workspace,
+ * View, Context, and Outline were inserted. Context therefore occupied the
+ * flexible row on scene Views and rendered as a large empty field. A stable
+ * Workspace rail plus one contextual pane now serves every route.
+ */
+#app.workspace-shell {
+    grid-template-columns: 336px minmax(0, 1fr);
+}
+
+#app.workspace-shell .sidebar {
+    display: grid;
+    grid-template-columns: 88px minmax(0, 1fr);
+    min-width: 0;
+    overflow: hidden;
+    border-right: 1px solid var(--line);
+    background: linear-gradient(180deg, var(--plate), var(--plate-2));
+}
+
+#app.workspace-shell .workspace-nav {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    display: flex;
+    min-width: 0;
+    padding: 8px 6px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    flex-direction: column;
+    gap: 4px;
+    border-right: 1px dotted var(--line-dot);
+    border-bottom: 0;
+    background: linear-gradient(180deg, var(--plate), var(--plate-2));
+}
+
+#app.workspace-shell .workspace-switcher { display: none; }
+
+#app.workspace-shell .workspace-nav a {
+    display: flex;
+    min-width: 0;
+    min-height: 54px;
+    padding: 6px 3px;
+    overflow: hidden;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 5px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--etch);
+    font: 0/0 var(--mono);
+    letter-spacing: 0;
+    text-align: center;
+    text-decoration: none;
+    text-overflow: clip;
+    text-transform: uppercase;
+    white-space: normal;
+}
+
+#app.workspace-shell .workspace-nav a > .workspace-nav-label {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    color: inherit;
+    font: 500 6.5px/1.15 var(--mono) !important;
+    letter-spacing: .025em;
+    text-overflow: clip;
+    white-space: nowrap;
+}
+
+#app.workspace-shell .workspace-nav a > span {
+    color: var(--ink-2);
+    font: 600 13px/1 var(--mono);
+}
+
+#app.workspace-shell .workspace-nav a:hover {
+    border-color: var(--line);
+    background: var(--paper);
+    color: var(--ink);
+}
+
+#app.workspace-shell .workspace-nav a[aria-current='page'] {
+    border-color: var(--line);
+    background: var(--pressed);
+    box-shadow: inset 3px 0 0 var(--ink), var(--hold);
+    color: var(--ink);
+}
+
+#app.workspace-shell .view-nav,
+#app.workspace-shell .global-context-bar,
+#app.workspace-shell .workspace-outline,
+#app.workspace-shell .master-nav,
+#app.workspace-shell .scene-summary,
+#app.workspace-shell .detail-scroll,
+#app.workspace-shell .diag-strip {
+    grid-column: 2;
+    min-width: 0;
+}
+
+#app.workspace-shell:not(.shell-scaffold) .sidebar {
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+}
+
+#app.workspace-shell:not(.shell-scaffold) .view-nav {
+    grid-row: 1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    padding: 8px;
+    overflow: visible;
+    border-bottom: 1px solid var(--line);
+    background: var(--plate);
+}
+
+#app.workspace-shell:not(.shell-scaffold) .view-switcher { display: none; }
+
+#app.workspace-shell:not(.shell-scaffold) .view-nav::before {
+    grid-column: 1 / -1;
+    margin: 0 1px 2px;
+    color: var(--etch);
+    content: 'VIEWS';
+    font: 400 7.5px/1 var(--mono);
+    letter-spacing: .24em;
+}
+
+#app.workspace-shell:not(.shell-scaffold) .view-nav a {
+    display: flex;
+    min-width: 0;
+    min-height: 30px;
+    padding: 6px 7px;
+    align-items: center;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--etch);
+    font: 500 8.5px/1.2 var(--mono);
+    text-decoration: none;
+    white-space: normal;
+}
+
+#app.workspace-shell:not(.shell-scaffold) .view-nav a[aria-current='page'] {
+    border-color: var(--line);
+    background: var(--pressed);
+    box-shadow: var(--hold);
+    color: var(--ink);
+}
+
+#app.workspace-shell:not(.shell-scaffold) .global-context-bar {
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+    padding: 8px;
+    border-bottom: 1px solid var(--line);
+    background: var(--face);
+}
+
+#app.workspace-shell:not(.shell-scaffold) .context-cell {
+    min-width: 0;
+    padding: 6px 7px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--well);
+    box-shadow: var(--sink-1);
+}
+
+#app.workspace-shell:not(.shell-scaffold) .context-cell:nth-child(3) {
+    grid-column: 1 / -1;
+}
+
+#app.workspace-shell:not(.shell-scaffold) .context-cell span {
+    color: var(--etch);
+    font: 400 7.5px/1 var(--mono);
+    letter-spacing: .16em;
+}
+
+#app.workspace-shell:not(.shell-scaffold) .context-cell strong {
+    margin-top: 4px;
+    font: 600 10px/1 var(--mono);
+}
+
+#app.workspace-shell:not(.shell-scaffold) .context-actions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 7px;
+    color: var(--etch);
+    font: 400 7.5px/1.35 var(--mono);
+}
+
+#app.workspace-shell:not(.shell-scaffold) .context-actions button {
+    min-height: 30px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: linear-gradient(180deg, #f6f5f1, #e7e5e0);
+    box-shadow: var(--rise-1);
+    color: var(--ink-2);
+    font: 500 7.5px/1 var(--mono);
+}
+
+#app.workspace-shell:not(.shell-scaffold) .attention-slot { display: none; }
+
+#app.workspace-shell:not(.shell-scaffold) .master-nav {
+    grid-row: 3;
+    display: flex;
+    padding: 5px 8px 0;
+    flex-wrap: wrap;
+    gap: 2px;
+    border-bottom: 1px solid var(--line);
+    background: var(--plate);
+}
+
+#app.workspace-shell:not(.shell-scaffold) .master-nav::before {
+    width: 100%;
+    margin: 3px 1px 1px;
+    color: var(--etch);
+    content: 'VIEW TOOLS';
+    font: 400 7.5px/1 var(--mono);
+    letter-spacing: .24em;
+}
+
+#app.workspace-shell:not(.shell-scaffold) .master-tab {
+    min-height: 32px;
+    padding: 7px 8px;
+    color: var(--etch);
+    font: 500 8.5px/1 var(--mono);
+    letter-spacing: .12em;
+}
+
+#app.workspace-shell:not(.shell-scaffold) .master-tab[aria-pressed='true'] {
+    color: var(--ink);
+}
+
+#app.workspace-shell:not(.shell-scaffold) .scene-summary { grid-row: 4; }
+#app.workspace-shell:not(.shell-scaffold) .detail-scroll {
+    grid-row: 5;
+    padding: 10px;
+}
+#app.workspace-shell:not(.shell-scaffold) .diag-strip { grid-row: 6; }
+
+#app.shell-scaffold.workspace-shell .sidebar {
+    grid-template-rows: auto minmax(0, 1fr);
+}
+
+#app.shell-scaffold.workspace-shell .workspace-nav {
+    grid-column: 1;
+    grid-row: 1 / -1;
+}
+
+#app.shell-scaffold.workspace-shell .global-context-bar {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+#app.shell-scaffold.workspace-shell .workspace-outline {
+    grid-column: 2;
+    grid-row: 2;
+}
+
+@media (max-width: 900px) {
+    #app.workspace-shell {
+        grid-template-columns: 1fr;
+        grid-template-rows: 64px auto minmax(420px, 1fr);
+    }
+
+    #app.workspace-shell .sidebar {
+        grid-template-columns: 1fr;
+        max-height: 460px;
+    }
+
+    #app.workspace-shell .workspace-nav {
+        grid-column: 1;
+        grid-row: 1;
+        display: flex;
+        padding: 6px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        flex-direction: row;
+    }
+
+    #app.workspace-shell .workspace-nav a {
+        min-width: 82px;
+        min-height: 50px;
+        flex: 0 0 82px;
+    }
+
+    #app.workspace-shell .view-nav,
+    #app.workspace-shell .global-context-bar,
+    #app.workspace-shell .workspace-outline,
+    #app.workspace-shell .master-nav,
+    #app.workspace-shell .scene-summary,
+    #app.workspace-shell .detail-scroll,
+    #app.workspace-shell .diag-strip {
+        grid-column: 1;
+    }
+
+    #app.shell-scaffold.workspace-shell .global-context-bar { grid-row: 2; }
+    #app.shell-scaffold.workspace-shell .workspace-outline { display: none; }
+    #app.workspace-shell:not(.shell-scaffold) .view-nav { grid-row: 2; }
+    #app.workspace-shell:not(.shell-scaffold) .global-context-bar { display: none; }
+    #app.workspace-shell:not(.shell-scaffold) .master-nav { grid-row: 3; }
+    #app.workspace-shell:not(.shell-scaffold) .scene-summary { grid-row: 4; }
+    #app.workspace-shell:not(.shell-scaffold) .detail-scroll { grid-row: 5; }
+    #app.workspace-shell:not(.shell-scaffold) .diag-strip { grid-row: 6; }
+}
