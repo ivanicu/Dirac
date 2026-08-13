@@ -212,6 +212,7 @@ class InvocationService:
 
     # ── job control surface ─────────────────────────────────────────────────
     def capabilities(self) -> dict:
+        executor_adapter = self._executor_adapter()
         return {
             'job_store': {
                 'kind': getattr(self.ledger, 'kind', 'none') if self.ledger else 'none',
@@ -223,7 +224,13 @@ class InvocationService:
                 'durability': ('durable' if getattr(self, 'store_kind', '') == 'postgres'
                                else 'process'),
             },
-            'executor': {'kind': getattr(self.executor, 'kind', 'unknown')},
+            'executor': {
+                'kind': getattr(self.executor, 'kind', 'unknown'),
+                'adapter': executor_adapter,
+                'gpu_execution': executor_adapter in {
+                    'local_gpu', 'slurm', 'kubernetes'
+                },
+            },
             'command_traces': {
                 'kind': getattr(self.command_traces, 'kind', 'none'),
                 'durability': getattr(self.command_traces, 'durability', 'none'),
@@ -240,6 +247,43 @@ class InvocationService:
             # available when ThreadExecutor owns a submitted future.
             'cancellation': 'queued-only',
         }
+
+    def _executor_adapter(self) -> str:
+        """Return the contract adapter represented by the injected executor.
+
+        A generic ``RemoteExecutor`` is only a callback boundary; it is not proof
+        that Kubernetes or Slurm is actually connected.  Deployments therefore
+        have to set ``adapter_kind`` explicitly on a remote executor before a
+        method that requires that adapter may run.
+        """
+        explicit = getattr(self.executor, 'adapter_kind', None)
+        if explicit:
+            return str(explicit)
+        return {
+            'inline': 'inline',
+            'thread': 'local_cpu',
+            'process': 'local_cpu',
+        }.get(getattr(self.executor, 'kind', 'unknown'), 'unconfigured')
+
+    def _require_executor_compatibility(self, spec: C.MethodSpec) -> None:
+        """Fail closed when a GPU method would escape its declared scheduler."""
+        if spec.execution.get('resource_class') != 'gpu':
+            return
+        adapter = self._executor_adapter()
+        supported = tuple(spec.execution.get('supported_adapters') or ())
+        if adapter not in supported:
+            raise failures.DiracUnsupported(
+                f'{spec.method_id} requires a configured GPU execution adapter; '
+                f'this kernel exposes {adapter!r}',
+                details={
+                    'method_id': spec.method_id,
+                    'resource_class': 'gpu',
+                    'executor_kind': getattr(self.executor, 'kind', 'unknown'),
+                    'executor_adapter': adapter,
+                    'supported_adapters': list(supported),
+                    'recovery': ('configure a local_gpu, slurm, or kubernetes worker '
+                                 'adapter; the API will not run this job in-process'),
+                })
 
     def list_jobs(self, *, state: str | None = None, limit: int = 100) -> list[dict]:
         if self.ledger is None or not hasattr(self.ledger, 'list'):
@@ -296,6 +340,7 @@ class InvocationService:
         """Create a reconnectable queued Job and execute it on the injected executor."""
         spec = self.catalog.get(method_id)
         self.catalog.validate(method_id, payload)
+        self._require_executor_compatibility(spec)
         handler = spec.handler()  # fail before minting a handle that can never run
         execution_identity = self._execution_identity(spec, payload, handler)
         if 'job' not in spec.execution.get('supported_modes', []):
@@ -393,6 +438,7 @@ class InvocationService:
             actor_ref = self._actor(actor)
             spec = self.catalog.get(method_id)
             self.catalog.validate(method_id, payload)
+            self._require_executor_compatibility(spec)
             handler = spec.handler()
             execution_identity = self._execution_identity(spec, payload, handler)
 

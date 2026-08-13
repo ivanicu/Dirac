@@ -16,16 +16,42 @@ class FakeKubectl:
     def __init__(self) -> None:
         self.calls: list[tuple[tuple[str, ...], str | None]] = []
         self.job: dict = {}
+        self.config_map: dict = {}
+        self.pods: list[dict] = []
+        self.job_exists = False
 
     def __call__(self, command, *, input=None, text, capture_output, check):
         self.calls.append((tuple(command), input))
         args = tuple(command[1:])
         if args[:3] == ("get", "job", "dirac-00000000000040008000000000000004"):
+            if not self.job_exists:
+                raise subprocess.CalledProcessError(
+                    1, command, stderr='Error from server (NotFound): jobs "missing" not found')
             return self._result(json.dumps(self.job))
+        if args[:3] == ("get", "configmap", "dirac-00000000000040008000000000000004-request"):
+            if not self.config_map:
+                raise subprocess.CalledProcessError(
+                    1, command, stderr='Error from server (NotFound): configmaps "missing" not found')
+            return self._result(json.dumps(self.config_map))
+        if args[:2] == ("get", "pods"):
+            return self._result(json.dumps({"items": self.pods}))
         if args[:2] == ("get", "events"):
             return self._result('{"items": []}')
         if args[:2] == ("logs", "job/dirac-00000000000040008000000000000004"):
             return self._result("worker output\n")
+        if args[:3] == ("apply", "--server-side", "-f"):
+            manifest = json.loads(input)
+            if manifest["kind"] == "ConfigMap":
+                self.config_map = manifest
+            elif manifest["kind"] == "Job":
+                self.job = manifest
+                self.job["metadata"]["uid"] = "internal-kubernetes-uid"
+                self.job["status"] = {}
+                self.job_exists = True
+            return self._result("{}")
+        if args[:3] == ("patch", "configmap", "dirac-00000000000040008000000000000004-request"):
+            patch = json.loads(args[7])
+            self.config_map["metadata"].update(patch["metadata"])
         return self._result("{}")
 
     @staticmethod
@@ -39,24 +65,13 @@ class KubernetesKueueAdapterTests(unittest.TestCase):
         self.adapter = KubernetesKueueAdapter(
             worker_command=["python", "-m", "dirac_worker"],
             allowed_images=[IMAGE],
+            policy_init_image=IMAGE,
             runner=self.runner,
         )
         self.request = copy.deepcopy(EXECUTION_REQUEST)
         self.request["placement"]["backend"] = "kubernetes"
         self.request["container_image"] = IMAGE
         self.request["attempt_id"] = "00000000-0000-4000-8000-000000000004"
-        self.runner.job = {
-            "apiVersion": "batch/v1",
-            "kind": "Job",
-            "metadata": {
-                "name": "dirac-00000000000040008000000000000004",
-                "namespace": "dirac-motif",
-                "uid": "internal-kubernetes-uid",
-                "labels": {"kueue.x-k8s.io/queue-name": "motif"},
-            },
-            "spec": {"suspend": True},
-            "status": {},
-        }
 
     def test_submit_uses_fixed_worker_and_kueue_suspension(self):
         self.request["entrypoint"] = ["malicious", "--escape"]
@@ -67,8 +82,16 @@ class KubernetesKueueAdapterTests(unittest.TestCase):
         self.assertEqual(len(manifests), 2)
         job = manifests[1]
         container = job["spec"]["template"]["spec"]["containers"][0]
+        init = job["spec"]["template"]["spec"]["initContainers"][0]
         self.assertEqual(container["command"], ["python", "-m", "dirac_worker"])
+        self.assertEqual(container["image"], IMAGE)
+        self.assertEqual(init["command"], ["/bin/sh", "-c", "sleep 3"])
+        self.assertEqual(init["image"], IMAGE)
         self.assertEqual(job["spec"]["suspend"], True)
+        self.assertNotIn("activeDeadlineSeconds", job["spec"])
+        self.assertEqual(job["spec"]["template"]["spec"]["activeDeadlineSeconds"], 3600)
+        self.assertEqual(job["spec"]["template"]["spec"]["terminationGracePeriodSeconds"],
+                         5)
         self.assertEqual(job["spec"]["backoffLimit"], 0)
         self.assertEqual(
             job["metadata"]["labels"]["kueue.x-k8s.io/queue-name"], "motif")
@@ -102,10 +125,24 @@ class KubernetesKueueAdapterTests(unittest.TestCase):
         self.assertEqual(resources["limits"]["nvidia.com/gpu"], "1")
 
     def test_state_mapping_cancel_and_events(self):
+        self.adapter.submit(self.request)
         allocation = "dirac-motif/dirac-00000000000040008000000000000004"
         self.runner.job["spec"]["suspend"] = False
         self.runner.job["status"] = {"active": 1}
+        self.runner.pods = [{"status": {"phase": "Pending", "conditions": [{
+            "type": "PodScheduled", "status": "False", "reason": "Unschedulable",
+            "message": "Insufficient cpu",
+        }]}}]
+        pending = self.adapter.inspect(allocation)
+        self.assertEqual(pending.state, "pending")
+        self.assertEqual(pending.scheduler_summary["unschedulable"][0]["reason"],
+                         "Unschedulable")
+        self.runner.pods[0]["status"]["phase"] = "Running"
         self.assertEqual(self.adapter.inspect(allocation).state, "running")
+        self.runner.pods[0]["status"].update({
+            "phase": "Failed", "reason": "DeadlineExceeded",
+        })
+        self.assertEqual(self.adapter.inspect(allocation).state, "failed")
         self.runner.job["status"] = {"succeeded": 1, "conditions": [
             {"type": "Complete", "status": "True", "reason": "Completed"}]}
         self.assertEqual(self.adapter.reconcile(allocation).state, "succeeded")
@@ -113,12 +150,64 @@ class KubernetesKueueAdapterTests(unittest.TestCase):
         self.assertTrue(any(call[0][1:4] == ("delete", "job",
                                              "dirac-00000000000040008000000000000004")
                             for call in self.runner.calls))
+        job_delete = next(call[0] for call in self.runner.calls
+                          if call[0][1:3] == ("delete", "job"))
+        self.assertIn("--cascade=orphan", job_delete)
+        self.assertTrue(any(call[0][1:3] == ("delete", "pods")
+                            for call in self.runner.calls))
+        self.assertTrue(any(call[0][1:4] == ("delete", "configmap",
+                                             "dirac-00000000000040008000000000000004-request")
+                            for call in self.runner.calls))
+        workload_delete = next(call[0] for call in self.runner.calls
+                               if call[0][1:3] == (
+                                   "delete", "workloads.kueue.x-k8s.io"))
+        self.assertIn("kueue.x-k8s.io/job-uid=internal-kubernetes-uid",
+                      workload_delete)
         self.assertEqual(self.adapter.collect_events(None).cursor, "0")
+
+    def test_exact_resubmission_is_idempotent_but_collision_is_rejected(self):
+        first = self.adapter.submit(self.request)
+        apply_count = sum(call[0][1:3] == ("apply", "--server-side")
+                          for call in self.runner.calls)
+        self.runner.job["spec"]["suspend"] = False  # Kueue owns this mutation.
+        second = self.adapter.submit(copy.deepcopy(self.request))
+        self.assertEqual(first.allocation_id, second.allocation_id)
+        self.assertEqual(
+            apply_count,
+            sum(call[0][1:3] == ("apply", "--server-side")
+                for call in self.runner.calls),
+        )
+        collision = copy.deepcopy(self.request)
+        collision["execution_digest"] = "sha256:" + "f" * 64
+        with self.assertRaisesRegex(RuntimeError, "ATTEMPT_IDENTITY_COLLISION"):
+            self.adapter.submit(collision)
+
+    def test_configmap_first_race_is_replayed_without_overwrite(self):
+        request_json = json.dumps(
+            self.request, sort_keys=True, separators=(",", ":"))
+        self.runner.config_map = self.adapter._config_map_manifest(
+            "dirac-00000000000040008000000000000004-request",
+            "dirac-00000000000040008000000000000004", request_json)
+        self.adapter.submit(copy.deepcopy(self.request))
+        applied = [json.loads(body) for command, body in self.runner.calls
+                   if command[1:3] == ("apply", "--server-side")]
+        self.assertEqual([item["kind"] for item in applied], ["Job"])
+
+        self.runner.job_exists = False
+        collision = copy.deepcopy(self.request)
+        collision["execution_digest"] = "sha256:" + "e" * 64
+        with self.assertRaisesRegex(RuntimeError, "ATTEMPT_IDENTITY_COLLISION"):
+            self.adapter.submit(collision)
 
     def test_mutable_images_are_rejected_at_configuration(self):
         with self.assertRaisesRegex(ValueError, "mutable"):
             KubernetesKueueAdapter(worker_command=["worker"],
-                                   allowed_images=["registry.example/worker:latest"])
+                                   allowed_images=["registry.example/worker:latest"],
+                                   policy_init_image=IMAGE)
+
+    def test_policy_barrier_requires_a_pinned_init_image(self):
+        with self.assertRaisesRegex(ValueError, "policy_init_image"):
+            KubernetesKueueAdapter(worker_command=["worker"], allowed_images=[IMAGE])
 
 
 if __name__ == "__main__":

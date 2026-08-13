@@ -42,15 +42,21 @@ class AllocationStoreTests(unittest.TestCase):
         adapter.request_cancel.assert_called_once_with(status.allocation_id,
                                                        grace_seconds=0)
 
-    def test_cancel_is_mirrored_before_job_disappears(self):
+    def test_cancel_is_mirrored_after_scheduler_confirms_deletion(self):
         adapter = mock.Mock(kind="kubernetes")
         store = mock.Mock()
+        events = []
+        adapter.request_cancel.side_effect = lambda *args, **kwargs: events.append(
+            "scheduler_deleted")
+        store.update_status.side_effect = lambda *args, **kwargs: events.append(
+            "database_cancelled")
         durable = DurableSchedulerAdapter(adapter, store)
         durable.request_cancel("dirac-motif/job-1", grace_seconds=30)
         adapter.request_cancel.assert_called_once_with("dirac-motif/job-1",
                                                        grace_seconds=30)
         persisted = store.update_status.call_args.args[0]
         self.assertEqual(persisted.state, "cancelled")
+        self.assertEqual(events, ["scheduler_deleted", "database_cancelled"])
 
 
 if __name__ == "__main__":

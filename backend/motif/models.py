@@ -10,6 +10,8 @@ import json
 import math
 from typing import Any, Iterable
 
+from motif.validation import prepare_training_rows
+
 
 def _rdkit():
     try:
@@ -52,7 +54,7 @@ def train_baselines(rows: Iterable[dict[str, Any]], *, endpoint_key: str,
     points. The first baseline release trains only on explicit equality labels.
     """
     import numpy as np
-    source = [dict(row) for row in rows]
+    source = prepare_training_rows(rows)
     exact = [row for row in source if row.get("qualifier", "equal") == "equal"
              and row.get("value") is not None]
     censored = [row for row in source if row.get("qualifier", "equal") != "equal"]

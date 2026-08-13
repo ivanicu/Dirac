@@ -6,6 +6,59 @@ import json
 from collections import defaultdict
 from typing import Any, Iterable
 
+from motif.features import canonical_smiles
+
+
+_SPLIT_ORDER = {name: index for index, name in enumerate(
+    ("train", "calibration", "validation", "test", "external"))}
+
+
+def prepare_training_rows(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Canonicalize semantic row order and reject cross-split leakage.
+
+    Method payload array order is transport noise, not model identity. Compound,
+    canonical structure and optional medicinal-chemistry series are all leakage
+    keys; any key shared by train and a held-out split invalidates the release
+    before feature fitting or GPU allocation.
+    """
+    source = []
+    for value in rows:
+        row = dict(value)
+        row["smiles"] = canonical_smiles(str(row["smiles"]))
+        source.append(row)
+
+    train_keys: dict[tuple[str, str], set[str]] = defaultdict(set)
+    heldout_keys: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for row in source:
+        split = str(row.get("split", "train"))
+        target = train_keys if split == "train" else heldout_keys
+        keys = {
+            ("compound_id", str(row.get("compound_id", ""))),
+            ("canonical_smiles", row["smiles"]),
+        }
+        if row.get("series_id") not in (None, ""):
+            keys.add(("series_id", str(row["series_id"])))
+        for key in keys:
+            if key[1]:
+                target[key].add(split)
+    collisions = sorted(set(train_keys) & set(heldout_keys))
+    if collisions:
+        details = [
+            {"kind": kind, "value": value,
+             "heldout_splits": sorted(heldout_keys[(kind, value)])}
+            for kind, value in collisions[:20]
+        ]
+        raise ValueError(f"cross-split leakage detected: {details}")
+
+    return sorted(source, key=lambda row: (
+        _SPLIT_ORDER.get(str(row.get("split", "train")), len(_SPLIT_ORDER)),
+        str(row.get("measurement_id", "")),
+        str(row.get("compound_id", "")),
+        row["smiles"],
+        str(row.get("qualifier", "equal")),
+        json.dumps(row, sort_keys=True, separators=(",", ":"), allow_nan=False),
+    ))
+
 
 def _digest(value: Any) -> str:
     return "sha256:" + hashlib.sha256(json.dumps(
@@ -107,4 +160,5 @@ def specification_curve(records: Iterable[dict[str, Any]], *, bootstrap_samples:
 
 __all__ = [
     "bootstrap_ci", "interval_metrics", "regression_metrics", "specification_curve",
+    "prepare_training_rows",
 ]

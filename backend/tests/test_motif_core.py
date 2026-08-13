@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import failures
 from catalog import MethodCatalog
 from execution_control.admission import ResourceInventory, admit
 from execution_control.retry import classify_retry
@@ -133,6 +134,38 @@ class MotifCoreTests(unittest.TestCase):
         self.assertRegex(result["meta"]["execution_digest"], r"^sha256:[0-9a-f]{64}$")
         self.assertEqual(result["meta"]["execution_identity"]["method_id"],
                          "design.motif.acquire")
+
+    def test_gpu_mesh_cannot_escape_to_inline_or_thread_executor(self):
+        payload = {
+            "endpoint_key": "potency",
+            "rows": [
+                {"compound_id": "c1", "smiles": "CCO", "endpoint_key": "potency",
+                 "value": 1.0, "qualifier": "equal", "split": "train"},
+                {"compound_id": "c2", "smiles": "CCN", "endpoint_key": "potency",
+                 "value": 2.0, "qualifier": "equal", "split": "train"},
+                {"compound_id": "c3", "smiles": "CCC", "endpoint_key": "potency",
+                 "value": 1.5, "qualifier": "equal", "split": "test"},
+            ],
+            "registration": {
+                "dataset_snapshot_ref": {"kind": "dataset", "id": UUID(31)},
+                "model_object_id": "mesh-test",
+                "release_name": "mesh-test-v1",
+                "source_commit": "0" * 40,
+                "intended_use": {}, "prohibited_use": {}, "known_limitations": {},
+            },
+        }
+        inline = InvocationService(MethodCatalog.load())
+        result = inline.invoke("ml.motif.mesh.train", payload)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"]["code"], "UNSUPPORTED")
+        self.assertEqual(result["error"]["details"]["executor_adapter"], "inline")
+        self.assertFalse(inline.capabilities()["executor"]["gpu_execution"])
+
+        thread = mock.Mock(kind="thread", supports_submission=True)
+        service = InvocationService(MethodCatalog.load(), executor=thread)
+        with self.assertRaises(failures.DiracUnsupported):
+            service.submit("ml.motif.mesh.train", payload)
+        thread.submit.assert_not_called()
 
     def test_production_invocation_refuses_partial_implicit_identity(self):
         service = InvocationService(MethodCatalog.load(), production_execution=True)

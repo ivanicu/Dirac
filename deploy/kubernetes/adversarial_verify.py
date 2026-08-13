@@ -98,7 +98,8 @@ def request(number: int, *, image: str, cpu: float = 1, memory: int = 256 << 20,
 
 
 def adapter(command: list[str], image: str) -> KubernetesKueueAdapter:
-    return KubernetesKueueAdapter(worker_command=command, allowed_images=[image])
+    return KubernetesKueueAdapter(
+        worker_command=command, allowed_images=[image], policy_init_image=BUSYBOX)
 
 
 def wait_status(instance: KubernetesKueueAdapter, allocation_id: str, *,
@@ -291,10 +292,13 @@ echo DIRAC_SECURITY_BOUNDARY_OK
 
 def hard_walltime(verify: Verification) -> dict[str, Any]:
     instance = adapter(["/bin/sh", "-c", "echo WALLTIME_STARTED; sleep 30"], BUSYBOX)
-    status = verify.submit(instance, request(20, image=BUSYBOX, walltime=3))
+    status = verify.submit(instance, request(20, image=BUSYBOX, walltime=7))
     final = wait_status(instance, status.allocation_id, timeout=30)
     assert final.state == "failed"
     reasons = [item.get("reason") for item in final.scheduler_summary["conditions"]]
+    reasons.extend(item.get("reason")
+                   for item in final.scheduler_summary["pod_status"])
+    reasons.extend(final.scheduler_summary["termination_reasons"])
     assert "DeadlineExceeded" in reasons
     return {"state": final.state, "condition_reasons": reasons,
             "logs": instance.logs(status.allocation_id).strip()}
@@ -306,6 +310,7 @@ def cancellation(verify: Verification) -> dict[str, Any]:
     running = wait_status(instance, status.allocation_id, wanted={"running"}, timeout=30)
     assert running.state == "running"
     job_name = status.allocation_id.split("/")[1]
+    job_uid = kube_json("get", "job", job_name, "-n", "dirac-motif")["metadata"]["uid"]
     instance.request_cancel(status.allocation_id, grace_seconds=0)
     cancelled_at = time.monotonic()
     deadline = time.monotonic() + 120
@@ -322,8 +327,13 @@ def cancellation(verify: Verification) -> dict[str, Any]:
         time.sleep(.25)
     pods = kube_json("get", "pods", "-n", "dirac-motif",
                      "-l", f"job-name={job_name}").get("items", [])
+    workloads = kube_json(
+        "get", "workloads.kueue.x-k8s.io", "-n", "dirac-motif",
+        "-l", f"kueue.x-k8s.io/job-uid={job_uid}").get("items", [])
     assert not pods
-    return {"job_deleted": True, "pod_count": 0, "request_configmap_deleted": True,
+    assert not workloads
+    return {"job_deleted": True, "pod_count": 0, "workload_count": 0,
+            "request_configmap_deleted": True,
             "converged_seconds": round(time.monotonic() - cancelled_at, 3)}
 
 
@@ -349,8 +359,8 @@ def duplicate_attempt(verify: Verification) -> dict[str, Any]:
     collision["execution_digest"] = "sha256:" + "f" * 64
     try:
         instance.submit(collision)
-    except subprocess.CalledProcessError as error:
-        conflict = (error.stderr or "").strip()[-500:]
+    except RuntimeError as error:
+        conflict = str(error)[-500:]
     else:
         raise AssertionError("same attempt_id accepted a different execution digest")
     final = wait_status(instance, first.allocation_id)
@@ -388,9 +398,9 @@ def cpu_overcommit(verify: Verification) -> dict[str, Any]:
                      for item in events.get("items", [])
                      if item.get("reason") == "FailedScheduling" and
                      item.get("involvedObject", {}).get("name", "").startswith("dirac-900")]
-    if max_reserved_cpu > 24:
+    if max_reserved_cpu > 20:
         raise AssertionError(
-            f"Kueue reserved {max_reserved_cpu} CPU on a 24-CPU node; "
+            f"Kueue reserved {max_reserved_cpu} CPU above its 20-core quota; "
             f"max_running={max_running}, states={jobs}, waiting={saw_waiting}, "
             f"failed_scheduling={bool(unschedulable)}"
         )
@@ -399,7 +409,7 @@ def cpu_overcommit(verify: Verification) -> dict[str, Any]:
     return {"max_reserved_cpu": max_reserved_cpu, "max_running": max_running,
             "saw_waiting": saw_waiting, "job_states": jobs,
             "node_allocatable_cpu": kube_json("get", "node", "icu")["status"]
-            ["allocatable"]["cpu"], "declared_queue_cpu": "48",
+            ["allocatable"]["cpu"], "declared_queue_cpu": "20",
             "failed_scheduling_tail": unschedulable[-1][-500:] if unschedulable else None}
 
 
@@ -453,6 +463,7 @@ def gpu_exclusive(verify: Verification, round_number: int) -> dict[str, Any]:
         "logs", "job/" + status.allocation_id.split("/")[1],
         "--namespace", "dirac-motif", "--tail", "20", check=False,
     ).returncode == 0 for status in statuses]
+    assert all(postmortem_logs)
 
     smoke = adapter(command[:-1], GPU_OPERATOR)
     smoke_status = verify.submit(smoke, request(base + 2, image=GPU_OPERATOR,

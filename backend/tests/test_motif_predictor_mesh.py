@@ -32,6 +32,30 @@ class PredictorMeshTests(unittest.TestCase):
                                               "censored_tobit"}
         assert validation["cell_count"] > 0
 
+    def test_training_is_order_canonical_and_cross_split_leakage_is_refused(self):
+        from motif.mesh import train_predictor_mesh
+        values = [
+            {"measurement_id": f"m-{index}", "compound_id": f"c-{index}",
+             "smiles": smiles, "endpoint_key": "activity", "qualifier": "equal",
+             "value": float(index), "split": "test" if index >= 6 else "train"}
+            for index, smiles in enumerate(SMILES)
+        ]
+        first, first_validation = train_predictor_mesh(
+            values, endpoint_key="activity", n_bits=128, include_chemprop=False,
+            bootstrap_samples=20, seed=9)
+        second, second_validation = train_predictor_mesh(
+            reversed(values), endpoint_key="activity", n_bits=128,
+            include_chemprop=False, bootstrap_samples=20, seed=9)
+        self.assertEqual(first["digest"], second["digest"])
+        self.assertEqual(first_validation["digest"], second_validation["digest"])
+
+        leaked = [dict(row) for row in values[:6]]
+        leaked.append({**values[0], "measurement_id": "leaked-test", "split": "test"})
+        with self.assertRaisesRegex(ValueError, "cross-split leakage"):
+            train_predictor_mesh(
+                leaked, endpoint_key="activity", n_bits=128,
+                include_chemprop=False, bootstrap_samples=20, seed=9)
+
     @classmethod
     def setUpClass(cls):
         cls.release = fit_feature_release(SMILES, n_bits=128)

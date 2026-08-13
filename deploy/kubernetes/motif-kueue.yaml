@@ -47,7 +47,7 @@ spec:
         - name: dirac-default
           resources:
             - name: cpu
-              nominalQuota: "48"
+              nominalQuota: "20"
             - name: memory
               nominalQuota: 48Gi
             - name: ephemeral-storage

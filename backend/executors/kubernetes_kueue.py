@@ -31,7 +31,8 @@ class KubernetesKueueConfig:
     namespace: str = "dirac-motif"
     queue_name: str = "motif"
     service_account: str = "dirac-motif-worker"
-    termination_grace_seconds: int = 300
+    termination_grace_seconds: int = 5
+    network_policy_settle_seconds: int = 3
 
     def __post_init__(self) -> None:
         for field in ("namespace", "queue_name", "service_account"):
@@ -40,6 +41,8 @@ class KubernetesKueueConfig:
                 raise ValueError(f"{field} must be a Kubernetes DNS label")
         if self.termination_grace_seconds < 0:
             raise ValueError("termination_grace_seconds must be non-negative")
+        if not 0 <= self.network_policy_settle_seconds <= 30:
+            raise ValueError("network_policy_settle_seconds must be between 0 and 30")
 
 
 class KubernetesKueueAdapter:
@@ -56,6 +59,7 @@ class KubernetesKueueAdapter:
         *,
         worker_command: Sequence[str],
         allowed_images: Sequence[str],
+        policy_init_image: str | None = None,
         config: KubernetesKueueConfig | None = None,
         runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
     ) -> None:
@@ -69,6 +73,13 @@ class KubernetesKueueAdapter:
         self.worker_command = tuple(worker_command)
         self.allowed_images = frozenset(allowed_images)
         self.config = config or KubernetesKueueConfig()
+        if self.config.network_policy_settle_seconds:
+            if not policy_init_image:
+                raise ValueError(
+                    "policy_init_image is required when the network policy barrier is enabled")
+            if not _is_digest_image(policy_init_image):
+                raise ValueError("policy_init_image must be an immutable OCI digest")
+        self.policy_init_image = policy_init_image
         self._runner = runner or subprocess.run
 
     def admit(self, request: dict[str, Any]) -> AdmissionDecision:
@@ -126,7 +137,16 @@ class KubernetesKueueAdapter:
         name = self._job_name(request["attempt_id"])
         config_map = f"{name}-request"
         request_json = json.dumps(request, sort_keys=True, separators=(",", ":"))
-        self._apply(self._config_map_manifest(config_map, name, request_json))
+        existing = self._get_optional("job", name)
+        if existing is not None:
+            self._verify_existing_submission(
+                existing, config_map=config_map, request_json=request_json, request=request)
+            return self._status(existing, self._pods(name))
+        existing_request = self._get_optional("configmap", config_map)
+        if existing_request is not None:
+            self._verify_request_config_map(existing_request, request_json)
+        else:
+            self._apply(self._config_map_manifest(config_map, name, request_json))
         try:
             self._apply(self._job_manifest(name, config_map, request))
             job = self._get("job", name)
@@ -148,9 +168,21 @@ class KubernetesKueueAdapter:
                 },
             )
         except Exception:
-            self._delete("configmap", config_map, ignore_not_found=True)
+            # A concurrent submitter may have won between the first GET and the
+            # server-side apply. Treat the exact same immutable Attempt as an
+            # idempotent replay; never force-conflict with Kueue's ownership of
+            # spec.suspend.
+            existing = self._get_optional("job", name)
+            if existing is not None:
+                self._verify_existing_submission(
+                    existing, config_map=config_map, request_json=request_json,
+                    request=request)
+                return self._status(existing, self._pods(name))
+            # Do not delete the immutable request here. A concurrent submitter
+            # may have created the same ConfigMap between our GET and apply;
+            # deleting it would make its newly-created Job fail to mount.
             raise
-        return self._status(job)
+        return self._status(job, self._pods(name))
 
     def inspect(self, allocation_id: str) -> AllocationStatus:
         namespace, name = self._parse_allocation_id(allocation_id)
@@ -158,16 +190,44 @@ class KubernetesKueueAdapter:
             job = self._get("job", name, namespace=namespace)
         except KubernetesObjectNotFound:
             return AllocationStatus(allocation_id, "unknown", {})
-        return self._status(job)
+        return self._status(job, self._pods(name, namespace=namespace))
 
     def request_cancel(self, allocation_id: str, *, grace_seconds: int) -> None:
         namespace, name = self._parse_allocation_id(allocation_id)
+        timeout = max(30, max(0, grace_seconds) + 15)
+        job = self._get_optional("job", name, namespace=namespace)
+        job_uid = (job or {}).get("metadata", {}).get("uid")
+        # Orphan first: background/foreground propagation stamps the child Pod
+        # with the template's normal shutdown grace before our explicit deletion,
+        # and Kubernetes will not shorten that already-running grace period. Once
+        # the controller is deleting and cannot recreate work, terminate the
+        # orphaned executable Pods with the caller's grace.
         self._run(
             "delete", "job", name,
             "--namespace", namespace,
             "--grace-period", str(max(0, grace_seconds)),
-            "--wait=false", "--ignore-not-found=true",
+            "--cascade=orphan", "--wait=false",
+            "--ignore-not-found=true",
         )
+        self._run(
+            "delete", "pods", "--selector", f"job-name={name}",
+            "--namespace", namespace,
+            "--grace-period", str(max(0, grace_seconds)),
+            "--wait=true", f"--timeout={timeout}s",
+            "--ignore-not-found=true",
+        )
+        # Owner-reference collection is deliberately not the cancellation
+        # completion signal: on a quiet single-node cluster it took ~60 s.
+        # Delete the immutable request only after the Job and its Pods are gone.
+        self._run("delete", "configmap", f"{name}-request", "--namespace", namespace,
+                  "--wait=true", "--ignore-not-found=true")
+        if job_uid:
+            self._run(
+                "delete", "workloads.kueue.x-k8s.io",
+                "--selector", f"kueue.x-k8s.io/job-uid={job_uid}",
+                "--namespace", namespace, "--wait=true",
+                "--ignore-not-found=true",
+            )
 
     def suspend(self, allocation_id: str) -> None:
         namespace, name = self._parse_allocation_id(allocation_id)
@@ -259,7 +319,6 @@ class KubernetesKueueAdapter:
             "spec": {
                 "suspend": True,
                 "backoffLimit": 0,
-                "activeDeadlineSeconds": resources["walltime_seconds"],
                 "ttlSecondsAfterFinished": 86400,
                 "template": {
                     "metadata": {"labels": {
@@ -268,6 +327,9 @@ class KubernetesKueueAdapter:
                     }},
                     "spec": {
                         **({"runtimeClassName": "nvidia"} if resources["gpus"] else {}),
+                        # Pod-level deadline leaves a terminal Pod behind, so
+                        # kubectl logs and termination evidence survive timeout.
+                        "activeDeadlineSeconds": resources["walltime_seconds"],
                         "restartPolicy": "Never",
                         "serviceAccountName": self.config.service_account,
                         "automountServiceAccountToken": False,
@@ -299,6 +361,28 @@ class KubernetesKueueAdapter:
                                 {"name": "tmp", "mountPath": "/tmp"},
                             ],
                         }],
+                        # K3s' NetworkPolicy controller is eventually consistent
+                        # with Pod creation. Without this barrier a millisecond-fast
+                        # worker can send packets before its per-Pod firewall chain
+                        # exists. The main worker cannot start until that window has
+                        # elapsed; the live security canary proves the deny policy.
+                        **({"initContainers": [{
+                            "name": "network-policy-settle",
+                            "image": self.policy_init_image,
+                            "imagePullPolicy": "IfNotPresent",
+                            "command": ["/bin/sh", "-c", "sleep " + str(
+                                self.config.network_policy_settle_seconds)],
+                            "resources": {
+                                "requests": {"cpu": "10m", "memory": "16Mi"},
+                                "limits": {"cpu": "100m", "memory": "32Mi"},
+                            },
+                            "securityContext": {
+                                "allowPrivilegeEscalation": False,
+                                "capabilities": {"drop": ["ALL"]},
+                                "readOnlyRootFilesystem": True,
+                                "runAsNonRoot": True,
+                            },
+                        }]} if self.config.network_policy_settle_seconds else {}),
                         "volumes": [
                             {"name": "execution-request", "configMap": {"name": config_map,
                               "items": [{"key": "execution-request.json",
@@ -327,7 +411,7 @@ class KubernetesKueueAdapter:
             "data": {"execution-request.json": request_json},
         }
 
-    def _status(self, job: dict[str, Any]) -> AllocationStatus:
+    def _status(self, job: dict[str, Any], pods: tuple[dict[str, Any], ...] = ()) -> AllocationStatus:
         metadata = job.get("metadata", {})
         spec = job.get("spec", {})
         status = job.get("status", {})
@@ -336,16 +420,47 @@ class KubernetesKueueAdapter:
             for condition in status.get("conditions", ())
             if condition.get("status") == "True"
         }
+        phases = [pod.get("status", {}).get("phase", "Unknown") for pod in pods]
+        pod_reasons = [
+            {
+                key: pod.get("status", {}).get(key)
+                for key in ("phase", "reason", "message")
+                if pod.get("status", {}).get(key) is not None
+            }
+            for pod in pods
+        ]
+        termination_reasons = [
+            terminated.get("reason")
+            for pod in pods
+            for container in pod.get("status", {}).get("containerStatuses", ())
+            for terminated in [container.get("state", {}).get("terminated", {})]
+            if terminated.get("reason")
+        ]
+        unschedulable = [
+            condition
+            for pod in pods
+            for condition in pod.get("status", {}).get("conditions", ())
+            if condition.get("type") == "PodScheduled" and condition.get("status") == "False"
+        ]
         if metadata.get("deletionTimestamp"):
             state = "cancelled"
         elif "Complete" in conditions or status.get("succeeded", 0) > 0:
             state = "succeeded"
         elif "Failed" in conditions or status.get("failed", 0) > 0:
             state = "failed"
-        elif status.get("active", 0) > 0:
-            state = "running"
         elif spec.get("suspend"):
             state = "suspended"
+        elif "Running" in phases:
+            state = "running"
+        elif "Failed" in phases:
+            # Pod.activeDeadlineSeconds and some node failures become durable
+            # Pod terminal truth before the Job controller publishes its own
+            # Failed condition. Never report a terminal Pod as pending.
+            state = "failed"
+        elif phases or status.get("active", 0) > 0:
+            # A Job counts an unschedulable Pending Pod as active. It is not
+            # running until at least one Pod reaches phase=Running.
+            state = "pending"
         else:
             state = "pending"
         name = metadata["name"]
@@ -356,6 +471,13 @@ class KubernetesKueueAdapter:
             "active": status.get("active", 0),
             "succeeded": status.get("succeeded", 0),
             "failed": status.get("failed", 0),
+            "pod_phases": phases,
+            "pod_status": pod_reasons,
+            "termination_reasons": termination_reasons,
+            "unschedulable": [
+                {key: item.get(key) for key in ("reason", "message") if item.get(key)}
+                for item in unschedulable
+            ],
             "conditions": [
                 {key: condition.get(key) for key in
                  ("type", "status", "reason", "message", "lastTransitionTime")
@@ -364,6 +486,37 @@ class KubernetesKueueAdapter:
             ],
         }
         return AllocationStatus(self._allocation_id(name), state, summary)
+
+    def _verify_existing_submission(
+        self, job: dict[str, Any], *, config_map: str, request_json: str,
+        request: dict[str, Any],
+    ) -> None:
+        stored = self._get_optional("configmap", config_map)
+        self._verify_request_config_map(stored, request_json)
+        annotations = job.get("metadata", {}).get("annotations", {})
+        container = ((job.get("spec", {}).get("template", {}).get("spec", {})
+                      .get("containers") or [{}])[0])
+        matches = (
+            annotations.get("dirac.io/execution-digest") == request["execution_digest"]
+            and annotations.get("dirac.io/fencing-token") == str(request["fencing_token"])
+            and container.get("image") == request["container_image"]
+            and tuple(container.get("command", ())) == self.worker_command
+        )
+        if not matches:
+            raise RuntimeError(
+                "ATTEMPT_IDENTITY_COLLISION: scheduler Job name already exists with "
+                "different immutable request bytes"
+            )
+
+    @staticmethod
+    def _verify_request_config_map(stored: dict[str, Any] | None,
+                                   request_json: str) -> None:
+        stored_request = (stored or {}).get("data", {}).get("execution-request.json")
+        if stored_request != request_json:
+            raise RuntimeError(
+                "ATTEMPT_IDENTITY_COLLISION: immutable scheduler request already "
+                "exists with different bytes"
+            )
 
     def _available(self) -> dict[str, Any]:
         return {"scheduler": "kubernetes+kueue", "namespace": self.config.namespace,
@@ -394,6 +547,20 @@ class KubernetesKueueAdapter:
             if "NotFound" in (error.stderr or ""):
                 raise KubernetesObjectNotFound(name) from error
             raise
+
+    def _get_optional(self, kind: str, name: str, *,
+                      namespace: str | None = None) -> dict[str, Any] | None:
+        try:
+            return self._get(kind, name, namespace=namespace)
+        except KubernetesObjectNotFound:
+            return None
+
+    def _pods(self, job_name: str, *, namespace: str | None = None) -> tuple[dict[str, Any], ...]:
+        payload = self._json(
+            "get", "pods", "--namespace", namespace or self.config.namespace,
+            "--selector", f"job-name={job_name}",
+        )
+        return tuple(payload.get("items", ()))
 
     def _patch(self, kind: str, name: str, patch: dict[str, Any],
                *, namespace: str | None = None) -> None:

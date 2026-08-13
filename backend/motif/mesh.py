@@ -14,7 +14,7 @@ from motif.models import train_baselines
 from motif.tree_models import predict_tree_models, train_tree_models
 from motif.uncertainty import (assess_domain, ensemble_summary,
                                fit_conditional_conformal, fit_domain)
-from motif.validation import specification_curve
+from motif.validation import prepare_training_rows, specification_curve
 
 
 _SOURCE_ROOT = pathlib.Path(__file__).resolve().parent
@@ -40,7 +40,8 @@ def train_predictor_mesh(rows: Iterable[dict[str, Any]], *, endpoint_key: str,
                          include_chemprop: bool = True, chemprop_ensemble_size: int = 5,
                          chemprop_epochs: int = 30, accelerator: str = "auto",
                          bootstrap_samples: int = 500) -> tuple[dict[str, Any], dict[str, Any]]:
-    source = [dict(row) for row in rows if row.get("endpoint_key") == endpoint_key]
+    source = prepare_training_rows(
+        row for row in rows if row.get("endpoint_key") == endpoint_key)
     train_exact = _exact(source, splits={"train"})
     if len(train_exact) < 3:
         raise ValueError("predictor mesh requires at least three exact train labels")

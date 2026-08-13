@@ -40,7 +40,12 @@ flowchart LR
 - GPU Operator: host driver mode (`driver.enabled=false`), with the toolkit
   writing a k3s containerd v3 drop-in.
 - Namespace: restricted Pod Security plus default-deny ingress and egress.
-- CPU quota: 48 cores; memory: 48 GiB; ephemeral storage: 300 GiB.
+- Worker Pods hold the main process behind a three-second policy-settle init
+  barrier, closing the K3s per-Pod firewall installation race.
+- Deadline termination has a five-second hard-kill grace by default; deployments
+  that need longer checkpoint flushing must opt in explicitly.
+- CPU quota: 20 cores (leaves four host cores for system services); memory: 48 GiB;
+  ephemeral storage: 300 GiB.
 - GPU quota starts at zero and fails closed until runtime health is proven.
 
 Apply or reconcile the queue resources:
@@ -74,6 +79,7 @@ from executors.kubernetes_kueue import KubernetesKueueAdapter
 adapter = KubernetesKueueAdapter(
     worker_command=["python", "-m", "dirac_worker"],
     allowed_images=["registry/dirac-worker@sha256:<64 lowercase hex>"],
+    policy_init_image="registry/dirac-policy-init@sha256:<64 lowercase hex>",
 )
 durable = DurableSchedulerAdapter(
     adapter,
