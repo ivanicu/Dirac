@@ -167,7 +167,7 @@ def test_process_and_remote_executors_share_the_same_boundary():
     backing.shutdown()
 
 
-if __name__ != 'probe':
+if __name__ == '__main__':
     for name, fn in list(globals().items()):
         if name.startswith('test_') and callable(fn):
             check(name, fn)

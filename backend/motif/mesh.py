@@ -23,6 +23,7 @@ PREDICTOR_SOURCE_DIGESTS = {
     for name in ("chemprop_adapter.py", "features.py", "labels.py", "models.py",
                  "tree_models.py", "uncertainty.py", "validation.py", "methods.py")
 }
+MINIMUM_CONFORMAL_CALIBRATION_OBSERVATIONS = 20
 
 
 def _digest(value: Any) -> str:
@@ -61,7 +62,18 @@ def train_predictor_mesh(rows: Iterable[dict[str, Any]], *, endpoint_key: str,
     # covariance over 2,048 sparse fingerprint bits is unstable for ordinary
     # medicinal-chemistry dataset sizes and creates enormous checkpoints.
     descriptor_count = len(feature_release["descriptors"]["names"])
-    domain = fit_domain(train_features[:, -descriptor_count:])
+    model_scope_id = _digest({
+        "kind": "motif_predictor_mesh_scientific_identity",
+        "endpoint_key": endpoint_key,
+        "feature_release_digest": feature_release["digest"],
+        "members": ["ridge", "nearest_neighbor", "random_forest", "xgboost",
+                    "censored_tobit", *( ["chemprop_dpmpnn"] if include_chemprop else [])],
+    })
+    provisional_model_ref = {"kind": "model_release", "id": model_scope_id}
+    representation_ref = {"kind": "feature_release", "id": feature_release["digest"]}
+    domain = fit_domain(
+        train_features[:, -descriptor_count:], model_release_ref=provisional_model_ref,
+        endpoint_key=endpoint_key, representation_release_ref=representation_ref)
     chemprop = None
     chemprop_validation = {"available": False}
     if include_chemprop:
@@ -70,24 +82,35 @@ def train_predictor_mesh(rows: Iterable[dict[str, Any]], *, endpoint_key: str,
             epochs=chemprop_epochs, seed=seed, accelerator=accelerator)
     checkpoint = {
         "schema_version": "1.0", "algorithm": "motif_predictor_mesh",
+        "scientific_lifecycle": "technical_smoke",
         "endpoint_key": endpoint_key, "seed": seed,
         "feature_release": feature_release, "linear_baselines": linear,
         "tree_baselines": trees, "censored_tobit": tobit,
         "censored_feature_slice": [descriptor_start, feature_release["feature_count"]],
         "pairwise_ranker": ranker, "domain_release": domain,
         "chemprop": chemprop, "calibration": None,
+        "calibration_assessment": {
+            "minimum_observations": MINIMUM_CONFORMAL_CALIBRATION_OBSERVATIONS,
+            "eligible": False, "reason_codes": ["CALIBRATION_SAMPLE_TOO_SMALL"],
+        },
         "members": ["ridge", "nearest_neighbor", "random_forest", "xgboost",
                     "censored_tobit", *( ["chemprop_dpmpnn"] if chemprop else [])],
     }
-    checkpoint["digest"] = _digest(checkpoint)
     calibration_rows = _exact(source, splits={"calibration"})
-    if len(calibration_rows) >= 2:
+    checkpoint["calibration_assessment"]["observations"] = len(calibration_rows)
+    checkpoint["digest"] = _digest(checkpoint)
+    if len(calibration_rows) >= MINIMUM_CONFORMAL_CALIBRATION_OBSERVATIONS:
         predicted = predict_predictor_mesh(
             checkpoint, [row["smiles"] for row in calibration_rows], accelerator=accelerator)
         checkpoint["calibration"] = fit_conditional_conformal(
             [row["ensemble"]["mean"] for row in predicted],
             [float(row["value"]) for row in calibration_rows],
             [row["applicability_domain"]["status"] for row in predicted], min_group=5)
+        checkpoint["calibration_assessment"] = {
+            "minimum_observations": MINIMUM_CONFORMAL_CALIBRATION_OBSERVATIONS,
+            "observations": len(calibration_rows), "eligible": True,
+            "reason_codes": [],
+        }
         checkpoint.pop("digest")
         checkpoint["digest"] = _digest(checkpoint)
     heldout = _exact(source, splits={"validation", "test", "external"})
@@ -147,7 +170,13 @@ def predict_predictor_mesh(checkpoint: dict[str, Any], smiles: Iterable[str], *,
         if chemprop:
             members["chemprop_dpmpnn"] = chemprop[index]["endpoints"][
                 checkpoint["endpoint_key"]]["mean"]
-        ensemble = ensemble_summary({key: [number] for key, number in members.items()})[0]
+        semantics = {name: {"endpoint_key": checkpoint["endpoint_key"],
+                            "output_space": "canonical_endpoint_value",
+                            "unit": "endpoint_canonical_unit"}
+                     for name in members}
+        ensemble = ensemble_summary(
+            {key: [number] for key, number in members.items()},
+            member_semantics=semantics)[0]
         item = {"smiles": value, "canonical_smiles": canonical[index],
                 "endpoint_key": checkpoint["endpoint_key"], "models": members,
                 "ensemble": ensemble, "applicability_domain": domain[index]}
@@ -162,4 +191,5 @@ def predict_predictor_mesh(checkpoint: dict[str, Any], smiles: Iterable[str], *,
     return output
 
 
-__all__ = ["predict_predictor_mesh", "train_predictor_mesh"]
+__all__ = ["MINIMUM_CONFORMAL_CALIBRATION_OBSERVATIONS",
+           "predict_predictor_mesh", "train_predictor_mesh"]

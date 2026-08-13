@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "schema_version": "2.0.0", "method_id": "ml.motif.mesh.train",
-  "summary": "Train the governed Motif predictor mesh: Ridge/1NN, RF, XGBoost, censored Tobit, ranking and Chemprop D-MPNN ensemble.",
-  "implementation": {"module": "backend.motif.mesh", "functions": ["_digest", "predict_predictor_mesh", "train_predictor_mesh"], "constants": ["PREDICTOR_SOURCE_DIGESTS"]},
+  "summary": "Train a governed Motif predictor mesh with baselines, trees, censored labels, scoped OOD, Chemprop ensembles and conformal calibration; promotion remains separate.",
+  "implementation": {"module": "backend.motif.mesh", "functions": ["_digest", "predict_predictor_mesh", "train_predictor_mesh"], "constants": ["PREDICTOR_SOURCE_DIGESTS", "MINIMUM_CONFORMAL_CALIBRATION_OBSERVATIONS"]},
   "input": {"schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object", "additionalProperties": false,
@@ -32,13 +32,14 @@
       }},
       "registration": {
         "type": "object", "additionalProperties": false,
-        "required": ["dataset_snapshot_ref", "model_object_id", "release_name", "source_commit", "intended_use", "prohibited_use", "known_limitations"],
+        "required": ["dataset_snapshot_ref", "model_object_id", "release_name", "source_commit", "scientific_lifecycle", "intended_use", "prohibited_use", "known_limitations"],
         "properties": {
           "dataset_snapshot_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"],
             "properties": {"kind": {"const": "dataset"}, "id": {"type": "string", "format": "uuid"}}},
           "model_object_id": {"type": "string", "minLength": 1, "maxLength": 256},
           "release_name": {"type": "string", "minLength": 1, "maxLength": 256},
           "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+          "scientific_lifecycle": {"enum": ["technical_smoke", "candidate_unvalidated"]},
           "intended_use": {"type": "object"}, "prohibited_use": {"type": "object"},
           "known_limitations": {"type": "object"}
         }
@@ -61,7 +62,7 @@
           "ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"],
             "properties": {"kind": {"const": "model"}, "id": {"type": "string", "minLength": 1}}},
           "model_release_id": {"type": "string", "format": "uuid"},
-          "lifecycle": {"const": "candidate"}, "created": {"type": "boolean"}
+          "lifecycle": {"enum": ["technical_smoke", "candidate_unvalidated"]}, "created": {"type": "boolean"}
         }}
     }
   }},

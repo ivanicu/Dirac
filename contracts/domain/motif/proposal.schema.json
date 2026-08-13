@@ -5,9 +5,9 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema_version", "proposal_id", "compound", "parents", "strategy",
+    "schema_version", "proposal_id", "compound", "parents", "lineage_depth", "duplicate_class", "strategy",
     "generator_release_id", "generation_trace", "synthesis", "identity_gate",
-    "created_at"
+    "route_assessment", "created_at"
   ],
   "properties": {
     "schema_version": {"const": "2.0"},
@@ -20,11 +20,14 @@
       "type": "array", "minItems": 1, "maxItems": 32,
       "items": {"$ref": "#/$defs/compound_ref"}, "uniqueItems": true
     },
+    "lineage_depth": {"type": "integer", "minimum": 1},
+    "duplicate_class": {"enum": ["novel_identity", "exact_identity", "stereoisomer", "tautomer", "salt_or_form", "known_proposal"]},
     "series": {"oneOf": [{"$ref": "#/$defs/series_ref"}, {"type": "null"}]},
     "strategy": {"enum": ["local_edit", "reaction", "scaffold", "fragment", "linker", "pocket_3d", "explore"]},
     "generator_release_id": {"type": "string", "format": "uuid"},
     "generation_trace": {"$ref": "#/$defs/generation_trace"},
     "synthesis": {"$ref": "#/$defs/synthesis"},
+    "route_assessment": {"$ref": "#/$defs/route_assessment"},
     "identity_gate": {"$ref": "#/$defs/gate"},
     "chemistry_gate": {"$ref": "#/$defs/gate"},
     "novelty": {"$ref": "#/$defs/novelty"},
@@ -65,7 +68,7 @@
       "properties": {
         "template_id": {"type": "string", "minLength": 1},
         "template_version": {"type": "string", "minLength": 1},
-        "reactants": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/object_ref"}},
+        "reactants": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["role", "ref"], "properties": {"role": {"type": "string", "minLength": 1}, "ref": {"$ref": "#/$defs/object_ref"}}}},
         "atom_mapping": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}}
       }
     },
@@ -93,6 +96,16 @@
         "currency": {"type": ["string", "null"], "pattern": "^[A-Z]{3}$"},
         "estimated_days": {"type": ["number", "null"], "minimum": 0},
         "reason_codes": {"type": "array", "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$"}, "uniqueItems": true}
+      }
+    },
+    "route_assessment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "predicate_release_id", "checks", "reason_codes"],
+      "properties": {
+        "state": {"enum": ["not_assessed", "route_proposed", "plausibility_assessed", "needs_review", "supported", "rejected", "unsupported"]},
+        "predicate_release_id": {"type": "string", "format": "uuid"},
+        "checks": {"type": "object", "additionalProperties": {"type": "boolean"}},
+        "reason_codes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,95}$"}}
       }
     },
     "gate": {

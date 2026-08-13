@@ -107,7 +107,9 @@ def rbfe_plan_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
         network = plan_rbfe_network(
             payload["compounds"],
             extra_edge_fraction=payload.get("extra_edge_fraction", .35),
-            minimum_similarity=payload.get("minimum_similarity", .15))
+            minimum_similarity=payload.get("minimum_similarity", .15),
+            mode=payload.get("mode", "pilot"),
+            planner=payload.get("planner", "openfe"))
     except (ValueError, RuntimeError) as exc:
         raise failures.DiracInvalidParameters(str(exc)) from exc
     return HandlerResult(
@@ -115,7 +117,7 @@ def rbfe_plan_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
                 "compound_count": len(network["compounds"]),
                 "edge_count": len(network["edges"]), "network": network},
         artifacts=[("rbfe.network", _json(network))],
-        provenance={"algorithm": "maximum-similarity spanning network + FMCS"},
+        provenance={"algorithm": "OpenFE redundant LigandNetwork + Lomap/Kartograf + FMCS diagnostic"},
         warnings=[{"code": "NETWORK_PLAN_ONLY", "message": network["claim_boundary"]}])
 
 

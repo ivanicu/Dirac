@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/performance-benchmark.schema.json",
+  "title": "Motif Performance Benchmark Result",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "fixture_id", "method_release_ref", "fixture_characteristics", "runtime", "peak_ram_bytes", "peak_vram_bytes", "scratch_growth_bytes", "artifact_growth_bytes", "estimator", "hardware_snapshot_ref", "recorded_at"],
+  "properties": {
+    "schema_version": {"const": "1.0"}, "fixture_id": {"type": "string"},
+    "method_release_ref": {"$ref": "#/$defs/ref"}, "fixture_characteristics": {"type": "object"},
+    "runtime": {"type": "object", "additionalProperties": false, "required": ["seconds", "quantile"], "properties": {"seconds": {"type": "number", "minimum": 0}, "quantile": {"enum": ["sample", "p50", "p95"]}, "ns_per_day": {"type": ["number", "null"], "minimum": 0}}},
+    "peak_ram_bytes": {"type": "integer", "minimum": 0}, "peak_vram_bytes": {"type": "integer", "minimum": 0},
+    "scratch_growth_bytes": {"type": "integer", "minimum": 0}, "artifact_growth_bytes": {"type": "integer", "minimum": 0},
+    "estimator": {"type": "object", "additionalProperties": false, "required": ["release_ref", "predicted_peak", "actual_peak", "underestimated"], "properties": {"release_ref": {"$ref": "#/$defs/ref"}, "predicted_peak": {"type": "number", "minimum": 0}, "actual_peak": {"type": "number", "minimum": 0}, "underestimated": {"type": "boolean"}}},
+    "hardware_snapshot_ref": {"$ref": "#/$defs/ref"}, "recorded_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {"ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"type": "string"}, "id": {"type": "string"}}}}
+}

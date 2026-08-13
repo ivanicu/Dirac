@@ -25,6 +25,9 @@ from execution_control.protocol import (
 _DNS_LABEL = re.compile(r"^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$")
 _SENSITIVE_ENV = re.compile(r"(?:TOKEN|PASSWORD|PASSWD|SECRET|API_KEY|CREDENTIAL)")
 _RESERVED_ENV_PREFIX = "DIRAC_"
+_WORKLOAD_PRIORITY_CLASSES = frozenset({
+    "motif-interactive", "motif-standard", "motif-long",
+})
 
 
 @dataclass(frozen=True)
@@ -32,7 +35,7 @@ class KubernetesKueueConfig:
     namespace: str = "dirac-motif"
     queue_name: str = "motif"
     service_account: str = "dirac-motif-worker"
-    termination_grace_seconds: int = 5
+    termination_grace_seconds: int = 120
     network_policy_settle_seconds: int = 3
 
     def __post_init__(self) -> None:
@@ -182,6 +185,12 @@ class KubernetesKueueAdapter:
                 f"adapter-owned environment names cannot be overridden: {reserved}",
                 self._available(),
             )
+        priority = request["placement"].get("workload_priority_class")
+        if priority not in _WORKLOAD_PRIORITY_CLASSES:
+            return AdmissionDecision(
+                False, "PLACEMENT_MISMATCH",
+                "a deployed Motif WorkloadPriorityClass is required",
+                self._available())
         return AdmissionDecision(
             True,
             "ADMITTED",
@@ -368,6 +377,8 @@ class KubernetesKueueAdapter:
                     "dirac.io/attempt-id": request["attempt_id"],
                     "dirac.io/job-id": request["job_id"],
                     "kueue.x-k8s.io/queue-name": self.config.queue_name,
+                    "kueue.x-k8s.io/priority-class":
+                        request["placement"]["workload_priority_class"],
                 },
                 "annotations": {
                     "dirac.io/execution-digest": request["execution_digest"],

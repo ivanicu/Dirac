@@ -8,13 +8,16 @@
 // answer is 0.0.0.0", because the day the code changes the answer, a
 // hardcoded expectation goes stale in exactly the way the docs did.
 //
-// Two independent checks:
+// Independent checks:
 //   1. HOST CLAIMS — every `127.0.0.1:PORT` / `0.0.0.0:PORT` / `localhost:PORT`
 //      string in a fixed list of doc+source files, checked against the actual
 //      bind address parsed out of the server that owns that port.
 //   2. BUILD/RUN COMMANDS — every command in a ```bash fenced block in
 //      README.md / backend/README.md, checked against package.json's
 //      scripts or the real filesystem.
+//   3. SOURCE-DERIVED COUNTS — canonical status numbers must match registries.
+//   4. ACTIVE ENTRYPOINTS — current operator surfaces cannot point at retired ports.
+//   5. LOCAL LINKS — primary documentation links must resolve on disk.
 //
 // Exit 1 with file:line for every mismatch. Exit 0 when clean.
 
@@ -354,6 +357,87 @@ for (const relFile of COMMAND_DOC_FILES) {
             }
         }
         info.push(`STATUS.md facet table: ${dirs.length} facet directories, both directions checked`);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 4. CANONICAL COUNTS, ACTIVE ENTRYPOINTS, AND PRIMARY LINKS
+// ─────────────────────────────────────────────────────────────────────────
+{
+    const commands = JSON.parse(read('contracts/commands/registry.json')).commands.length;
+    const kinds = JSON.parse(read('contracts/domain/object-kinds.json')).kinds.length;
+    const relations = JSON.parse(read('contracts/domain/relations.json')).relations.length;
+    const methods = fs.readdirSync(path.join(ROOT, 'contracts/methods'))
+        .filter(name => name.endsWith('.method.json')).length;
+    const migrationNames = fs.readdirSync(path.join(ROOT, 'backend/db/migrations'))
+        .filter(name => /^\d{3}_.+\.sql$/.test(name)).sort();
+    const migrations = migrationNames.length;
+    const lastMigration = migrationNames.at(-1)?.slice(0, 3);
+
+    const registries = read('src/app/shell/registries.ts');
+    const workspaceBlock = registries.match(/export const WORKSPACES[\s\S]*?\] as const;/)?.[0] ?? '';
+    const viewBlock = registries.match(/export const VIEWS[\s\S]*?\] as const;/)?.[0] ?? '';
+    const moduleBlock = registries.match(/export const MODULES[\s\S]*?\] as const;/)?.[0] ?? '';
+    const workspaces = (workspaceBlock.match(/\{ id: '/g) ?? []).length;
+    const views = (viewBlock.match(/^\s*view\(/gm) ?? []).length;
+    const connectedViews = (viewBlock.match(/^\s*view\([^\n]*\btrue,/gm) ?? []).length;
+    const modules = (moduleBlock.match(/^\s*\{ id: '/gm) ?? []).length;
+
+    const expected = [
+        ['README.md', `${commands} versioned semantic Commands`],
+        ['README.md', `${kinds} canonical ObjectKinds`],
+        ['README.md', `${methods} scientific Method manifests`],
+        ['README.md', `${views} routable Views, of which ${connectedViews}`],
+        ['STATUS.md', `${kinds} ObjectKinds`],
+        ['STATUS.md', `${relations} controlled relation kinds`],
+        ['STATUS.md', `${commands} registered Commands`],
+        ['STATUS.md', `${methods} Method manifests`],
+        ['STATUS.md', `${migrations} forward-only migrations`],
+        ['STATUS.md', `${workspaces} Workspaces and ${views} routable Views`],
+        ['STATUS.md', `${connectedViews} of ${views} Views connected to ${modules}`],
+        ['docs/product/DOMAIN_MODEL.md', `owns the ${kinds} ObjectKinds`],
+        ['ARCHITECTURE.md', `${methods} executable scientific Methods`],
+        ['ARCHITECTURE.md', `Migrations 000–${lastMigration}`],
+        ['ARCHITECTURE.md', `${connectedViews}/${views} Views connected`],
+    ];
+    for (const [file, phrase] of expected) {
+        if (!read(file).includes(phrase)) {
+            violate(file, 0, `source-derived fact is missing or stale; expected exact phrase "${phrase}"`);
+        }
+    }
+    info.push(`canonical counts: ${kinds} kinds, ${relations} relations, ${commands} commands, ${methods} methods, ${migrations} migrations, ${workspaces} workspaces, ${connectedViews}/${views} connected views, ${modules} modules`);
+
+    const activeEntrypoints = [
+        'README.md', 'AGENTS.md', 'CLAUDE.md', 'backend/README.md', 'deploy/README.md',
+        'src/app.frontend.facets.molstar-rdkit.editable/README.md', 'bin/dev',
+        'ops/host.js', 'scripts/perf_probe.mjs', 'deploy/systemd/dirac-ops.service',
+    ];
+    const obsolete1338 = /(?:localhost:1338|127\.0\.0\.1:1338|0\.0\.0\.0:1338|-p\s+1338\b|WEB(?:_PORT|_URL)?\s*=.*1338|const WEB\s*=.*1338)/;
+    for (const file of activeEntrypoints) {
+        const lines = read(file).split('\n');
+        lines.forEach((line, index) => {
+            if (obsolete1338.test(line)) {
+                violate(file, index + 1, 'active Dirac entrypoint still points at retired web port 1338; current port is 1360');
+            }
+        });
+    }
+
+    const primaryDocs = [
+        'README.md', 'STATUS.md', 'ARCHITECTURE.md', 'ROADMAP.md', 'docs/README.md',
+        'backend/README.md', 'deploy/README.md',
+    ];
+    for (const file of primaryDocs) {
+        const lines = read(file).split('\n');
+        lines.forEach((line, index) => {
+            for (const match of line.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
+                const target = match[1].split('#')[0];
+                if (!target || /^(?:https?:|mailto:)/.test(target)) continue;
+                const resolved = path.resolve(ROOT, path.dirname(file), target);
+                if (!fs.existsSync(resolved)) {
+                    violate(file, index + 1, `local Markdown link target does not exist: ${target}`);
+                }
+            }
+        });
     }
 }
 

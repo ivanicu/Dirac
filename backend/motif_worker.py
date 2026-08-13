@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import signal
 import sys
 import time
 import traceback
@@ -15,6 +16,7 @@ from typing import Any
 import failures
 from catalog import MethodCatalog
 from execution_control.protocol import validate_execution_request
+from execution_control.protocol import CancellationToken
 from invocation import HandlerResult, InvocationContext
 
 
@@ -94,14 +96,24 @@ def run(request_path: Path, exchange_root: Path) -> int:
         os.environ.setdefault(
             "DIRAC_OPENFE_EXECUTABLE",
             "/home/ivan/dirac/openfe-runtime-v2/bin/openfe")
+        cancellation_token = CancellationToken()
+        previous_sigterm = signal.getsignal(signal.SIGTERM)
+        signal.signal(
+            signal.SIGTERM,
+            lambda _signum, _frame: cancellation_token.request(
+                "Kubernetes termination requested; checkpoint before grace expires"))
         context = InvocationContext(
             method_id=spec.method_id,
             version=document.get("method_version"),
             execution_digest=request["execution_digest"],
             actor=dict(request["security_context"]["actor"]),
             budget_seconds=document.get("budget_seconds"),
-            job_id=request["job_id"], spec=spec, deadline=deadline)
-        output = handler(payload, context)
+            job_id=request["job_id"], spec=spec, deadline=deadline,
+            cancellation_token=cancellation_token)
+        try:
+            output = handler(payload, context)
+        finally:
+            signal.signal(signal.SIGTERM, previous_sigterm)
         if not isinstance(output, HandlerResult):
             raise RuntimeError(
                 f"handler returned {type(output).__name__}, expected HandlerResult")

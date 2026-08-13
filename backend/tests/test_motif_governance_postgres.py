@@ -4,6 +4,7 @@ import copy
 import hashlib
 import os
 import unittest
+import uuid
 
 try:
     import psycopg
@@ -21,56 +22,70 @@ from invocation import InvocationService
 @unittest.skipUnless(os.environ.get("DIRAC_TEST_DSN") and psycopg,
                      "requires isolated PostgreSQL DIRAC_TEST_DSN")
 class PostgresMotifGovernanceTests(unittest.TestCase):
-    TARGET_ID = "10000000-0000-4000-8000-000000000001"
-    ASSAY_ID = "10000000-0000-4000-8000-000000000002"
-    PROGRAM_ID = "10000000-0000-4000-8000-000000000003"
-    CAMPAIGN_ID = "10000000-0000-4000-8000-000000000004"
-
     @classmethod
     def setUpClass(cls) -> None:
         cls.dsn = os.environ["DIRAC_TEST_DSN"]
         cls.connect = staticmethod(lambda: psycopg.connect(cls.dsn))
         cls.store = PostgresMotifGovernanceStore(cls.connect)
         cls.actor = {"kind": "human", "id": "chemist-1"}
+        cls.run_token = uuid.uuid4().hex[:12]
+        cls.TARGET_ID = str(uuid.uuid4())
+        cls.ASSAY_ID = str(uuid.uuid4())
+        cls.PROGRAM_ID = str(uuid.uuid4())
+        cls.CAMPAIGN_ID = str(uuid.uuid4())
+        cls.ENDPOINT_KEY = f"ic50-{cls.run_token}"
+        cls.OBJECTIVE_SPEC_ID = str(uuid.uuid4())
+        cls.MEASUREMENT_ID = f"m-{cls.run_token}"
         source = b"source assay export fixture"
         source_digest = hashlib.sha256(source).hexdigest()
         with cls.connect() as conn, conn.cursor() as cur:
-            cur.execute("INSERT INTO bio.target(id,name,kind) VALUES (%s,'Motif test target','protein')",
-                        (cls.TARGET_ID,))
+            cur.execute("INSERT INTO bio.target(id,name,kind) VALUES (%s,%s,'protein')",
+                        (cls.TARGET_ID, f"Motif test target {cls.run_token}"))
             cur.execute("INSERT INTO bio.assay(id,code,name,kind,target_id) "
-                        "VALUES (%s,'MOTIF-IC50','Motif IC50','biochemical',%s)",
-                        (cls.ASSAY_ID, cls.TARGET_ID))
+                        "VALUES (%s,%s,%s,'biochemical',%s)",
+                        (cls.ASSAY_ID, f"MOTIF-{cls.run_token}",
+                         f"Motif IC50 {cls.run_token}", cls.TARGET_ID))
             cur.execute("INSERT INTO design.project(id,code,name,target_id) "
-                        "VALUES (%s,'MOTIF-P','Motif test program',%s)",
-                        (cls.PROGRAM_ID, cls.TARGET_ID))
+                        "VALUES (%s,%s,%s,%s)",
+                        (cls.PROGRAM_ID, f"MOTIF-P-{cls.run_token}",
+                         f"Motif test program {cls.run_token}", cls.TARGET_ID))
             cur.execute("INSERT INTO design.campaign(id,program_id,name,objective,created_by_kind,created_by_id) "
-                        "VALUES (%s,%s,'Motif test campaign','validate governance','human','chemist-1')",
-                        (cls.CAMPAIGN_ID, cls.PROGRAM_ID))
+                        "VALUES (%s,%s,%s,'validate governance','human','chemist-1')",
+                        (cls.CAMPAIGN_ID, cls.PROGRAM_ID,
+                         f"Motif test campaign {cls.run_token}"))
             cur.execute("INSERT INTO app.blob(sha256,media_type,byte_len,bytes) "
-                        "VALUES (decode(%s,'hex'),'text/plain',%s,%s)",
+                        "VALUES (decode(%s,'hex'),'text/plain',%s,%s) "
+                        "ON CONFLICT (sha256) DO NOTHING",
                         (source_digest, len(source), source))
             cur.execute("INSERT INTO app.artifact(blob_sha256,media_type,role,size_bytes) "
-                        "VALUES (decode(%s,'hex'),'text/plain','assay.source',%s) RETURNING id",
+                        "VALUES (decode(%s,'hex'),'text/plain','assay.source',%s) "
+                        "ON CONFLICT (blob_sha256,role,encoding) DO UPDATE "
+                        "SET media_type=excluded.media_type RETURNING id",
                         (source_digest, len(source)))
             cls.source_artifact_id = str(cur.fetchone()[0])
 
     def endpoint(self) -> dict:
         document = copy.deepcopy(ENDPOINT_DEFINITION)
+        document["endpoint_key"] = self.ENDPOINT_KEY
         document["assay"]["id"] = self.ASSAY_ID
         document["target"]["id"] = self.TARGET_ID
         return with_semantic_digest(document)
 
     def objective(self) -> dict:
         document = copy.deepcopy(DESIGN_BRIEF)
+        document["objective_spec_id"] = self.OBJECTIVE_SPEC_ID
         document["program"]["id"] = self.PROGRAM_ID
         document["campaign"]["id"] = self.CAMPAIGN_ID
         document["target"]["id"] = self.TARGET_ID
+        for objective in document["objectives"]:
+            objective["endpoint"]["id"] = self.ENDPOINT_KEY
         return with_semantic_digest(document)
 
     def measurement(self) -> dict:
         document = copy.deepcopy(MEASUREMENT)
+        document["measurement_id"] = self.MEASUREMENT_ID
         document["assay"]["id"] = self.ASSAY_ID
-        document["endpoint"] = {"id": "ic50", "version": "1"}
+        document["endpoint"] = {"id": self.ENDPOINT_KEY, "version": "1"}
         document["source"]["artifact_id"] = self.source_artifact_id
         return document
 
@@ -106,11 +121,28 @@ class PostgresMotifGovernanceTests(unittest.TestCase):
 
         with self.connect() as conn, conn.cursor() as cur:
             cur.execute("SELECT qualifier,value_num,lower_num,upper_num,missing_reason "
-                        "FROM bio.measurement_v2 WHERE measurement_key='m-1'")
+                        "FROM bio.measurement_v2 WHERE measurement_key=%s",
+                        (self.MEASUREMENT_ID,))
             self.assertEqual(cur.fetchone(), ("not_tested", None, None, None, "not_tested"))
-            cur.execute("SELECT count(*) FROM app.outbox_event "
-                        "WHERE event_type LIKE 'motif.%'")
-            self.assertEqual(cur.fetchone()[0], 9)
+            expected_aggregates = [
+                ("motif.endpoint.registered", endpoint_first["endpoint_definition_id"]),
+                ("motif.objective.saved", objective_first["objective_spec_id"]),
+                ("motif.measurement.ingested",
+                 ingest_first["measurements"][0]["measurement_ref"]["id"]),
+                *[("motif.policy.registered", policy_id)
+                  for policy_id in {
+                      *DESIGN_BRIEF["policy_releases"].values(),
+                      DESIGN_BRIEF["chemistry_constraints"]["identity_policy_release_id"],
+                  }],
+            ]
+            for event_type, aggregate_id in expected_aggregates:
+                cur.execute(
+                    "SELECT count(*) FROM app.outbox_event "
+                    "WHERE event_type=%s AND aggregate_id=%s",
+                    (event_type, aggregate_id),
+                )
+                self.assertEqual(cur.fetchone()[0], 1,
+                                 (event_type, aggregate_id))
 
     def test_measurement_identity_collision_rolls_back(self):
         self.store.register_endpoint(self.endpoint(), self.actor)
@@ -121,7 +153,8 @@ class PostgresMotifGovernanceTests(unittest.TestCase):
             self.store.ingest_measurements([changed], self.actor)
         with self.connect() as conn, conn.cursor() as cur:
             cur.execute("SELECT missing_reason,count(*) FROM bio.measurement_v2 "
-                        "WHERE measurement_key='m-1' GROUP BY missing_reason")
+                        "WHERE measurement_key=%s GROUP BY missing_reason",
+                        (self.MEASUREMENT_ID,))
             self.assertEqual(cur.fetchone(), ("not_tested", 1))
 
     def test_dataset_completion_registers_snapshot_and_endpoint_link(self):
@@ -141,17 +174,19 @@ class PostgresMotifGovernanceTests(unittest.TestCase):
             motif_governance=self.store)
         rows = [
             {"measurement_id": "dataset-m-1", "compound_id": "compound-1",
-             "smiles": "CCO", "endpoint_key": "ic50", "protocol_id": "protocol-1",
+             "smiles": "CCO", "endpoint_key": self.ENDPOINT_KEY,
+             "protocol_id": "protocol-1",
              "unit": "nM", "measurement_type": "concentration", "value": 1.0,
              "qualifier": "equal", "split": "train"},
             {"measurement_id": "dataset-m-2", "compound_id": "compound-2",
-             "smiles": "CCN", "endpoint_key": "ic50", "protocol_id": "protocol-1",
+             "smiles": "CCN", "endpoint_key": self.ENDPOINT_KEY,
+             "protocol_id": "protocol-1",
              "unit": "nM", "measurement_type": "concentration", "value": 2.0,
              "qualifier": "equal", "split": "train"},
         ]
         payload = {
             "selection_query": "measurement-v2:smoke",
-            "endpoint_definitions": [{"endpoint_key": "ic50", "version": "1",
+            "endpoint_definitions": [{"endpoint_key": self.ENDPOINT_KEY, "version": "1",
                                       "canonical_unit": "nM",
                                       "measurement_type": "concentration"}],
             "rows": rows,
@@ -180,11 +215,12 @@ class PostgresMotifGovernanceTests(unittest.TestCase):
         mismatched_rows = copy.deepcopy(rows)
         mismatched_rows[0]["value"] = 99.0
         refused = service.invoke("ml.motif.train", {
-            "endpoint_key": "ic50", "n_bits": 128, "rows": mismatched_rows,
+            "endpoint_key": self.ENDPOINT_KEY, "n_bits": 128, "rows": mismatched_rows,
             "registration": {
                 "dataset_snapshot_ref": first["data"]["dataset_snapshot"]["ref"],
-                "model_object_id": "motif-postgres-mismatch",
+                "model_object_id": f"motif-postgres-mismatch-{self.run_token}",
                 "release_name": "candidate-1", "source_commit": "b" * 40,
+                "scientific_lifecycle": "technical_smoke",
                 "intended_use": {}, "prohibited_use": {}, "known_limitations": {},
             },
         }, actor=self.actor)
@@ -192,15 +228,17 @@ class PostgresMotifGovernanceTests(unittest.TestCase):
         self.assertEqual(refused["error"]["code"], "INVALID_PARAMETERS")
         with self.connect() as conn, conn.cursor() as cur:
             cur.execute("SELECT count(*) FROM meta.model_release "
-                        "WHERE model_object_id='motif-postgres-mismatch'")
+                        "WHERE model_object_id=%s",
+                        (f"motif-postgres-mismatch-{self.run_token}",))
             self.assertEqual(cur.fetchone()[0], 0)
 
         trained = service.invoke("ml.motif.train", {
-            "endpoint_key": "ic50", "n_bits": 128, "rows": rows,
+            "endpoint_key": self.ENDPOINT_KEY, "n_bits": 128, "rows": rows,
             "registration": {
                 "dataset_snapshot_ref": first["data"]["dataset_snapshot"]["ref"],
-                "model_object_id": "motif-postgres-baseline",
+                "model_object_id": f"motif-postgres-baseline-{self.run_token}",
                 "release_name": "candidate-1", "source_commit": "b" * 40,
+                "scientific_lifecycle": "technical_smoke",
                 "intended_use": {"fixture": True},
                 "prohibited_use": {"clinical": True},
                 "known_limitations": {"fixture": True},

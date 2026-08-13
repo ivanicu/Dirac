@@ -222,6 +222,18 @@ def compute_torsion_strain(molblock: str, steps: int = 24,
         'total_verdict': _verdict(total_strain),
         'meta': {
             'method': variant,
+            'protocol': {
+                'scan_kind': 'bidirectional_relaxed_one_dimensional',
+                'increment_degrees': 360.0 / steps,
+                'optimization': 'constrained_mmff',
+                'endpoint_policy': 'periodic_endpoint_included_once',
+                'symmetry_policy': 'no_symmetry_reduction',
+                'ring_torsion_policy': 'excluded_by_rotatable_bond_definition',
+                'environment': 'gas_phase_force_field',
+                'strain_reference': 'global_minimum_same_force_field_protocol',
+                'coupled_torsion_claim': 'forbidden',
+                'decision_eligibility': 'descriptive_triage_only',
+            },
             'note': ('Force-field energies. A triage signal, not a thermodynamic '
                      'quantity; per-torsion strains are coupled and are not summed.'),
             'hydrogens_relaxed': relax_hydrogens,

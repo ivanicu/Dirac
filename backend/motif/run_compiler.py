@@ -9,22 +9,17 @@ from uuid import UUID
 import failures
 
 
-STEP_METHODS = {
-    "snapshot.freeze": "data.motif.snapshot",
-    "proposal.local_edit": "design.motif.local_edits",
-    "proposal.reaction_enumerate": "design.motif.reaction_enumerate",
-    "chemistry.identity_gate": "chem.identity.standardize",
-    "synthesis.route_gate": "synthesis.motif.assess",
-    "prediction.f1": "ml.motif.mesh.predict",
-    "structure.conformer": "structure.motif.conformers",
-    "structure.pose_f2": "structure.motif.vina",
-    "structure.fields_f3": "fields.mep",
-    "acquisition.portfolio": "design.motif.acquire",
-    "review.human": None,
-    "result.ingest": None,
-    "model.recalibrate": "ml.motif.calibrate",
-    "physics.md_f4": "physics.motif.openmm_md",
-    "physics.rbfe_network_f4": "physics.motif.rbfe_network",
+ACTION_LOOP_STEPS = {
+    "inputs.freeze": None,
+    "evidence.snapshot": None,
+    "decision.evaluate": "design.motif.acquire",
+    "action.plan": None,
+    "resource.lease": None,
+    "action.execute": None,
+    "outcome.assess": None,
+    "evidence.assemble": None,
+    "decision.refresh": "design.motif.acquire",
+    "loop.guard": None,
 }
 
 
@@ -34,7 +29,10 @@ def _canonical(value: Any) -> bytes:
 
 
 def compile_run_plan(spec: dict[str, Any]) -> dict[str, Any]:
-    """Build the v1 dependency graph; policy IDs and budgets remain frozen inputs."""
+    """Build a bounded evidence/action loop; method choice is planner output.
+
+    Cost-tier labels may appear in action metadata, but are not state transitions.
+    """
     required = {
         "run_id", "root_seed", "objective_spec_id", "program_snapshot_id",
         "policies", "resource_envelope", "approval_gates",
@@ -48,18 +46,24 @@ def compile_run_plan(spec: dict[str, Any]) -> dict[str, Any]:
         except ValueError as exc:
             raise failures.DiracInvalidParameters(f"{key} must be a UUID") from exc
 
-    names = list(STEP_METHODS)
-    steps = [{"index": index, "kind": name, "method_id": STEP_METHODS[name]}
+    names = list(ACTION_LOOP_STEPS)
+    steps = [{"index": index, "kind": name, "method_id": ACTION_LOOP_STEPS[name]}
              for index, name in enumerate(names)]
     edges = []
     for index in range(len(names) - 1):
         condition = {"type": "on_success"}
-        if names[index + 1] == "review.human":
-            condition = {"type": "if_approval", "gate": "portfolio_review"}
         edges.append({"from": index, "to": index + 1, "condition": condition})
+    edges.extend([
+        {"from": names.index("loop.guard"), "to": names.index("evidence.snapshot"),
+         "condition": {"type": "if_continue", "bounded_by": [
+             "planner.max_iterations", "planner.max_actions_per_subject_question",
+             "resource_envelope", "planner.minimum_net_value"]}},
+        {"from": names.index("loop.guard"), "to": None,
+         "condition": {"type": "if_stop", "emits": "immutable_decision_snapshot"}},
+    ])
 
     plan = {
-        "run_id": spec["run_id"], "schema_version": "2.0",
+        "run_id": spec["run_id"], "schema_version": "3.0",
         "root_seed": int(spec["root_seed"]),
         "objective_spec_id": spec["objective_spec_id"],
         "program_snapshot_id": spec["program_snapshot_id"],
@@ -67,6 +71,8 @@ def compile_run_plan(spec: dict[str, Any]) -> dict[str, Any]:
         "policies": spec["policies"],
         "resource_envelope": spec["resource_envelope"],
         "approval_gates": spec["approval_gates"],
+        "planner_semantics": "expected_utility_delta_minus_priced_resource_cost",
+        "fidelity_labels_are_reporting_only": True,
     }
     plan["digest"] = "sha256:" + hashlib.sha256(_canonical(plan)).hexdigest()
     return plan

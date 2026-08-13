@@ -147,10 +147,11 @@ def test_it_imports_nothing_heavy():
         f'MCP adapter all need cannot depend on the science stack or the transport')
 
 
-for name, fn in list(globals().items()):
-    if name.startswith('test_') and callable(fn):
-        check(name, fn)
+if __name__ == '__main__':
+    for name, fn in list(globals().items()):
+        if name.startswith('test_') and callable(fn):
+            check(name, fn)
 
-print('─' * 100)
-print(f'{len(PASS)} passed · {len(FAIL)} failed')
-sys.exit(1 if FAIL else 0)
+    print('─' * 100)
+    print(f'{len(PASS)} passed · {len(FAIL)} failed')
+    sys.exit(1 if FAIL else 0)

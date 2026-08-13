@@ -1,5 +1,9 @@
 # Checks Audit — "a check that cannot fire"
 
+> Historical verification snapshot from 2026-08-11. This is retained as evidence,
+> not as a description of the current repository. See `../../../STATUS.md` for the
+> current construction state.
+
 Hunt for one bug class across the whole repo, triggered by today's
 `ecp_for()` incident in `backend/field_server.py` (fixed 2026-08-11): a
 `try/except` was wrapped around `gto.basis.load_ecp(basis, s)`, but pyscf

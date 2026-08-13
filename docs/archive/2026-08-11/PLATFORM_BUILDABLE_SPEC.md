@@ -1,4 +1,8 @@
 # Dirac system architecture · the buildable spec
+
+> Historical build specification from 2026-08-11. The implementation has since
+> moved to the Command/Method/Job/Artifact architecture described by
+> `../../../ARCHITECTURE.md`; this file is retained for design provenance only.
 class: S · status: DRAFT · date: 2026-08-10 22:54 PDT · repo@662c386 (PRE-REWRITE SHA — history was rewritten 2026-08-11 to strip tooling trailers, so this hash no longer resolves; the date is the durable half)
 N: 8901-endpoints=2 consumers · facet-callsites=11 · field_cube-writers(py)=1 · tokens.css-consumers=4  [measured:M04]
 spec-budget: 600 lines / one session

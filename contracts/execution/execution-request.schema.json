@@ -110,6 +110,7 @@
         "queue": {"type": ["string", "null"], "maxLength": 128},
         "account": {"type": ["string", "null"], "maxLength": 128},
         "qos": {"type": ["string", "null"], "maxLength": 128},
+        "workload_priority_class": {"enum": ["motif-interactive", "motif-standard", "motif-long"]},
         "topology": {"enum": ["single_process", "single_node", "multi_node", "job_array", "heterogeneous"]},
         "node_constraints": {
           "type": "object",

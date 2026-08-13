@@ -147,4 +147,56 @@ def run_openmm_md(*, system_xml: str, topology_pdb: str, steps: int,
     }
 
 
-__all__ = ["run_openmm_md"]
+def assess_md_trajectory(*, trajectory_ref: dict[str, str],
+                         analysis_protocol_ref: dict[str, str],
+                         selections: dict[str, str], pbc: dict[str, Any],
+                         alignment: dict[str, Any], cutoffs: dict[str, float],
+                         blocks: dict[str, int],
+                         finite_frame_fraction: float, energy_drift_kj_mol_ns: float,
+                         ligand_departed: bool, departure_time_ns: float | None,
+                         repeat_index: int, quality_limits: dict[str, float]) -> dict[str, Any]:
+    """Separate trajectory quality from a scientifically meaningful departure."""
+    if not 0 <= finite_frame_fraction <= 1:
+        raise ValueError("finite_frame_fraction must be in [0,1]")
+    quality_pass = (finite_frame_fraction >= quality_limits["minimum_finite_frame_fraction"]
+                    and abs(energy_drift_kj_mol_ns)
+                    <= quality_limits["maximum_absolute_energy_drift_kj_mol_ns"])
+    if ligand_departed and departure_time_ns is None:
+        raise ValueError("ligand departure requires departure_time_ns")
+    if not selections or not all(str(value).strip() for value in selections.values()):
+        raise ValueError("named atom selections are required")
+    if set(pbc) != {"unwrap", "image", "reference_selection"}:
+        raise ValueError("PBC protocol must freeze unwrap, image and reference_selection")
+    if set(alignment) != {"selection", "mass_weighted"}:
+        raise ValueError("alignment protocol must freeze selection and mass_weighted")
+    if blocks.get("length_frames", 0) < 1 or blocks.get("minimum_blocks", 0) < 2:
+        raise ValueError("analysis requires positive blocks and at least two blocks")
+    if not quality_pass:
+        scientific_effect = "invalidates_evidence"
+        scientific_state = "rejected"
+        reason = "TRAJECTORY_QUALITY_FAILED"
+    elif ligand_departed:
+        scientific_effect = "accepted_negative_evidence"
+        scientific_state = "accepted"
+        reason = "LIGAND_DEPARTURE_ACCEPTED_NEGATIVE_EVIDENCE"
+    else:
+        scientific_effect = "provisional_only"
+        scientific_state = "provisional"
+        reason = "TRAJECTORY_VALID_REQUIRES_REPEAT_AGGREGATION"
+    return {
+        "schema_version": "3.0", "trajectory_ref": trajectory_ref,
+        "analysis_protocol_release_ref": analysis_protocol_ref,
+        "selections": dict(selections), "pbc": dict(pbc),
+        "alignment": dict(alignment), "cutoffs": dict(cutoffs),
+        "blocks": dict(blocks), "repeat_index": repeat_index,
+        "quality": {"passed": quality_pass,
+                    "finite_frame_fraction": finite_frame_fraction,
+                    "energy_drift_kj_mol_ns": energy_drift_kj_mol_ns},
+        "ligand_departure": {"observed": ligand_departed,
+                             "departure_time_ns": departure_time_ns},
+        "scientific_effect": scientific_effect, "scientific_state": scientific_state,
+        "reason_codes": [reason],
+    }
+
+
+__all__ = ["run_openmm_md", "assess_md_trajectory"]

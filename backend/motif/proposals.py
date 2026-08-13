@@ -5,6 +5,7 @@ import hashlib
 import json
 from typing import Any, Iterable
 from uuid import UUID, uuid5
+from collections import defaultdict
 
 
 NAMESPACE = UUID("f88d7051-2fa7-48ce-91e0-469d6dfd8b85")
@@ -111,8 +112,11 @@ def reaction_enumerate(reactants: Iterable[dict[str, str]], *,
                     trace={"reaction": {
                         "template_id": template["template_id"],
                         "template_version": template["version"],
-                        "reactants": [{"kind": "building_block", "id": item[0]["id"]}
-                                      for item in combination],
+                        "reactants": [{
+                            "role": (template.get("reactant_roles") or
+                                     [f"reactant_{index + 1}" for index in range(arity)])[index],
+                            "ref": {"kind": "building_block", "id": item[0]["id"]},
+                        } for index, item in enumerate(combination)],
                         "atom_mapping": _atom_mapping(product),
                     }})
                 output.setdefault(key, proposal)
@@ -211,6 +215,47 @@ def generator_metrics(proposals: Iterable[dict[str, Any]]) -> dict[str, Any]:
             "novelty_is_not_success": True}
 
 
+def apply_proposal_quotas(proposals: Iterable[dict[str, Any]], *,
+                          max_per_parent: int, max_per_template: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Deterministically prevent a prolific parent/template from owning a cycle."""
+    if max_per_parent < 1 or max_per_template < 1:
+        raise ValueError("proposal quotas must be positive")
+    parent_counts: dict[str, int] = defaultdict(int)
+    template_counts: dict[str, int] = defaultdict(int)
+    accepted, excluded = [], []
+    for proposal in sorted(proposals, key=lambda row: row["proposal_id"]):
+        parent = proposal["parents"][0]["id"]
+        reaction = proposal["generation_trace"].get("reaction") or {}
+        template = str(reaction.get("template_id", "local_edit"))
+        reason = None
+        if parent_counts[parent] >= max_per_parent:
+            reason = "PARENT_QUOTA_REACHED"
+        elif template_counts[template] >= max_per_template:
+            reason = "TEMPLATE_QUOTA_REACHED"
+        if reason:
+            excluded.append({"proposal_id": proposal["proposal_id"], "reason_code": reason})
+            continue
+        accepted.append(proposal)
+        parent_counts[parent] += 1
+        template_counts[template] += 1
+    return accepted, {"excluded": excluded, "parent_counts": dict(parent_counts),
+                      "template_counts": dict(template_counts)}
+
+
+ROUTE_TRANSITIONS = {
+    "not_assessed": {"route_proposed", "unsupported"},
+    "route_proposed": {"plausibility_assessed", "unsupported"},
+    "plausibility_assessed": {"supported", "rejected", "needs_review"},
+    "needs_review": {"supported", "rejected"},
+    "supported": set(), "rejected": set(), "unsupported": set(),
+}
+
+
+def advance_route_assessment(before: str, after: str) -> None:
+    if after not in ROUTE_TRANSITIONS.get(before, set()):
+        raise ValueError(f"invalid route assessment transition {before}->{after}")
+
+
 def _proposal(key: str, smiles: str, parent: dict[str, str], generator_release_id: str,
               strategy_release_id: str, identity_policy_release_id: str, root_seed: int,
               created_at: str, gate: dict[str, Any], *, strategy: str,
@@ -224,6 +269,8 @@ def _proposal(key: str, smiles: str, parent: dict[str, str], generator_release_i
             "identity_policy_release_id": identity_policy_release_id,
             "stereochemistry_status": "complete" if "@" in smiles else "not_applicable"},
         "parents": [{"kind": "compound", "id": parent["id"]}],
+        "lineage_depth": int(parent.get("lineage_depth", 0)) + 1,
+        "duplicate_class": "novel_identity",
         "strategy": strategy, "generator_release_id": generator_release_id,
         "generation_trace": {
             "root_seed": root_seed, "strategy_release_id": strategy_release_id,
@@ -234,6 +281,14 @@ def _proposal(key: str, smiles: str, parent: dict[str, str], generator_release_i
             "route_depth": 1 if strategy == "reaction" else None,
             "estimated_cost": None, "currency": None, "estimated_days": None,
             "reason_codes": ["TEMPLATE_ROUTE"] if strategy == "reaction" else ["ROUTE_UNKNOWN"]},
+        "route_assessment": {
+            "state": "route_proposed" if strategy == "reaction" else "not_assessed",
+            "predicate_release_id": strategy_release_id,
+            "checks": {"template_match": strategy == "reaction",
+                       "all_reactant_roles_bound": strategy == "reaction"},
+            "reason_codes": (["TEMPLATE_ROUTE_PROPOSED"] if strategy == "reaction"
+                             else ["ROUTE_NOT_ASSESSED"]),
+        },
         "identity_gate": {"status": "pass", "reason_codes": [],
                           "details": {"deduplicated_by": "InChIKey"}},
         "chemistry_gate": gate, "warnings": [], "created_at": created_at}
@@ -242,3 +297,7 @@ def _proposal(key: str, smiles: str, parent: dict[str, str], generator_release_i
 def _atom_mapping(molecule: Any) -> dict[str, int]:
     return {str(atom.GetIdx()): int(atom.GetAtomMapNum())
             for atom in molecule.GetAtoms() if atom.GetAtomMapNum()}
+
+
+__all__ = ["local_edits", "reaction_enumerate", "chemistry_gate",
+           "generator_metrics", "apply_proposal_quotas", "advance_route_assessment"]

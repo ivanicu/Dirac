@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/orthogonal-state.schema.json",
+  "title": "Motif Orthogonal State",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["execution", "applicability", "scientific", "disposition", "claim_eligibility", "reason_codes"],
+  "properties": {
+    "execution": {"enum": ["created", "queued", "admitted", "running", "succeeded", "failed", "cancelled", "lost"]},
+    "applicability": {"enum": ["unknown", "applicable", "not_applicable", "unsupported", "outside_validated_domain"]},
+    "scientific": {"enum": ["not_assessed", "accepted", "provisional", "rejected"]},
+    "disposition": {"enum": ["pending", "selected", "reserve", "deferred", "rejected", "refused"]},
+    "claim_eligibility": {"enum": ["eligible", "ineligible_technical_smoke", "ineligible_unvalidated_method", "ineligible_outside_validated_domain", "ineligible_provisional_quality", "ineligible_stale", "ineligible_conflict", "ineligible_missing_dependency"]},
+    "reason_codes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,95}$"}}
+  },
+  "allOf": [
+    {"if": {"properties": {"disposition": {"const": "refused"}}, "required": ["disposition"]}, "then": {"properties": {"reason_codes": {"minItems": 1}}}},
+    {"if": {"properties": {"applicability": {"enum": ["not_applicable", "unsupported"]}}, "required": ["applicability"]}, "then": {"not": {"properties": {"claim_eligibility": {"const": "eligible"}}, "required": ["claim_eligibility"]}}}
+  ]
+}

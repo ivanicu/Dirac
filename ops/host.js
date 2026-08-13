@@ -15,8 +15,7 @@
 
 const HOST = window.location.hostname || '127.0.0.1';
 const FIELDS = `http://${HOST}:8901`;
-const PHYSICS = `http://${HOST}:8902`;
-const WEB = `http://${HOST}:1338`;
+const WEB = `http://${HOST}:1360`;
 const OPS = `http://${HOST}:1355`;
 
 /** Each capability names the probe that decides it — the probe IS the definition. */
@@ -79,18 +78,15 @@ function renderGeneration(health, snap) {
         + `<span><b>${r.key}</b> <span class="p">— ${r.probe}</span></span>`).join('');
 }
 
-function renderServices(health, snap, physicsUp, webUp) {
+function renderServices(health, snap, webUp) {
     const fieldsUp = health && !health.__error;
     const rows = [
         ['dirac-fields', ':8901', fieldsUp ? 'up' : 'down',
          fieldsUp ? `rdkit ${health.rdkit} · pyscf ${health.pyscf} · rss ${health.rss_mb} MB`
                   : (health.__error || 'no answer')],
-        ['dirac-web', ':1338', webUp ? 'up' : 'down',
+        ['dirac-web', ':1360', webUp ? 'up' : 'down',
          webUp ? 'the app bundle' : 'no answer'],
         ['dirac-ops', ':1355', 'up', 'this page and the console'],
-        ['dirac-physics', ':8902', physicsUp ? 'up' : 'down',
-         physicsUp ? 'σ-hole surface MEP · torsion · region fields'
-                   : 'installed, not started (unit exists; port may be hand-run)'],
     ];
     $('svc').querySelector('tbody').innerHTML = rows.map(([n, p, st, note]) =>
         `<tr>${cell(n, 'k')}${cell(p, 'n')}`
@@ -145,11 +141,9 @@ async function tick() {
         fetchJSON(`${FIELDS}/health`),
         fetchJSON(`${FIELDS}/admin/snapshot`, 9000),
     ]);
-    const [physicsUp, webUp] = await Promise.all([
-        reachable(`${PHYSICS}/health`), reachable(`${WEB}/`),
-    ]);
+    const webUp = await reachable(`${WEB}/`);
     renderGeneration(health.__error ? null : health, snap.__error ? null : snap);
-    renderServices(health, snap, physicsUp, webUp);
+    renderServices(health, snap, webUp);
     renderLive(health.__error ? null : health, snap.__error ? null : snap);
     renderUrls();
     const stamp = new Date().toTimeString().slice(0, 8);

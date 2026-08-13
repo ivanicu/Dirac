@@ -13,23 +13,45 @@ def _digest(value: Any) -> str:
         value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
 
 
-def ensemble_summary(predictions: dict[str, Iterable[float]]) -> list[dict[str, Any]]:
+def ensemble_summary(predictions: dict[str, Iterable[float]], *,
+                     member_semantics: dict[str, dict[str, str]]) -> list[dict[str, Any]]:
+    """Summarize commensurate model outputs without relabelling spread as uncertainty.
+
+    Every member must declare the same endpoint, canonical output space and unit.
+    Sample dispersion between algorithms is useful diagnostics, but it is not a
+    calibrated epistemic posterior.
+    """
     import numpy as np
 
     names = sorted(predictions)
     if len(names) < 2:
         raise ValueError("ensemble requires at least two model members")
+    if set(member_semantics) != set(names):
+        raise ValueError("member_semantics must describe exactly every ensemble member")
+    required = {"endpoint_key", "output_space", "unit"}
+    normalized = []
+    for name in names:
+        semantics = member_semantics[name]
+        if not required <= set(semantics):
+            raise ValueError(f"ensemble member {name} misses prediction semantics")
+        normalized.append(tuple(str(semantics[key]) for key in sorted(required)))
+    if len(set(normalized)) != 1:
+        raise ValueError("ensemble members are not commensurate in endpoint, space and unit")
     matrix = np.asarray([list(predictions[name]) for name in names], dtype=np.float64)
     if matrix.ndim != 2 or len({len(row) for row in matrix}) != 1:
         raise ValueError("ensemble members must have equal prediction counts")
     return [{"mean": float(matrix[:, index].mean()),
-             "epistemic_std": float(matrix[:, index].std(ddof=1)),
+             "model_dispersion_std": float(matrix[:, index].std(ddof=1)),
+             "dispersion_claim": "algorithmic_model_dispersion_not_epistemic_uncertainty",
+             "prediction_semantics": dict(member_semantics[names[0]]),
              "members": {name: float(matrix[row, index])
                          for row, name in enumerate(names)}}
             for index in range(matrix.shape[1])]
 
 
-def fit_domain(features, *, neighbor_quantile: float = 0.95,
+def fit_domain(features, *, model_release_ref: dict[str, str], endpoint_key: str,
+               representation_release_ref: dict[str, str],
+               neighbor_quantile: float = 0.95,
                mahalanobis_quantile: float = 0.99) -> dict[str, Any]:
     """Fit kNN-distance and shrinkage Mahalanobis domain thresholds."""
     import numpy as np
@@ -47,6 +69,9 @@ def fit_domain(features, *, neighbor_quantile: float = 0.95,
         "ij,jk,ik->i", centered, covariance.precision_, centered).clip(min=0))
     release = {
         "schema_version": "1.0", "kind": "knn_mahalanobis_domain",
+        "scope": {"model_release_ref": dict(model_release_ref),
+                  "endpoint_key": endpoint_key,
+                  "representation_release_ref": dict(representation_release_ref)},
         "training_features": matrix.astype(float).tolist(),
         "location": covariance.location_.astype(float).tolist(),
         "precision": covariance.precision_.astype(float).tolist(),
@@ -81,7 +106,9 @@ def assess_domain(release: dict[str, Any], features) -> list[dict[str, Any]]:
         worst = max(ratios)
         status = "in_domain" if worst <= 1 else "borderline" if worst <= 1.5 else "out_of_domain"
         output.append({"status": status, "nearest_distance": nearest,
-                       "mahalanobis_distance": mahalanobis, "threshold_ratio": worst})
+                       "mahalanobis_distance": mahalanobis, "threshold_ratio": worst,
+                       "ratio_definition": "max(knn_distance/knn_threshold,mahalanobis_distance/mahalanobis_threshold)",
+                       "scope": dict(release["scope"])})
     return output
 
 

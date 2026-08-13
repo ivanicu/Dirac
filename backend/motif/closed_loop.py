@@ -103,11 +103,15 @@ class ClosedLoopController:
                     f"closed_loop.snapshot.{key} is required")
         train = _required_object(spec, "train")
         registration = _required_object(train, "registration")
-        for key in ("model_object_id", "release_name", "source_commit", "intended_use",
+        for key in ("model_object_id", "release_name", "source_commit", "scientific_lifecycle", "intended_use",
                     "prohibited_use", "known_limitations"):
             if key not in registration:
                 raise failures.DiracInvalidParameters(
                     f"closed_loop.train.registration.{key} is required")
+        if registration["scientific_lifecycle"] not in {
+                "technical_smoke", "candidate_unvalidated"}:
+            raise failures.DiracInvalidParameters(
+                "a training loop cannot self-promote to a scientific/validated release")
         acquisition = _required_object(spec, "acquisition")
         for key in ("objectives", "capacity", "prediction_objective_key"):
             if key not in acquisition:
@@ -380,7 +384,7 @@ class ClosedLoopController:
                     uncertainty_key = acquisition.get("uncertainty_objective_key")
                     if uncertainty_key:
                         candidate["objectives"][uncertainty_key] = (
-                            prediction["ensemble"]["epistemic_std"])
+                            prediction["ensemble"]["model_dispersion_std"])
                     domain_status = prediction["applicability_domain"]["status"]
                     candidate["constraints"]["model_domain_accepted"] = (
                         domain_status in accepted_domain)

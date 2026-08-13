@@ -16,7 +16,7 @@
 # step as the app it reports on. A build failure that takes the app down would
 # otherwise take its diagnostic surface down with it — which is exactly when it
 # is needed. Measured symptom before this existed: ops/index.html was not
-# reachable at all on the local host, because :1338 serves build/dirac and the
+# reachable at all on the local host, because :1360 serves build/dirac and the
 # console lives in the repo root.
 
 [Unit]

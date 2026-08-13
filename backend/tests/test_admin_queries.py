@@ -309,18 +309,20 @@ def test_overdue_flag_true_for_synthetic_runaway_false_for_fresh_job():
             overdue_hash = hashlib.sha256(b'admin-queries-test-overdue-job').digest()
 
             cur.execute("""
-                INSERT INTO app.job (method_row_id, state, input_sha256, budget_seconds)
-                VALUES (%s, 'queued', %s, 999999)
+                INSERT INTO app.job
+                    (method_row_id, state, input_sha256, request_digest, budget_seconds)
+                VALUES (%s, 'queued', %s, %s, 999999)
                 RETURNING id
-            """, (method_row_id, fresh_hash))
+            """, (method_row_id, fresh_hash, fresh_hash))
             fresh_id = str(cur.fetchone()['id'])
 
             cur.execute("""
                 INSERT INTO app.job
-                    (method_row_id, state, input_sha256, budget_seconds, started_at)
-                VALUES (%s, 'running', %s, 1, now() - interval '999999 seconds')
+                    (method_row_id, state, input_sha256, request_digest,
+                     budget_seconds, started_at)
+                VALUES (%s, 'running', %s, %s, 1, now() - interval '999999 seconds')
                 RETURNING id
-            """, (method_row_id, overdue_hash))
+            """, (method_row_id, overdue_hash, overdue_hash))
             overdue_id = str(cur.fetchone()['id'])
 
         rows = aq.queue(conn)
@@ -359,10 +361,10 @@ def test_overdue_is_false_when_budget_seconds_is_null():
             no_budget_hash = hashlib.sha256(b'admin-queries-test-no-budget-job').digest()
             cur.execute("""
                 INSERT INTO app.job
-                    (method_row_id, state, input_sha256, started_at)
-                VALUES (%s, 'running', %s, now() - interval '999999 seconds')
+                    (method_row_id, state, input_sha256, request_digest, started_at)
+                VALUES (%s, 'running', %s, %s, now() - interval '999999 seconds')
                 RETURNING id
-            """, (method_row_id, no_budget_hash))
+            """, (method_row_id, no_budget_hash, no_budget_hash))
             no_budget_id = str(cur.fetchone()['id'])
 
         rows = aq.queue(conn)

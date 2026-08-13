@@ -34,6 +34,8 @@ dev-key.pem
 data/sym/syminfo.lib
 backend/env/
 /.runtime/
+/openfe-runtime-v2
+/backups/
 
 # a tracked .pyc dirties the worktree on every import (it happened)
 __pycache__/

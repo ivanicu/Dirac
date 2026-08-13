@@ -193,7 +193,7 @@ def test_classical_fields_are_NOT_gated():
         f'{after}) — the bound has been applied to the interactive path')
 
 
-if os.environ.get('DIRAC_IMPORT_PROBE') != '1':
+if __name__ == '__main__' and os.environ.get('DIRAC_IMPORT_PROBE') != '1':
     for name, fn in list(globals().items()):
         if name.startswith('test_') and callable(fn):
             check(name, fn)

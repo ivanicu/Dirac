@@ -20,7 +20,7 @@ Invocation kernel
         │                    │                │
         │                    │                └─ Inline / Thread / Process / Remote
         │                    └─ field cache + generic method-version result cache
-        └─ 12 executable scientific Methods
+        └─ 28 executable scientific Methods
                      │
           ┌──────────┼──────────┐
           ▼          ▼          ▼
@@ -42,7 +42,7 @@ errors and provenance belong below those adapters.
 
 ## Canonical contracts
 
-- `contracts/domain/object-kinds.json` owns 30 stable `ObjectKind` values and the
+- `contracts/domain/object-kinds.json` owns 83 stable `ObjectKind` values and the
   `{kind,id}` `ObjectRef` shape.
 - `contracts/domain/relations.json` owns the controlled relation vocabulary.
 - `contracts/commands/registry.json` owns semantic commands, schemas, mutation and Job
@@ -59,7 +59,7 @@ errors and provenance belong below those adapters.
 validates command input and output, records `human | agent | service` actor identity,
 and enforces that long commands declared `job_policy=required` actually return a Job.
 
-`backend/invocation.py` is the single scientific invocation path. It validates method
+`backend/invocation.py` is the single scientific invocation path for 28 registered Methods. It validates method
 input/output, consults method-current caches, creates or joins Jobs, runs an injected
 Executor, stores content-addressed artifacts, and returns one v2 envelope with exact
 method version and provenance. Long scientific commands always submit through the
@@ -90,7 +90,7 @@ PostgreSQL is the durable authority:
 - `app.command_trace` and `app.v_command_observation` retain semantic-command outcomes,
   latency, cache, actor and linked-Job evidence for the architecture twin.
 
-Migrations are forward-only and content-hash checked. Applied migrations 000–018 are the
+Migrations are forward-only and content-hash checked. Migrations 000–038 are the
 current schema history.
 
 ## Client application
@@ -101,7 +101,8 @@ the separate truth for connected scientific capability. `AppShell` owns routing 
 `ScientificContextStore` owns Program, focus, selection and the application's only
 staleness generation; `SceneService` owns one mol* instance that survives navigation.
 
-The current vertical slice exposes Design, Structures and Runs. Existing chemistry
+Twelve of thirty Views currently expose connected modules across Programs, Design,
+Structures, Campaigns, Synthesis, Experiments, Knowledge and Runs. Existing chemistry
 facets are modules over the shared scene and context. Molecule embedding, fields,
 surface MEP and torsion strain enter through semantic commands; long results return by
 Job and content-addressed artifacts.
@@ -147,7 +148,7 @@ rebuilds. The model can therefore calibrate observed command latency and outcome
 addition to detecting drift, ranking static hotspots and estimating dependency radius.
 It still cannot predict unseen inputs or autonomously change the architecture; that is
 the L4 boundary. The platform substrate is complete against its approved DoD; the
-product capability is explicitly partial (currently 3/8 Workspaces and 7/30 Views connected)
+product capability is explicitly partial (currently 8/8 Workspaces represented and 12/30 Views connected)
 even though the navigable product shell is complete at 8/8 and 30/30.
 
 `scripts/digital_twin_scope.json` is the ownership boundary. The watcher recursively

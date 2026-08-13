@@ -7,6 +7,8 @@
       "compounds": {"type": "array", "minItems": 2, "items": {"type": "object", "additionalProperties": false,
         "required": ["id", "smiles"], "properties": {"id": {"type": "string", "minLength": 1}, "smiles": {"type": "string", "minLength": 1}}}},
       "extra_edge_fraction": {"type": "number", "minimum": 0, "maximum": 5}, "minimum_similarity": {"type": "number", "minimum": 0, "maximum": 1}
+      ,"mode": {"enum": ["pilot", "full"], "default": "pilot"},
+      "planner": {"enum": ["openfe", "rdkit_fallback"], "default": "openfe"}
     }}},
   "output": {"schema": {"type": "object"}},
   "refusals": [{"code": "INVALID_PARAMETERS", "condition": "invalid chemistry, mapping, disconnected results or invalid uncertainty"}],

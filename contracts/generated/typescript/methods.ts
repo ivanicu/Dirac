@@ -895,12 +895,12 @@ export type MlMotifMeshTrainOutput = {
             id: string;
         };
         model_release_id: string;
-        lifecycle: 'candidate';
+        lifecycle: 'technical_smoke' | 'candidate_unvalidated';
         created: boolean;
     };
 };
 
-/** ml.motif.mesh.train — Train the governed Motif predictor mesh: Ridge/1NN, RF, XGBoost, censored Tobit, ranking and Chemprop D-MPNN ensemble. */
+/** ml.motif.mesh.train — Train a governed Motif predictor mesh with baselines, trees, censored labels, scoped OOD, Chemprop ensembles and conformal calibration; promotion remains separate. */
 export const MlMotifMeshTrainExecution = {
     "supported_modes": [
         "job"
@@ -982,7 +982,7 @@ export type MlMotifTrainOutput = {
             id: string;
         };
         model_release_id: string;
-        lifecycle: 'candidate';
+        lifecycle: 'technical_smoke' | 'candidate_unvalidated';
         created: boolean;
     };
 };
@@ -1068,6 +1068,7 @@ export type PhysicsMotifOpenfe_edgeOutput = {
     engine: 'OpenFE';
     engine_version: '1.11.1';
     transformation_digest: string;
+    ligand_charge_digest: string;
     target_ref?: Record<string, unknown> | null;
     protein_structure_ref?: Record<string, unknown> | null;
     thermodynamic_cycle_id?: string | null;
@@ -1343,8 +1344,15 @@ export const TorsionStrainExecution = {
     ],
     "default_mode": "job",
     "inline_threshold_seconds": 2.0,
-    "resource_class": "cpu-qm",
-    "concurrency_class": "scf",
+    "resource_class": "cpu",
+    "concurrency_class": "torsion",
+    "scale_profile": {
+        "cpu_cores": 1,
+        "shardable": true,
+        "distributed": false,
+        "min_gpus": 0,
+        "max_gpus": 0
+    },
     "supports_cancellation": false,
     "deterministic": true,
     "cacheable": true,

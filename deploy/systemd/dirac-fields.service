@@ -1,24 +1,9 @@
-# dirac-fields.service — Dirac fields daemon — classical + quantum cube fields (:8901)
-#
-# SPLIT FROM dirac-backend.service, which supervised BOTH python daemons under
-# one wrapper. That file said so itself: "the correct systemd shape is almost
-# certainly two independent units, so a crash in one does not restart the
-# other", and it only existed in the merged form because the task that wrote it
-# was granted a single unit path. Two reasons the split is now worth the two
-# files:
-#
-# ① SHARED FATE. `wait -n` means a physics crash restarts the fields daemon,
-#    throwing away its in-memory SCF cache (a converged Fe-heme wavefunction is
-#    minutes of CPU) for a fault in a different process.
-# ② PORT OWNERSHIP, which is the concrete reason today: the physics daemon on
-#    :8902 is run by hand from another session right now. A merged unit would
-#    try to bind a port already in use, the wrapper would exit, and systemd
-#    would restart-loop BOTH — taking down a working fields daemon to fail at
-#    starting a physics one. Separate units let :8901 come under supervision
-#    immediately and :8902 be handed over whenever its owner is ready.
+# dirac-fields.service — unified Dirac application and scientific service (:8901).
+# Historical field and physics routes share this Command/Method/Job/Artifact control
+# plane. The standalone :8902 unit is archived and must stay disabled.
 
 [Unit]
-Description=Dirac fields daemon — classical + quantum cube fields (:8901)
+Description=Dirac application and scientific service (:8901)
 After=postgresql.service network.target
 StartLimitIntervalSec=300
 StartLimitBurst=5

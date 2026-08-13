@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/structured-error.schema.json",
+  "title": "Motif Structured Error",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "error_id", "category", "stage", "subject_ref", "retryability", "scientific_effect", "recommended_action", "cause_code", "severity", "detail", "occurred_at"],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "error_id": {"type": "string", "format": "uuid"},
+    "category": {"enum": ["input", "applicability", "parameterization", "numerical", "resource", "scheduler", "infrastructure", "artifact", "security", "internal"]},
+    "stage": {"type": "string", "minLength": 1},
+    "subject_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"type": "string"}, "id": {"type": "string", "minLength": 1}}},
+    "retryability": {"enum": ["never", "same_inputs_new_attempt", "after_resource_change", "after_parameter_change", "after_input_change", "manual_review"]},
+    "scientific_effect": {"enum": ["none", "missing_evidence", "provisional_only", "invalidates_evidence", "accepted_negative_evidence"]},
+    "recommended_action": {"enum": ["stop", "retry", "resume", "reparameterize", "change_method", "review", "defer"]},
+    "cause_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,95}$"},
+    "severity": {"enum": ["info", "warning", "error", "critical"]},
+    "detail": {"type": "object"},
+    "occurred_at": {"type": "string", "format": "date-time"}
+  }
+}

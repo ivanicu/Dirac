@@ -1,5 +1,8 @@
 # Dirac performance — measured, not remembered
 
+> Historical measurement snapshot from 2026-08-11. Its 1338 measurements and
+> pre-Program architecture are not current runtime guidance.
+
 **How to re-run:** `node scripts/perf_probe.mjs` (everything) · `--json` for machine output ·
 `--only bundle|load|swap|backend|rss` for one section. The script is read-only against the
 repo and the database (see its header comment for exactly what it does and does not touch);

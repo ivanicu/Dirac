@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/chemical-state-ensemble.schema.json",
+  "title": "Motif Coupled Chemical State Ensemble",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["chemical_entity_ref", "condition", "enumeration_engine", "coupling_policy", "microstates", "retained_population_mass", "discarded_population_mass", "truncation", "confidence", "parent_aggregation_policy"],
+  "properties": {
+    "chemical_entity_ref": {"$ref": "#/$defs/ref"},
+    "condition": {"type": "object", "additionalProperties": false, "required": ["ph", "temperature_kelvin", "solvent"], "properties": {"ph": {"type": "number", "minimum": 0, "maximum": 14}, "temperature_kelvin": {"type": "number", "exclusiveMinimum": 0}, "solvent": {"type": "string", "minLength": 1}, "ionic_strength_molar": {"type": ["number", "null"], "minimum": 0}}},
+    "enumeration_engine": {"type": "object", "additionalProperties": false, "required": ["name", "version", "release_digest", "parameters"], "properties": {"name": {"type": "string"}, "version": {"type": "string"}, "release_digest": {"type": "string", "format": "sha256-digest"}, "parameters": {"type": "object"}}},
+    "coupling_policy": {"const": "joint_protonation_tautomer_stereo_no_cartesian_product"},
+    "microstates": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "object", "additionalProperties": false, "required": ["microstate_ref", "population", "population_uncertainty", "score", "retained"], "properties": {"microstate_ref": {"$ref": "#/$defs/ref"}, "population": {"type": "number", "minimum": 0, "maximum": 1}, "population_uncertainty": {"type": ["number", "null"], "minimum": 0}, "score": {"type": ["number", "null"]}, "retained": {"type": "boolean"}, "discard_reason_code": {"type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9_]{1,95}$"}}}},
+    "retained_population_mass": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+    "discarded_population_mass": {"type": "number", "minimum": 0, "exclusiveMaximum": 1},
+    "truncation": {"type": "object", "additionalProperties": false, "required": ["maximum_states", "minimum_population", "reason_codes"], "properties": {"maximum_states": {"type": "integer", "minimum": 1}, "minimum_population": {"type": "number", "minimum": 0, "maximum": 1}, "reason_codes": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}}},
+    "confidence": {"enum": ["high", "medium", "low", "unknown"]},
+    "parent_aggregation_policy": {"enum": ["population_weighted", "worst_case", "policy_defined_distribution"]}
+  },
+  "$defs": {"ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"type": "string", "minLength": 1}, "id": {"type": "string", "minLength": 1}}}}
+}

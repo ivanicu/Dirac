@@ -38,7 +38,10 @@ except ImportError:
 
 import artifacts_pg                                                 # noqa: E402
 
-DSN = 'dbname=dirac user=ivan'
+DSN = os.environ.get('DIRAC_TEST_DSN', 'dbname=dirac user=ivan')
+if 'pytest' in sys.modules and not os.environ.get('DIRAC_TEST_DSN'):
+    import pytest
+    pytest.skip('requires isolated PostgreSQL DIRAC_TEST_DSN', allow_module_level=True)
 PASS, FAIL = [], []
 MARKER = b'dirac-artifact-pg-test-'
 WRITTEN: list[str] = []            # digests to clean up
@@ -292,13 +295,14 @@ def cleanup() -> None:
         cur.execute("DELETE FROM app.job WHERE worker = 'artifact-pg-test'")
 
 
-try:
-    for name, fn in list(globals().items()):
-        if name.startswith('test_') and callable(fn):
-            check(name, fn)
-finally:
-    cleanup()
+if __name__ == '__main__':
+    try:
+        for name, fn in list(globals().items()):
+            if name.startswith('test_') and callable(fn):
+                check(name, fn)
+    finally:
+        cleanup()
 
-print('─' * 100)
-print(f'{len(PASS)} passed · {len(FAIL)} failed')
-sys.exit(1 if FAIL else 0)
+    print('─' * 100)
+    print(f'{len(PASS)} passed · {len(FAIL)} failed')
+    sys.exit(1 if FAIL else 0)

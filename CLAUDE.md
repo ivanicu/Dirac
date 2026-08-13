@@ -64,7 +64,8 @@ failure never announces itself — it hands you a plausible screenshot.
 ## ⚠ THE BACKEND DAEMON DOES NOT RELOAD ITSELF
 
 **After touching anything in `backend/`: `systemctl --user restart dirac-fields`.**
-(`dirac-physics` likewise for `backend/physics/`.)
+The standalone `dirac-physics` service is retired; physics routes now run through the
+unified service on 8901.
 
 The daemon on `:8901` holds your code in memory. Edit a handler, take a
 screenshot, and you have photographed a build that no longer exists on disk —

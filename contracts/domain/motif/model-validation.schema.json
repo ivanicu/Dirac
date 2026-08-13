@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/model-validation.schema.json",
+  "title": "Motif Model Release Validation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "model_release_ref", "validation_policy_release_ref", "requested_lifecycle", "granted_lifecycle", "independent_compounds", "independent_series", "split_groups", "effective_sample_size", "censoring_fraction", "label_noise", "domain_coverage", "independent_holdout", "specification_curve_artifact_ref", "checks", "claim_eligible", "created_at"],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "model_release_ref": {"$ref": "#/$defs/ref"},
+    "validation_policy_release_ref": {"$ref": "#/$defs/ref"},
+    "requested_lifecycle": {"$ref": "#/$defs/lifecycle"},
+    "granted_lifecycle": {"$ref": "#/$defs/lifecycle"},
+    "independent_compounds": {"type": "integer", "minimum": 0},
+    "independent_series": {"type": "integer", "minimum": 0},
+    "split_groups": {"type": "integer", "minimum": 0},
+    "effective_sample_size": {"type": "number", "minimum": 0},
+    "censoring_fraction": {"type": "number", "minimum": 0, "maximum": 1},
+    "label_noise": {"type": "number", "minimum": 0},
+    "domain_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+    "independent_holdout": {"type": "boolean"},
+    "specification_curve_artifact_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+    "checks": {"type": "object", "additionalProperties": {"type": "boolean"}},
+    "claim_eligible": {"type": "boolean"},
+    "created_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {"ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"type": "string"}, "id": {"type": "string", "minLength": 1}}}, "lifecycle": {"enum": ["technical_smoke", "candidate_unvalidated", "scientific_candidate", "validated_release", "promoted_release", "retired"]}}
+}

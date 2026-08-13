@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/md-analysis.schema.json",
+  "title": "Motif MD Analysis Protocol and Assessment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "trajectory_ref", "analysis_protocol_release_ref", "selections", "pbc", "alignment", "cutoffs", "blocks", "repeat_index", "quality", "ligand_departure", "scientific_effect", "scientific_state", "reason_codes"],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "trajectory_ref": {"$ref": "#/$defs/ref"},
+    "analysis_protocol_release_ref": {"$ref": "#/$defs/ref"},
+    "selections": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string"}},
+    "pbc": {"type": "object", "additionalProperties": false, "required": ["unwrap", "image", "reference_selection"], "properties": {"unwrap": {"type": "boolean"}, "image": {"type": "boolean"}, "reference_selection": {"type": "string"}}},
+    "alignment": {"type": "object", "additionalProperties": false, "required": ["selection", "mass_weighted"], "properties": {"selection": {"type": "string"}, "mass_weighted": {"type": "boolean"}}},
+    "cutoffs": {"type": "object", "additionalProperties": {"type": "number"}},
+    "blocks": {"type": "object", "additionalProperties": false, "required": ["length_frames", "minimum_blocks"], "properties": {"length_frames": {"type": "integer", "minimum": 1}, "minimum_blocks": {"type": "integer", "minimum": 2}}},
+    "repeat_index": {"type": "integer", "minimum": 1},
+    "quality": {"type": "object"},
+    "ligand_departure": {"type": "object"},
+    "scientific_effect": {"enum": ["invalidates_evidence", "accepted_negative_evidence", "provisional_only"]},
+    "scientific_state": {"enum": ["accepted", "provisional", "rejected"]},
+    "reason_codes": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+  },
+  "$defs": {"ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"type": "string"}, "id": {"type": "string", "minLength": 1}}}}
+}

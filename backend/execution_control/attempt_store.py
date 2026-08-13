@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 from execution_control.leases import StaleAttemptError
+from execution_control.completion import validate_output_manifest
 
 
 @dataclass(frozen=True)
@@ -97,4 +98,75 @@ class PostgresAttemptStore:
                 "(event_key, aggregate_kind, aggregate_id, event_type, payload) "
                 "VALUES (%s,'job_attempt',%s,%s,%s) ON CONFLICT (event_key) DO NOTHING",
                 (event_key, claim.attempt_id, f"attempt.{state}", json.dumps(payload)))
+        return True
+
+    def commit_success(self, claim: ClaimedAttempt, *, manifest: dict[str, Any],
+                       manifest_artifact_id: str, required_roles: list[str],
+                       artifact_reader: Any, event_key: str) -> bool:
+        """Atomically publish one terminal scientific manifest for a LogicalJob.
+
+        Workers may execute at least once.  Only the current fenced Attempt can insert
+        ``app.artifact_commit`` and transition terminal state.  A replay of the exact
+        same commit is idempotent; a late or conflicting result is rejected.
+        """
+        expected_digest = manifest.get("execution_digest")
+        validate_output_manifest(
+            manifest, expected_execution_digest=expected_digest,
+            expected_fencing_token=claim.fencing_token,
+            required_roles=required_roles, artifact_reader=artifact_reader,
+        )
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT job_id,state,execution_digest,fencing_token,lease_owner,lease_expires_at "
+                "FROM app.job_attempt WHERE id=%s FOR UPDATE", (claim.attempt_id,))
+            row = cur.fetchone()
+            if row is None:
+                raise StaleAttemptError("Attempt no longer exists")
+            database_digest = "sha256:" + bytes(row[2]).hex()
+            if database_digest != expected_digest:
+                raise StaleAttemptError("manifest execution identity differs from Attempt")
+            cur.execute(
+                "SELECT attempt_id,manifest_artifact_id,fencing_token "
+                "FROM app.artifact_commit WHERE logical_job_id=%s FOR UPDATE",
+                (claim.job_id,))
+            existing = cur.fetchone()
+            if existing is not None:
+                if (str(existing[0]), str(existing[1]), int(existing[2])) == (
+                        claim.attempt_id, manifest_artifact_id, claim.fencing_token):
+                    return False
+                raise StaleAttemptError(
+                    "LogicalJob already has a different terminal artifact commit")
+            if (row[1] != "running" or int(row[3]) != claim.fencing_token
+                    or row[4] != claim.lease_owner or row[5] is None):
+                raise StaleAttemptError("terminal artifact commit rejected by fencing barrier")
+            cur.execute("SELECT %s::timestamptz > now()", (row[5],))
+            if not cur.fetchone()[0]:
+                raise StaleAttemptError("terminal artifact commit lease has expired")
+            cur.execute(
+                "INSERT INTO app.artifact_commit "
+                "(logical_job_id,attempt_id,fencing_token,manifest_artifact_id,terminal_event_key) "
+                "VALUES (%s,%s,%s,%s,%s)",
+                (claim.job_id, claim.attempt_id, claim.fencing_token,
+                 manifest_artifact_id, event_key))
+            cur.execute(
+                "UPDATE app.job_attempt SET state='succeeded',finished_at=now(),"
+                "lease_owner=NULL,lease_expires_at=NULL,heartbeat_at=NULL WHERE id=%s",
+                (claim.attempt_id,))
+            cur.execute(
+                "INSERT INTO design.motif_method_outcome "
+                "(attempt_id,execution_state,manifest_artifact_id) "
+                "VALUES (%s,'succeeded',%s) ON CONFLICT (attempt_id) DO NOTHING",
+                (claim.attempt_id, manifest_artifact_id))
+            cur.execute(
+                "INSERT INTO app.outbox_event "
+                "(event_key,aggregate_kind,aggregate_id,event_type,payload) "
+                "VALUES (%s,'job_attempt',%s,'attempt.succeeded',%s) "
+                "ON CONFLICT (event_key) DO NOTHING",
+                (event_key, claim.attempt_id, json.dumps({
+                    "logical_job_id": claim.job_id,
+                    "attempt_id": claim.attempt_id,
+                    "fencing_token": claim.fencing_token,
+                    "manifest_artifact_id": manifest_artifact_id,
+                    "execution_digest": expected_digest,
+                })))
         return True

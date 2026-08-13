@@ -34,7 +34,8 @@ def specification():
         },
         "train": {"registration": {
             "model_object_id": "model-1", "release_name": "cycle-1",
-            "source_commit": "0" * 40, "intended_use": {}, "prohibited_use": {},
+            "source_commit": "0" * 40, "scientific_lifecycle": "technical_smoke",
+            "intended_use": {}, "prohibited_use": {},
             "known_limitations": {}}},
         "candidates": [{"proposal_id": "00000000-0000-4000-8000-000000000001",
                         "smiles": "CCN", "objectives": {}, "constraints": {},

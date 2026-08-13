@@ -1,129 +1,246 @@
 # Dirac
 
-> **Dirac is to Schrödinger (the company) what the Dirac equation is to the Schrödinger equation: an open-source, browser-native upgrade.**
+> **Dirac is to Schrödinger's molecular-design platform what the Dirac equation is to
+> the Schrödinger equation: an open-source, browser-native upgrade.**
 
-![Dirac's Fields facet: the 1CBS retinoid-binding protein's beta-barrel with a classical electrostatic potential well rendered as a translucent isosurface around the retinoic-acid ligand inside the pocket, computed by the local backend and served from the browser cache](docs/screenshots/02_fields_electrostatic_well.png)
+Dirac is an open, browser-native molecular discovery platform that combines a mol\* +
+RDKit workbench with Programs, versioned scientific Methods, durable Jobs,
+content-addressed Artifacts and provenance. Computational chemists, ML researchers,
+automation and agents work through the same semantic Commands—from hypothesis to
+inspectable evidence.
 
-**Where things stand:** [`STATUS.md`](STATUS.md) records live evidence;
-[`ARCHITECTURE.md`](ARCHITECTURE.md) describes the current platform boundaries; and
-[`docs/product/PRODUCT_ARCHITECTURE.md`](docs/product/PRODUCT_ARCHITECTURE.md) defines
-the product architecture. The local supervised deployment has no authentication and is
-not a public multi-user service.
+![Dirac rendering an electrostatic field around the 1CBS ligand](docs/screenshots/02_fields_electrostatic_well.png)
 
-Schrödinger's Maestro / LiveDesign stack is the commercial state-of-the-art for structure-based molecular design. It is closed, expensive, and desktop-native. **Dirac is the open-source, browser-native answer** — built on the [mol\*](https://github.com/molstar/molstar) 3D engine and the [RDKit-JS](https://github.com/rdkit/rdkit-js) cheminformatics runtime. Interactive perception stays in-browser; real 3D embedding and scientific computation use the optional local Python service through the same command, Job, artifact and provenance contracts.
+## Introducing Motif v3
 
-The name is intentional. In physics, Schrödinger's equation describes matter at non-relativistic energies; Dirac's equation is its upgrade to the relativistic regime, predicting spin, antimatter, and the fine structure of hydrogen. **Dirac the project aims to be that kind of upgrade over Schrödinger the product** — same domain, deeper formulation, open and accessible.
+We built **Motif v3** to carry molecular machine learning from raw observations to a
+validated model release, decision-ready predictions and the next experiment. It brings
+model development, computational chemistry and production execution into one traceable
+loop:
 
-## What Dirac is today
-
-Dirac is **one integrated app** with multiple facets, all sharing the same mol\* scene, the same RDKit-JS session, and the same focused ligand. Facets are organized as sub-directories of `src/app.frontend.facets.molstar-rdkit.editable/facets/`; agents develop them in parallel against the shared substrate in `src/chemistry.backend.perception.rdkit-wasm.editable/`.
-
-| Status | Facet | What it does |
-|---|---|---|
-| ✅ shipped | **Lab** (in `index.ts`) | 3D structure + RDKit chemistry perception (aromaticity / donor / acceptor / Gasteiger stub) + 2D ligand depiction with click-sync + 3D pharmacophore primitives (HBA cones / HBD sticks / aromatic disks / hydrophobic halos) |
-| ✅ shipped | **Property Optimization Cockpit** (`facets/property-cockpit/`) | Lipinski / Veber / lead-likeness dashboard driven by `mol.get_descriptors()` — `Properties` master-tab |
-| ✅ shipped | **Pharmacophore Designer** (`facets/pharmacophore-designer/`) | Drag-editable pharmacophore model + topological SMARTS screening against a 68-molecule library — `Designer` master-tab |
-| ✅ shipped | **Field Wells** (`facets/field-wells/` + `backend/`) | 3D energy wells rendered in the pocket: classical electrostatic well (Gasteiger/Coulomb), quantum HOMO / LUMO / electron density / QM potential via pyscf HF — `Fields` master-tab. Needs the optional local Python backend (below) |
-| 🚧 blocked | **Conformer Explorer** (`facets/conformer-explorer/`) | RDKit ETKDG conformer generation, mol\* morph animation, energy landscape. Blocked in-browser: the vendored RDKit-JS wasm has no `ETKDG`/`EmbedMolecule`/force fields (verified against the binary). Route reopens through the fields backend (RDKit 2026.03 with MMFF) |
-
-## What it looks like
-
-| Screenshot | What's on screen |
-|---|---|
-| <img src="docs/screenshots/01_lab_1cbs_hbond.png" width="320" alt="Lab facet: 2D RDKit depiction beside the 3D structure"> | **Lab** — the 2D RDKit depiction of REA·A:200 (22 atoms, 1 HBD, 2 HBA) beside the same ligand in the 3D pocket, click-synced in both directions, with the halogen-audit panel stating what a purely geometric profiler would have reported instead. |
-| <img src="docs/screenshots/03_properties_cockpit.png" width="320" alt="Properties facet: Lipinski/Veber descriptor dashboard"> | **Properties** — Lipinski/Veber descriptor dashboard for the same ligand (MW 300.4 Da, LogP 5.60 flagged red for exceeding the ≤5.0 rule, TPSA 37.3 Å², 1 HBD / 2 HBA). |
-| <img src="docs/screenshots/04_designer_pharmacophore.png" width="320" alt="Designer facet: pharmacophore feature list and 3D glyphs"> | **Designer** — Pharmacophore Designer feature list auto-derived from the ligand (2 HBA, 1 HBD, 19 hydrophobic points), each with an editable radius, shown in the 3D pocket. |
-| <img src="docs/screenshots/05_ops_console.png" width="320" alt="Ops console reading the live field backend snapshot"> | **Ops console** — live read of `/admin/snapshot` from the field backend: 0 jobs running, field-cache health (68 rows, 291.6 MB across 5 field kinds), and the stale-sweep reclaim list. |
-
-### Optional scientific application service
-
-The browser can explore bundled examples without a backend. Real embedding, fields,
-surface MEP and torsion analysis use the unified local application service:
-
-```bash
-backend/env/bin/python backend/field_server.py     # 0.0.0.0:8901 (LAN-reachable, unauthenticated); the Fields tab shows online/offline honestly
+```text
+Observations → Dataset Snapshot → Feature Release → Model Release
+             → Prediction + Uncertainty → Acquisition → Simulation → Evidence → Decision
 ```
 
-Self-contained conda env in `backend/env` (RDKit 2026.03 + pyscf 2.14). MEP is instant; HOMO/LUMO/density/QM-MEP run a real RHF/UHF (STO-3G default; 6-31G, 6-31G\*, or def2-SVP on request) and refuse to render if SCF does not converge.
+### A complete molecular ML lifecycle
 
-## Run it
+| Capability | What Motif v3 provides |
+|---|---|
+| Reproducible data and features | Immutable dataset snapshots preserve molecular identity, endpoint semantics, units, censoring, assay context, splits and source lineage. Versioned RDKit feature releases make the representation itself inspectable and reusable. |
+| Deep models plus rigorous baselines | Chemprop D-MPNN ensembles run through PyTorch and Lightning alongside Ridge, nearest-neighbor, random forest, XGBoost, censored Tobit and pairwise-ranking models. Every member is trained and compared over the same frozen data contract. |
+| Governed model releases | Checkpoints are data-only, digest-verified Artifacts tied to source, parameters, runtime, dataset and feature releases. Technical smoke, scientific validation, promotion and retirement are distinct lifecycle states. |
+| Honest uncertainty and applicability | Ensemble dispersion, conditional conformal intervals and model × endpoint × representation domain assessment remain separate signals. Out-of-domain inputs can be refused instead of receiving an unjustifiably confident score. |
+| Multi-objective molecular design | BoTorch/GPyTorch qLogEHVI operates over an explicit finite candidate set with validated posteriors, hard constraints, pending-point conditioning, Pareto ranking, diversity and selection-sensitivity analysis. |
+| Research-to-production execution | Training, prediction and acquisition use durable Jobs, governed CPU/GPU resources, retries, cancellation, content-addressed outputs and local or Kubernetes/Kueue execution without changing scientific identity. |
+| ML and physics in one evidence graph | Predictions can route into structure preparation, docking, torsion, MD, OpenFE and covariance-aware RBFE; results return as typed evidence with conditions, quality assessment, dependencies and claim eligibility. |
+
+Motif v3 makes the engineering around a model as explicit as the model itself. A research
+idea can become a reproducible experiment, a promoted capability and a scientist-facing
+decision surface without losing the failures, uncertainty, compute cost or physical
+assumptions that produced it. Its public `motif.plan`, `motif.validate` and
+`motif.explain` Commands expose evidence-driven action planning through the same
+interface as the rest of Dirac.
+
+See the [Motif v3 system of record](docs/product/motif-v3/README.md) for its semantic,
+physical, execution and validation contracts.
+
+## One continuous scientific loop
+
+| Scientific step | Dirac surface | Durable result |
+|---|---|---|
+| Frame the question | Programs connect objectives, hypotheses, compounds and work items. | A versioned intent and ownership context |
+| Explore molecular context | One persistent mol\* scene and shared RDKit chemistry coordinate protein, ligand, 2D and 3D views. | Reusable selections, structures and derived chemical features |
+| Run a method | A semantic Command resolves a versioned Method and submits work through one invocation path. | A durable Job with exact inputs, actor and runtime identity |
+| Interrogate the outcome | Completed, partial, failed, stale and cancelled work remains distinguishable; large outputs stay addressable as Artifacts. | Results, uncertainty, provenance and typed failure evidence |
+| Make the next decision | Programs and Campaigns relate evidence back to hypotheses and follow-up work. | A traceable decision rather than an isolated file or notebook cell |
+
+This loop is the product boundary: visualization, models, simulation, data and compute are
+parts of one scientific decision system rather than separate tools.
+
+## What teams can use today
+
+| Capability | Current implementation |
+|---|---|
+| Interactive molecular workbench | Protein and ligand exploration, synchronized 2D/3D chemistry, pharmacophore editing, property analysis, torsion and field visualizations |
+| Program and experiment context | Durable Programs, objectives, hypotheses, compounds, work packages, decisions, evidence and lineage projected across shared Workspaces |
+| ML lifecycle | Governed paths for dataset snapshots, model training, prediction, ranking, release validation, uncertainty and out-of-domain assessment |
+| Computational chemistry | Versioned structure, docking, conformer, torsion, MD, OpenFE and RBFE Methods with explicit inputs, outputs and refusal conditions |
+| Long-running compute | PostgreSQL-backed Jobs and attempts, retries, cancellation, resource leases, fenced completion and content-addressed Artifacts |
+| Execution at different scales | Inline, thread, process, local GPU and Kubernetes/Kueue adapters keep placement separate from scientific intent |
+| Programmatic integration | HTTP v2, Python SDK, CLI and generated safe agent projection share the browser application's command boundary |
+| Operational understanding | Typed errors, command observations, a read-only operations surface and a source-derived architecture twin |
+
+## Representative surfaces
+
+| Molecular workspace | Property analysis | Operations |
+|---|---|---|
+| <img src="docs/screenshots/01_lab_1cbs_hbond.png" alt="Synchronized molecular workspace showing 2D ligand chemistry and a 3D protein pocket" width="320"> | <img src="docs/screenshots/03_properties_cockpit.png" alt="Molecular property analysis cockpit" width="320"> | <img src="docs/screenshots/05_ops_console.png" alt="Operations console showing Jobs and artifact-cache state" width="320"> |
+| Synchronized ligand chemistry and structural context | Decision-oriented molecular descriptors | Live Job, service and artifact state |
+
+## Construction status
+
+Dirac currently defines 8 stable Workspaces and 30 routable Views, of which 12 are
+connected to working modules. The contract layer contains 79 versioned semantic Commands
+over 83 canonical ObjectKinds and 28 scientific Method manifests behind one invocation
+path. PostgreSQL owns Programs, Jobs, attempts, artifacts, relations, provenance and
+execution control.
+
+These counts are source-derived from the working tree on 2026-08-13; the documentation
+gate fails when they drift from the registries. Dirac is under active development: the
+platform substrate and product shell are real, while 18 Views remain explicit
+implementation shells and individual scientific Methods still require method-specific
+validation. See [Construction status](STATUS.md) for the current evidence boundary and
+[Architecture](ARCHITECTURE.md) for the live system shape.
+
+## Product model
+
+Dirac organizes work around scientific intent, not around algorithms:
+
+| Layer | Owns |
+|---|---|
+| Programs | objectives, hypotheses, compounds, work items, decisions, evidence and lineage |
+| Workspaces and Views | human navigation and composable modules over shared scientific context |
+| Commands | versioned application actions with schemas, mutation policy, actor identity and typed errors |
+| Methods | reproducible scientific computation, runtime identity, estimates and refusal conditions |
+| Jobs and Runs | durable execution state, attempts, scheduling, retries, cancellation and attention |
+| Artifacts and provenance | content-addressed outputs linked to exact methods, inputs and actors |
+
+Algorithms such as docking, QM, MD, RBFE and ML are Methods reached through Commands.
+They are not separate products or navigation silos.
+
+## Architecture
+
+```text
+Canonical JSON contracts
+  ObjectKind · Relation · Command · Method · Error · Artifact
+                         │
+                         ▼
+CommandRegistry → CommandDispatcher → typed application handler
+                         │
+                         ▼
+MethodCatalog → InvocationService → JobStore → Executor
+                         │                         │
+                         └──────────────► ArtifactStore + provenance
+
+HTTP v2 · Python SDK · CLI · MCP · browser application
+                         │
+ScientificContextStore → AppShell → Workspace/View/Module registries
+                         │
+                  one persistent mol* SceneService
+```
+
+PostgreSQL is the durable authority. The browser is a projection over shared context and
+semantic commands; it does not own a second scientific API. Long computations return a
+Job and addressable artifacts rather than embedding large results in transport envelopes.
+
+## Quick start: browser application
+
+Prerequisites: Node.js 22 or newer and npm.
 
 ```bash
 git clone https://github.com/ivanicu/Dirac.git
 cd Dirac
-npm ci                                                       # use ci, not install (see AGENTS.md)
-node ./scripts/build.mjs -a dirac --prd                       # one-shot production build
-node_modules/.bin/http-server build/dirac -p 1360 -g
-# open http://localhost:1360/
+npm ci
+npm run build:dirac
+node_modules/.bin/http-server build/dirac -p 1360 -g -c-1 -a 0.0.0.0 -P http://127.0.0.1:1360?
 ```
 
-First page load fetches `RDKit_minimal.wasm` (~7 MB) from `src/app.frontend.facets.molstar-rdkit.editable/assets/rdkit/`. Browser-cached afterwards.
+Open <http://localhost:1360/>. The first load fetches the vendored RDKit WASM bundle;
+after that the browser cache supplies it.
 
-## Demo scenes
+On the canonical workstation, **do not run that server command**: `dirac-web.service`
+already owns the one allowed web port, 1360. Rebuild with `npm run build:dirac` and reload
+the existing page. See [Runtime and deployment](deploy/README.md).
 
-| Structure | What to enable | What you'll see |
-|---|---|---|
-| **1CBS** (retinoic-acid binding protein) | Focus → `REA · A:200`, then Semantics → RDKit → **H-bond donor / acceptor** | 1 HBD + 2 HBA on the carboxylate. Switch to Ligand tab for the 2D depiction with the same atoms highlighted. |
-| **4HHB** (hemoglobin) | Focus → `HEM · A:142`, then Pharmacophore → **Pharmacophore features · 3D** | 8 HBA cones, 2 HBD sticks, 2 aromatic disks over pyrrole rings, 24 hydrophobic halos. |
-| **1CBS** → Ligand tab | Click an atom in the 2D SVG | The 3D viewer selects the same atom + camera focuses on it. |
+The browser can open bundled structures and run in-browser RDKit features without the
+Python service. Durable Programs, server-side Methods, Jobs and artifacts require the
+application service and PostgreSQL.
 
-## Architecture in one paragraph
+## Application service and CLI
 
+The canonical workstation uses the repository-local scientific environment:
+
+```bash
+backend/env/bin/python backend/field_server.py
+PYTHONPATH=python/src python3 -m dirac.cli commands --json
+PYTHONPATH=python/src python3 -m dirac.cli health --json
 ```
-GUI / CLI / MCP ─► SDK ─► CommandDispatcher ─► InvocationService
-                                      ├─► MethodCatalog + cache
-                                      ├─► durable JobStore + Executor
-                                      └─► content-addressed ArtifactStore + provenance
 
-AppShell ─► ScientificContextStore ─► composable modules
-        └─► one persistent SceneService / mol* instance
+The service listens on `0.0.0.0:8901` and exposes health, command discovery, invocation,
+Jobs and artifacts through HTTP v2. The CLI can use in-process or HTTP transport and
+reports which transport handled the request. Environment provisioning, PostgreSQL
+migrations and security profiles are documented in [Backend](backend/README.md),
+[Database](backend/db/README.md), [Deployment](deploy/README.md), and
+[Remote security](docs/security/REMOTE.md).
+
+The local/LAN profile is intentionally unauthenticated. Do not expose it to the public
+internet. The remote profile must add HTTPS, operator-issued credentials, scopes, quotas
+and artifact authorization.
+
+## Verification
+
+The repository gate suite derives its claims from source and runs every selected gate
+even if an earlier one fails:
+
+```bash
+bash scripts/gates.sh
 ```
 
-The atom-index contract is the load-bearing seam: ligand loci iteration order is preserved through molfile construction, RDKit parsing, SMARTS predicates, 2D SVG generation, and 3D click-back selection. Every layer uses the same walker.
+Some gates require the local PostgreSQL database or the scientific daemon. For a
+portable source/build pass:
 
-## Visual channel allocation
+```bash
+bash scripts/gates.sh tsc build palette css docs contracts portability layering twin
+```
 
-Dirac treats color, geometry, label, and halo as orthogonal carriers — each piece of chemistry information is assigned exactly one channel so they never compete.
+The main CI additionally migrates a clean PostgreSQL 18 + pgvector database from `000`
+through the current migration and checks contract/schema alignment.
 
-| Information | Channel |
+## Repository map
+
+| Path | Purpose |
 |---|---|
-| Element identity | Atom CPK color (default) |
-| Bond order | Bond visual style (single/double/triple parallel lines) — *future work* |
-| Formal charge | Atom text label |
-| Partial charge | Atomic color gradient (mutually exclusive with CPK) — *pending RDKit API* |
-| Donor / acceptor | Atom halo + 2D highlight color |
-| Aromaticity | Ring color + 3D ring disk |
-| Hydrophobicity | 3D hazy halo (separate from atom color) |
+| `src/app/` | AppShell, context, domain types, registries and client modules |
+| `src/app.frontend.facets.molstar-rdkit.editable/` | integrated browser application and scientific facets |
+| `src/chemistry.backend.perception.rdkit-wasm.editable/` | shared RDKit-JS chemistry substrate |
+| `backend/dirac_app/` | command registry, dispatcher and application handlers |
+| `backend/motif/` | governed molecular-design and closed-loop scientific workflows |
+| `backend/execution_control/` | allocation, leases, retries, reconciliation and completion |
+| `backend/executors/` | local and Kubernetes/Kueue execution adapters |
+| `backend/db/` | PostgreSQL schema, migrations and database gates |
+| `contracts/` | canonical Object, Command, Method and Error schemas plus generated types |
+| `python/` | dependency-light Python SDK, CLI and MCP adapter |
+| `docs/product/` | product, HCI and Motif specifications; Motif v3 is the current baseline |
+| `docs/adr/` | accepted architecture decisions |
+| `docs/archive/` | dated evidence and superseded plans; never current guidance |
+| `deploy/` | current service topology and deployment assets |
 
-## What's deliberately not here
+The upstream mol\* engine remains in the tree under explicitly named vendored/read-only
+areas. [Source ownership](src/VENDORED.md) distinguishes upstream substrate from Dirac
+code.
 
-- **MMFF / OPLS ligand strain**: RDKit-JS does not expose force-field APIs in the 2025.03.4 build. Implemented as a clean "unavailable" badge, not silently missing.
-- **FEP / ΔΔG**: requires HPC backend; not faked.
-- **APBS electrostatics**: requires an external service; deferred.
-- **Retrosynthesis**: RDKit-JS does not expose the retrosynthesis API; would need a Python backend.
-- **3D bond-order double-line rendering**: data is available (CCD `ComponentBond.order`), the renderer is not yet written. The 2D RDKit depiction shows proper bond orders today.
+## Documentation
 
-## Honest limitations
+- [Construction status](STATUS.md) — what is connected, measured or still partial
+- [Architecture](ARCHITECTURE.md) — current technical boundaries
+- [Product architecture](docs/product/PRODUCT_ARCHITECTURE.md) — Workspaces, Views and intent model
+- [Domain model](docs/product/DOMAIN_MODEL.md) and [Command model](docs/product/COMMAND_MODEL.md)
+- [Human interface charter](docs/product/HUMAN_INTERFACE_CHARTER.md) and [HCI contracts](docs/product/HCI_SEMANTIC_CONTRACTS.md)
+- [Program reference jobs](docs/product/DIRAC_PROGRAM_REFERENCE_JOBS_SPEC.md)
+- [Motif v3](docs/product/motif-v3/README.md) — current scientific-compute system of record
+- [Documentation map](docs/README.md)
 
-- **Single-residue ligand assumption.** The molfile generator and atom-index walker assume one `LigandFocusTarget` bundle = one residue. Covalent multi-residue ligands and UNL entries are not supported.
-- **CCD dependency.** mol*'s `MolEncoder` requires `ComponentBond` data from the Chemical Component Dictionary. Novel ligands not in CCD will report "RDKit cannot parse this ligand" rather than silently failing.
-- **Porphyrin aromaticity undercount.** RDKit's default aromaticity model perceives only 2 of the 4 pyrrole rings in HEME. Faithfully reported, not a bug.
+## Scientific honesty
 
-## Repository topology
+Dirac separates workflow capability from scientific validation. A registered Method or
+passing transport parity test proves that computation is routed and recorded correctly;
+it does not by itself validate a force field, model, dataset or prospective prediction.
+Methods must expose their runtime identity, units, refusal conditions and provenance, and
+the UI must not upgrade planned or partial capability into scientific readiness.
 
-```
-origin   → github.com/ivanicu/Dirac.git     (canonical)
-master   → tracks upstream mol* locally for cherry-pick (never pushed to origin)
-```
+## Acknowledgments and license
 
-Single-tree model: all facets live in `main`. See `AGENTS.md` for directory-based ownership and the `[coord]` issue protocol for shared substrate changes.
-
-## Acknowledgments
-
-Dirac is built on top of [mol\*](https://github.com/molstar/molstar) (MIT) and [RDKit-JS](https://github.com/rdkit/rdkit-js) (BSD-3-Clause). The mol\* engine, semantic-chemistry substrate, and example lab structure are derivative work; please cite mol\* as:
-
-David Sehnal, Sebastian Bittrich, Mandar Deshpande, Radka Svobodová, Karel Berka, Václav Bazgier, Sameer Velankar, Stephen K Burley, Jaroslav Koča, Alexander S Rose: *Mol\* Viewer: modern web app for 3D visualization and analysis of large biomolecular structures*, Nucleic Acids Research, 2021; https://doi.org/10.1093/nar/gkab314.
-
-## License
-
-MIT. See [LICENSE](./LICENSE). The bundled RDKit-WASM is BSD-3-Clause.
+Dirac is built on [mol\*](https://github.com/molstar/molstar) and
+[RDKit](https://github.com/rdkit/rdkit). See [LICENSE](LICENSE) for the MIT license;
+the bundled RDKit-WASM retains its BSD-3-Clause terms.

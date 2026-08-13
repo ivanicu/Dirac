@@ -109,7 +109,7 @@ MLMOTIFMESHPREDICT_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mod
 MLMOTIFMESHPREDICT_REFUSALS = ['INVALID_PARAMETERS']
 MLMOTIFMESHPREDICT_WARNINGS = []
 
-# ml.motif.mesh.train — Train the governed Motif predictor mesh: Ridge/1NN, RF, XGBoost, censored Tobit, ranking and Chemprop D-MPNN ensemble.
+# ml.motif.mesh.train — Train a governed Motif predictor mesh with baselines, trees, censored labels, scoped OOD, Chemprop ensembles and conformal calibration; promotion remains separate.
 MLMOTIFMESHTRAIN_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'gpu', 'determinism': 'numeric_tolerant', 'checkpointable': True, 'cancellation': 'cooperative', 'artifact_access': ['read:dataset', 'write:model', 'write:checkpoint'], 'supported_adapters': ['local_gpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': False, 'distributed': True, 'min_gpus': 1, 'max_gpus': 10000}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
 MLMOTIFMESHTRAIN_REFUSALS = ['INVALID_PARAMETERS']
 MLMOTIFMESHTRAIN_WARNINGS = []
@@ -192,8 +192,8 @@ class TorsionStrainParameters(TypedDict, total=False):
     max_torsions: int
     variant: Literal["MMFF94", "MMFF94s"]
 
-TORSIONSTRAIN_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
-TORSIONSTRAIN_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
-TORSIONSTRAIN_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
+TORSIONSTRAIN_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu', 'concurrency_class': 'torsion', 'scale_profile': {'cpu_cores': 1, 'shardable': True, 'distributed': False, 'min_gpus': 0, 'max_gpus': 0}, 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
+TORSIONSTRAIN_REFUSALS = ['INVALID_PARAMETERS', 'UNCONVERGED', 'UNSUPPORTED']
+TORSIONSTRAIN_WARNINGS = ['ONE_DIMENSIONAL_TORSION_NOT_THERMODYNAMIC']
 
 METHOD_IDS = ['data.motif.snapshot', 'design.motif.acquire', 'design.motif.bayesian_acquire', 'design.motif.local_edits', 'design.motif.reaction_enumerate', 'fields.mep', 'fields.mlp', 'fields.qm.density', 'fields.qm.homo', 'fields.qm.lumo', 'fields.qm.mep_qm', 'fields.region.mep', 'fields.region.mlp', 'ml.motif.calibrate', 'ml.motif.mesh.predict', 'ml.motif.mesh.train', 'ml.motif.predict', 'ml.motif.train', 'molecule.embed', 'physics.motif.openfe_edge', 'physics.motif.openmm_md', 'physics.motif.rbfe_aggregate', 'physics.motif.rbfe_network', 'structure.motif.conformers', 'structure.motif.vina', 'surface.mep', 'surface.mep_at', 'torsion.strain']

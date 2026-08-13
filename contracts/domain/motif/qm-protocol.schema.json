@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/qm-protocol.schema.json",
+  "title": "Motif QM Method Identity",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "geometry", "electronic_structure_method", "basis", "dispersion", "solvent_model", "charge", "multiplicity", "scf", "integration_grid", "program", "method_release_ref"],
+  "properties": {
+    "schema_version": {"const": "3.0"}, "geometry": {"type": "object"},
+    "electronic_structure_method": {"type": "string", "minLength": 1}, "basis": {"type": "string", "minLength": 1},
+    "dispersion": {"type": ["string", "null"]}, "solvent_model": {"type": ["object", "null"]},
+    "charge": {"type": "integer"}, "multiplicity": {"type": "integer", "minimum": 1},
+    "scf": {"type": "object"}, "integration_grid": {"type": "object"},
+    "program": {"type": "object", "additionalProperties": false, "required": ["name", "version", "binary_digest"], "properties": {"name": {"type": "string"}, "version": {"type": "string"}, "binary_digest": {"type": "string", "format": "sha256-digest"}}},
+    "method_release_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"const": "method_release"}, "id": {"type": "string"}}}
+  }
+}

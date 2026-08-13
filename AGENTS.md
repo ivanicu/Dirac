@@ -126,12 +126,9 @@ Examples:
 ## Build and run
 
 ```bash
-# Baseline (existing shipped facet)
-node ./scripts/build.mjs -a dirac --prd
-node_modules/.bin/http-server build/examples/mn-compiler-lab -p 1338 -g
-# open http://localhost:1338/
-
-# Each new facet uses the same pattern with its own -a dirac
+npm run build:dirac
+# Reload the one supervised application at http://localhost:1360/.
+# Do not start a second server for a facet or screenshot.
 ```
 
 ## RDKit-JS notes (critical)

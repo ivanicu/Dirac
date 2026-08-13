@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/method-manifest.schema.json",
+  "title": "Motif Method Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "method_id", "release_name", "lifecycle", "input_schema_digest", "output_schema_digest", "parameter_schema_digest", "implementation", "external_binaries", "numeric_contract", "determinism_contract", "checkpoint_contract", "capability_contract", "validation_artifact_refs", "digest"],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "method_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_-]*)+$"},
+    "release_name": {"type": "string", "minLength": 1},
+    "lifecycle": {"enum": ["technical_smoke", "candidate_unvalidated", "scientific_candidate", "validated_release", "promoted_release", "retired"]},
+    "input_schema_digest": {"type": "string", "format": "sha256-digest"},
+    "output_schema_digest": {"type": "string", "format": "sha256-digest"},
+    "parameter_schema_digest": {"type": "string", "format": "sha256-digest"},
+    "implementation": {"type": "object", "additionalProperties": false, "required": ["source_commit", "runtime_kind"], "properties": {"source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "runtime_kind": {"enum": ["container", "local_env"]}, "container_image_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"}, "runtime_artifact_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]}, "cuda_version": {"type": ["string", "null"]}, "driver_version": {"type": ["string", "null"]}}},
+    "external_binaries": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["name", "version", "digest"], "properties": {"name": {"type": "string"}, "version": {"type": "string"}, "digest": {"type": "string", "format": "sha256-digest"}}}},
+    "numeric_contract": {"type": "object", "additionalProperties": false, "required": ["precision", "comparison", "absolute_tolerance", "relative_tolerance", "thread_policy"], "properties": {"precision": {"enum": ["fp32", "fp64", "mixed"]}, "comparison": {"const": "tolerance"}, "absolute_tolerance": {"type": "number", "minimum": 0}, "relative_tolerance": {"type": "number", "minimum": 0}, "thread_policy": {"type": "string"}}},
+    "determinism_contract": {"type": "object", "additionalProperties": false, "required": ["class", "seed_fields", "known_nondeterminism"], "properties": {"class": {"enum": ["bitwise", "numeric_tolerance", "statistical", "nondeterministic_declared"]}, "seed_fields": {"type": "array", "items": {"type": "string"}}, "known_nondeterminism": {"type": "array", "items": {"type": "string"}}}},
+    "checkpoint_contract": {"type": "object", "additionalProperties": false, "required": ["supported", "portable_state", "binary_restart", "sigterm_grace_seconds"], "properties": {"supported": {"type": "boolean"}, "portable_state": {"type": "boolean"}, "binary_restart": {"type": "boolean"}, "sigterm_grace_seconds": {"type": "integer", "minimum": 0}}},
+    "capability_contract": {"type": "object", "additionalProperties": {"enum": ["applicable", "unsupported", "not_applicable", "outside_validated_domain"]}, "propertyNames": {"enum": ["neutral", "charged", "charge_change", "metal", "covalent", "macrocycle", "peptide", "noncanonical_residue", "membrane"]}},
+    "validation_artifact_refs": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+    "digest": {"type": "string", "format": "sha256-digest"}
+  },
+  "$defs": {"ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"type": "string"}, "id": {"type": "string", "minLength": 1}}}}
+}

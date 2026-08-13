@@ -41,11 +41,14 @@ class KubernetesInvocationExecutor:
 
     def __init__(self, *, adapter: Any, exchange_root: Path,
                  container_image: str, max_controllers: int = 4,
-                 poll_seconds: float = .25) -> None:
+                 poll_seconds: float = .25, resource_broker: Any | None = None,
+                 attempt_store: Any | None = None) -> None:
         self.adapter = adapter
         self.exchange_root = exchange_root.resolve()
         self.container_image = container_image
         self.poll_seconds = max(.05, float(poll_seconds))
+        self.resource_broker = resource_broker
+        self.attempt_store = attempt_store
         self._pool = ThreadPoolExecutor(
             max_workers=max(1, int(max_controllers)),
             thread_name_prefix="dirac-k8s-controller")
@@ -57,9 +60,53 @@ class KubernetesInvocationExecutor:
 
     def execute(self, handler: Callable[..., HandlerResult], payload: dict,
                 ctx: InvocationContext) -> HandlerResult:
-        if (ctx.spec is None
-                or ctx.spec.execution.get("resource_class") != "gpu"):
-            return handler(payload, ctx)
+        if ctx.spec is None or ctx.spec.execution.get("resource_class") != "gpu":
+            if self.resource_broker is None:
+                return handler(payload, ctx)
+            if not ctx.job_id:
+                raise failures.DiracInternal(
+                    "resource-governed local execution requires a durable Job identity")
+            attempt_claim = None
+            if self.attempt_store is not None:
+                attempt_claim = self.attempt_store.claim(
+                    job_id=ctx.job_id,
+                    execution_digest=bytes.fromhex(
+                        ctx.execution_digest.removeprefix("sha256:")),
+                    owner=f"local-controller:{uuid4()}",
+                    lease_seconds=max(600, int(ctx.budget_seconds or 0) + 300))
+            profile = (ctx.spec.execution.get("scale_profile")
+                       if ctx.spec is not None else {}) or {}
+            lease = self.resource_broker.acquire(
+                ctx.job_id, None, {
+                    "cpu_cores": float(profile.get("cpu_cores", 1)),
+                    "ram_bytes": float(profile.get("memory_bytes", 1 << 30)),
+                    "scratch_bytes": float(profile.get("scratch_bytes", 1 << 30)),
+                    "process_slots": 1,
+                    "scf_slots": 1 if (ctx.spec and
+                        ctx.spec.execution.get("resource_class") == "cpu_heavy") else 0,
+                }, ttl_seconds=max(600, int(ctx.budget_seconds or 0) + 300),
+                backend="local_cpu")
+            try:
+                result = handler(payload, ctx)
+                if isinstance(result, HandlerResult):
+                    result.attempt_claim = attempt_claim
+                return result
+            except BaseException:
+                if attempt_claim is not None:
+                    try:
+                        self.attempt_store.complete(
+                            attempt_claim, state="failed",
+                            event_key=(f"attempt:{attempt_claim.attempt_id}:failed:"
+                                       f"{attempt_claim.fencing_token}"),
+                            payload={"error_code": "LOCAL_EXECUTION_FAILED"})
+                    except Exception:
+                        pass
+                raise
+            finally:
+                try:
+                    self.resource_broker.release(lease.lease_id, lease.fencing_token)
+                except RuntimeError:
+                    pass
         return self._execute_remote(handler, payload, ctx)
 
     @staticmethod
@@ -78,7 +125,13 @@ class KubernetesInvocationExecutor:
             raise failures.DiracInternal(
                 "Kubernetes execution requires the Invocation execution digest")
 
-        attempt_id = str(uuid4())
+        attempt_claim = None
+        if self.attempt_store is not None:
+            attempt_claim = self.attempt_store.claim(
+                job_id=ctx.job_id,
+                execution_digest=bytes.fromhex(ctx.execution_digest.removeprefix("sha256:")),
+                owner=f"kubernetes-controller:{uuid4()}", lease_seconds=budget + 600)
+        attempt_id = attempt_claim.attempt_id if attempt_claim is not None else str(uuid4())
         input_id = str(uuid4())
         now = datetime.now(timezone.utc)
         budget = max(1, int(ctx.budget_seconds or 3600))
@@ -101,9 +154,24 @@ class KubernetesInvocationExecutor:
 
         request = self._request(
             ctx, payload, attempt_id=attempt_id, input_id=input_id,
-            input_sha=input_sha, budget=budget, now=now)
+            input_sha=input_sha, budget=budget, now=now,
+            attempt_no=attempt_claim.attempt if attempt_claim else 1,
+            fencing_token=attempt_claim.fencing_token if attempt_claim else 1)
         allocation_id: str | None = None
+        resource_lease = None
+        next_resource_heartbeat = time.time() + min(30.0, max(1.0, budget / 4))
         try:
+            if self.resource_broker is not None:
+                resources = request["resource_request"]
+                resource_lease = self.resource_broker.acquire(
+                    ctx.job_id, None, {
+                        "cpu_cores": resources["cpu_cores"],
+                        "ram_bytes": resources["memory_bytes"],
+                        "gpus": resources["gpus"],
+                        "gpu_vram_bytes": resources.get("gpu_memory_bytes_min", 0),
+                        "scratch_bytes": resources["scratch_bytes"],
+                        "process_slots": 1,
+                    }, ttl_seconds=budget + 600, backend="kubernetes")
             status = self.adapter.submit(request)
             allocation_id = status.allocation_id
             while status.state not in _TERMINAL:
@@ -120,6 +188,12 @@ class KubernetesInvocationExecutor:
                         details={"allocation_id": allocation_id,
                                  "budget_seconds": ctx.budget_seconds})
                 time.sleep(self.poll_seconds)
+                if resource_lease is not None and time.time() >= next_resource_heartbeat:
+                    resource_lease = self.resource_broker.heartbeat(
+                        resource_lease.lease_id, resource_lease.fencing_token,
+                        ttl_seconds=budget + 600)
+                    next_resource_heartbeat = time.time() + min(
+                        30.0, max(1.0, budget / 4))
                 status = self.adapter.inspect(allocation_id)
 
             result_path = self.exchange_root / "outputs" / attempt_id / "worker-result.json"
@@ -141,16 +215,26 @@ class KubernetesInvocationExecutor:
             if worker_result is None:
                 raise failures.DiracInternal(
                     f"Kubernetes allocation {allocation_id} succeeded without a fenced result")
-            return self._handler_result(worker_result, result_path.parent)
+            result = self._handler_result(worker_result, result_path.parent)
+            result.attempt_claim = attempt_claim
+            return result
         finally:
             # InvocationService persists public artifacts only after this method
             # returns, so outputs must remain until a separate retention/GC policy
             # can prove persistence. Inputs are request-local and safe to remove.
             input_path.unlink(missing_ok=True)
+            if resource_lease is not None:
+                try:
+                    self.resource_broker.release(
+                        resource_lease.lease_id, resource_lease.fencing_token)
+                except RuntimeError:
+                    # A stale lease is already fenced and cannot reserve capacity.
+                    pass
 
     def _request(self, ctx: InvocationContext, payload: dict, *, attempt_id: str,
                  input_id: str, input_sha: str, budget: int,
-                 now: datetime) -> dict[str, Any]:
+                 now: datetime, attempt_no: int = 1,
+                 fencing_token: int = 1) -> dict[str, Any]:
         spec = ctx.spec
         checkpointable = bool(spec.execution.get("checkpointable"))
         determinism = str(spec.execution.get("determinism") or "numeric_tolerant")
@@ -162,14 +246,17 @@ class KubernetesInvocationExecutor:
             spec.output_schema, sort_keys=True, separators=(",", ":")))
         scale_profile = spec.execution.get("scale_profile") or {}
         cpu_cores = float(scale_profile.get("cpu_cores", 4))
+        workload_priority = (
+            "motif-long" if ctx.method_id == "physics.motif.openfe_edge" or budget > 3600
+            else "motif-interactive" if budget <= 300 else "motif-standard")
         return {
             "schema_version": "1.0",
             "execution_id": str(uuid4()),
             "job_id": ctx.job_id,
             "step_id": str(uuid4()),
             "attempt_id": attempt_id,
-            "attempt": 1,
-            "fencing_token": 1,
+            "attempt": attempt_no,
+            "fencing_token": fencing_token,
             "method_id": ctx.method_id,
             "execution_digest": ctx.execution_digest,
             "container_image": self.container_image,
@@ -190,6 +277,7 @@ class KubernetesInvocationExecutor:
             "placement": {
                 "backend": "kubernetes", "site": "dirac-local-k3s",
                 "queue": "motif", "topology": "single_node",
+                "workload_priority_class": workload_priority,
                 "node_constraints": {}, "data_residency": ["local-node"],
             },
             "retry_policy": {

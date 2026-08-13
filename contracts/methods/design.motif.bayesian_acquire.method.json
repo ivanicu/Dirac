@@ -5,10 +5,25 @@
   "implementation": {"module": "backend.motif.advanced_acquisition", "functions": ["_digest", "botorch_qehvi", "greedy_diversity", "information_value", "selection_sensitivity"], "constants": ["ACQUISITION_SOURCE_DIGESTS"]},
   "input": {"schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
-    "required": ["train_features", "train_objectives", "reference_point", "candidates", "objectives", "capacity"],
+    "required": ["train_features", "train_objectives", "posterior_contract", "reference_point", "candidates", "objectives", "capacity"],
     "properties": {
       "train_features": {"type": "array", "minItems": 3, "items": {"type": "array", "minItems": 1, "items": {"type": "number"}}},
       "train_objectives": {"type": "array", "minItems": 3, "items": {"type": "array", "minItems": 2, "items": {"type": "number"}}},
+      "posterior_contract": {
+        "type": "object", "additionalProperties": false,
+        "required": ["model_release_ref", "validation_evidence_ref", "lifecycle", "posterior_kind", "objective_semantics", "likelihoods", "candidate_domain", "pending_conditioning", "minimum_observations"],
+        "properties": {
+          "model_release_ref": {"type": "object", "required": ["kind", "id"]},
+          "validation_evidence_ref": {"type": "object", "required": ["kind", "id"]},
+          "lifecycle": {"enum": ["validated_release", "promoted_release"]},
+          "posterior_kind": {"const": "exact_gp_independent_outputs"},
+          "objective_semantics": {"type": "array", "minItems": 2, "items": {"type": "object", "required": ["endpoint_key", "direction", "unit"]}},
+          "likelihoods": {"type": "array", "minItems": 2, "items": {"enum": ["gaussian_homoscedastic"]}},
+          "candidate_domain": {"const": "finite_discrete_set"},
+          "pending_conditioning": {"enum": ["none", "explicitly_conditioned"]},
+          "minimum_observations": {"type": "integer", "minimum": 3}
+        }
+      },
       "reference_point": {"type": "array", "minItems": 2, "items": {"type": "number"}},
       "candidates": {"type": "array", "minItems": 1, "maxItems": 50000, "items": {"type": "object", "required": ["proposal_id", "features", "objectives"]}},
       "objectives": {"type": "array", "minItems": 2, "items": {"type": "object", "required": ["key", "direction"]}},
@@ -24,7 +39,7 @@
     "properties": {"portfolio": {"type": "object"}, "counts": {"type": "object"},
       "acquisition_digest": {"type": "string", "format": "sha256-digest"},
       "sensitivity_digest": {"type": "string", "format": "sha256-digest"}}}},
-  "refusals": [{"code": "INVALID_PARAMETERS", "condition": "inconsistent posterior dimensions, nonpositive costs or invalid objective policy"}],
+  "refusals": [{"code": "INVALID_PARAMETERS", "condition": "model lifecycle is not validated/promoted, posterior contract is incomplete, dimensions are inconsistent, costs are nonpositive, or objective policy is invalid"}],
   "execution": {
     "supported_modes": ["sync", "job"], "default_mode": "job", "resource_class": "cpu",
     "determinism": "numeric_tolerant", "checkpointable": false, "cancellation": "cooperative",

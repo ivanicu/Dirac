@@ -56,6 +56,21 @@ class PredictorMeshTests(unittest.TestCase):
                 leaked, endpoint_key="activity", n_bits=128,
                 include_chemprop=False, bootstrap_samples=20, seed=9)
 
+    def test_two_calibration_points_never_create_a_claimable_interval(self):
+        from motif.mesh import train_predictor_mesh
+        rows = [
+            {"measurement_id": f"m-{index}", "compound_id": f"c-{index}",
+             "smiles": smiles, "endpoint_key": "activity", "qualifier": "equal",
+             "value": float(index), "split": "calibration" if index >= 6 else "train"}
+            for index, smiles in enumerate(SMILES)
+        ]
+        checkpoint, _ = train_predictor_mesh(
+            rows, endpoint_key="activity", n_bits=128,
+            include_chemprop=False, bootstrap_samples=20, seed=9)
+        self.assertIsNone(checkpoint["calibration"])
+        self.assertFalse(checkpoint["calibration_assessment"]["eligible"])
+        self.assertEqual(checkpoint["scientific_lifecycle"], "technical_smoke")
+
     @classmethod
     def setUpClass(cls):
         cls.release = fit_feature_release(SMILES, n_bits=128)
@@ -99,12 +114,18 @@ class PredictorMeshTests(unittest.TestCase):
         values = [1.0, 1.5, 2.0, 2.3, 2.6, 3.0, 4.0, 4.4]
         ranker = fit_pairwise_ranker(self.features, values, l2=10.0)
         self.assertGreater(ranker["pair_count"], 0)
-        domain = fit_domain(self.features)
+        domain = fit_domain(
+            self.features, model_release_ref={"kind": "model_release", "id": "m1"},
+            endpoint_key="ic50",
+            representation_release_ref={"kind": "feature_release", "id": "f1"})
         states = assess_domain(domain, self.features)
         self.assertTrue(all(row["status"] in {"in_domain", "borderline"} for row in states))
         members = {"a": values, "b": [value + .2 for value in values]}
-        summary = ensemble_summary(members)
-        self.assertGreater(summary[0]["epistemic_std"], 0)
+        semantics = {name: {"endpoint_key": "ic50", "output_space": "pIC50",
+                            "unit": "dimensionless"} for name in members}
+        summary = ensemble_summary(members, member_semantics=semantics)
+        self.assertGreater(summary[0]["model_dispersion_std"], 0)
+        self.assertNotIn("epistemic_std", summary[0])
         calibration = fit_conditional_conformal(
             values, [value + .1 for value in values],
             [row["status"] for row in states], min_group=2)

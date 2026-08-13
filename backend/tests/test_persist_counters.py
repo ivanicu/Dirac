@@ -135,10 +135,11 @@ def test_health_exposes_the_counters_so_the_number_has_a_reader():
         f'is worse than none because it will be believed')
 
 
-for name, fn in list(globals().items()):
-    if name.startswith('test_'):
-        check(name, fn)
+if __name__ == '__main__':
+    for name, fn in list(globals().items()):
+        if name.startswith('test_'):
+            check(name, fn)
 
-print('─' * 100)
-print(f'{len(PASS)} passed · {len(FAIL)} failed')
-sys.exit(1 if FAIL else 0)
+    print('─' * 100)
+    print(f'{len(PASS)} passed · {len(FAIL)} failed')
+    sys.exit(1 if FAIL else 0)

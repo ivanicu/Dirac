@@ -267,6 +267,73 @@ def campaign_closed_loop_retry(input: dict, ctx) -> dict:
     return controller.retry(input["run_ref"]["id"])
 
 
+def motif_plan(input: dict, _ctx) -> dict:
+    """Plan the next scientific action; fidelity labels are descriptive only."""
+    from motif.action_planner import PlannerPolicy, plan_actions
+
+    raw = input["policy"]
+    policy = PlannerPolicy(
+        policy_release_id=raw["policy_release_id"],
+        utility_contract_id=raw["utility_contract_id"],
+        outcome_model_release_id=raw["outcome_model_release_id"],
+        cost_model_release_id=raw["cost_model_release_id"],
+        resource_prices=raw["resource_prices"],
+        max_iterations=raw["max_iterations"],
+        max_actions_per_subject_question=raw["max_actions_per_subject_question"],
+        minimum_net_value=raw.get("minimum_net_value", 0.0),
+    )
+    return plan_actions(
+        evidence_snapshot_ref=input["evidence_snapshot_ref"],
+        current_utilities=input["current_utilities"],
+        candidates=input["candidate_actions"],
+        remaining_budget=input["remaining_budget"], policy=policy,
+        iteration=input["iteration"], action_history=input.get("action_history", []),
+    )
+
+
+def motif_validate(input: dict, _ctx) -> dict:
+    """Validate one document against an allow-listed Motif machine contract."""
+    import json
+    from pathlib import Path
+    from contracts.validation import violations
+
+    allowed = {
+        "scientific-object", "chemical-state-ensemble", "orthogonal-state",
+        "method-outcome", "evidence-item", "routing-action", "structured-error",
+        "method-manifest", "resource-lease", "model-validation",
+    }
+    schema_name = input["schema"]
+    if schema_name not in allowed:
+        raise failures.DiracInvalidParameters(
+            "unknown Motif validation schema", details={"schema": schema_name,
+                                                        "allowed": sorted(allowed)})
+    root = Path(__file__).resolve().parents[2]
+    schema = json.loads((root / "contracts/domain/motif" /
+                         f"{schema_name}.schema.json").read_text())
+    problems = [problem.to_dict() for problem in violations(schema, input["document"])]
+    return {"schema": schema_name, "valid": not problems, "violations": problems}
+
+
+def motif_explain(input: dict, _ctx) -> dict:
+    plan = input["plan"]
+    selected = plan.get("selected_action")
+    return {
+        "decision": plan.get("decision"),
+        "reason_codes": plan.get("reason_codes", []),
+        "selected": None if selected is None else {
+            "action_kind": selected["action_kind"],
+            "subject_ref": selected["subject_ref"],
+            "scientific_question": selected["scientific_question"],
+            "expected_utility_delta": selected["expected_utility_delta"],
+            "priced_resource_cost": selected["priced_resource_cost"],
+            "expected_net_value": selected["expected_net_value"],
+        },
+        "excluded": plan.get("excluded", []),
+        "candidate_count": len(plan.get("ranked_candidates", [])),
+        "p_decision_change_is_diagnostic_only": True,
+    }
+
+
 def _programs(ctx):
     repository = getattr(ctx.kernel, "program_repository", None)
     if repository is None:

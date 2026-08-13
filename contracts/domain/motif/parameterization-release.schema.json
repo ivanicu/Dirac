@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/parameterization-release.schema.json",
+  "title": "Motif Parameterization Release",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "parameterization_release_id", "complex_ref", "protein_force_field", "ligand_force_field", "water_model", "ion_parameters", "ligand_charge", "residue_templates", "constraints", "nonbonded", "pme", "box", "salt", "integrator", "thermostat", "barostat", "minimization", "equilibration", "production", "support_class", "system_artifact_ref", "digest"],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "parameterization_release_id": {"type": "string", "format": "uuid"},
+    "complex_ref": {"$ref": "#/$defs/ref"},
+    "protein_force_field": {"$ref": "#/$defs/versioned"},
+    "ligand_force_field": {"$ref": "#/$defs/versioned"},
+    "water_model": {"$ref": "#/$defs/versioned"},
+    "ion_parameters": {"$ref": "#/$defs/versioned"},
+    "ligand_charge": {"type": "object", "additionalProperties": false, "required": ["method", "artifact_ref", "digest"], "properties": {"method": {"$ref": "#/$defs/versioned"}, "artifact_ref": {"$ref": "#/$defs/ref"}, "digest": {"type": "string", "format": "sha256-digest"}}},
+    "residue_templates": {"type": "array", "items": {"$ref": "#/$defs/versioned"}},
+    "constraints": {"type": "object"}, "nonbonded": {"type": "object"},
+    "pme": {"type": "object"}, "box": {"type": "object"}, "salt": {"type": "object"},
+    "integrator": {"type": "object"}, "thermostat": {"type": "object"},
+    "barostat": {"type": "object"}, "minimization": {"type": "object"},
+    "equilibration": {"type": "object"}, "production": {"type": "object"},
+    "support_class": {"enum": ["neutral", "charged", "charge_change", "metal", "covalent", "macrocycle", "peptide", "noncanonical_residue", "membrane"]},
+    "system_artifact_ref": {"$ref": "#/$defs/ref"},
+    "digest": {"type": "string", "format": "sha256-digest"}
+  },
+  "$defs": {
+    "ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"type": "string"}, "id": {"type": "string", "minLength": 1}}},
+    "versioned": {"type": "object", "additionalProperties": false, "required": ["name", "version"], "properties": {"name": {"type": "string", "minLength": 1}, "version": {"type": "string", "minLength": 1}, "digest": {"type": ["string", "null"], "format": "sha256-digest"}}}
+  }
+}

@@ -142,7 +142,7 @@ def test_cache_read_prefers_full_precision_json_and_hides_internal_v1_facts():
     assert internal['_n_atoms'] == 3
 
 
-if __name__ != 'probe':
+if __name__ == '__main__':
     for name, fn in list(globals().items()):
         if name.startswith('test_') and callable(fn):
             check(name, fn)

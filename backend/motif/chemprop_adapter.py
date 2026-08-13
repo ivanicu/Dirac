@@ -196,7 +196,9 @@ def predict_chemprop_ensemble(checkpoint: dict[str, Any], smiles: Iterable[str],
     endpoints = checkpoint["config"]["endpoint_keys"]
     return [{"smiles": value, "endpoints": {
         endpoint: {"mean": float(means[row, column]),
-                   "epistemic_std": float(deviations[row, column])}
+                   "member_dispersion_std": float(deviations[row, column]),
+                   "dispersion_claim":
+                   "ensemble_member_dispersion_not_calibrated_epistemic_uncertainty"}
         for column, endpoint in enumerate(endpoints)}}
         for row, value in enumerate(values)]
 

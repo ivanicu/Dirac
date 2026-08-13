@@ -124,6 +124,10 @@ class HandlerResult:
     # Private producer material for an injected cache writer. It is deliberately
     # outside the envelope: clients may depend only on the validated public result.
     cache_record: dict[str, Any] | None = None
+    # Execution-control ownership is not public scientific provenance. A remote
+    # executor hands the fenced claim to InvocationService so artifact persistence
+    # and terminal publication can share the authoritative commit barrier.
+    attempt_claim: Any | None = None
 
 
 class Ledger(Protocol):
@@ -152,6 +156,7 @@ class InvocationService:
                  artifact_reader: Any | None = None,
                  artifact_writer: Any | None = None,
                  checkpoint_writer: Any | None = None,
+                 attempt_store: Any | None = None,
                  motif_governance: Any | None = None,
                  program_repository: Any | None = None,
                  execution_identity_resolver: Callable[[C.MethodSpec, dict], ExecutionIdentity] | None = None,
@@ -166,6 +171,7 @@ class InvocationService:
         self.artifact_reader = artifact_reader
         self.artifact_writer = artifact_writer
         self.checkpoint_writer = checkpoint_writer
+        self.attempt_store = attempt_store
         self.motif_governance = motif_governance
         self.program_repository = program_repository
         self.execution_identity_resolver = execution_identity_resolver
@@ -446,6 +452,7 @@ class InvocationService:
         self.counters['invoked'] += 1
         job_id = _preopened_job_id
         spec = None
+        attempt_claim = None
         try:
             actor_ref = self._actor(actor)
             spec = self.catalog.get(method_id)
@@ -517,6 +524,7 @@ class InvocationService:
                     f'HandlerResult. A handler that returns an untyped dict makes the '
                     f'service guess which key is the result and which is provenance, '
                     f'and every transport would guess differently.')
+            attempt_claim = out.attempt_claim
             self._require_declared_artifacts(spec, out)
             # THE CONTRACT, ENFORCED IN BOTH DIRECTIONS. Until now only inputs were
             # validated, so a handler could quietly return a shape no client was told to
@@ -531,6 +539,9 @@ class InvocationService:
             # Completion projectors may add governed Dataset/Model release refs.
             # Validate again so the augmented terminal result is also contractual.
             self.catalog.validate_output(method_id, out.result)
+            if attempt_claim is not None:
+                self._commit_attempt_success(
+                    attempt_claim, spec, out, env, execution_identity.digest)
             # Cache only after ArtifactStore has minted stable references and governed
             # completion projection has passed. Generic caches persist those references;
             # specialised field caches may still use the bytes in HandlerResult. A cache
@@ -559,6 +570,7 @@ class InvocationService:
 
         except failures.DiracFailure as f:
             is_bug = f.code == 'INTERNAL'
+            self._complete_attempt_failure(attempt_claim, f.code, f.message)
             self.counters['failed' if is_bug else 'refused'] += 1
             if job_id is not None and self.ledger is not None:
                 try:
@@ -584,6 +596,7 @@ class InvocationService:
             # transport, so all four transports report a bug identically.
             self.counters['failed'] += 1
             f = failures.DiracInternal(e)
+            self._complete_attempt_failure(attempt_claim, 'INTERNAL', str(e))
             if job_id is not None and self.ledger is not None:
                 try:
                     self.ledger.failed(job_id, code='INTERNAL', detail=str(e),
@@ -599,6 +612,54 @@ class InvocationService:
                              'actor': actor if actor is not None else
                                       {'kind': 'service', 'id': 'dirac-kernel'},
                              'command': command_id}}
+
+    def _commit_attempt_success(self, claim: Any, spec: C.MethodSpec,
+                                out: HandlerResult, envelope: dict,
+                                execution_digest: str) -> None:
+        if self.attempt_store is None:
+            raise failures.DiracInternal(
+                "remote fenced execution returned an Attempt without an AttemptStore")
+        now = __import__('datetime').datetime.now(__import__('datetime').timezone.utc)
+        artifacts = []
+        required_roles = {item.role for item in spec.artifacts if item.required}
+        for ref in envelope.get('artifacts', []):
+            artifacts.append({
+                'role': ref['role'], 'sha256': 'sha256:' + ref['sha256'],
+                'size_bytes': ref['size_bytes'],
+                'media_type': ref['media_type'].split(';', 1)[0],
+                'encoding': ref.get('encoding', 'identity'),
+                'required': ref['role'] in required_roles,
+            })
+        manifest = {
+            'schema_version': '1.0', 'job_id': claim.job_id,
+            'attempt_id': claim.attempt_id, 'fencing_token': claim.fencing_token,
+            'execution_digest': execution_digest, 'artifacts': artifacts,
+            'result_summary': {'result_keys': sorted(out.result)},
+            'warnings': out.warnings,
+            'started_at': now.isoformat(),
+            'finished_at': now.isoformat(),
+        }
+        data = json.dumps(manifest, sort_keys=True, separators=(',', ':')).encode()
+        artifact = self.store.put(data, role='output.manifest',
+                                  media_type='application/json',
+                                  method_version=spec.version)
+        event_key = f"attempt:{claim.attempt_id}:succeeded:{claim.fencing_token}"
+        self.attempt_store.commit_success(
+            claim, manifest=manifest, manifest_artifact_id=artifact.id,
+            required_roles=sorted(required_roles), artifact_reader=self.store,
+            event_key=event_key)
+        envelope['artifacts'].append(artifact.to_reference())
+
+    def _complete_attempt_failure(self, claim: Any, code: str, message: str) -> None:
+        if claim is None or self.attempt_store is None:
+            return
+        try:
+            self.attempt_store.complete(
+                claim, state='failed',
+                event_key=f"attempt:{claim.attempt_id}:failed:{claim.fencing_token}",
+                payload={'error_code': code, 'message': message})
+        except Exception:  # noqa: BLE001
+            pass
 
     # ── internals ─────────────────────────────────────────────────────────────
     def _open_job(self, spec: C.MethodSpec, payload: dict,

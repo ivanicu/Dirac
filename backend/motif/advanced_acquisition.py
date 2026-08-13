@@ -21,7 +21,34 @@ def _digest(value: Any) -> str:
         value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
 
 
+def _validate_posterior_contract(contract: dict[str, Any], *,
+                                 observations: int, objectives: int) -> None:
+    required = {
+        "model_release_ref", "validation_evidence_ref", "lifecycle",
+        "posterior_kind", "objective_semantics", "likelihoods",
+        "candidate_domain", "pending_conditioning", "minimum_observations",
+    }
+    missing = required - set(contract)
+    if missing:
+        raise ValueError(f"posterior contract misses {sorted(missing)}")
+    if contract["lifecycle"] not in {"validated_release", "promoted_release"}:
+        raise ValueError("Bayesian acquisition requires a validated model release")
+    if contract["posterior_kind"] != "exact_gp_independent_outputs":
+        raise ValueError("unsupported posterior_kind for this acquisition implementation")
+    if contract["candidate_domain"] != "finite_discrete_set":
+        raise ValueError("qLogEHVI is restricted to the submitted discrete candidate set")
+    if contract["pending_conditioning"] not in {"none", "explicitly_conditioned"}:
+        raise ValueError("pending-point conditioning must be explicit")
+    if observations < int(contract["minimum_observations"]):
+        raise ValueError("posterior contract minimum observation count is not met")
+    if len(contract["objective_semantics"]) != objectives:
+        raise ValueError("posterior objective semantics do not match objective matrix")
+    if len(contract["likelihoods"]) != objectives:
+        raise ValueError("posterior likelihoods do not match objective matrix")
+
+
 def botorch_qehvi(train_features, train_objectives, candidate_features, *,
+                  posterior_contract: dict[str, Any],
                   reference_point: Iterable[float], mc_samples: int = 128,
                   seed: int = 0) -> dict[str, Any]:
     """Fit an exact multitask GP and score each candidate by q=1 noisy EHVI.
@@ -50,6 +77,8 @@ def botorch_qehvi(train_features, train_objectives, candidate_features, *,
         raise ValueError("qEHVI matrix dimensions are inconsistent")
     if len(x) < 3 or y.shape[1] < 2:
         raise ValueError("qEHVI requires >=3 observations and >=2 objectives")
+    _validate_posterior_contract(
+        posterior_contract, observations=len(x), objectives=y.shape[1])
     model = SingleTaskGP(x, y)
     fit_gpytorch_mll(ExactMarginalLogLikelihood(model.likelihood, model))
     partitioning = NondominatedPartitioning(ref_point=ref, Y=y)
@@ -68,6 +97,7 @@ def botorch_qehvi(train_features, train_objectives, candidate_features, *,
         "reference_point": ref.tolist(), "mc_samples": mc_samples, "seed": seed,
         "scores": [float(value) for value in scores],
         "posterior_mean": mean, "posterior_variance": variance,
+        "posterior_contract": posterior_contract,
         "policy": "q=1 independent candidate scoring; batch diversity applied separately",
     }
     release["digest"] = _digest(release)

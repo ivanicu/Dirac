@@ -1,49 +1,58 @@
 # Changelog
 
-All notable changes to **Dirac** are documented here. This project forks from [mol\*](https://github.com/molstar/molstar) at upstream SHA `e594cc6` (mol\* master, August 2026); mol\*'s pre-fork history is not included. When mol\* features are pulled forward they appear here with a `upstream:` tag.
+This file records product-level changes after Dirac became a distinct application. The
+repository inherited mol\* history and currently has no reliable release-tag series;
+`package.json` is the package version authority and Git is the detailed change ledger.
 
-The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/2.1.0/).
+## Unreleased
 
-## [Unreleased]
+### Application platform
 
-### Added
+- Established one canonical domain vocabulary, semantic Command registry and generated
+  Python/TypeScript contracts.
+- Added a transport-neutral dispatcher and one Method invocation path shared by HTTP,
+  Python SDK, CLI, MCP and the browser.
+- Added durable Jobs, content-addressed Artifacts, provenance, command observations,
+  attention and method-current caches in PostgreSQL.
+- Added local, process, GPU and Kubernetes/Kueue execution adapters with fenced attempt,
+  lease, retry and completion semantics.
 
-- **Field Wells facet** (`facets/field-wells/`, new `Fields` master-tab) + **fields backend** (`backend/field_server.py`). 3D energy/potential wells for the focused ligand, rendered as signed x-ray-shaded isosurfaces inside the protein scene: classical electrostatic well (RDKit Gasteiger + Coulomb grid, ~0.1 s), and quantum HOMO / LUMO / electron density / QM electrostatic potential via pyscf HF + cubegen (real SCF; an unconverged SCF returns an error, never a field). The ligand molfile already carries scene coordinates, so every cube lands registered with zero alignment code. Isovalue slider updates the two `VolumeRepresentation3D` nodes in place; SCF results cached per (geometry, basis). Backend is a self-contained stdlib HTTP daemon on `127.0.0.1:8901` with its own conda env (RDKit 2026.03.5 + pyscf 2.14.0, gitignored); the panel reports online/offline honestly. Verified on 1CBS REA: MEP well in the β-barrel pocket 0.12 s; RHF/STO-3G E=−911.9424 Ha, HOMO −5.15 eV, LUMO +4.69 eV, 138 basis functions, 5.27 s first SCF, cached thereafter.
-- **V2000 counts-line fix in both hand-rolled molfile builders** (`semantic-chemistry-rdkit.ts`, `pharmacophore-features.ts`): nine zero fields between the bond count and `999` where the spec says eight. RDKit-JS tolerates the malformed line, desktop RDKit rejects it (`CTAB version string invalid`) — invisible until the first spec-strict consumer (the fields backend) refused every molfile.
+### Product operating model
 
-- **Pharmacophore Designer facet** (`facets/pharmacophore-designer/`, new `Designer` master-tab). Drag-editable pharmacophore model seeded from the focused ligand's RDKit perception (same `computePharmacophoreFeatures` as the read-only 3D layer): per-feature enable/disable, tolerance radius (0.5–3 Å), delete, add free-standing features, camera-plane 3D drag with the trackball suppressed while a feature is armed (hover → grab cursor). Live inter-feature distance matrix. Topological SMARTS screening of a shipped 68-molecule library (probes, fragments, drugs, natural products, steroids) against the model's feature-count requirements plus an optional custom SMARTS constraint; hit rows show per-kind have/required chips and click through to a 2D depiction with per-channel atom highlights. Model export/import as versioned JSON. Screening counts reuse the substrate's `computeLigandChemistry` (identical SMARTS both sides); the only facet-local pattern is the hydrophobic-carbon SMARTS, held in parity with the 3D layer's neighbor rule. Validation gate: `node scripts/check-pharmacophore-library.mjs` (node-side RDKit 2025.03.4 — parse validity, canonical-SMILES dedup, SMARTS parity vs the substrate source, exact probe counts for benzene / cyclohexane / pyridine / caffeine). Screening is topological only — the library ships no conformers and the UI says so. Verified end-to-end via CDP: 1CBS/REA seeds 2 HBA · 1 HBD · 19 HYD and the only library match is retinoic acid itself; drag moves a feature 5.4 Å with zero camera motion; 4HHB/HEM seeds 2 aromatic-ring features from SSSR.
+- Made Program the durable root for objectives, hypotheses, compounds, portfolios,
+  decisions, work packages/items, evidence and lineage.
+- Added an 8-Workspace / 30-View AppShell with one ScientificContextStore and one
+  persistent mol\* SceneService.
+- Connected Program, molecular design, structure, campaign, synthesis, experiment,
+  knowledge and compute projections without presenting the remaining shells as shipped
+  scientific capability.
+- Added typed HCI contracts for context, actions, work graphs, handoffs and projection
+  truthfulness.
 
-- **Production database** (`backend/db/`, PostgreSQL 18, database `dirac`). The persistence and registration layer: 37 tables in six schemas — `meta` (toolkits, sources, unit legality, migrations), `chem` (compound / form / batch registry, descriptors, fingerprints, conformer sets), `bio` (targets, PDB structures, assays, dose-response curves, partitioned results), `design` (projects, series, ideas, pharmacophore models, screening runs), `app` (content-addressed blobs, field-cube cache, workspaces), `audit` (row history). 23 enums, 88 CHECK constraints, 72 foreign keys: identity is the InChIKey of the RDKit-standardized parent (never SMILES); results attach to batches and carry a qualifier, with `(result_type, unit)` a foreign key into a dimensional-legality table so "IC50 in percent" is unwritable; every computed number references the `meta.toolkit` row that produced it; `dirac_app` has no DELETE and retraction is a column. Similarity search runs in-database over Morgan-2 `bit(2048)` with pgvector HNSW `bit_jaccard_ops` (Tanimoto = 1 − Jaccard; the RDKit cartridge is not installed and the README documents the drop-in path if it ever is). Gates: `backend/db/check_constraints.sql` — 19 attacks each asserting its expected SQLSTATE, plus 10 positive controls so a schema that rejected everything could not score. Loaded and verified: 68 library compounds registered with real InChIKeys, 1156 descriptors, 68 fingerprints; aspirin's Tanimoto neighbours come back benzoic acid → ketoprofen → phenol; a Designer model exported from the browser (22 features, 1CBS/REA) round-trips into `design.pharmacophore_model` and its single screening hit resolves to `DRC-0000059`, which is the deposited ligand REA itself. Dirac still runs with no backend at all; the database adds registration, persistence and provenance.
-- **Audit-trail partition fix** (`003_audit_partition_root.sql`). A row trigger on a partitioned table reports the PARTITION in `TG_TABLE_NAME`, so every `bio.result` audit row was filed under `bio.result_2026` and the obvious query returned nothing — an audit trail that fragments every January is indistinguishable from no audit trail. Now records the partition root as the logical table and keeps the physical partition beside it. Found by gate P9, not by reading.
+### Scientific workflows
 
-### Pending product workstreams
+- Integrated RDKit-JS chemistry, 2D/3D ligand synchronization, properties,
+  pharmacophores, field wells, surface MEP, torsion and explicit evidence boundaries.
+- Added Motif contracts and implementations for dataset snapshots, model training and
+  calibration, proposal generation, ranking, structure work, MD, RBFE, OpenFE and
+  governed closed-loop execution.
+- Preserved scientific runtime identity, units, refusal conditions and artifacts through
+  the same Job/provenance path.
 
-- **Conformer Explorer** — RDKit ETKDG conformer generation, mol\* morph animation, overlay view, energy landscape. ⚠ The vendored RDKit-JS 2025.03.4 wasm exposes no 3D embedding (`ETKDG` / `EmbedMolecule` absent from the binary) — this workstream needs a custom RDKit-JS build with 3D coords enabled, precomputed conformer data, or the Python backend escalation path.
+### Operations and verification
 
-## [0.1.0] — 2026-08-10
+- Standardized the current local topology on web `:1360`, unified application service
+  `:8901`, and read-only operations `:1355`; the standalone `:8902` service is retired.
+- Added source-derived architecture-twin generation and drift checks.
+- Added gates for types, production builds, design invariants, documentation facts,
+  contracts, migrations, portability, layering, physics protections, security and
+  architecture coherence.
+- Added a remote fail-closed security profile while retaining the explicitly
+  unauthenticated local/LAN development profile.
 
-Initial Dirac snapshot consolidating the mn-compiler-lab workbench and its RDKit-JS chemistry substrate.
+## Initial Dirac application — 2026-08-10
 
-### Added
-
-- **mn-compiler-lab UI redesign.** Replaced the single-pane scrolling sidebar with a master-detail layout: 64-px top bar (molecule / representation / picking / status / clear), 380-px sidebar with five master-tabs (Focus / Semantics / Ligand / VFX / Ledger), sticky diagnostics strip with 4 always-visible metrics. Cuts vertical overflow from 260 px to 0 on a 900-px viewport.
-- **RDKit-JS chemistry integration.** Vendored `@rdkit/rdkit` 2025.3.4-1.0.0 WASM at `src/app.frontend.facets.molstar-rdkit.editable/assets/rdkit/` (7 MB). Singleton loader at `src/chemistry.backend.perception.rdkit-wasm.editable/semantic-chemistry-rdkit.ts` exposes SMARTS-based perception for aromaticity, Lipinski H-bond donor, and Lipinski H-bond acceptor over the focused ligand. Acceptor SMARTS excludes positively charged atoms (no quaternary-ammonium false positives). Donor SMARTS includes protonated species (NH3+ is a real donor).
-- **2D ligand depiction panel.** New master-tab `Ligand` renders `mol.get_svg_with_highlights()` with synchronized atom highlights matching the enabled RDKit chemistry layers. Uses `mol.get_new_coords()` + re-parse to regenerate 2D coordinates from the 3D molfile (the documented `forceCoords: true` flag does not work in the 2025.03.4 build). Atom-click → mol\* selection + camera focus is wired via the same atom-index contract as the molfile builder.
-- **3D pharmacophore feature rendering.** New module `src/chemistry.backend.perception.rdkit-wasm.editable/pharmacophore-features.ts` draws H-bond acceptor cones (red, ~1 Å, oriented by neighbor centroid), H-bond donor sticks (blue), aromatic ring disks (amber, perpendicular to ring plane via `Mat4.targetTo` + `Circle` primitive), and hydrophobic halos (grey translucent spheres) as mol\* `Shape` primitives. Each feature is its own mesh group, so the picker returns the originating feature. Aromatic rings are detected via RDKit SSSR (`a1aaaaa1` + `a1aaaa1` with dedup), correctly handling fused systems (caffeine, naphthalene, indole, adenine).
-- **AGENTS.md.** Defines branch model (`main` integration, `feature/<product>` per workstream, `master` upstream-molstar-sync only), file ownership rules per workstream, PR verification gate, commit-message convention, and the RDKit-JS 2025.03.4 known-limitations list.
-
-### Fixed
-
-- **Pharmacophore availability badge leak.** Switching to a ligand-free structure (e.g., 1CRN) now clears the pharmacophore availability text instead of leaving stale counts from the previous molecule.
-- **Fused-ring detection.** Replaced the BFS connected-component approach (which over-grouped fused systems into 9-10-atom blobs that failed the 5-7 size filter) with RDKit SSSR queries.
-- **Charged-species SMARTS.** Acceptor pattern now excludes positively charged atoms (was matching quaternary ammonium as a false-positive acceptor). Donor pattern keeps positive charges (NH3+ is a real donor).
-
-### Known limitations
-
-- `compute_gasteiger_charges` is not exposed in RDKit-JS 2025.03.4. The partial-charge layer is a graceful-stub — displays "Gasteiger computation unavailable in this RDKit-JS build" instead of silent failure.
-- `<metadata>` block is not emitted by `get_svg_with_highlights` regardless of the `includeMetadata` flag. Atom click mapping falls back to a bond-path centroid computation over the rendered SVG.
-- The lab's `getLigandFocusTargets` exposes a malformed label on `1GRM` (option text starts with the CIF file header). Pre-existing in the mol\* lab code, not introduced here.
-
-### Verification
-
-Tested against 9 lab fixture structures (zero runtime errors across all), 22 external reference molecules for SMARTS correctness (22 / 22 expected counts after the SMARTS fixes), 15-cycle reload test (heap stable at 58-63 MB, zero state-cell leak), 8-cycle rapid molecule switching (zero stuck states), and end-to-end 2D-click → 3D-selection on 1CBS-REA and 4HHB-HEM.
+- Forked the application surface from mol\* while preserving upstream engine history.
+- Added the first integrated molecular workbench with RDKit-JS chemistry perception,
+  ligand depiction, pharmacophore overlays and the initial Fields backend.
+- Adopted the single-tree `main` development model and Dirac visual identity.

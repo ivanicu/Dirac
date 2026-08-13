@@ -476,6 +476,70 @@
       }
     },
     {
+      "id": "motif.plan", "version": 1, "category": "motif",
+      "mutability": "read", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "content-digest", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["evidence_snapshot", "model_release", "policy_release"],
+      "output_object_kinds": ["routing_action", "resource_lease"],
+      "errors": ["INVALID_PARAMETERS", "INTERNAL"], "handler": "handlers:motif_plan",
+      "input_schema": {
+        "type": "object", "additionalProperties": false,
+        "required": ["evidence_snapshot_ref", "current_utilities", "candidate_actions", "remaining_budget", "policy", "iteration"],
+        "properties": {
+          "evidence_snapshot_ref": {"type": "object", "required": ["kind", "id"]},
+          "current_utilities": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "number"}},
+          "candidate_actions": {"type": "array", "maxItems": 10000, "items": {"type": "object"}},
+          "remaining_budget": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0}},
+          "policy": {
+            "type": "object", "additionalProperties": false,
+            "required": ["policy_release_id", "utility_contract_id", "outcome_model_release_id", "cost_model_release_id", "resource_prices", "max_iterations", "max_actions_per_subject_question"],
+            "properties": {
+              "policy_release_id": {"type": "string", "minLength": 1},
+              "utility_contract_id": {"type": "string", "minLength": 1},
+              "outcome_model_release_id": {"type": "string", "minLength": 1},
+              "cost_model_release_id": {"type": "string", "minLength": 1},
+              "resource_prices": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0}},
+              "max_iterations": {"type": "integer", "minimum": 1},
+              "max_actions_per_subject_question": {"type": "integer", "minimum": 1},
+              "minimum_net_value": {"type": "number"}
+            }
+          },
+          "iteration": {"type": "integer", "minimum": 0},
+          "action_history": {"type": "array", "maxItems": 100000, "items": {"type": "object"}}
+        }
+      },
+      "output_schema": {
+        "type": "object", "additionalProperties": false,
+        "required": ["schema_version", "decision", "evidence_snapshot_ref", "selected_action", "ranked_candidates", "excluded", "policy", "reason_codes"],
+        "properties": {
+          "schema_version": {"const": "3.0"}, "decision": {"enum": ["act", "stop"]},
+          "evidence_snapshot_ref": {"type": "object"},
+          "selected_action": {"type": ["object", "null"]},
+          "ranked_candidates": {"type": "array"}, "excluded": {"type": "array"},
+          "policy": {"type": "object"}, "budget_lease_request": {"type": "object"},
+          "reason_codes": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    {
+      "id": "motif.validate", "version": 1, "category": "motif",
+      "mutability": "read", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "none", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["artifact"], "output_object_kinds": ["artifact"],
+      "errors": ["INVALID_PARAMETERS", "INTERNAL"], "handler": "handlers:motif_validate",
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["schema", "document"], "properties": {"schema": {"type": "string", "minLength": 1}, "document": {"type": "object"}}},
+      "output_schema": {"type": "object", "additionalProperties": false, "required": ["schema", "valid", "violations"], "properties": {"schema": {"type": "string"}, "valid": {"type": "boolean"}, "violations": {"type": "array", "items": {"type": "object"}}}}
+    },
+    {
+      "id": "motif.explain", "version": 1, "category": "motif",
+      "mutability": "read", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "none", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["routing_action"], "output_object_kinds": ["routing_action"],
+      "errors": ["INVALID_PARAMETERS", "INTERNAL"], "handler": "handlers:motif_explain",
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["plan"], "properties": {"plan": {"type": "object"}}},
+      "output_schema": {"type": "object", "additionalProperties": false, "required": ["decision", "reason_codes", "selected", "excluded", "candidate_count", "p_decision_change_is_diagnostic_only"], "properties": {"decision": {"type": "string"}, "reason_codes": {"type": "array"}, "selected": {"type": ["object", "null"]}, "excluded": {"type": "array"}, "candidate_count": {"type": "integer"}, "p_decision_change_is_diagnostic_only": {"const": true}}}
+    },
+    {
       "id": "program.create", "version": 1, "category": "program",
       "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
       "idempotency_policy": "request-id-or-program-code", "job_policy": "forbidden", "provenance_policy": "required",

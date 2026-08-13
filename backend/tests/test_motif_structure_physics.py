@@ -81,6 +81,22 @@ def test_rbfe_network_and_weighted_aggregation_keep_failures_visible():
     assert partial["failed_edges"][0]["reason"] == "engine_failed"
 
 
+def test_official_openfe_full_network_has_mapper_disagreement_and_24_execution_floor():
+    from motif.rbfe import plan_rbfe_network
+    network = plan_rbfe_network([
+        {"id": "ethanol", "smiles": "CCO"},
+        {"id": "ethylamine", "smiles": "CCN"},
+        {"id": "propane", "smiles": "CCC"},
+        {"id": "chloroethane", "smiles": "CCCl"},
+    ], mode="full", planner="openfe")
+    assert network["official_openfe_plan"]["engine"] == "OpenFE"
+    assert network["execution_matrix"]["production_execution_count"] >= 24
+    assert network["execution_matrix"]["pilot_included_in_production_count"] is False
+    assert all(len(edge["mapping_methods"]) >= 2 for edge in network["edges"])
+    assert all(edge["mapping_disagreement_jaccard"] is not None
+               for edge in network["edges"])
+
+
 def test_chemistry_gate_exposes_properties_stereo_and_reactivity():
     from rdkit import Chem
     from motif.proposals import chemistry_gate

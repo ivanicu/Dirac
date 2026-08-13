@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/method-outcome.schema.json",
+  "title": "Motif Method Outcome",
+  "description": "Operational result of one MethodRun. Scientific interpretation is emitted separately as EvidenceItem.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "outcome_id", "method_run_ref", "execution_state", "artifact_refs", "finished_at"],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "outcome_id": {"type": "string", "format": "uuid"},
+    "method_run_ref": {"$ref": "#/$defs/ref"},
+    "execution_state": {"enum": ["succeeded", "failed", "cancelled", "lost"]},
+    "artifact_refs": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+    "telemetry_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+    "error_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+    "finished_at": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {"if": {"properties": {"execution_state": {"const": "succeeded"}}, "required": ["execution_state"]}, "then": {"properties": {"error_ref": {"type": "null"}}}},
+    {"if": {"properties": {"execution_state": {"enum": ["failed", "cancelled", "lost"]}}, "required": ["execution_state"]}, "then": {"properties": {"artifact_refs": {"maxItems": 0}}}}
+  ],
+  "$defs": {"ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"type": "string", "minLength": 1}, "id": {"type": "string", "minLength": 1}}}}
+}

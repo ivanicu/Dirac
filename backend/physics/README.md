@@ -1,4 +1,8 @@
-# Dirac physics backend
+# Dirac physics implementation
+
+> The standalone server on `:8902` is retired. Surface and torsion calculations are
+> reached through the unified Dirac application service on `:8901`. The command below is
+> retained only for isolated compatibility debugging; do not run it on the canonical host.
 
 Two quantities that medicinal-chemistry software does not show and a physicist
 computes without thinking. Both run on the CPU in seconds, both return numbers

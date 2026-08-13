@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/field-protocol.schema.json",
+  "title": "Motif Field Protocol",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "field_kind", "physical_name", "origin_angstrom", "axes", "dimensions", "spacing_angstrom", "units", "alignment", "atom_selection", "method_release_ref"],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "field_kind": {"enum": ["gasteiger_partial_charge_potential", "qm_mep", "mlp", "density", "homo", "lumo"]},
+    "physical_name": {"type": "string", "minLength": 1},
+    "origin_angstrom": {"$ref": "#/$defs/vector3"}, "axes": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/vector3"}},
+    "dimensions": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "integer", "minimum": 1}},
+    "spacing_angstrom": {"type": "number", "exclusiveMinimum": 0}, "units": {"type": "string", "minLength": 1},
+    "alignment": {"type": "object"}, "atom_selection": {"type": "string"},
+    "method_release_ref": {"$ref": "#/$defs/ref"}
+  },
+  "$defs": {"vector3": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "number"}}, "ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"type": "string"}, "id": {"type": "string"}}}}
+}

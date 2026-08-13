@@ -11,11 +11,13 @@
   },
   "kinds": [
     "portfolio", "program", "target", "disease", "molecule", "compound", "compound_form", "substance_registration", "series",
-    "protein", "protein_structure", "complex", "pose", "conformer",
+    "protein", "protein_structure", "protein_structure_source", "prepared_receptor_state", "binding_site_hypothesis",
+    "complex", "complex_hypothesis", "pose", "pose_hypothesis", "pose_ensemble", "conformer", "conformer_ensemble", "conformer_hypothesis",
+    "submitted_compound_record", "chemical_entity", "chemical_state_ensemble", "chemical_microstate", "parameterized_system", "simulation_run", "free_energy_transformation",
     "field", "prediction", "campaign", "synthesis_route", "reaction",
     "building_block", "batch", "sample", "formulation", "quality_release",
     "assay", "protocol", "protocol_version", "experiment", "measurement", "objective", "hypothesis",
-    "claim", "evidence", "external_evidence_release", "external_evidence_record", "decision", "milestone", "stage_gate", "work_item", "work_package", "program_snapshot", "dataset", "dataset_version", "structure_observation", "analysis_snapshot", "annotation", "review", "model", "artifact",
+    "claim", "evidence", "evidence_item", "evidence_snapshot", "method_run", "method_outcome", "quality_assessment", "routing_action", "decision_snapshot", "resource_lease", "method_release", "policy_release", "condition", "assumption", "transformation", "external_evidence_release", "external_evidence_record", "decision", "milestone", "stage_gate", "work_item", "work_package", "program_snapshot", "dataset", "dataset_snapshot", "dataset_version", "structure_observation", "analysis_snapshot", "annotation", "review", "model", "model_release", "artifact",
     "mission", "run", "job", "literature_reference"
   ]
 }

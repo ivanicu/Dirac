@@ -629,7 +629,8 @@ def torsion_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
     return HandlerResult(
         result={'summary': {'total_strain_kcal': out['total_strain_kcal'],
                             'total_verdict': out['total_verdict'],
-                            'n_scanned': meta.get('n_scanned'), 'meta': meta}},
+                            'n_scanned': meta.get('n_scanned'),
+                            'protocol': meta.get('protocol'), 'meta': meta}},
         artifacts=[('torsion.profile', profile)],
         provenance={'n_atoms': None},
         parameters_used={'steps': int(params.get('steps', 24)),

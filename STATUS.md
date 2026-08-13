@@ -1,83 +1,72 @@
 # Construction status
 
-Last re-derived: **2026-08-12**, from the running local system and repository gates.
+Last re-derived: **2026-08-13** from the current working tree, repository gates and the
+live supervised local services.
 
-## Platform substrate
+This page distinguishes platform plumbing, connected product capability and scientific
+validation. A green contract or transport gate does not validate a scientific model.
 
-| capability | current evidence |
+## Source-derived platform snapshot
+
+| Capability | Current evidence |
 |---|---|
-| Canonical domain | 30 ObjectKinds, controlled relations and generated ObjectRef types in Python and TypeScript |
-| Semantic commands | 18 registered commands; dispatcher validates input/output, actor and required-Job policy |
-| Scientific methods | 12/12 registered Methods executable through one InvocationService |
-| SDK / CLI / MCP | Python and TypeScript SDKs share commands; CLI JSON is parseable; MCP is a generated safe projection with no mutation tools |
-| Durable execution | PostgreSQL JobStore, bounded ThreadExecutor, plus Inline/Process/Remote executor contracts |
-| Results | content-addressed artifacts; method-current field cache and generic deterministic result cache |
-| Application context | one ScientificContextStore generation; LigandStore and async facets delegate to it |
-| AppShell | exactly 8 Workspaces and 30 Views; all have navigable, human-readable shells while connected capability remains explicit; ModuleHost composes runtime modules from the registry |
-| 3D scene | one SceneService-owned mol* instance survives route navigation |
-| Durable domain | Program, Campaign, Hypothesis, Evidence, Decision, Mission, Run, Run↔Job and controlled relations |
-| Attention | derived from actionable Job outcomes and approval-waiting Runs; exposed through the same `attention.list` command boundary |
-| Remote boundary | opt-in fail-closed bearer authentication, TLS proxy enforcement, actor/scopes, request caps, rate and durable cost quotas, artifact authorization and redacted audit |
-| Architecture twin | L3 observed twin; recursive event-driven source synchronization plus runtime observations, health findings and static change-impact simulation |
+| Canonical domain | 83 ObjectKinds and 27 controlled relation kinds; ObjectRef types generated for Python and TypeScript |
+| Semantic Commands | 79 registered Commands with schemas, actor identity, mutation policy, required-Job policy and typed errors |
+| Scientific Methods | 28 Method manifests behind one InvocationService |
+| Durable schema | 39 forward-only migrations, `000` through `038` |
+| Product shell | 8 Workspaces and 30 routable Views |
+| Connected UI | 12 of 30 Views connected to 15 composable modules; the remaining 18 are explicit shells |
+| Interfaces | HTTP v2, Python SDK, CLI and generated safe MCP projection share the command boundary |
+| Execution | durable JobStore plus inline, thread, process, local GPU and Kubernetes/Kueue adapters |
+| Results | content-addressed artifacts, method-current caches, provenance and command observations |
+| Program state | Programs, portfolios, objectives, hypotheses, decisions, work packages/items, evidence and lineage |
+| Scientific automation | Motif dataset, model, proposal, structure, MD, RBFE, validation and closed-loop control paths |
+| Architecture twin | source-derived graph with contract, SQL, module, runtime-observation and change-impact projections |
 
-## Current frontend modules
+## Connected frontend modules
 
-| module | state |
+| Module area | State |
 |---|---|
-| `facets/field-wells/` | implemented; field commands and content-addressed cubes |
-| `facets/ligand-physics/` | implemented; surface MEP and torsion through durable Jobs |
-| `facets/property-cockpit/` | implemented; RDKit descriptor cockpit |
-| `facets/pharmacophore-designer/` | implemented; editable model and screening |
-| `facets/bond-atlas/` | implemented; shared ligand bond information |
-| `facets/halogen-audit/` | implemented with explicit geometry/QM evidence boundary |
+| `facets/field-wells/` | connected through field commands and artifacts |
+| `facets/ligand-physics/` | connected through surface and torsion Jobs |
+| `facets/property-cockpit/` | connected to RDKit descriptor calculation |
+| `facets/pharmacophore-designer/` | connected for editable models and library screening |
+| `facets/bond-atlas/` | connected to shared ligand bond information |
+| `facets/halogen-audit/` | connected with explicit geometry/QM evidence boundaries |
 
-## Live local topology
+Connected Views currently cover Program overview, molecule design/objectives, three
+structure Views, compound records, material/sample records, experiment records, evidence,
+and active/history compute projections. The other Views are navigable contracts, not
+claims of shipped scientific capability.
 
-| component | state |
+## Verified local topology
+
+Verified on 2026-08-13 with service state, listening sockets and HTTP responses:
+
+| Component | State |
 |---|---|
-| `dirac-fields.service` / `:8901` | active; unified command, method, Job, cache and artifact control plane |
-| `dirac-web.service` / `:1360` | active; serves `build/dirac` |
-| `dirac-ops.service` / `:1355` | active; read-only ops projection |
-| `dirac-digital-twin.service` | active; recursive first-party source watcher and atomic DT regeneration |
-| legacy `:8902` | absent; service disabled and hand-run process terminated after migration |
-| PostgreSQL `dirac` | migrations 000–019 applied; content hashes clean |
+| `dirac-web.service` / `:1360` | active; `0.0.0.0`; HTTP 200; the only Dirac web server |
+| `dirac-fields.service` / `:8901` | active; `0.0.0.0`; health HTTP 200; unified application/scientific control plane |
+| `dirac-ops.service` / `:1355` | active; `0.0.0.0`; HTTP 200; read-only operational projection |
+| `dirac-digital-twin.service` | active; watches first-party source and regenerates the twin |
+| legacy `:8902` | no listener; standalone physics unit archived as superseded |
 
-## Verification snapshot
+The default LAN profile is unauthenticated. It is not a public multi-user deployment.
 
-- All 18 architecture gate checks green, including build, contracts, migrations, parity,
-  layering, security and the digital twin.
-- TypeScript typecheck and focused AppShell/ScientificContext/ModuleHost specs: green; all
-  30 View routes are restorable and skeleton Views unmount operational modules cleanly.
-- Production `dirac` bundle and real deep-link browser flow: green; `/p/KRAS-G12D/structures/complex`
-  restored Program + Complex + Molecule and a live Mol* scene.
-- Real browser navigation `Structures → Design → Structures → Runs` preserved the exact
-  SceneService-owned Mol* object while ModuleHost changed the visible module projection.
-- Migration hash gate: 20 compared, zero drift; tamper redproof convicted.
-- Real generic cache: first torsion call `computed`, second `db`; result and artifact
-  SHA-256 identical.
-- Real HTTP and CLI: 18 commands discovered; `system.health` reports durable PostgreSQL
-  JobStore and ArtifactStore.
-- Real MCP JSON-RPC: initialization, generated safe tool discovery and semantic health
-  call succeeded; mutation commands excluded.
-- Real long command: agent-attributed torsion command created a durable Job, completed
-  with exact method version, and linked `torsion.profile` artifact.
-- Six-way HOMO parity: core, v1, v2, Python SDK, CLI and MCP agreed on all 20
-  compared facts and the exact 6,746,050-byte artifact SHA-256.
-- Remote boundary tests passed in memory and transactionally against PostgreSQL;
-  a real loopback remote-mode probe convicted missing auth, TLS and scope, then bound
-  the accepted request to the credential's agent identity without storing the raw token.
-- Digital twin: 3,409 nodes / 5,790 edges; 18/18 command handlers, 12/12 method
-  implementations, zero import cycles, healthy observed topology, active recursive watcher.
+## Verification boundary
 
-The default local/LAN profile intentionally remains unauthenticated. Public operation must
-explicitly activate the documented remote profile behind HTTPS with real operator-issued
-credentials. All 8 Workspaces and 30 Views now have stable routes and honest product shells;
-planned modules show their real backing state instead of placeholder scientific results.
+Repository gates cover typechecking, production builds, palette/CSS invariants, document
+facts, generated contracts, migrations, portability, layering, physics protections,
+transport parity, remote security and architecture-twin coherence. Database and live
+transport gates require their real dependencies; a skipped gate is unverified, not green.
+
+The working tree contains ongoing Motif scientific-semantics work. Counts above include
+those present files and contracts; they should not be interpreted as a release tag.
 
 ## Scope verdict
 
-The approved **platform substrate and product-shell phases are complete**. The whole Dirac
-product is not: 8 of 8 Workspaces and 30 of 30 Views are navigable, while 3 of 8 Workspaces
-and 7 of 30 Views currently expose connected scientific vertical slices. The remaining
-Views are implementation contracts with explicit foundation/planned states, not shipped
-scientific capability. The Architecture Optimization Twin reports both dimensions.
+The command/method/job/artifact substrate and the complete navigation shell exist. The
+product remains partial: 12/30 Views are connected, application-grade HCI action semantics
+are still being migrated, and individual scientific Methods need method-specific validation
+before prospective claims can be made. Workflow completeness and scientific validity are
+separate acceptance gates.

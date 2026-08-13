@@ -15,7 +15,11 @@
     ],
     "constants": [
       "FORCE_FIELDS",
-      "ROTATABLE_SMARTS"
+      "ROTATABLE_SMARTS",
+      "TORSION_FORCE_CONSTANT",
+      "TORSION_WINDOW_DEG",
+      "MINIMIZE_STEPS",
+      "VERDICTS"
     ]
   },
   "input": {
@@ -153,46 +157,19 @@
     ]
   },
   "refusals": [
-    {
-      "code": "UNSUPPORTED",
-      "condition": "the requested basis does not describe every element present",
-      "points_at": "the same method with basis=def2-svp",
-      "measured": "6-31g has no iodine ECP; without one iodine runs all-electron and the potential is wrong by 58 kcal/mol with no error raised"
-    },
-    {
-      "code": "OPEN_SHELL_SPIN_REQUIRED",
-      "condition": "a transition metal is present and spin was not supplied",
-      "points_at": null,
-      "measured": "electron parity implies a closed-shell singlet that is not the ground state; collapsing this into UNSUPPORTED reads as \"give up\" rather than \"answer one question\""
-    },
-    {
-      "code": "UNCONVERGED",
-      "condition": "DIIS stalls and the second-order (newton) rescue also fails",
-      "points_at": null,
-      "measured": "a field rendered from an unconverged wavefunction is visually indistinguishable from a converged one"
-    },
-    {
-      "code": "BUDGET",
-      "condition": "the pre-flight estimate exceeds compute_budget_seconds, or the in-loop watchdog fires",
-      "points_at": null,
-      "measured": "estimate 2.8 x 5.9e-9 x nao^4.03 s, fitted over 47 molecules; the 2.8x factor is the measured underestimate mid-range"
-    },
-    {
-      "code": "TOO_LARGE",
-      "condition": "more than 120 atoms including hydrogens",
-      "points_at": null,
-      "measured": "beyond that, HF on this box is not interactive at any basis"
-    }
+    {"code": "INVALID_PARAMETERS", "condition": "the molfile is malformed, has no 3D conformer, scan parameters are outside the contract, or the force-field variant is unknown"},
+    {"code": "UNSUPPORTED", "condition": "MMFF cannot type the submitted chemistry or construct a force field"},
+    {"code": "UNCONVERGED", "condition": "scan minimizations do not converge sufficiently for the quality policy; unconverged points remain visible in the profile"}
   ],
   "warnings": [
     {
-      "code": "MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE",
-      "meaning": "Orbital energies are not quantitatively quotable at this basis.",
+      "code": "ONE_DIMENSIONAL_TORSION_NOT_THERMODYNAMIC",
+      "meaning": "The gas-phase one-dimensional MMFF profile is descriptive triage; coupled torsions, ring torsions, pose environment and thermodynamic claims are excluded.",
       "scope": [
-        "output.wavefunction.homo_ev",
-        "output.wavefunction.lumo_ev"
+        "output.summary.total_strain_kcal",
+        "artifact.torsion.profile"
       ],
-      "measured": "STO-3G ranks nitrobenzene as more electron-rich than benzene while def2-SVP ranks it last; water's LUMO moves 12 eV"
+      "measured": "Per-torsion strains are coupled and therefore are never summed; the global same-force-field relaxation is reported separately."
     }
   ],
   "execution": {
@@ -202,8 +179,9 @@
     ],
     "default_mode": "job",
     "inline_threshold_seconds": 2.0,
-    "resource_class": "cpu-qm",
-    "concurrency_class": "scf",
+    "resource_class": "cpu",
+    "concurrency_class": "torsion",
+    "scale_profile": {"cpu_cores": 1, "shardable": true, "distributed": false, "min_gpus": 0, "max_gpus": 0},
     "supports_cancellation": false,
     "deterministic": true,
     "cacheable": true,

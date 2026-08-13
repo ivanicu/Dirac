@@ -1,5 +1,8 @@
 # Dirac Motif v2 — Implementation-Grade Specification Bundle
 
+> Superseded by [`../motif-v3/README.md`](../motif-v3/README.md). This directory is a
+> versioned design record retained for provenance, not current implementation guidance.
+
 This bundle converts the existing Motif product/science specification into a landable software and execution specification for the current Dirac repository.
 
 ## Baseline

@@ -25,6 +25,12 @@ MEASUREMENT = {
     "qc": {"status": "not_assessed", "reason_codes": []},
     "missing_reason": "not_tested",
     "source": {"artifact_id": UUIDS[0], "record_locator": "rows/1"},
+    "representation_policy": {
+        "measurement_subject": "chemical_entity",
+        "model_representation": "parent_entity", "aggregation": "none",
+        "state_uncertainty_handling": "refuse_state_specific_claim",
+        "claim_scope": "parent_entity_only", "assignment_source": "submitted",
+    },
     "measured_at": NOW,
 }
 
@@ -89,6 +95,7 @@ DESIGN_BRIEF = {
 PROPOSAL = {
     "schema_version": "2.0", "proposal_id": UUIDS[8], "compound": ref("compound", 1),
     "parents": [ref("compound", 0)], "strategy": "local_edit",
+    "lineage_depth": 1, "duplicate_class": "novel_identity",
     "generator_release_id": UUIDS[9],
     "generation_trace": {
         "root_seed": 1729, "strategy_release_id": UUIDS[10],
@@ -96,6 +103,8 @@ PROPOSAL = {
     },
     "synthesis": {"status": "route_unknown", "route_depth": None,
                   "estimated_cost": None, "estimated_days": None},
+    "route_assessment": {"state": "not_assessed", "predicate_release_id": UUIDS[10],
+                         "checks": {}, "reason_codes": ["ROUTE_NOT_ASSESSED"]},
     "identity_gate": {"status": "pass", "reason_codes": []}, "created_at": NOW,
 }
 

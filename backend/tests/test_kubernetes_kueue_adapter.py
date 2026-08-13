@@ -71,6 +71,7 @@ class KubernetesKueueAdapterTests(unittest.TestCase):
         )
         self.request = copy.deepcopy(EXECUTION_REQUEST)
         self.request["placement"]["backend"] = "kubernetes"
+        self.request["placement"]["workload_priority_class"] = "motif-standard"
         self.request["container_image"] = IMAGE
         self.request["attempt_id"] = "00000000-0000-4000-8000-000000000004"
 
@@ -89,10 +90,12 @@ class KubernetesKueueAdapterTests(unittest.TestCase):
         self.assertEqual(init["command"], ["/bin/sh", "-c", "sleep 3"])
         self.assertEqual(init["image"], IMAGE)
         self.assertEqual(job["spec"]["suspend"], True)
+        self.assertEqual(job["metadata"]["labels"]["kueue.x-k8s.io/priority-class"],
+                         "motif-standard")
         self.assertNotIn("activeDeadlineSeconds", job["spec"])
         self.assertEqual(job["spec"]["template"]["spec"]["activeDeadlineSeconds"], 3600)
         self.assertEqual(job["spec"]["template"]["spec"]["terminationGracePeriodSeconds"],
-                         5)
+                         120)
         self.assertEqual(job["spec"]["backoffLimit"], 0)
         self.assertEqual(
             job["metadata"]["labels"]["kueue.x-k8s.io/queue-name"], "motif")

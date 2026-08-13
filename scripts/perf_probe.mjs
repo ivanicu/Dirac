@@ -41,7 +41,7 @@ import os from 'node:os';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
 
-const WEB_URL = 'http://127.0.0.1:1338';
+const WEB_URL = 'http://127.0.0.1:1360';
 const BACKEND_URL = 'http://127.0.0.1:8901';
 const BUNDLE_PATH = path.join(REPO_ROOT, 'build/dirac/dirac.js');
 

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/measurement-observation.schema.json",
+  "title": "Motif Measurement Observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "observation_id", "chemical_entity_ref", "endpoint_definition_ref", "target_construct_ref", "assay_protocol_ref", "protocol_version", "measurement", "original_unit", "canonical_unit", "transform_release_ref", "replicate_group", "batch_id", "measurement_uncertainty", "quality_status", "observation_time", "source_artifact_ref", "representation_policy"],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "observation_id": {"type": "string", "format": "uuid"},
+    "chemical_entity_ref": {"$ref": "#/$defs/ref"},
+    "endpoint_definition_ref": {"$ref": "#/$defs/ref"},
+    "target_construct_ref": {"$ref": "#/$defs/ref"},
+    "assay_protocol_ref": {"$ref": "#/$defs/ref"},
+    "protocol_version": {"type": "string", "minLength": 1},
+    "measurement": {"oneOf": [{"$ref": "#/$defs/exact"}, {"$ref": "#/$defs/censored"}, {"$ref": "#/$defs/interval"}, {"$ref": "#/$defs/missing"}]},
+    "original_unit": {"type": "string", "minLength": 1},
+    "canonical_unit": {"type": "string", "minLength": 1},
+    "transform_release_ref": {"$ref": "#/$defs/ref"},
+    "replicate_group": {"type": "string", "minLength": 1},
+    "batch_id": {"type": "string", "minLength": 1},
+    "measurement_uncertainty": {"oneOf": [{"type": "null"}, {"type": "object", "additionalProperties": false, "required": ["kind", "value", "unit"], "properties": {"kind": {"enum": ["standard_deviation", "standard_error", "confidence_interval", "unknown"]}, "value": {"type": ["number", "array", "null"]}, "unit": {"type": "string"}}}]},
+    "quality_status": {"enum": ["accepted", "provisional", "rejected", "not_assessed"]},
+    "observation_time": {"type": "string", "format": "date-time"},
+    "source_artifact_ref": {"$ref": "#/$defs/ref"},
+    "representation_policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["measurement_subject", "model_representation", "aggregation", "state_uncertainty_handling", "claim_scope"],
+      "properties": {
+        "measurement_subject": {"const": "chemical_entity"},
+        "model_representation": {"enum": ["parent_entity", "dominant_assumed_microstate", "population_weighted_microstates", "latent_microstate_marginalization"]},
+        "aggregation": {"enum": ["none", "population_weighted", "posterior_marginalization"]},
+        "state_uncertainty_handling": {"enum": ["explicit_feature", "marginalized", "refuse_state_specific_claim"]},
+        "claim_scope": {"enum": ["parent_entity_only", "state_specific"]}
+      }
+    }
+  },
+  "$defs": {
+    "ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"type": "string", "minLength": 1}, "id": {"type": "string", "minLength": 1}}},
+    "exact": {"type": "object", "additionalProperties": false, "required": ["kind", "value"], "properties": {"kind": {"const": "exact"}, "value": {"type": "number"}}},
+    "censored": {"type": "object", "additionalProperties": false, "required": ["kind", "qualifier", "bound"], "properties": {"kind": {"const": "censored"}, "qualifier": {"enum": ["less_than", "less_or_equal", "greater_than", "greater_or_equal"]}, "bound": {"type": "number"}}},
+    "interval": {"type": "object", "additionalProperties": false, "required": ["kind", "lower", "upper"], "properties": {"kind": {"const": "interval"}, "lower": {"type": "number"}, "upper": {"type": "number"}}},
+    "missing": {"type": "object", "additionalProperties": false, "required": ["kind", "reason_code"], "properties": {"kind": {"const": "missing"}, "reason_code": {"type": "string"}}}
+  }
+}

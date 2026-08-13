@@ -1,91 +1,102 @@
-# Dirac fields backend
+# Dirac application and scientific service
 
-Local daemon that turns the focused ligand's molfile into Gaussian-cube scalar
-fields for the **Fields** master-tab. The molfile arrives in scene coordinates,
-so every cube renders registered with the mol\* scene — there is no alignment
-step anywhere.
+`backend/field_server.py` is the unified local control plane for semantic Commands,
+scientific Methods, durable Jobs, artifacts and compatibility routes. The historical
+name remains, but it is no longer only a field-cube daemon.
 
-## Run
+## Runtime
 
-```bash
-backend/env/bin/python backend/field_server.py     # 0.0.0.0:8901
-```
-
-`backend/env` is a self-contained conda env (gitignored): RDKit 2026.03 +
-pyscf 2.14 + numpy. Recreate with:
+The canonical workstation runs the service as `dirac-fields.service`:
 
 ```bash
-~/miniforge3/bin/conda create -p backend/env python=3.12 -y
-backend/env/bin/pip install rdkit pyscf numpy
+systemctl --user status dirac-fields
+systemctl --user restart dirac-fields
+journalctl --user -u dirac-fields -n 100 --no-pager
 ```
 
-## Security posture
+For a clean development environment where the supervised unit is not installed:
 
-Bound to **all interfaces** (`0.0.0.0`), not loopback — Ivan drives this from
-a Mac on the LAN, and a loopback-only daemon just reports "offline" there.
-Stated rather than discovered: it is **unauthenticated** and runs quantum
-chemistry on whatever molfile is POSTed to it. A `Host`/`Origin` allowlist
-(this box's own hostnames/addresses) blocks DNS-rebinding and drive-by reads
-from a page opened elsewhere, but anyone who can already reach this machine
-on the LAN can submit compute. There is no DELETE route on this daemon —
-`app.field_cube` / `app.blob` rows are only ever removed by a human running
-`bin/dirac-sweep` by hand.
+```bash
+backend/env/bin/python backend/field_server.py
+```
 
-## Protocol
+The default bind is `0.0.0.0:8901`. It is LAN-reachable and the default local profile is
+unauthenticated. Do not expose it to the public internet. See
+[`../docs/security/REMOTE.md`](../docs/security/REMOTE.md) for the remote profile.
 
-| Route | In | Out |
-|---|---|---|
-| `GET /health` | — | `{ok, rdkit, pyscf}` |
-| `POST /field` | `{molfile, kind, basis?}` | `{ok, cube, meta}` or `{ok: false, error}` |
+`backend/env/` is a repository-local, gitignored scientific environment. The checked
+Motif runtime lock is `motif/requirements.lock.txt`, but full environment provisioning is
+currently workstation-oriented rather than a supported one-command installation. A
+missing optional toolkit must produce a typed unavailable/refusal result, not a fabricated
+scientific output.
 
-Kinds: `mep` (Gasteiger/Coulomb, ~0.1 s) · `homo` · `lumo` · `density` ·
-`mep_qm` (pyscf HF + cubegen). `basis`: `sto-3g` (default) · `6-31g` ·
-`6-31g*` · `def2-svp` (needed for Br/I — 6-31g\* has no iodine ECP).
+## Boundaries
 
-## Persistent cube cache
-
-With the `dirac` PostgreSQL database up (see `backend/db/`), every computed
-cube is persisted to `app.field_cube` keyed `(sha256(molfile), kind, basis)`
-with the cube bytes content-addressed in `app.blob`. A repeated request —
-including after a daemon restart — is served from the database (~50 ms
-measured vs 5 s recompute; a 6-minute Fe-heme SCF now survives restarts).
-`GET /health` reports `db_cache: on|off`; without the database the daemon
-falls back to the in-memory SCF cache only. SCF provenance is stored split
-(`scf_reference` × `scf_converger`, migration 004) via
-`app.parse_scf_method()`; the schema independently enforces that an
-unconverged quantum field cannot be cached (`field_cube_check`, verified by
-direct negative control: SQLSTATE 23514).
-
-## Honesty invariants
-
-- An SCF that does not converge returns an **error**, never a field. Plain
-  DIIS that stalls is retried once with second-order SCF (`newton()`);
-  `meta.method` says which path produced the numbers.
-- Only converged SCF results are cached (per geometry × basis). Caching a
-  failure would make every retry fail instantly from the cache.
-- `meta` always carries basis, method, SCF energy, HOMO/LUMO (eV),
-  convergence, atom/basis counts, and wall time.
-
-## Measured timings (24-thread CPU, STO-3G)
-
-| Case | Time |
+| Path | Responsibility |
 |---|---|
-| MEP, 50 atoms | 0.1 s |
-| First SCF, caffeine (24 atoms) | 0.6 s |
-| First SCF, retinoic acid (50 atoms) | ~3 s; orbital cube +2 s |
-| `mep_qm`, 50 atoms, 50³ grid | ~12 s after cached SCF |
-| Fe-heme (75 atoms) | DIIS stalls at 120 cycles → SOSCF rescue, minutes |
+| `dirac_app/` | command loading, validation, dispatch, application handlers and repositories |
+| `invocation.py` | one Method validation, cache, Job, executor, artifact and provenance path |
+| `method_registry.py` | executable Method registration against canonical manifests |
+| `jobs.py` | durable and in-memory JobStore implementations |
+| `artifacts.py` | local and PostgreSQL content-addressed artifact stores |
+| `programs/` | durable Program aggregate and repository logic |
+| `motif/` | governed data, model, proposal, structure, physics and closed-loop workflows |
+| `execution_control/` | allocation, attempt identity, leases, retries, reconciliation and completion |
+| `executors/` | local process/GPU and Kubernetes/Kueue adapters |
+| `db/` | PostgreSQL schema, migrations, checks and operational views |
+| `physics/` | reusable surface/torsion implementations; its standalone `:8902` server is legacy |
+| `tests/` | portable, scientific-stack, database and live transport tests |
 
-Known limits: `MAX_QM_ATOMS = 120` (with hydrogens); transition-metal ligands
-are minutes, not seconds.
+Adapters do not own scientific business logic. HTTP parses/serializes, the CLI renders,
+and MCP projects safe Commands; all delegate to the same dispatcher and invocation
+kernel.
 
-## Concurrency
+## HTTP surface
 
-`ThreadingHTTPServer` — every request runs on its own thread, so **concurrent
-compute is unbounded**: nothing here queues or rejects a second SCF while a
-first is running. There is still no request *cancellation* (a client that
-gives up cannot stop the thread already computing for it), but each SCF is
-individually **deadline-bounded**: a watchdog fires inside the SCF loop
-(`max_seconds`, default 90 s, clamp 900 s) and unwinds with an error instead
-of running to `max_cycle` — so a stuck computation cannot hold a thread
-forever, only up to its own budget.
+The current service exposes:
+
+- `GET /health` for runtime and store health;
+- `GET /v2/meta`, `/v2/commands`, `/v2/methods` and their detail routes;
+- `POST /v2/execute` for semantic Commands;
+- `POST /v2/invoke` for generic Method invocation;
+- `/v2/jobs/*` for durable Job discovery, wait and cancellation;
+- `/v2/artifacts/*` for authorized artifact retrieval and metadata;
+- read-only `/admin/*` projections used by the operations console;
+- compatibility routes retained behind the v2 kernel.
+
+Long-running Commands declared `job_policy=required` must return a durable Job. Large
+scientific results are Artifacts, not inline response payloads.
+
+## PostgreSQL
+
+PostgreSQL is the durable authority for application and execution state. Apply migrations
+in order and stop on the first error:
+
+```bash
+for file in backend/db/migrations/*.sql; do
+  psql "$DIRAC_DSN" -X -v ON_ERROR_STOP=1 -f "$file"
+done
+```
+
+Never edit an applied migration. `backend/db/check_migration_hashes.sh` compares the files
+with the migration ledger, and CI also migrates a clean PostgreSQL 18 + pgvector database.
+
+## CLI smoke checks
+
+```bash
+PYTHONPATH=python/src python3 -m dirac.cli commands --json
+PYTHONPATH=python/src python3 -m dirac.cli health --json
+```
+
+After changing any backend file on the canonical workstation, restart
+`dirac-fields.service` before live verification; the daemon does not reload itself.
+
+## Scientific and operational honesty
+
+- Unconverged or unsupported calculations return typed failures; they are never cached or
+  rendered as valid fields.
+- Method versions and runtime locks are provenance, not decorative labels.
+- Cache identity follows Method currency and exact inputs.
+- A Job/transport parity test proves routing and persistence, not scientific validity.
+- GPU work is submitted through the configured execution boundary; repository users must
+  not launch competing unmanaged CUDA work.

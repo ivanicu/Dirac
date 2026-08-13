@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/evidence-item.schema.json",
+  "title": "Motif Typed Evidence Item",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "evidence_id", "kind", "subject_ref", "condition_ref", "method_release_ref", "outcome_ref", "payload", "applicability", "scientific_state", "claim_eligibility", "dependency_refs", "shared_assumption_refs", "supersedes", "stale", "created_at"],
+  "properties": {
+    "schema_version": {"const": "3.0"},
+    "evidence_id": {"type": "string", "format": "uuid"},
+    "kind": {"enum": ["scalar_estimate", "censored_estimate", "distribution", "pose_ensemble", "trajectory", "transformation", "network_estimate", "qualitative_gate", "conflict"]},
+    "subject_ref": {"$ref": "#/$defs/ref"},
+    "condition_ref": {"$ref": "#/$defs/ref"},
+    "method_release_ref": {"$ref": "#/$defs/ref"},
+    "outcome_ref": {"$ref": "#/$defs/ref"},
+    "quality_assessment_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]},
+    "payload_schema": {"type": ["string", "null"], "format": "uri"},
+    "payload": {"oneOf": [{"$ref": "#/$defs/scalar"}, {"$ref": "#/$defs/censored"}, {"$ref": "#/$defs/distribution"}, {"$ref": "#/$defs/pose_ensemble"}, {"$ref": "#/$defs/trajectory"}, {"$ref": "#/$defs/transformation"}, {"$ref": "#/$defs/network_estimate"}, {"$ref": "#/$defs/gate"}, {"$ref": "#/$defs/conflict"}]},
+    "applicability": {"enum": ["unknown", "applicable", "not_applicable", "unsupported", "outside_validated_domain"]},
+    "scientific_state": {"enum": ["not_assessed", "accepted", "provisional", "rejected"]},
+    "claim_eligibility": {"enum": ["eligible", "ineligible_technical_smoke", "ineligible_unvalidated_method", "ineligible_outside_validated_domain", "ineligible_provisional_quality", "ineligible_stale", "ineligible_conflict", "ineligible_missing_dependency"]},
+    "dependency_refs": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+    "shared_assumption_refs": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+    "supersedes": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+    "stale": {"type": "boolean"},
+    "created_at": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {"if": {"properties": {"stale": {"const": true}}, "required": ["stale"]}, "then": {"not": {"properties": {"claim_eligibility": {"const": "eligible"}}, "required": ["claim_eligibility"]}}},
+    {"if": {"properties": {"kind": {"const": "scalar_estimate"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/scalar"}}}},
+    {"if": {"properties": {"kind": {"const": "censored_estimate"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/censored"}}}},
+    {"if": {"properties": {"kind": {"const": "distribution"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/distribution"}}}},
+    {"if": {"properties": {"kind": {"const": "pose_ensemble"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/pose_ensemble"}}}},
+    {"if": {"properties": {"kind": {"const": "trajectory"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/trajectory"}}}},
+    {"if": {"properties": {"kind": {"const": "transformation"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/transformation"}}}},
+    {"if": {"properties": {"kind": {"const": "network_estimate"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/network_estimate"}}}},
+    {"if": {"properties": {"kind": {"const": "qualitative_gate"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/gate"}}}},
+    {"if": {"properties": {"kind": {"const": "conflict"}}, "required": ["kind"]}, "then": {"properties": {"payload": {"$ref": "#/$defs/conflict"}}}}
+  ],
+  "$defs": {
+    "ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"type": "string", "minLength": 1}, "id": {"type": "string", "minLength": 1}}},
+    "scalar": {"type": "object", "additionalProperties": false, "required": ["value", "unit"], "properties": {"value": {"type": "number"}, "unit": {"type": "string", "minLength": 1}, "uncertainty": {"type": ["number", "null"], "minimum": 0}}},
+    "censored": {"type": "object", "additionalProperties": false, "required": ["qualifier", "bound", "unit"], "properties": {"qualifier": {"enum": ["less_than", "less_or_equal", "greater_than", "greater_or_equal"]}, "bound": {"type": "number"}, "unit": {"type": "string", "minLength": 1}}},
+    "artifact_payload": {"type": "object", "additionalProperties": false, "required": ["artifact_ref", "summary"], "properties": {"artifact_ref": {"$ref": "#/$defs/ref"}, "summary": {"type": "object"}}},
+    "distribution": {"type": "object", "additionalProperties": false, "required": ["artifact_ref", "distribution_family", "support", "summary", "calibration_population_ref"], "properties": {"artifact_ref": {"$ref": "#/$defs/ref"}, "distribution_family": {"type": "string", "minLength": 1}, "support": {"enum": ["continuous", "discrete", "mixed", "empirical"]}, "summary": {"type": "object", "required": ["unit"], "properties": {"unit": {"type": "string", "minLength": 1}, "mean": {"type": "number"}, "median": {"type": "number"}, "quantiles": {"type": "object"}}}, "calibration_population_ref": {"oneOf": [{"$ref": "#/$defs/ref"}, {"type": "null"}]}}},
+    "pose_ensemble": {"type": "object", "additionalProperties": false, "required": ["artifact_ref", "microstate_ref", "receptor_state_ref", "binding_site_ref", "pose_protocol_release_ref", "pose_count", "cluster_count", "score_semantics"], "properties": {"artifact_ref": {"$ref": "#/$defs/ref"}, "microstate_ref": {"$ref": "#/$defs/ref"}, "receptor_state_ref": {"$ref": "#/$defs/ref"}, "binding_site_ref": {"$ref": "#/$defs/ref"}, "pose_protocol_release_ref": {"$ref": "#/$defs/ref"}, "pose_count": {"type": "integer", "minimum": 1}, "cluster_count": {"type": "integer", "minimum": 1}, "score_semantics": {"enum": ["within_method_rank", "calibrated_rank_fusion", "pose_consistency_only"]}}},
+    "trajectory": {"type": "object", "additionalProperties": false, "required": ["artifact_ref", "simulation_run_ref", "analysis_protocol_ref", "repeat_index", "frame_count", "time_unit", "block_assessment_ref", "outcome"], "properties": {"artifact_ref": {"$ref": "#/$defs/ref"}, "simulation_run_ref": {"$ref": "#/$defs/ref"}, "analysis_protocol_ref": {"$ref": "#/$defs/ref"}, "repeat_index": {"type": "integer", "minimum": 1}, "frame_count": {"type": "integer", "minimum": 1}, "time_unit": {"type": "string", "minLength": 1}, "block_assessment_ref": {"$ref": "#/$defs/ref"}, "outcome": {"enum": ["stable_under_protocol", "ligand_departure_observed", "instability_observed", "inconclusive"]}}},
+    "transformation": {"type": "object", "additionalProperties": false, "required": ["artifact_ref", "transformation_ref", "edge_orientation", "sign_convention_ref", "complex_leg_ref", "solvent_leg_ref", "repeat_index", "estimate", "unit", "effective_samples"], "properties": {"artifact_ref": {"$ref": "#/$defs/ref"}, "transformation_ref": {"$ref": "#/$defs/ref"}, "edge_orientation": {"enum": ["a_to_b", "b_to_a"]}, "sign_convention_ref": {"$ref": "#/$defs/ref"}, "complex_leg_ref": {"$ref": "#/$defs/ref"}, "solvent_leg_ref": {"$ref": "#/$defs/ref"}, "repeat_index": {"type": "integer", "minimum": 1}, "estimate": {"type": "number"}, "unit": {"type": "string", "minLength": 1}, "effective_samples": {"type": "number", "exclusiveMinimum": 0}}},
+    "network_estimate": {"type": "object", "additionalProperties": false, "required": ["artifact_ref", "network_ref", "reference_node_ref", "reference_value", "edge_estimates_ref", "edge_covariance_ref", "node_estimates_ref", "node_covariance_ref", "cycle_basis_ref", "cycle_residuals_ref", "failed_edge_refs", "sign_convention_ref"], "properties": {"artifact_ref": {"$ref": "#/$defs/ref"}, "network_ref": {"$ref": "#/$defs/ref"}, "reference_node_ref": {"$ref": "#/$defs/ref"}, "reference_value": {"const": 0}, "edge_estimates_ref": {"$ref": "#/$defs/ref"}, "edge_covariance_ref": {"$ref": "#/$defs/ref"}, "node_estimates_ref": {"$ref": "#/$defs/ref"}, "node_covariance_ref": {"$ref": "#/$defs/ref"}, "cycle_basis_ref": {"$ref": "#/$defs/ref"}, "cycle_residuals_ref": {"$ref": "#/$defs/ref"}, "failed_edge_refs": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}}, "sign_convention_ref": {"$ref": "#/$defs/ref"}}},
+    "gate": {"type": "object", "additionalProperties": false, "required": ["result", "reason_codes"], "properties": {"result": {"enum": ["pass", "warn", "fail", "not_assessed"]}, "reason_codes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,95}$"}}}},
+    "conflict": {"type": "object", "additionalProperties": false, "required": ["evidence_refs", "conflict_kind", "resolution_state"], "properties": {"evidence_refs": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}}, "conflict_kind": {"enum": ["sign", "magnitude", "rank", "condition", "method", "identity", "dependency"]}, "resolution_state": {"enum": ["open", "explained", "resolved", "accepted_unresolved"]}}}
+  }
+}

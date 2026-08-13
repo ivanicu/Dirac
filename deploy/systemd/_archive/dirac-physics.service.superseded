@@ -1,4 +1,6 @@
-# dirac-physics.service — Dirac physics daemon — sigma-hole surface MEP + torsion (:8902)
+# SUPERSEDED: standalone physics daemon on :8902.
+# Physics routes now execute through dirac-fields on :8901. Retained only for
+# deployment history; do not install or start this unit.
 #
 # SPLIT FROM dirac-backend.service, which supervised BOTH python daemons under
 # one wrapper. That file said so itself: "the correct systemd shape is almost

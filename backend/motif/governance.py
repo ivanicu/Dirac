@@ -39,6 +39,26 @@ def with_semantic_digest(value: dict[str, Any]) -> dict[str, Any]:
     return frozen
 
 
+def normalize_measurement_representation(document: dict[str, Any]) -> dict[str, Any]:
+    """Make the parent-measurement to model-representation bridge explicit.
+
+    Legacy v2 callers did not state it. The safe migration default preserves the
+    parent/sample observation and forbids state-specific claims; it never guesses a
+    dominant protonation or tautomer state.
+    """
+    normalized = copy.deepcopy(document)
+    normalized.setdefault("representation_policy", {
+        "measurement_subject": ("chemical_entity" if normalized.get("compound")
+                                else "sample"),
+        "model_representation": "parent_entity",
+        "aggregation": "none",
+        "state_uncertainty_handling": "refuse_state_specific_claim",
+        "claim_scope": "parent_entity_only",
+        "assignment_source": "governance_default_v3",
+    })
+    return normalized
+
+
 def validate_document(schema_name: str, value: dict[str, Any]) -> None:
     schema = json.loads((SCHEMAS / schema_name).read_text(encoding="utf-8"))
     errors = violations(schema, value)
@@ -195,6 +215,8 @@ class MemoryMotifGovernanceStore:
 
     def ingest_measurements(self, documents: list[dict[str, Any]],
                             actor: dict[str, str]) -> dict:
+        documents = [normalize_measurement_representation(document)
+                     for document in documents]
         results = []
         created_count = 0
         for document in documents:
@@ -269,6 +291,12 @@ class MemoryMotifGovernanceStore:
                 "digest": digest, "status": existing["status"], "created": created}}
         if method_id in {"ml.motif.train", "ml.motif.mesh.train"}:
             registration = payload["registration"]
+            scientific_lifecycle = registration.get(
+                "scientific_lifecycle", "candidate_unvalidated")
+            if scientific_lifecycle not in {"technical_smoke", "candidate_unvalidated"}:
+                raise failures.DiracInvalidParameters(
+                    "training can create only technical_smoke or candidate_unvalidated releases; "
+                    "scientific promotion requires an independent validation record")
             snapshot_id = registration["dataset_snapshot_ref"]["id"]
             snapshot = next((item for item in self.datasets.values()
                              if item["id"] == snapshot_id), None)
@@ -295,7 +323,7 @@ class MemoryMotifGovernanceStore:
                 self.models[key] = existing
             return {"model_release": {
                 "ref": {"kind": "model", "id": identifier},
-                "model_release_id": existing["id"], "lifecycle": "candidate",
+                "model_release_id": existing["id"], "lifecycle": scientific_lifecycle,
                 "created": created}}
         return {}
 
@@ -515,6 +543,8 @@ class PostgresMotifGovernanceStore:
     def ingest_measurements(self, documents: list[dict[str, Any]],
                             actor: dict[str, str]) -> dict:
         from psycopg.types.json import Jsonb
+        documents = [normalize_measurement_representation(document)
+                     for document in documents]
         for document in documents:
             validate_document("measurement-v2.schema.json", document)
             _require_recorded_actor(document, actor)
@@ -725,6 +755,12 @@ class PostgresMotifGovernanceStore:
         from psycopg.types.json import Jsonb
 
         registration = payload["registration"]
+        scientific_lifecycle = registration.get(
+            "scientific_lifecycle", "candidate_unvalidated")
+        if scientific_lifecycle not in {"technical_smoke", "candidate_unvalidated"}:
+            raise failures.DiracInvalidParameters(
+                "training can create only technical_smoke or candidate_unvalidated releases; "
+                "scientific promotion requires an independent validation record")
         snapshot_id = registration["dataset_snapshot_ref"]["id"]
         roles = self._artifact_roles(artifacts)
         required_roles = {"model.checkpoint", "model.validation", "model.runtime_lock"}
@@ -799,14 +835,15 @@ class PostgresMotifGovernanceStore:
             else:
                 cur.execute(
                     "INSERT INTO meta.model_release "
-                    "(model_object_id,release_name,lifecycle,method_row_id,source_commit,"
+                    "(model_object_id,release_name,lifecycle,scientific_lifecycle,method_row_id,source_commit,"
                     " container_image_digest,runtime_kind,runtime_lock_artifact_id,"
                     " lockfile_digest,featurizer_digest,checkpoint_artifact_id,"
                     " validation_artifact_id,execution_digest,intended_use,prohibited_use,"
                     " known_limitations,created_by_kind,created_by_id) "
-                    "VALUES (%s,%s,'candidate',%s,%s,NULL,'local_env',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                    "VALUES (%s,%s,'candidate',%s,%s,%s,NULL,'local_env',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
                     "ON CONFLICT (model_object_id,release_name) DO NOTHING RETURNING id",
-                    (registration["model_object_id"], registration["release_name"], method[0],
+                    (registration["model_object_id"], registration["release_name"],
+                     scientific_lifecycle, method[0],
                      registration["source_commit"], roles["model.runtime_lock"]["id"],
                      bytes.fromhex(runtime_digest.removeprefix("sha256:")),
                      bytes.fromhex(result["featurizer_digest"].removeprefix("sha256:")),
@@ -864,17 +901,19 @@ class PostgresMotifGovernanceStore:
                         event_type="motif.model.registered",
                         payload={"model_object_id": registration["model_object_id"],
                                  "release_name": registration["release_name"],
-                                 "lifecycle": "candidate", "dataset_snapshot_id": snapshot_id,
+                                 "lifecycle": scientific_lifecycle,
+                                 "dataset_snapshot_id": snapshot_id,
                                  "execution_digest": execution_digest, "job_id": job_id,
                                  "artifact_ids": {role: roles[role]["id"]
                                                   for role in sorted(required_roles)}})
         return {"model_release": {
             "ref": {"kind": "model", "id": registration["model_object_id"]},
-            "model_release_id": release_id, "lifecycle": "candidate",
+            "model_release_id": release_id, "lifecycle": scientific_lifecycle,
             "created": created}}
 
 
 __all__ = [
     "MemoryMotifGovernanceStore", "PostgresMotifGovernanceStore", "canonical_bytes",
-    "semantic_digest", "validate_document", "with_semantic_digest",
+    "normalize_measurement_representation", "semantic_digest", "validate_document",
+    "with_semantic_digest",
 ]

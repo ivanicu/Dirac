@@ -84,6 +84,31 @@ def _gufe_component_types(value: Any) -> set[str]:
     return found
 
 
+def _extract_gufe_native_objects(value: Any) -> list[dict[str, Any]]:
+    """Inventory native OpenFE/GUFE objects that must survive as artifacts."""
+    required = {"LigandNetwork", "ChemicalSystem", "AlchemicalNetwork",
+                "Transformation", "ProtocolUnit"}
+    found: dict[tuple[str, str], dict[str, Any]] = {}
+    def visit(node: Any) -> None:
+        if isinstance(node, dict):
+            kind = node.get("__qualname__")
+            key = node.get(":gufe-key:") or node.get("key")
+            if kind in required:
+                serialized = _canonical(node)
+                digest = "sha256:" + hashlib.sha256(serialized).hexdigest()
+                found[(str(kind), str(key or digest))] = {
+                    "kind": kind, "gufe_key": key, "digest": digest,
+                    "serialized": node,
+                }
+            for child in node.values():
+                visit(child)
+        elif isinstance(node, (list, tuple)):
+            for child in node:
+                visit(child)
+    visit(value)
+    return [found[key] for key in sorted(found)]
+
+
 def _terminate(process: subprocess.Popen, *, grace_seconds: float = 5.0) -> None:
     if process.poll() is not None:
         return
@@ -170,6 +195,7 @@ def execute_openfe_edge(payload: dict[str, Any], ctx: InvocationContext) -> Hand
             "protein_structure_ref is required for an OpenFE complex leg")
     transformation = payload["transformation"]
     component_types = _gufe_component_types(transformation)
+    native_objects = _extract_gufe_native_objects(transformation)
     has_protein = "ProteinComponent" in component_types
     has_solvent = "SolventComponent" in component_types
     if leg == "complex" and not has_protein:
@@ -185,6 +211,14 @@ def execute_openfe_edge(payload: dict[str, Any], ctx: InvocationContext) -> Hand
         raise failures.DiracInvalidParameters(
             "an OpenFE vacuum leg cannot contain a GUFE SolventComponent")
     transformation_digest = _digest(transformation)
+    charge_digest = payload.get("ligand_charge_digest")
+    if not isinstance(charge_digest, str) or not charge_digest.startswith("sha256:"):
+        raise failures.DiracInvalidParameters(
+            "ligand_charge_digest is required and must freeze charges across legs/repeats")
+    invariant = payload.get("charge_invariant") or {}
+    if invariant.get("digest") != charge_digest or invariant.get("edge_id") != payload["edge_id"]:
+        raise failures.DiracInvalidParameters(
+            "charge_invariant must bind the declared charge digest to this edge")
     declared = payload.get("transformation_digest")
     if declared is not None and declared != transformation_digest:
         raise failures.DiracInvalidParameters(
@@ -275,8 +309,11 @@ def execute_openfe_edge(payload: dict[str, Any], ctx: InvocationContext) -> Hand
         "target_ref": target_ref, "protein_structure_ref": structure_ref,
         "thermodynamic_cycle_id": cycle_id,
         "repeat_index": payload.get("repeat_index", 0),
+        "ligand_charge_digest": charge_digest,
         "analysis_bootstraps": analysis_bootstraps,
         "gufe_component_types": sorted(component_types),
+        "gufe_native_objects": [{key: value for key, value in row.items()
+                                  if key != "serialized"} for row in native_objects],
         "ambertools_compiled_shims": amber_shims,
         "transformation_digest": transformation_digest,
         "result_sha256": "sha256:" + hashlib.sha256(result_bytes).hexdigest(),
@@ -290,12 +327,18 @@ def execute_openfe_edge(payload: dict[str, Any], ctx: InvocationContext) -> Hand
             "repeats, convergence diagnostics and cycle-closure policy pass."),
     }
     report_bytes = _canonical(report)
+    native_bytes = _canonical({
+        "schema_version": "1.0", "edge_id": payload["edge_id"],
+        "transformation_digest": transformation_digest,
+        "objects": native_objects,
+    })
     return HandlerResult(
         result={
             "edge_id": payload["edge_id"], "leg": leg,
             "target_ref": target_ref, "protein_structure_ref": structure_ref,
             "thermodynamic_cycle_id": cycle_id,
             "repeat_index": payload.get("repeat_index", 0),
+            "ligand_charge_digest": charge_digest,
             "engine": "OpenFE", "engine_version": OPENFE_VERSION,
             "transformation_digest": transformation_digest,
             "estimate": estimate, "uncertainty": uncertainty, "unit": unit,
@@ -304,6 +347,7 @@ def execute_openfe_edge(payload: dict[str, Any], ctx: InvocationContext) -> Hand
         },
         artifacts=[("rbfe.openfe.result", result_bytes),
                    ("rbfe.openfe.run_report", report_bytes),
+                   ("rbfe.openfe.native_objects", native_bytes),
                    ("rbfe.openfe.log", log_bytes)],
         provenance={"engine": "OpenFE", "engine_version": OPENFE_VERSION,
                     "installer_sha256": "sha256:" + OPENFE_INSTALLER_SHA256,
@@ -336,6 +380,7 @@ def openfe_edge_estimate(payload: dict[str, Any]) -> dict[str, Any]:
 
 __all__ = ["OPENFE_INSTALLER_SHA256", "OPENFE_VERSION", "POSIX_SHELL_SHA256", "_digest",
            "_configure_analysis_environment",
+           "_extract_gufe_native_objects",
            "_gufe_component_types",
            "_prepare_runtime_environment",
            "execute_openfe_edge", "openfe_edge_estimate", "openfe_edge_handler"]

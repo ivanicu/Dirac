@@ -18,6 +18,7 @@
       "generator_release_id": {"type": "string", "format": "uuid"}, "strategy_release_id": {"type": "string", "format": "uuid"},
       "identity_policy_release_id": {"type": "string", "format": "uuid"}, "root_seed": {"type": "integer", "minimum": 0},
       "created_at": {"type": "string", "format": "date-time"},
+      "quotas": {"type": "object", "additionalProperties": false, "properties": {"max_per_parent": {"type": "integer", "minimum": 1}, "max_per_template": {"type": "integer", "minimum": 1}}},
       "constraints": {"$ref": "#/$defs/constraints"}, "max_proposals": {"type": "integer", "minimum": 1, "maximum": 50000}
     },
     "$defs": {

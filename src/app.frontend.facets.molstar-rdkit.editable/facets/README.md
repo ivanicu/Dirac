@@ -1,53 +1,29 @@
-# Dirac facets
+# Scientific facets
 
-Dirac is ONE app. Its capabilities are organized as **facets** — pluggable
-panels that share the same mol\* scene, the same RDKit-JS session, and the
-same focused ligand. Each facet owns a sub-directory here and registers itself
-with the app shell via a master-tab.
+Facets are browser modules over Dirac's shared scientific context, RDKit session and
+single mol\* scene. They do not own routing, a second context store or private backend
+APIs.
 
-## Layout
+Current facet directories:
 
-```
-src/app.frontend.facets.molstar-rdkit.editable/
-├── index.html                  # app shell, all master-tabs
-├── index.ts                    # router, mounts every facet
-├── facets/
-│   ├── README.md               # this file
-│   ├── pharmacophore-designer/ # NEW: drag-editable features + screening
-│   ├── conformer-explorer/     # NEW: ETKDG conformers + morph + landscape
-│   ├── property-cockpit/       # NEW: Lipinski/Veber descriptor dashboard
-│   └── (lab facet lives in the parent index.ts as the existing baseline)
-├── assets/
-│   ├── rdkit/                  # SHARED RDKit-JS WASM, do not duplicate
-│   └── structures/             # molecular fixtures
-└── README.md
-```
+| Directory | Capability |
+|---|---|
+| `bond-atlas/` | shared ligand bond information |
+| `field-wells/` | field computation and 3D artifact overlays |
+| `halogen-audit/` | geometry/QM evidence boundary for halogen interactions |
+| `ligand-physics/` | surface MEP and torsion Jobs |
+| `pharmacophore-designer/` | editable pharmacophore model and screening |
+| `property-cockpit/` | RDKit descriptor and rule summaries |
 
-## Owner rules (per AGENTS.md)
+The AppShell registry in `src/app/shell/registries.ts` assigns these capabilities to
+Views through Module definitions. A facet directory existing on disk does not by itself
+make a View connected; the registry's `implemented` and `delivery` state is the product
+truth.
 
-| Directory | Owner | Edits by others |
-|---|---|---|
-| `facets/pharmacophore-designer/` | Pharmacophore agent | Read-only |
-| `facets/conformer-explorer/` | Conformer agent | Read-only |
-| `facets/property-cockpit/` | Property agent | Read-only |
-| `assets/rdkit/` | Nobody (vendored, do not modify) | — |
-| `assets/structures/` | Lab agent (existing) | Coord via issue |
-| `index.html`, `index.ts` (shell) | Lead agent | Coord via issue |
+Shared chemistry lives in
+`src/chemistry.backend.perception.rdkit-wasm.editable/`. Facets consume that substrate
+and the semantic application client; they must not duplicate the RDKit WASM, atom-index
+mapping, Command schemas or Job state.
 
-## Facet registration contract (TBD)
-
-Each facet module should export a function with a stable signature that the
-shell calls to register it. Exact shape to be defined when the first new facet
-ships; the existing lab facet is currently inlined in `../index.ts` and will
-be refactored when the second facet arrives.
-
-## Shared substrate (in src/chemistry.backend.perception.rdkit-wasm.editable/, not here)
-
-Facets DO NOT own chemistry — they consume the shared substrate at
-`src/chemistry.backend.perception.rdkit-wasm.editable/`:
-
-- `semantic-chemistry-rdkit.ts` — RDKit singleton, molfile builder, SMARTS
-- `ligand-depiction.ts` — 2D SVG with click sync
-- `pharmacophore-features.ts` — 3D pharmacophore primitives
-
-Changes to substrate files require a `[coord]` GitHub issue first.
+See [`../README.md`](../README.md) for browser-application boundaries and the root
+[`STATUS.md`](../../../STATUS.md) for current connected capability.

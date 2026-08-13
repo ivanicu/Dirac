@@ -190,6 +190,15 @@ class DiracClient:
             **({'budget_seconds': budget_seconds}
                if budget_seconds is not None else {})})
 
+    def motif_plan(self, specification: dict) -> dict:
+        return self.execute('motif.plan', specification)
+
+    def motif_validate(self, schema: str, document: dict) -> dict:
+        return self.execute('motif.validate', {'schema': schema, 'document': document})
+
+    def motif_explain(self, plan: dict) -> dict:
+        return self.execute('motif.explain', {'plan': plan})
+
     def methods(self) -> list[dict]:
         return self.transport.list_methods()
 

@@ -1,5 +1,8 @@
 # Frontend state audit — is `ligand-store.ts` in use?
 
+> Historical verification snapshot from 2026-08-11. This predates the current
+> AppShell and Program workspace. See `../../../STATUS.md` for current capability.
+
 Audited: 2026-08-11, 11:45–12:15 PDT, starting against HEAD `f9dabd6`, last re-verified
 against HEAD `6a04662`. **This repo is being edited live by other sessions while this audit
 was written — three times, materially, inside the audit window itself (see the callouts in

@@ -79,6 +79,20 @@ def _params(a: argparse.Namespace) -> dict:
     return out
 
 
+def _json_document(path: str) -> dict:
+    try:
+        if path == '-':
+            value = json.load(sys.stdin)
+        else:
+            with open(path, encoding='utf-8') as handle:
+                value = json.load(handle)
+    except (OSError, json.JSONDecodeError) as error:
+        raise SystemExit2(f'cannot read JSON document {path!r}: {error}') from error
+    if not isinstance(value, dict):
+        raise SystemExit2(f'{path!r} must contain one JSON object')
+    return value
+
+
 # ── commands ──────────────────────────────────────────────────────────────────
 def _emit_command(env: dict, json_mode: bool) -> int:
     if json_mode:
@@ -309,6 +323,18 @@ def cmd_artifact_verify(a: argparse.Namespace) -> int:
     return EXIT_OK if got == want else EXIT_REFUSED
 
 
+def cmd_motif(a: argparse.Namespace) -> int:
+    client = _client(a)
+    document = _json_document(a.input)
+    if a.motif_action == 'plan':
+        envelope = client.motif_plan(document)
+    elif a.motif_action == 'validate':
+        envelope = client.motif_validate(a.schema, document)
+    else:
+        envelope = client.motif_explain(document)
+    return _emit_command(envelope, a.json)
+
+
 # ── argument surface ──────────────────────────────────────────────────────────
 def _global_flags() -> argparse.ArgumentParser:
     """The flags every subcommand accepts, as a REUSED PARENT rather than a copy.
@@ -359,6 +385,23 @@ def build_parser() -> argparse.ArgumentParser:
     job.add_argument('job_id')
     job.add_argument('--wait-timeout', type=float, default=300)
     job.set_defaults(fn=cmd_job)
+
+    motif = sub.add_parser('motif', parents=[G],
+                           help='plan, validate and explain governed scientific actions')
+    msub = motif.add_subparsers(dest='motif_action', required=True)
+    mp = msub.add_parser('plan', parents=[G],
+                         help='rank scientific actions by EVSI minus explicit cost')
+    mp.add_argument('input', help='planner JSON, or - for stdin')
+    mp.set_defaults(fn=cmd_motif)
+    mv = msub.add_parser('validate', parents=[G],
+                         help='validate a Motif scientific document')
+    mv.add_argument('schema', help='machine contract name, e.g. evidence-item')
+    mv.add_argument('input', help='document JSON, or - for stdin')
+    mv.set_defaults(fn=cmd_motif)
+    me = msub.add_parser('explain', parents=[G],
+                         help='explain a planner result without rerunning science')
+    me.add_argument('input', help='planner-result JSON, or - for stdin')
+    me.set_defaults(fn=cmd_motif)
 
     molecule = sub.add_parser('molecule', parents=[G], help='molecule commands')
     molecule.add_argument('molecule_action', choices=('describe',))

@@ -228,10 +228,11 @@ def test_it_imports_nothing_heavy():
         f'depend on a database driver or a chemistry toolkit to compute a digest')
 
 
-for name, fn in list(globals().items()):
-    if name.startswith('test_') and callable(fn):
-        check(name, fn)
+if __name__ == '__main__':
+    for name, fn in list(globals().items()):
+        if name.startswith('test_') and callable(fn):
+            check(name, fn)
 
-print('─' * 100)
-print(f'{len(PASS)} passed · {len(FAIL)} failed')
-sys.exit(1 if FAIL else 0)
+    print('─' * 100)
+    print(f'{len(PASS)} passed · {len(FAIL)} failed')
+    sys.exit(1 if FAIL else 0)

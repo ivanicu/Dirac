@@ -311,3 +311,7 @@ class MemoryArtifactStore:
 
     def head(self, address: str) -> Artifact:
         return self._resolve(address)
+
+    def verify(self, address: str) -> Artifact:
+        artifact, _ = self.read(address)
+        return artifact

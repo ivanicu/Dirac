@@ -138,6 +138,7 @@ class MotifGovernanceTests(unittest.TestCase):
                     "dataset_snapshot_ref": result["data"]["dataset_snapshot"]["ref"],
                     "model_object_id": "motif-test-baseline", "release_name": "candidate-1",
                     "source_commit": "a" * 40,
+                    "scientific_lifecycle": "technical_smoke",
                     "intended_use": {"fixture": True},
                     "prohibited_use": {"clinical": True},
                     "known_limitations": {"fixture": True},

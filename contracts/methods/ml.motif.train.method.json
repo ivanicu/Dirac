@@ -25,7 +25,7 @@
       }},
       "registration": {
         "type": "object", "additionalProperties": false,
-        "required": ["dataset_snapshot_ref", "model_object_id", "release_name", "source_commit", "intended_use", "prohibited_use", "known_limitations"],
+        "required": ["dataset_snapshot_ref", "model_object_id", "release_name", "source_commit", "scientific_lifecycle", "intended_use", "prohibited_use", "known_limitations"],
         "properties": {
           "dataset_snapshot_ref": {
             "type": "object", "additionalProperties": false, "required": ["kind", "id"],
@@ -34,6 +34,7 @@
           "model_object_id": {"type": "string", "minLength": 1, "maxLength": 256},
           "release_name": {"type": "string", "minLength": 1, "maxLength": 256},
           "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+          "scientific_lifecycle": {"enum": ["technical_smoke", "candidate_unvalidated"]},
           "intended_use": {"type": "object"},
           "prohibited_use": {"type": "object"},
           "known_limitations": {"type": "object"}
@@ -59,7 +60,7 @@
                   "required": ["kind", "id"],
                   "properties": {"kind": {"const": "model"}, "id": {"type": "string", "minLength": 1}}},
           "model_release_id": {"type": "string", "format": "uuid"},
-          "lifecycle": {"const": "candidate"}, "created": {"type": "boolean"}
+          "lifecycle": {"enum": ["technical_smoke", "candidate_unvalidated"]}, "created": {"type": "boolean"}
         }
       }
     }

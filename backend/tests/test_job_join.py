@@ -40,6 +40,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import field_server as fs                                            # noqa: E402
 import jobs                                                          # noqa: E402
 
+if 'pytest' in sys.modules and not os.environ.get('DIRAC_TEST_DSN'):
+    import pytest
+    pytest.skip('requires isolated PostgreSQL DIRAC_TEST_DSN', allow_module_level=True)
+
 PASS, FAIL = [], []
 
 
@@ -225,10 +229,11 @@ def test_two_identical_requests_produce_one_computation():
         f'happened but the result did not travel, which is a wait for nothing')
 
 
-for name, fn in list(globals().items()):
-    if name.startswith('test_') and callable(fn):
-        check(name, fn)
+if __name__ == '__main__':
+    for name, fn in list(globals().items()):
+        if name.startswith('test_') and callable(fn):
+            check(name, fn)
 
-print('─' * 100)
-print(f'{len(PASS)} passed · {len(FAIL)} failed')
-sys.exit(1 if FAIL else 0)
+    print('─' * 100)
+    print(f'{len(PASS)} passed · {len(FAIL)} failed')
+    sys.exit(1 if FAIL else 0)

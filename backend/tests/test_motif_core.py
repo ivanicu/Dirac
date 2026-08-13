@@ -151,6 +151,7 @@ class MotifCoreTests(unittest.TestCase):
                 "model_object_id": "mesh-test",
                 "release_name": "mesh-test-v1",
                 "source_commit": "0" * 40,
+                "scientific_lifecycle": "technical_smoke",
                 "intended_use": {}, "prohibited_use": {}, "known_limitations": {},
             },
         }

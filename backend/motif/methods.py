@@ -11,7 +11,8 @@ from invocation import HandlerResult, InvocationContext
 from motif.acquisition import rank_portfolio
 from motif.datasets import create_snapshot
 from motif.models import calibrate, predict, train_baselines
-from motif.proposals import generator_metrics, local_edits, reaction_enumerate
+from motif.proposals import (apply_proposal_quotas, generator_metrics, local_edits,
+                             reaction_enumerate)
 
 
 def _runtime_manifest(ctx: InvocationContext) -> dict:
@@ -196,11 +197,15 @@ def proposal_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
                                            **common)
         else:
             raise failures.DiracInternal(f"unexpected proposal Method {ctx.method_id}")
+        quota = payload.get("quotas", {})
+        proposals, quota_report = apply_proposal_quotas(
+            proposals, max_per_parent=int(quota.get("max_per_parent", 10000)),
+            max_per_template=int(quota.get("max_per_template", 10000)))
     except ValueError as exc:
         raise failures.DiracInvalidParameters(str(exc)) from exc
     metrics = generator_metrics(proposals)
     artifact = json.dumps(proposals, sort_keys=True, separators=(",", ":")).encode()
-    trace = json.dumps({"metrics": metrics}, sort_keys=True).encode()
+    trace = json.dumps({"metrics": metrics, "quotas": quota_report}, sort_keys=True).encode()
     return HandlerResult(
         result={"proposal_count": len(proposals), "generator_metrics": metrics},
         artifacts=[("design.proposals", artifact), ("design.generator_report", trace)],

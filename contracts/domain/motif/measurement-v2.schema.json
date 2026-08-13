@@ -7,7 +7,8 @@
   "additionalProperties": false,
   "required": [
     "schema_version", "measurement_id", "sample", "assay", "protocol",
-    "endpoint", "qualifier", "quantity", "qc", "source", "measured_at"
+    "endpoint", "qualifier", "quantity", "qc", "source", "measured_at",
+    "representation_policy"
   ],
   "properties": {
     "schema_version": {"const": "2.0"},
@@ -49,6 +50,18 @@
     "measured_at": {"type": "string", "format": "date-time"},
     "recorded_at": {"type": "string", "format": "date-time"},
     "recorded_by": {"$ref": "#/$defs/actor"}
+    ,"representation_policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["measurement_subject", "model_representation", "aggregation", "state_uncertainty_handling", "claim_scope", "assignment_source"],
+      "properties": {
+        "measurement_subject": {"enum": ["chemical_entity", "sample"]},
+        "model_representation": {"enum": ["parent_entity", "dominant_assumed_microstate", "population_weighted_microstates", "latent_microstate_marginalization"]},
+        "aggregation": {"enum": ["none", "population_weighted", "posterior_marginalization"]},
+        "state_uncertainty_handling": {"enum": ["explicit_feature", "marginalized", "refuse_state_specific_claim"]},
+        "claim_scope": {"enum": ["parent_entity_only", "state_specific"]},
+        "assignment_source": {"enum": ["submitted", "governance_default_v3"]}
+      }
+    }
   },
   "allOf": [
     {

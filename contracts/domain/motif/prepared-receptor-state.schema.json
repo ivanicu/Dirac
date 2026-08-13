@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/prepared-receptor-state.schema.json",
+  "title": "Motif Prepared Receptor State",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_ref", "biological_assembly", "construct", "sequence_mapping_ref", "chains", "altloc_policy", "missing_structure_policy", "termini", "disulfides", "histidine_states", "residue_protonation", "cofactors", "metals", "waters", "environment", "preparation_release_ref", "binding_site_hypothesis_refs", "quality_assessment_ref", "artifact_ref", "digest"],
+  "properties": {
+    "schema_version": {"const": "3.0"}, "source_ref": {"$ref": "#/$defs/ref"},
+    "biological_assembly": {"type": "string"}, "construct": {"type": "object"},
+    "sequence_mapping_ref": {"$ref": "#/$defs/ref"}, "chains": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "altloc_policy": {"type": "object"}, "missing_structure_policy": {"type": "object"},
+    "termini": {"type": "object"}, "disulfides": {"type": "array", "items": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "string"}}},
+    "histidine_states": {"type": "object", "additionalProperties": {"enum": ["HID", "HIE", "HIP"]}},
+    "residue_protonation": {"type": "object"}, "cofactors": {"type": "array", "items": {"type": "object"}},
+    "metals": {"type": "array", "items": {"type": "object"}}, "waters": {"type": "object"},
+    "environment": {"type": "object"}, "preparation_release_ref": {"$ref": "#/$defs/ref"},
+    "binding_site_hypothesis_refs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/ref"}},
+    "quality_assessment_ref": {"$ref": "#/$defs/ref"}, "artifact_ref": {"$ref": "#/$defs/ref"},
+    "digest": {"type": "string", "format": "sha256-digest"}
+  },
+  "$defs": {"ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"type": "string"}, "id": {"type": "string", "minLength": 1}}}}
+}

@@ -94,6 +94,7 @@ def acquire_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
         release = botorch_qehvi(
             payload["train_features"], payload["train_objectives"],
             [row["features"] for row in payload["candidates"]],
+            posterior_contract=payload["posterior_contract"],
             reference_point=payload["reference_point"],
             mc_samples=payload.get("mc_samples", 128), seed=payload.get("seed", 0))
         voi = information_value(

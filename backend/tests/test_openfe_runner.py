@@ -10,7 +10,7 @@ from unittest import mock
 import failures
 from invocation import InvocationContext
 from motif.openfe_runner import (
-    _configure_analysis_environment, _digest, _gufe_component_types,
+    _configure_analysis_environment, _digest, _extract_gufe_native_objects, _gufe_component_types,
     _prepare_runtime_environment, _quantity,
     execute_openfe_edge)
 
@@ -41,6 +41,13 @@ class OpenFERunnerTests(unittest.TestCase):
         self.assertEqual(_gufe_component_types(graph),
                          {"ProteinComponent", "ChemicalSystem"})
 
+    def test_native_openfe_objects_are_inventory_artifacts(self):
+        graph = [{"__qualname__": "LigandNetwork", ":gufe-key:": "ln-1",
+                  "nested": {"__qualname__": "Transformation", ":gufe-key:": "t-1"}}]
+        objects = _extract_gufe_native_objects(graph)
+        self.assertEqual([row["kind"] for row in objects], ["LigandNetwork", "Transformation"])
+        self.assertTrue(all(row["digest"].startswith("sha256:") for row in objects))
+
     def test_quantity_decoder_handles_gufe_shapes(self):
         self.assertEqual(_quantity({"magnitude": -1.25, "unit": "kilocalorie_per_mole"}),
                          (-1.25, "kilocalorie_per_mole"))
@@ -60,6 +67,8 @@ class OpenFERunnerTests(unittest.TestCase):
         with self.assertRaises(failures.DiracInvalidParameters):
             execute_openfe_edge({
                 "edge_id": "edge-1", "leg": "solvent", "transformation": {"x": 1},
+                "ligand_charge_digest": "sha256:" + "1" * 64,
+                "charge_invariant": {"edge_id": "edge-1", "digest": "sha256:" + "1" * 64},
                 "transformation_digest": "sha256:" + "0" * 64,
             }, InvocationContext(method_id="physics.motif.openfe_edge"))
 
@@ -67,6 +76,8 @@ class OpenFERunnerTests(unittest.TestCase):
         with self.assertRaises(failures.DiracInvalidParameters):
             execute_openfe_edge({
                 "edge_id": "edge-1", "leg": "complex", "transformation": {"x": 1},
+                "ligand_charge_digest": "sha256:" + "1" * 64,
+                "charge_invariant": {"edge_id": "edge-1", "digest": "sha256:" + "1" * 64},
             }, InvocationContext(method_id="physics.motif.openfe_edge"))
 
     def test_pinned_quickrun_result_becomes_typed_artifacts(self):
@@ -92,6 +103,8 @@ class OpenFERunnerTests(unittest.TestCase):
                     "target_ref": {"kind": "target",
                                    "id": "00000000-0000-4000-8000-000000000001"},
                     "thermodynamic_cycle_id": "00000000-0000-4000-8000-000000000002",
+                    "ligand_charge_digest": "sha256:" + "1" * 64,
+                    "charge_invariant": {"edge_id": "edge-1", "digest": "sha256:" + "1" * 64},
                     "transformation": {
                         "protocol": "fixture",
                         "component": {"__qualname__": "SolventComponent"}},
@@ -104,7 +117,8 @@ class OpenFERunnerTests(unittest.TestCase):
             self.assertEqual(output.result["thermodynamic_cycle_id"],
                              "00000000-0000-4000-8000-000000000002")
             self.assertEqual([role for role, _ in output.artifacts], [
-                "rbfe.openfe.result", "rbfe.openfe.run_report", "rbfe.openfe.log"])
+                "rbfe.openfe.result", "rbfe.openfe.run_report",
+                "rbfe.openfe.native_objects", "rbfe.openfe.log"])
             report = json.loads(output.artifacts[1][1])
             self.assertTrue(output.provenance["physical_execution"])
             self.assertIn("not a validated RBFE claim", report["claim_boundary"])
@@ -124,6 +138,8 @@ class OpenFERunnerTests(unittest.TestCase):
                 "target_ref": target,
                 "protein_structure_ref": {"kind": "protein_structure", "id": "pdb-1"},
                 "thermodynamic_cycle_id": cycle,
+                "ligand_charge_digest": "sha256:" + "1" * 64,
+                "charge_invariant": {"edge_id": "edge-1", "digest": "sha256:" + "1" * 64},
                 "transformation": {"__qualname__": "SolventComponent"},
             }, context)
         with self.assertRaisesRegex(failures.DiracInvalidParameters,
@@ -131,6 +147,8 @@ class OpenFERunnerTests(unittest.TestCase):
             execute_openfe_edge({
                 "edge_id": "edge-1", "leg": "solvent",
                 "target_ref": target, "thermodynamic_cycle_id": cycle,
+                "ligand_charge_digest": "sha256:" + "1" * 64,
+                "charge_invariant": {"edge_id": "edge-1", "digest": "sha256:" + "1" * 64},
                 "transformation": {"__qualname__": "ProteinComponent"},
             }, context)
 

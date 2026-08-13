@@ -135,6 +135,10 @@ class PostgresArtifactStore:
         '  FROM app.artifact a '
         '  LEFT JOIN meta.method m ON m.id = a.created_by_method ')
 
+    def verify(self, address: str) -> A.Artifact:
+        artifact, _ = self.read(address)
+        return artifact
+
     def _row_to_artifact(self, row) -> A.Artifact:
         return A.Artifact(sha256=row[1], role=row[2], media_type=row[3],
                           size_bytes=row[4], encoding=row[5], id=str(row[0]),

@@ -27,6 +27,8 @@ from __future__ import annotations
 import contextlib
 import os
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 from typing import Any
 
@@ -93,8 +95,34 @@ def default_executor():
             StaticPvcMount('dirac-exchange', 'dirac-motif-exchange',
                            str(worker_exchange), False),
         ])
+    from motif.resource_broker import PostgresResourceBroker
+    from execution_control.attempt_store import PostgresAttemptStore
+    import psycopg
+    pages = os.sysconf("SC_AVPHYS_PAGES")
+    page_size = os.sysconf("SC_PAGE_SIZE")
+    available_ram = int(pages * page_size)
+    gpu_vram = 0
+    try:
+        probe = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+            check=True, capture_output=True, text=True, timeout=5)
+        gpu_vram = int(probe.stdout.splitlines()[0].strip()) * (1 << 20)
+    except (OSError, ValueError, subprocess.SubprocessError, IndexError):
+        pass
+    broker = PostgresResourceBroker(
+        lambda: psycopg.connect(DEFAULT_DSN), {
+            "cpu_cores": max(1, (os.cpu_count() or 1) - 4),
+            "ram_bytes": int(available_ram * .85),
+            "gpus": 1 if gpu_vram else 0,
+            "gpu_vram_bytes": int(gpu_vram * .875),
+            "scratch_bytes": max(0, shutil.disk_usage(exchange).free - (100 << 30)),
+            "persistent_growth_bytes": max(0, shutil.disk_usage(exchange).free - (100 << 30)),
+            "process_slots": 20, "scf_slots": 2, "campaign_credits": 1e12,
+        })
+    attempt_store = PostgresAttemptStore(lambda: psycopg.connect(DEFAULT_DSN))
     return KubernetesInvocationExecutor(
-        adapter=adapter, exchange_root=exchange, container_image=worker_image)
+        adapter=adapter, exchange_root=exchange, container_image=worker_image,
+        resource_broker=broker, attempt_store=attempt_store)
 
 
 def toolkit_versions() -> dict[str, str]:
@@ -334,6 +362,7 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
     ex = executor or default_executor()
     svc = invocation.InvocationService(cat, store=st, cache=ca, ledger=js, executor=ex,
                                       trace_store=trace,
+                                      attempt_store=getattr(ex, 'attempt_store', None),
                                       motif_governance=governance,
                                       program_repository=programs,
                                       toolkit_versions=toolkit_versions())

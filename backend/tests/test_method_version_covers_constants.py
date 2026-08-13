@@ -118,10 +118,11 @@ def test_every_declared_constant_exists_today():
                 f'{module.__name__} today')
 
 
-for name, fn in list(globals().items()):
-    if name.startswith('test_'):
-        check(name, fn)
+if __name__ == '__main__':
+    for name, fn in list(globals().items()):
+        if name.startswith('test_'):
+            check(name, fn)
 
-print('─' * 100)
-print(f'{len(PASS)} passed · {len(FAIL)} failed')
-sys.exit(1 if FAIL else 0)
+    print('─' * 100)
+    print(f'{len(PASS)} passed · {len(FAIL)} failed')
+    sys.exit(1 if FAIL else 0)
