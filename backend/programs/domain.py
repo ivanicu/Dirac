@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 import re
 from datetime import date, datetime
 from typing import Any
@@ -52,6 +53,29 @@ REFERENCE_JOB_KINDS = frozenset({
     "dataset_version", "experiment", "structure_observation", "annotation",
     "review", "analysis_snapshot", "evidence_release", "external_evidence",
 })
+REFERENCE_JOB_FIELDS = {
+    "target_disease": frozenset({"disease_key", "name", "description", "ontology", "target_ref", "role", "rationale"}),
+    "substance_registration": frozenset({"compound_ref", "status", "definition", "validation", "decision"}),
+    "sample": frozenset({"sample_code", "batch_ref", "parent_sample_ref", "amount_value", "amount_unit", "container", "location"}),
+    "sample_transfer": frozenset({"sample_ref", "to_location", "reason"}),
+    "work_comment": frozenset({"work_item_ref", "body"}),
+    "work_attachment": frozenset({"work_item_ref", "artifact_ref", "role"}),
+    "gate_criterion": frozenset({"stage_gate_ref", "criterion_key", "status", "evidence_ref", "explanation"}),
+    "protocol_version": frozenset({"protocol_key", "title", "assay_ref", "specification"}),
+    "dataset_version": frozenset({"dataset_key", "manifest_artifact_ref", "manifest", "schema_version", "access_scope",
+                                  "experiment_ref", "parent_refs", "producer_job_ref", "derivation"}),
+    "experiment": frozenset({"experiment_key", "work_item_ref", "protocol_version_ref", "title", "status",
+                             "started_at", "completed_at", "samples"}),
+    "structure_observation": frozenset({"observation_key", "structure_ref", "compound_ref", "experiment_ref",
+                                        "dataset_version_ref", "canonical_site"}),
+    "annotation": frozenset({"subject_ref", "annotation_kind", "label", "value"}),
+    "review": frozenset({"subject_ref", "review_role", "status", "comment"}),
+    "analysis_snapshot": frozenset({"work_item_ref", "title", "snapshot_mode", "release_channel",
+                                    "dataset_version_refs", "state"}),
+    "evidence_release": frozenset({"source_name", "release_name", "source_url", "retrieved_at", "payload_artifact_ref"}),
+    "external_evidence": frozenset({"release_ref", "source_record_id", "target_ref", "disease_ref", "data_type",
+                                    "evidence_source", "score", "is_direct", "payload"}),
+}
 
 _LIFECYCLE_TRANSITIONS = {
     "draft": {"draft", "active", "archived"},
@@ -306,11 +330,17 @@ def reference_job(kind: str, value: dict[str, Any]) -> dict[str, Any]:
     """Validate one native reference-system job without weakening its semantics."""
     if kind not in REFERENCE_JOB_KINDS or not isinstance(value, dict):
         raise failures.DiracInvalidParameters("unknown or invalid reference job")
+    unknown = set(value) - REFERENCE_JOB_FIELDS[kind]
+    if unknown:
+        raise failures.DiracInvalidParameters(
+            "reference job contains unsupported fields", details={"fields": sorted(unknown)})
     if kind == "target_disease":
         ontology = value.get("ontology")
         if ontology is not None and (not isinstance(ontology, dict)
                                      or not ontology.get("namespace") or not ontology.get("id")):
             raise failures.DiracInvalidParameters("disease ontology requires namespace and id")
+        if ontology is not None and set(ontology) - {"namespace", "id"}:
+            raise failures.DiracInvalidParameters("disease ontology contains unsupported fields")
         role = value.get("role", "primary")
         if role not in {"primary", "secondary", "safety", "biomarker", "exploratory"}:
             raise failures.DiracInvalidParameters("unknown target-disease role")
@@ -389,13 +419,26 @@ def reference_job(kind: str, value: dict[str, Any]) -> dict[str, Any]:
             {"planned", "running", "completed", "failed", "cancelled"}, "experiment.status")
         started = _iso_datetime(value.get("started_at"), "started_at")
         completed = _iso_datetime(value.get("completed_at"), "completed_at")
-        if status in {"completed", "failed", "cancelled"} and completed is None:
-            raise failures.DiracInvalidParameters("terminal experiment requires completed_at")
+        if status == "planned" and (started is not None or completed is not None):
+            raise failures.DiracInvalidParameters("planned experiment cannot have execution timestamps")
+        if status == "running" and started is None:
+            raise failures.DiracInvalidParameters("running experiment requires started_at")
+        if status == "running" and completed is not None:
+            raise failures.DiracInvalidParameters("running experiment cannot have completed_at")
+        if status in {"completed", "failed", "cancelled"} and (started is None or completed is None):
+            raise failures.DiracInvalidParameters("terminal experiment requires started_at and completed_at")
+        if started is not None and completed is not None:
+            started_value = datetime.fromisoformat(started)
+            completed_value = datetime.fromisoformat(completed)
+            if completed_value < started_value:
+                raise failures.DiracInvalidParameters("experiment completed_at cannot precede started_at")
         samples = _array(value.get("samples", []), "samples")
         normalized_samples = []
         for item in samples:
             if not isinstance(item, dict):
                 raise failures.DiracInvalidParameters("experiment samples must be objects")
+            if set(item) - {"sample_ref", "role"}:
+                raise failures.DiracInvalidParameters("experiment sample contains unsupported fields")
             normalized_samples.append({"sample_ref": ref(item.get("sample_ref"), "sample"),
                 "role": _choice(item.get("role", "test"), {"test", "control", "reference", "matrix", "reagent"}, "sample.role")})
         return {"experiment_key": key(value.get("experiment_key"), "experiment_key"),
@@ -441,13 +484,17 @@ def reference_job(kind: str, value: dict[str, Any]) -> dict[str, Any]:
                 "payload_artifact_ref": ref(value.get("payload_artifact_ref"), "artifact")}
     release = ref(value.get("release_ref"), "external_evidence_release")
     score = value.get("score")
-    if score is not None and (not isinstance(score, (int, float)) or isinstance(score, bool) or not 0 <= score <= 1):
+    if score is not None and (not isinstance(score, (int, float)) or isinstance(score, bool)
+                              or not math.isfinite(float(score)) or not 0 <= score <= 1):
         raise failures.DiracInvalidParameters("evidence score must be between 0 and 1")
+    is_direct = value.get("is_direct", True)
+    if not isinstance(is_direct, bool):
+        raise failures.DiracInvalidParameters("is_direct must be boolean")
     return {"release_ref": release, "source_record_id": nonempty(value.get("source_record_id"), "source_record_id", maximum=512),
             "target_ref": ref(value.get("target_ref"), "target"), "disease_ref": ref(value.get("disease_ref"), "disease"),
             "data_type": key(value.get("data_type"), "data_type"),
             "evidence_source": key(value.get("evidence_source"), "evidence_source"),
-            "score": float(score) if score is not None else None, "is_direct": bool(value.get("is_direct", True)),
+            "score": float(score) if score is not None else None, "is_direct": is_direct,
             "payload": _object(value.get("payload"), "payload")}
 
 
@@ -574,7 +621,10 @@ def _iso_datetime(value: Any, field: str, *, required: bool = False) -> str | No
             raise failures.DiracInvalidParameters(f"{field} is required")
         return None
     try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).isoformat()
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            raise ValueError("timezone offset is required")
+        return parsed.isoformat()
     except ValueError as exc:
         raise failures.DiracInvalidParameters(f"{field} must be an ISO-8601 timestamp") from exc
 
@@ -582,6 +632,11 @@ def _iso_datetime(value: Any, field: str, *, required: bool = False) -> str | No
 def _object(value: Any, field: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise failures.DiracInvalidParameters(f"{field} must be an object")
+    try:
+        json.dumps(value, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise failures.DiracInvalidParameters(
+            f"{field} must contain finite JSON values") from exc
     return copy.deepcopy(value)
 
 
@@ -601,7 +656,7 @@ def _positive_number(value: Any, field: str, *, allow_zero: bool = False) -> flo
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         raise failures.DiracInvalidParameters(f"{field} must be numeric")
     number = float(value)
-    if number < 0 or (number == 0 and not allow_zero):
+    if not math.isfinite(number) or number < 0 or (number == 0 and not allow_zero):
         raise failures.DiracInvalidParameters(f"{field} must be positive")
     return number
 

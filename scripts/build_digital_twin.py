@@ -607,7 +607,7 @@ def add_system_and_flows(twin: Twin) -> None:
 def runtime_snapshot(twin: Twin) -> dict:
     snapshot: dict[str, Any] = {'captured_at': dt.datetime.now(dt.timezone.utc).isoformat(),
                                 'source': 'best-effort live probes',
-                                'refresh_policy_seconds': 60,
+                                'refresh_trigger': 'source-change-or-manual',
                                 'freshness_state': 'fresh-at-generation'}
     ok, sha = run(['git', 'rev-parse', 'HEAD'])
     snapshot['git_commit'] = sha if ok else None
@@ -917,10 +917,10 @@ def architecture_analysis(twin: Twin, ts_data: dict, runtime: dict) -> dict:
                 'runtime_metrics_available': runtime_sync,
             },
             'is_continuously_synchronized': source_sync,
-            'synchronization': ('recursive source events plus periodic runtime refresh; source and telemetry '
-                                'freshness are reported separately'),
+            'synchronization': ('recursive source events with runtime captured at each rebuild; source and '
+                                'telemetry freshness are reported separately'),
             'source_sync': 'continuous while dirac-digital-twin.service is active',
-            'runtime_sync': 'periodic snapshot every 60 seconds while the watcher is active',
+            'runtime_sync': 'snapshot on every source-triggered or manual twin rebuild',
             'can_do': ['explain architecture', 'detect declared/observed drift', 'rank static hotspots',
                        'simulate dependency-radius change impact', 'preserve function-level traceability',
                        'calibrate command latency and outcomes from observed traffic'],

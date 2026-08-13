@@ -157,8 +157,8 @@ def errors(document: dict, html: str) -> list[str]:
         findings.append(f'module import cycle exceeds zero-cycle ratchet: {cycles[0]}')
     metrics = document.get('runtime_snapshot', {}).get('operational_metrics', {})
     runtime = document.get('runtime_snapshot', {})
-    if runtime.get('refresh_policy_seconds') != 60:
-        findings.append('runtime refresh policy is missing or drifted')
+    if runtime.get('refresh_trigger') != 'source-change-or-manual':
+        findings.append('runtime refresh trigger is missing or drifted')
     if runtime.get('freshness_state') != 'fresh-at-generation':
         findings.append('runtime snapshot does not declare freshness boundary')
     if int(metrics.get('command_traces', 0) or 0) < 1:

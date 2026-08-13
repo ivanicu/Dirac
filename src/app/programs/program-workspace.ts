@@ -6,6 +6,8 @@ type Program = Record<string, any> & { ref: ObjectRef<'program'>; version: numbe
 type Field = { name: string; label: string; value?: string; required?: boolean;
     multiline?: boolean; options?: readonly string[]; placeholder?: string };
 
+class ProgramPrerequisiteError extends Error {}
+
 const text = (tag: keyof HTMLElementTagNameMap, value: string, className = '') => {
     const node = document.createElement(tag);
     node.textContent = value; if (className) node.className = className;
@@ -37,7 +39,8 @@ export class ProgramWorkspaceController {
             const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-program-action]');
             if (!button || !document.querySelector('.program-workspace')) return;
             void this.action(button.dataset.programAction || '').catch(error => this.status(
-                error instanceof Error ? error.message : String(error), 'error'));
+                error instanceof Error ? error.message : String(error),
+                error instanceof ProgramPrerequisiteError ? 'needs-context' : 'error'));
         });
         document.addEventListener('change', event => {
             const workItem = (event.target as Element | null)?.closest<HTMLSelectElement>('#context-work-item');
@@ -508,11 +511,13 @@ export class ProgramWorkspaceController {
         const refs = (kind: string) => references.filter(item => item.job_kind === kind)
             .map(item => String(item.ref?.id || '')).filter(Boolean);
         const requiredOptions = (values: string[], what: string) => {
-            if (!values.length) throw new Error(`Record ${what} first; this operation will not invent a source object.`);
+            if (!values.length) throw new ProgramPrerequisiteError(
+                `Record ${what} first; this operation will not invent a source object.`);
             return values;
         };
         if (action === 'target-disease') {
-            if (!program.target_ref) throw new Error('Assign the Program target before linking a disease.');
+            if (!program.target_ref) throw new ProgramPrerequisiteError(
+                'Assign the Program target before linking a disease.');
             return this.form('Link Target–Disease Scope', [
                 { name: 'disease_key', label: 'Stable disease key', required: true },
                 { name: 'name', label: 'Disease name', required: true },
@@ -673,7 +678,8 @@ export class ProgramWorkspaceController {
             source_url: values.source_url || undefined, retrieved_at: values.retrieved_at,
             payload_artifact_ref: { kind: 'artifact', id: values.artifact_id } }, 'External evidence release pinned to a verified artifact.'));
         if (action === 'external-evidence') {
-            if (!program.target_ref) throw new Error('Assign the Program target before importing target–disease evidence.');
+            if (!program.target_ref) throw new ProgramPrerequisiteError(
+                'Assign the Program target before importing target–disease evidence.');
             return this.form('Record Explainable External Evidence', [
                 { name: 'release_id', label: 'Evidence release', required: true, options: requiredOptions(refs('evidence_release'), 'an evidence release') },
                 { name: 'disease_id', label: 'Program disease', required: true, options: requiredOptions(refs('target_disease'), 'a target–disease link') },
@@ -774,10 +780,11 @@ export class ProgramWorkspaceController {
         if (global) global.textContent = state === 'ready'
             ? `Connected · Program v${this.current?.version ?? '—'} ready`
             : state === 'error' ? `Connected · Program error · ${message}`
+                : state === 'needs-context' ? 'Connected · Program action needs context'
                 : state === 'empty' ? 'Connected · Program context required'
                     : 'Connected · loading Program data';
         const runtime = state === 'ready' ? 'ready' : state === 'error' ? 'error'
-            : state === 'empty' ? 'needs-context' : 'loading';
+            : state === 'empty' || state === 'needs-context' ? 'needs-context' : 'loading';
         const evidence = state === 'ready' ? 'provenance-backed' : 'none';
         for (const term of document.querySelectorAll<HTMLElement>('.workspace-state-strip dt')) {
             const description = term.parentElement?.querySelector<HTMLElement>('dd');

@@ -73,6 +73,7 @@ class MemoryProgramRepository:
         self.portfolio_by_code: dict[str, str] = {}
         self.events: dict[str, list[dict[str, Any]]] = {}
         self.request_results: dict[tuple[str, str], dict[str, Any]] = {}
+        self.request_digests: dict[tuple[str, str], str] = {}
         self.snapshots: dict[str, dict[str, Any]] = {}
 
     def create(self, value: dict, actor: dict, request_id: str | None = None) -> dict:
@@ -278,9 +279,63 @@ class MemoryProgramRepository:
     def record_reference_job(self, program_ref: dict, expected_version: int, kind: str,
                              value: dict, actor: dict, request_id: str | None = None) -> dict:
         identifier = self._id(program_ref); who = D.actor(actor); item = D.reference_job(kind, value)
+        request_digest = D.digest({"kind": kind, "record": item})
         duplicate = self._duplicate(identifier, request_id)
-        if duplicate is not None: return duplicate
+        if duplicate is not None:
+            previous = self.request_digests.get((identifier, request_id))
+            if previous != request_digest:
+                raise failures.DiracInvalidParameters(
+                    "request_id already identifies a different Program mutation")
+            return duplicate
         row = self.programs[identifier]; self._expect(row, expected_version)
+        owned_refs = {
+            record["ref"]["kind"] + ":" + record["ref"]["id"]
+            for record in row["reference_jobs"] if record.get("ref")
+        }
+        owned_refs.update("work_item:" + entry["ref"]["id"] for entry in row["work_items"])
+
+        def require_owned(object_ref: dict, label: str) -> None:
+            if object_ref["kind"] + ":" + object_ref["id"] not in owned_refs:
+                raise failures.DiracNotFound(f"{label} does not belong to this Program")
+
+        if kind == "sample" and item["parent_sample_ref"]:
+            require_owned(item["parent_sample_ref"], "Parent Sample")
+        elif kind == "sample_transfer":
+            require_owned(item["sample_ref"], "Sample")
+        elif kind in {"work_comment", "work_attachment"}:
+            require_owned(item["work_item_ref"], "Program Work Item")
+        elif kind == "gate_criterion":
+            if not any(entry["ref"] == item["stage_gate_ref"] for entry in row["stage_gates"]):
+                raise failures.DiracNotFound("Stage Gate does not belong to this Program")
+        elif kind == "experiment":
+            require_owned(item["work_item_ref"], "Program Work Item")
+            for sample in item["samples"]:
+                require_owned(sample["sample_ref"], "Sample")
+        elif kind == "dataset_version":
+            if item["experiment_ref"]:
+                require_owned(item["experiment_ref"], "Experiment")
+            for parent in item["parent_refs"]:
+                require_owned(parent, "Parent Dataset Version")
+        elif kind == "structure_observation":
+            require_owned(item["dataset_version_ref"], "Dataset Version")
+            if item["experiment_ref"]:
+                require_owned(item["experiment_ref"], "Experiment")
+        elif kind in {"annotation", "review"} and item["subject_ref"]["kind"] in {
+                "experiment", "dataset_version", "structure_observation", "analysis_snapshot",
+                "annotation", "review", "sample", "work_item"}:
+            require_owned(item["subject_ref"], "Scientific subject")
+        elif kind == "analysis_snapshot":
+            if item["work_item_ref"]:
+                require_owned(item["work_item_ref"], "Program Work Item")
+            for dataset in item["dataset_version_refs"]:
+                require_owned(dataset, "Dataset Version")
+        elif kind == "external_evidence":
+            linked = any(record.get("job_kind") == "target_disease"
+                         and record.get("target_ref") == item["target_ref"]
+                         and record.get("ref") == item["disease_ref"]
+                         for record in row["reference_jobs"])
+            if not linked:
+                raise failures.DiracNotFound("Target-disease pair does not belong to this Program")
         object_kind = {
             "target_disease": "disease", "substance_registration": "substance_registration",
             "sample": "sample", "sample_transfer": "sample", "work_comment": "artifact",
@@ -306,7 +361,10 @@ class MemoryProgramRepository:
             "evidence_release": "external_evidence_release.imported", "external_evidence": "external_evidence.recorded",
         }[kind]
         result = {"record": copy.deepcopy(record), "program_version": row["version"]}
-        return self._record(identifier, event_kind, atom_ref, result, who, request_id)
+        output = self._record(identifier, event_kind, atom_ref, result, who, request_id)
+        if request_id:
+            self.request_digests[(identifier, request_id)] = request_digest
+        return output
 
     def health(self, program_ref: dict) -> dict:
         program = self._overview(self._id(program_ref))
@@ -775,6 +833,7 @@ class PostgresProgramRepository:
     def record_reference_job(self, program_ref: dict, expected_version: int, kind: str,
                              value: dict, actor: dict, request_id: str | None = None) -> dict:
         item = D.reference_job(kind, value); who = D.actor(actor)
+        request_digest = D.digest({"kind": kind, "record": item})
         event_kind = {
             "target_disease": "target_disease.linked", "substance_registration": "substance_registration.recorded",
             "sample": "sample.created", "sample_transfer": "sample.transferred",
@@ -785,7 +844,8 @@ class PostgresProgramRepository:
             "review": "review.recorded", "analysis_snapshot": "analysis_snapshot.created",
             "evidence_release": "external_evidence_release.imported", "external_evidence": "external_evidence.recorded",
         }[kind]
-        with self._mutation(program_ref, expected_version, request_id) as state:
+        with self._mutation(program_ref, expected_version, request_id,
+                            request_digest=request_digest) as state:
             cur, identifier, _program, duplicate = state
             if duplicate is not None: return duplicate
             semantic_duplicate = self._reference_duplicate(cur, identifier, event_kind, kind, item)
@@ -796,7 +856,7 @@ class PostgresProgramRepository:
             version = self._advance(cur, identifier, who)
             result = {"record": D.jsonable(record), "program_version": version}
             return self._finish(cur, identifier, version, event_kind, atom_ref,
-                                result, who, request_id)
+                                result, who, request_id, request_digest=request_digest)
 
     def _reference_duplicate(self, cur, program_id, event_kind, kind, item):
         """Honor declared natural-key idempotency before touching domain tables."""
@@ -839,11 +899,7 @@ class PostgresProgramRepository:
             if not matches:
                 continue
             comparable = {key: record.get(key) for key in item}
-            if kind == "protocol_version":
-                comparable = {key: comparable[key] for key in item if key != "title"}
-                expected_item = {key: item[key] for key in item if key != "title"}
-            else:
-                expected_item = item
+            expected_item = item
             if comparable != expected_item:
                 raise failures.DiracInvalidParameters(
                     f"{kind} natural key already identifies a different record")
@@ -855,13 +911,20 @@ class PostgresProgramRepository:
         if kind == "target_disease":
             self._require_entity(cur, item["target_ref"])
             ontology = item["ontology"] or {}
-            cur.execute("SELECT id FROM bio.disease WHERE disease_key=%s", (item["disease_key"],))
+            self._advisory_lock(cur, "disease", item["disease_key"].lower())
+            cur.execute("SELECT id,name,description,ontology_namespace,ontology_id FROM bio.disease "
+                        "WHERE disease_key=%s", (item["disease_key"],))
             row = cur.fetchone()
             if row is None:
                 cur.execute("INSERT INTO bio.disease(disease_key,name,ontology_namespace,ontology_id,description,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at",
                     (item["disease_key"], item["name"], ontology.get("namespace"), ontology.get("id"),
                      item["description"], who["kind"], who["id"]))
                 row = cur.fetchone()
+            elif (row["name"] != item["name"] or row["description"] != item["description"]
+                  or row["ontology_namespace"] != ontology.get("namespace")
+                  or row["ontology_id"] != ontology.get("id")):
+                raise failures.DiracInvalidParameters(
+                    "disease_key already identifies a different canonical Disease")
             disease_ref = _ref("disease", row["id"])
             cur.execute("INSERT INTO design.program_target_disease(program_id,target_id,disease_id,role,rationale,linked_by_kind,linked_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING RETURNING id,linked_at",
                 (program_id, item["target_ref"]["id"], row["id"], item["role"], item["rationale"], who["kind"], who["id"]))
@@ -874,6 +937,7 @@ class PostgresProgramRepository:
                      "link_ref": _ref("artifact", link["id"]), "linked_at": link["linked_at"], "linked_by": who}, disease_ref)
         if kind == "substance_registration":
             self._require_entity(cur, item["compound_ref"])
+            self._advisory_lock(cur, "substance-registration", item["compound_ref"]["id"])
             cur.execute("SELECT id,revision FROM chem.substance_registration WHERE compound_id=%s AND status<>'superseded' FOR UPDATE",
                         (item["compound_ref"]["id"],)); old = cur.fetchone()
             revision = old["revision"] + 1 if old else 1
@@ -889,7 +953,13 @@ class PostgresProgramRepository:
                      "created_at": row["created_at"], "created_by": who}, atom)
         if kind == "sample":
             self._require_entity(cur, item["batch_ref"])
-            if item["parent_sample_ref"]: self._require_entity(cur, item["parent_sample_ref"])
+            if item["parent_sample_ref"]:
+                self._require_program_entity(cur, program_id, item["parent_sample_ref"])
+            self._advisory_lock(cur, "sample", item["sample_code"].lower())
+            cur.execute("SELECT 1 FROM chem.sample WHERE sample_code=%s", (item["sample_code"],))
+            if cur.fetchone() is not None:
+                raise failures.DiracInvalidParameters(
+                    "sample_code already identifies a canonical physical Sample")
             cur.execute("INSERT INTO chem.sample(batch_id,parent_sample_id,sample_code,amount_value,amount_unit,container,location,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at,status",
                 (item["batch_ref"]["id"], item["parent_sample_ref"]["id"] if item["parent_sample_ref"] else None,
                  item["sample_code"], item["amount_value"], item["amount_unit"], item["container"], item["location"],
@@ -899,7 +969,7 @@ class PostgresProgramRepository:
                         (row["id"], item["location"], who["kind"], who["id"]))
             return ({"ref": atom, **item, "status": row["status"], "created_at": row["created_at"], "created_by": who}, atom)
         if kind == "sample_transfer":
-            self._require_entity(cur, item["sample_ref"])
+            self._require_program_entity(cur, program_id, item["sample_ref"])
             cur.execute("SELECT location FROM chem.sample WHERE id=%s FOR UPDATE", (item["sample_ref"]["id"],)); old = cur.fetchone()
             if old is None: raise failures.DiracNotFound("Sample does not exist")
             cur.execute("UPDATE chem.sample SET location=%s WHERE id=%s", (item["to_location"], item["sample_ref"]["id"]))
@@ -939,12 +1009,27 @@ class PostgresProgramRepository:
             return ({"ref": atom, **item, "assessed_at": row["assessed_at"], "assessed_by": who}, atom)
         if kind == "protocol_version":
             if item["assay_ref"]: self._require_entity(cur, item["assay_ref"])
-            cur.execute("SELECT id,revision FROM bio.protocol_version WHERE protocol_key=%s AND status='active' FOR UPDATE",
+            specification_digest = digest_bytes(item["specification"])
+            self._advisory_lock(cur, "protocol", item["protocol_key"].lower())
+            cur.execute("SELECT id,revision,title,assay_id,specification,digest,supersedes_id,created_at,"
+                        "created_by_kind::text,created_by_id,status FROM bio.protocol_version "
+                        "WHERE protocol_key=%s AND status='active' FOR UPDATE",
                         (item["protocol_key"],)); old = cur.fetchone(); revision = old["revision"] + 1 if old else 1
+            if old and bytes(old["digest"]) == specification_digest:
+                assay_id = item["assay_ref"]["id"] if item["assay_ref"] else None
+                if old["title"] != item["title"] or str(old["assay_id"] or "") != str(assay_id or ""):
+                    raise failures.DiracInvalidParameters(
+                        "protocol_key and specification digest already identify different metadata")
+                atom = _ref("protocol_version", old["id"])
+                return ({"ref": atom, **item, "revision": old["revision"], "status": old["status"],
+                         "supersedes_ref": (_ref("protocol_version", old["supersedes_id"])
+                                             if old["supersedes_id"] else None),
+                         "digest": D.digest(item["specification"]), "created_at": old["created_at"],
+                         "created_by": {"kind": old["created_by_kind"], "id": old["created_by_id"]}}, atom)
             if old: cur.execute("UPDATE bio.protocol_version SET status='superseded' WHERE id=%s", (old["id"],))
             cur.execute("INSERT INTO bio.protocol_version(protocol_key,revision,title,assay_id,specification,digest,supersedes_id,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at,status",
                 (item["protocol_key"], revision, item["title"], item["assay_ref"]["id"] if item["assay_ref"] else None,
-                 self._json(item["specification"]), digest_bytes(item["specification"]), old["id"] if old else None,
+                 self._json(item["specification"]), specification_digest, old["id"] if old else None,
                  who["kind"], who["id"]))
             row = cur.fetchone(); atom = _ref("protocol_version", row["id"])
             return ({"ref": atom, **item, "revision": revision, "status": row["status"],
@@ -960,15 +1045,17 @@ class PostgresProgramRepository:
                  item["title"], item["status"], item["started_at"], item["completed_at"], who["kind"], who["id"]))
             row = cur.fetchone(); atom = _ref("experiment", row["id"])
             for sample in item["samples"]:
-                self._require_entity(cur, sample["sample_ref"])
+                self._require_program_entity(cur, program_id, sample["sample_ref"])
                 cur.execute("INSERT INTO bio.experiment_sample(experiment_id,sample_id,role) VALUES (%s,%s,%s)",
                             (row["id"], sample["sample_ref"]["id"], sample["role"]))
             return ({"ref": atom, **item, "recorded_at": row["recorded_at"], "recorded_by": who}, atom)
         if kind == "dataset_version":
             self._require_entity(cur, item["manifest_artifact_ref"])
-            if item["experiment_ref"]: self._require_entity(cur, item["experiment_ref"])
-            cur.execute("SELECT id,version FROM app.dataset_version WHERE dataset_key=%s AND status='committed' FOR UPDATE",
-                        (item["dataset_key"],)); old = cur.fetchone(); version = old["version"] + 1 if old else 1
+            if item["experiment_ref"]:
+                self._require_program_entity(cur, program_id, item["experiment_ref"])
+            cur.execute("SELECT id,version FROM app.dataset_version "
+                        "WHERE program_id=%s AND dataset_key=%s AND status='committed' FOR UPDATE",
+                        (program_id, item["dataset_key"])); old = cur.fetchone(); version = old["version"] + 1 if old else 1
             if old: cur.execute("UPDATE app.dataset_version SET status='superseded' WHERE id=%s", (old["id"],))
             manifest_digest = digest_bytes({"manifest": item["manifest"], "schema_version": item["schema_version"]})
             cur.execute("INSERT INTO app.dataset_version(dataset_key,version,program_id,experiment_id,manifest_artifact_id,manifest,schema_version,access_scope,digest,supersedes_id,committed_by_kind,committed_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,committed_at",
@@ -976,8 +1063,10 @@ class PostgresProgramRepository:
                  item["manifest_artifact_ref"]["id"], self._json(item["manifest"]), item["schema_version"],
                  item["access_scope"], manifest_digest, old["id"] if old else None, who["kind"], who["id"]))
             row = cur.fetchone(); atom = _ref("dataset_version", row["id"])
+            if item["producer_job_ref"]:
+                self._require_program_entity(cur, program_id, item["producer_job_ref"])
             for parent in item["parent_refs"]:
-                self._require_entity(cur, parent)
+                self._require_program_entity(cur, program_id, parent)
                 cur.execute("INSERT INTO app.dataset_version_parent(dataset_version_id,parent_dataset_version_id,producer_job_id,derivation) VALUES (%s,%s,%s,%s)",
                     (row["id"], parent["id"], item["producer_job_ref"]["id"] if item["producer_job_ref"] else None,
                      item["derivation"] or "Declared parent dataset"))
@@ -985,10 +1074,11 @@ class PostgresProgramRepository:
                      "supersedes_ref": _ref("dataset_version", old["id"]) if old else None,
                      "digest": "sha256:" + manifest_digest.hex(), "committed_at": row["committed_at"], "committed_by": who}, atom)
         if kind == "structure_observation":
-            for name in ("structure_ref", "dataset_version_ref"):
-                self._require_entity(cur, item[name])
+            self._require_entity(cur, item["structure_ref"])
+            self._require_program_entity(cur, program_id, item["dataset_version_ref"])
             if item["compound_ref"]: self._require_entity(cur, item["compound_ref"])
-            if item["experiment_ref"]: self._require_entity(cur, item["experiment_ref"])
+            if item["experiment_ref"]:
+                self._require_program_entity(cur, program_id, item["experiment_ref"])
             cur.execute("INSERT INTO bio.structure_observation(observation_key,program_id,structure_id,compound_id,experiment_id,source_dataset_version_id,canonical_site,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,quality_status,created_at",
                 (item["observation_key"], program_id, item["structure_ref"]["id"],
                  item["compound_ref"]["id"] if item["compound_ref"] else None,
@@ -997,7 +1087,12 @@ class PostgresProgramRepository:
             row = cur.fetchone(); atom = _ref("structure_observation", row["id"])
             return ({"ref": atom, **item, "quality_status": row["quality_status"], "created_at": row["created_at"], "created_by": who}, atom)
         if kind in {"annotation", "review"}:
-            self._require_entity(cur, item["subject_ref"])
+            if item["subject_ref"]["kind"] in {
+                    "experiment", "dataset_version", "structure_observation", "analysis_snapshot",
+                    "annotation", "review", "sample", "work_item"}:
+                self._require_program_entity(cur, program_id, item["subject_ref"])
+            else:
+                self._require_entity(cur, item["subject_ref"])
             if kind == "annotation":
                 cur.execute("INSERT INTO design.scientific_annotation(program_id,subject_kind,subject_id,annotation_kind,label,value,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at",
                     (program_id, item["subject_ref"]["kind"], item["subject_ref"]["id"], item["annotation_kind"],
@@ -1016,7 +1111,8 @@ class PostgresProgramRepository:
                             (item["work_item_ref"]["id"], program_id))
                 if cur.fetchone() is None: raise failures.DiracNotFound("Program Work Item does not exist")
             dataset_ids = [entry["id"] for entry in item["dataset_version_refs"]]
-            for entry in item["dataset_version_refs"]: self._require_entity(cur, entry)
+            for entry in item["dataset_version_refs"]:
+                self._require_program_entity(cur, program_id, entry)
             snapshot_digest = digest_bytes({"mode": item["snapshot_mode"], "release_channel": item["release_channel"],
                                             "datasets": dataset_ids, "state": item["state"]})
             cur.execute("INSERT INTO design.analysis_snapshot(program_id,work_item_id,title,snapshot_mode,release_channel,dataset_version_ids,state,digest,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at",
@@ -1029,16 +1125,57 @@ class PostgresProgramRepository:
         if kind == "evidence_release":
             self._require_entity(cur, item["payload_artifact_ref"])
             release_digest = digest_bytes(item)
-            cur.execute("INSERT INTO bio.external_evidence_release(source_name,release_name,source_url,retrieved_at,payload_artifact_id,digest,imported_by_kind,imported_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (source_name,release_name) DO UPDATE SET source_name=EXCLUDED.source_name RETURNING id,imported_at",
+            self._advisory_lock(cur, "evidence-release",
+                                item["source_name"].lower() + "\x1f" + item["release_name"].lower())
+            cur.execute("SELECT id,digest,imported_at,imported_by_kind::text,imported_by_id "
+                        "FROM bio.external_evidence_release WHERE source_name=%s AND release_name=%s",
+                        (item["source_name"], item["release_name"]))
+            existing = cur.fetchone()
+            if existing is not None:
+                if bytes(existing["digest"]) != release_digest:
+                    raise failures.DiracInvalidParameters(
+                        "external evidence release key already identifies different content")
+                atom = _ref("external_evidence_release", existing["id"])
+                return ({"ref": atom, **item, "digest": "sha256:" + release_digest.hex(),
+                         "imported_at": existing["imported_at"],
+                         "imported_by": {"kind": existing["imported_by_kind"],
+                                         "id": existing["imported_by_id"]}}, atom)
+            cur.execute("INSERT INTO bio.external_evidence_release(source_name,release_name,source_url,retrieved_at,payload_artifact_id,digest,imported_by_kind,imported_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,imported_at",
                 (item["source_name"], item["release_name"], item["source_url"], item["retrieved_at"],
                  item["payload_artifact_ref"]["id"], release_digest, who["kind"], who["id"]))
             row = cur.fetchone(); atom = _ref("external_evidence_release", row["id"])
             return ({"ref": atom, **item, "digest": "sha256:" + release_digest.hex(),
                      "imported_at": row["imported_at"], "imported_by": who}, atom)
         if kind == "external_evidence":
-            for name in ("release_ref", "target_ref", "disease_ref"): self._require_entity(cur, item[name])
+            for name in ("release_ref", "target_ref", "disease_ref"):
+                self._require_entity(cur, item[name])
+            cur.execute("SELECT 1 FROM design.program_target_disease "
+                        "WHERE program_id=%s AND target_id=%s AND disease_id=%s AND retired_at IS NULL",
+                        (program_id, item["target_ref"]["id"], item["disease_ref"]["id"]))
+            if cur.fetchone() is None:
+                raise failures.DiracNotFound("Target-disease pair does not belong to this Program")
             evidence_digest = digest_bytes(item["payload"])
-            cur.execute("INSERT INTO bio.external_evidence_record(release_id,source_record_id,target_id,disease_id,data_type,evidence_source,score,is_direct,payload,digest) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (release_id,source_record_id) DO UPDATE SET source_record_id=EXCLUDED.source_record_id RETURNING id,created_at",
+            self._advisory_lock(cur, "external-evidence",
+                                item["release_ref"]["id"] + "\x1f" + item["source_record_id"])
+            cur.execute("SELECT id,target_id,disease_id,data_type,evidence_source,score,is_direct,digest,created_at "
+                        "FROM bio.external_evidence_record WHERE release_id=%s AND source_record_id=%s",
+                        (item["release_ref"]["id"], item["source_record_id"]))
+            existing = cur.fetchone()
+            if existing is not None:
+                comparable = (str(existing["target_id"]), str(existing["disease_id"]),
+                              existing["data_type"], existing["evidence_source"],
+                              float(existing["score"]) if existing["score"] is not None else None,
+                              existing["is_direct"], bytes(existing["digest"]))
+                expected = (item["target_ref"]["id"], item["disease_ref"]["id"],
+                            item["data_type"], item["evidence_source"], item["score"],
+                            item["is_direct"], evidence_digest)
+                if comparable != expected:
+                    raise failures.DiracInvalidParameters(
+                        "external evidence source record already identifies different content")
+                atom = _ref("external_evidence_record", existing["id"])
+                return ({"ref": atom, **item, "digest": "sha256:" + evidence_digest.hex(),
+                         "created_at": existing["created_at"]}, atom)
+            cur.execute("INSERT INTO bio.external_evidence_record(release_id,source_record_id,target_id,disease_id,data_type,evidence_source,score,is_direct,payload,digest) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at",
                 (item["release_ref"]["id"], item["source_record_id"], item["target_ref"]["id"],
                  item["disease_ref"]["id"], item["data_type"], item["evidence_source"], item["score"],
                  item["is_direct"], self._json(item["payload"]), evidence_digest))
@@ -1160,15 +1297,21 @@ class PostgresProgramRepository:
                                       "status": "planned", "created_by": who, "created_at": row["created_at"]}
 
     @contextmanager
-    def _mutation(self, program_ref: dict, expected_version: int, request_id: str | None):
+    def _mutation(self, program_ref: dict, expected_version: int, request_id: str | None,
+                  *, request_digest: str | None = None):
         identifier = D.ref(program_ref, "program")["id"]; expected = _version(expected_version)
         with self._connect() as conn, self._cursor(conn) as cur:
             cur.execute("SELECT * FROM design.project WHERE id=%s FOR UPDATE", (identifier,)); row = cur.fetchone()
             if row is None: raise failures.DiracNotFound("Program does not exist", details={"program_ref": program_ref})
             if request_id:
-                cur.execute("SELECT payload->'result' AS result FROM design.program_event WHERE program_id=%s AND request_id=%s",
+                cur.execute("SELECT payload->'result' AS result,payload->>'request_digest' AS request_digest "
+                            "FROM design.program_event WHERE program_id=%s AND request_id=%s",
                             (identifier, request_id)); duplicate = cur.fetchone()
                 if duplicate is not None:
+                    previous = duplicate.get("request_digest")
+                    if request_digest is not None and previous != request_digest:
+                        raise failures.DiracInvalidParameters(
+                            "request_id already identifies a different Program mutation")
                     yield (cur, identifier, row, duplicate["result"]); return
             if row["version"] != expected:
                 raise failures.DiracInvalidParameters("Program version conflict",
@@ -1188,17 +1331,64 @@ class PostgresProgramRepository:
             raise failures.DiracNotFound("ObjectRef does not resolve to a canonical Dirac entity",
                 details={"object_ref": object_ref})
 
-    def _finish(self, cur, identifier, version, event_kind, atom_ref, result, who, request_id):
-        event_id = self._insert_event(cur, identifier, version, event_kind, atom_ref, result, who, request_id)
+    @classmethod
+    def _require_program_entity(cls, cur, program_id, object_ref):
+        cls._require_entity(cur, object_ref)
+        kind = object_ref["kind"]
+        tables = {
+            "work_item": ("design.program_work_item", "program_id"),
+            "stage_gate": ("design.program_stage_gate", "program_id"),
+            "experiment": ("bio.experiment", "program_id"),
+            "dataset_version": ("app.dataset_version", "program_id"),
+            "structure_observation": ("bio.structure_observation", "program_id"),
+            "analysis_snapshot": ("design.analysis_snapshot", "program_id"),
+            "annotation": ("design.scientific_annotation", "program_id"),
+            "review": ("design.scientific_review", "program_id"),
+        }
+        if kind in tables:
+            table, column = tables[kind]
+            cur.execute(f"SELECT 1 FROM {table} WHERE id=%s AND {column}=%s",
+                        (object_ref["id"], program_id))
+        elif kind == "sample":
+            cur.execute("SELECT 1 FROM design.program_event WHERE program_id=%s "
+                        "AND event_kind='sample.created' AND atom_kind='sample' AND atom_id=%s",
+                        (program_id, object_ref["id"]))
+        elif kind == "disease":
+            cur.execute("SELECT 1 FROM design.program_target_disease WHERE program_id=%s "
+                        "AND disease_id=%s AND retired_at IS NULL", (program_id, object_ref["id"]))
+        elif kind == "job":
+            cur.execute("SELECT 1 FROM design.program_work_execution execution "
+                        "JOIN design.program_work_item item ON item.id=execution.work_item_id "
+                        "WHERE item.program_id=%s AND execution.job_id=%s",
+                        (program_id, object_ref["id"]))
+        else:
+            raise failures.DiracInvalidParameters(
+                "Object kind has no Program ownership rule", details={"object_ref": object_ref})
+        if cur.fetchone() is None:
+            raise failures.DiracNotFound(
+                f"{kind} does not belong to this Program", details={"object_ref": object_ref})
+
+    @staticmethod
+    def _advisory_lock(cur, namespace: str, natural_key: str) -> None:
+        cur.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
+                    (namespace + "\x1f" + natural_key,))
+
+    def _finish(self, cur, identifier, version, event_kind, atom_ref, result, who, request_id,
+                *, request_digest: str | None = None):
+        event_id = self._insert_event(cur, identifier, version, event_kind, atom_ref, result, who,
+                                      request_id, request_digest=request_digest)
         output = D.jsonable(result); output["event_ref"] = _event_ref(event_id)
         self._update_event_result(cur, event_id, output)
         return output
 
-    def _insert_event(self, cur, identifier, version, kind, atom_ref, result, who, request_id):
+    def _insert_event(self, cur, identifier, version, kind, atom_ref, result, who, request_id,
+                      *, request_digest: str | None = None):
         atom_kind = atom_ref["kind"] if atom_ref else None; atom_id = atom_ref["id"] if atom_ref else None
         cur.execute("INSERT INTO design.program_event(program_id,aggregate_version,event_kind,atom_kind,atom_id,payload,request_id,actor_kind,actor_id) "
                     "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id",
-                    (identifier, version, kind, atom_kind, atom_id, self._json({"result": result}), request_id, who["kind"], who["id"]))
+                    (identifier, version, kind, atom_kind, atom_id,
+                     self._json({"result": result, "request_digest": request_digest}),
+                     request_id, who["kind"], who["id"]))
         return cur.fetchone()["id"]
 
     def _update_event_result(self, cur, event_id, result):
