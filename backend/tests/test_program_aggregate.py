@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import copy
+import os
+import subprocess
+import sys
 import unittest
 from types import SimpleNamespace
 
@@ -89,6 +92,12 @@ class ProgramAggregateTest(unittest.TestCase):
         self.assertTrue(loaded["ok"], loaded)
         self.assertEqual(loaded["data"]["program"]["code"], "CMD-1")
 
+    def test_kernel_honors_database_boundary_before_assembly(self) -> None:
+        env = {**os.environ, "PYTHONPATH": "backend", "DIRAC_DSN": "dbname=isolated-program-test"}
+        result = subprocess.run([sys.executable, "-c", "import kernel; print(kernel.DEFAULT_DSN)"],
+                                cwd=os.getcwd(), env=env, check=True, capture_output=True, text=True)
+        self.assertEqual(result.stdout.strip(), "dbname=isolated-program-test")
+
     def test_program_operating_system_keeps_governance_in_one_aggregate(self) -> None:
         portfolio = self.repo.create_portfolio({"code": "NEURO", "name": "Neuroscience"}, ACTOR)["portfolio"]
         assigned = self.repo.assign_portfolio(self.program_ref, 1, portfolio["ref"], ACTOR, "portfolio-1")
@@ -129,6 +138,35 @@ class ProgramAggregateTest(unittest.TestCase):
         overview = self.repo.get(self.program_ref)["program"]
         self.assertEqual(overview["counts"]["work_items"], 1)
         self.assertEqual(overview["work_items"][0]["lane"], "design")
+
+    def test_work_schedule_and_dependencies_are_real_program_facts(self) -> None:
+        first = self.repo.record_work_package(self.program_ref, 1, {
+            "key": "map-pocket", "title": "Map pocket", "description": "Confirm the site",
+            "lane": "understand", "status": "done", "start_on": "2026-08-14",
+            "due_on": "2026-08-18",
+        }, ACTOR, "schedule-first")
+        second = self.repo.record_work_package(self.program_ref, 2, {
+            "key": "design-series", "title": "Design series", "description": "Propose compounds",
+            "lane": "design", "status": "active", "start_on": "2026-08-19",
+            "due_on": "2026-08-28", "depends_on_refs": [first["work_item"]["ref"]],
+        }, ACTOR, "schedule-second")
+        overview = self.repo.get(self.program_ref)["program"]
+        current = next(item for item in overview["work_items"] if item["key"] == "design-series")
+        self.assertEqual(current["start_on"], "2026-08-19")
+        self.assertEqual(current["due_on"], "2026-08-28")
+        self.assertEqual(current["depends_on_refs"], [first["work_item"]["ref"]])
+        with self.assertRaises(failures.DiracInvalidParameters):
+            self.repo.record_work_package(self.program_ref, 3, {
+                "key": "map-pocket", "title": "Map pocket", "description": "Create a cycle",
+                "lane": "understand", "depends_on_refs": [second["work_item"]["ref"]],
+            }, ACTOR, "schedule-cycle")
+
+    def test_work_schedule_rejects_reversed_dates(self) -> None:
+        with self.assertRaises(failures.DiracInvalidParameters):
+            self.repo.record_work_package(self.program_ref, 1, {
+                "key": "time-travel", "title": "Time travel", "description": "Impossible plan",
+                "start_on": "2026-08-20", "due_on": "2026-08-19",
+            }, ACTOR, "bad-schedule")
 
     def test_runtime_job_can_belong_to_only_one_work_item(self) -> None:
         first = self.repo.record_work_package(self.program_ref, 1, {

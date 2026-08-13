@@ -332,6 +332,39 @@ export class WorkspaceCanvas {
 
         const metrics = element('dl', 'program-metrics'); metrics.dataset.programMetrics = '';
         const health = element('section', 'program-health'); health.dataset.programHealth = '';
+        const delivery = element('section', 'program-delivery-workbench');
+        const deliveryHeader = element('header');
+        const deliveryCopy = element('div');
+        deliveryCopy.append(element('span', 'workspace-section-kicker', 'Program delivery'),
+            element('h3', '', 'From scientific intent to completed work'),
+            element('p', '', 'Plan once, then move the same canonical Work Item through Understand, Design, Decide, Make, and Test & Learn.'));
+        deliveryHeader.append(deliveryCopy, button('Plan a task', 'work'));
+        const workSummary = element('dl', 'program-work-summary'); workSummary.dataset.programWorkSummary = '';
+        const workflowBoard = element('div', 'program-workflow-board'); workflowBoard.dataset.programWorkflowBoard = '';
+        for (const [lane, label, intent] of [
+            ['understand', 'Understand', 'Target, evidence, structure'],
+            ['design', 'Design', 'Ideas and molecular proposals'],
+            ['decide', 'Decide', 'Portfolio and priority'],
+            ['make', 'Make', 'Routes, batches, samples'],
+            ['test_learn', 'Test & Learn', 'Experiments and decisions'],
+        ]) {
+            const column = element('section', 'program-workflow-lane'); column.dataset.lane = lane;
+            const laneHeader = element('header');
+            laneHeader.append(element('div', '', ''), element('strong', 'program-workflow-count', '0'));
+            laneHeader.firstElementChild!.append(element('h4', '', label), element('p', '', intent));
+            const tasks = element('div', 'program-workflow-tasks'); tasks.dataset.programWorkLane = lane;
+            column.append(laneHeader, tasks); workflowBoard.append(column);
+        }
+        const gantt = element('section', 'program-gantt');
+        const ganttHeader = element('header');
+        ganttHeader.append(element('div', '', ''), element('div', 'program-gantt-legend', ''));
+        ganttHeader.firstElementChild!.append(element('span', 'workspace-section-kicker', 'Schedule'),
+            element('h4', '', 'Program Gantt'),
+            element('p', '', 'Only explicitly planned dates are drawn. Dependencies and overdue work stay visible.'));
+        ganttHeader.lastElementChild!.append(element('span', '', 'Active'), element('span', '', 'Blocked'), element('span', '', 'Done'));
+        const ganttBody = element('div', 'program-gantt-body'); ganttBody.dataset.programGantt = '';
+        gantt.append(ganttHeader, ganttBody);
+        delivery.append(deliveryHeader, workSummary, workflowBoard, gantt);
         const referenceJobs = element('section', 'program-reference-jobs');
         const referenceHeader = element('header');
         const referenceCopy = element('div');
@@ -390,7 +423,6 @@ export class WorkspaceCanvas {
         const operating = element('div', 'program-operating-grid');
         operating.append(panel('member', 'Team & roles', 'Member', 'members', 'Explicit scientific responsibility and review authority.'),
             panel('gate', 'Stage gates', 'Gate', 'stage_gates', 'Evidence-backed readiness criteria and approval decisions.'),
-            panel('work', 'Workflow jobs', 'Work item', 'work_items', 'One stable job moves through Understand, Design, Decide, Make, and Test & Learn.'),
             panel('evidence', 'Evidence graph', 'Evidence edge', 'evidence_bindings', 'Claims linked to canonical evidence without copying it.'),
             panel('lineage', 'Entity lineage', 'Lineage edge', 'lineage', 'One compound identity across form, batch, sample and result.'));
         const timeline = element('section', 'program-timeline');
@@ -400,7 +432,7 @@ export class WorkspaceCanvas {
             element('p', '', 'Ordered aggregate events; newest first.'));
         const events = element('ol'); events.dataset.programEvents = '';
         timeline.append(timelineHeader, events);
-        dashboard.append(identity, health, metrics, referenceJobs, operating, grid, timeline);
+        dashboard.append(identity, health, metrics, delivery, referenceJobs, operating, grid, timeline);
         workbench.append(toolbar, status, empty, dashboard);
         page.append(header, question, workbench);
         this.host.replaceChildren(page);

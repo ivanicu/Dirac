@@ -204,6 +204,22 @@ class MemoryProgramRepository:
                           "reason": "Created in this workflow lane", "transitioned_by": who,
                           "transitioned_at": datetime.now(timezone.utc).isoformat()}
             work_item["transitions"].append(transition); row["work_transitions"].append(transition)
+        dependency_refs = copy.deepcopy(item["depends_on_refs"])
+        known_items = {entry["ref"]["id"]: entry for entry in row["work_items"]}
+        if any(dependency["id"] == work_item["ref"]["id"] for dependency in dependency_refs):
+            raise failures.DiracInvalidParameters("A Work Item cannot depend on itself")
+        if any(dependency["id"] not in known_items for dependency in dependency_refs):
+            raise failures.DiracInvalidParameters("Work Item dependencies must belong to the same Program")
+        def reaches_current(candidate_id: str, visited: set[str] | None = None) -> bool:
+            if candidate_id == work_item["ref"]["id"]: return True
+            seen = visited or set()
+            if candidate_id in seen: return False
+            seen.add(candidate_id)
+            candidate = known_items.get(candidate_id)
+            return any(reaches_current(ref["id"], seen)
+                       for ref in (candidate or {}).get("depends_on_refs", []))
+        if any(reaches_current(dependency["id"]) for dependency in dependency_refs):
+            raise failures.DiracInvalidParameters("Work Item dependencies must remain acyclic")
         current = next((package for package in reversed(row["work_packages"])
                         if package["work_item_ref"] == work_item["ref"]
                         and package.get("status") != "superseded"), None)
@@ -215,6 +231,9 @@ class MemoryProgramRepository:
                    "created_by": who, "created_at": datetime.now(timezone.utc).isoformat()}
         row["work_packages"].append(package); work_item["title"] = package["title"]
         work_item["current_package"] = copy.deepcopy(package); work_item["status"] = package["status"]
+        work_item["priority"] = package["priority"]; work_item["owner"] = copy.deepcopy(package["owner"])
+        work_item["start_on"] = package["start_on"]; work_item["due_on"] = package["due_on"]
+        work_item["depends_on_refs"] = dependency_refs
         row["version"] += 1
         result = {"work_item": copy.deepcopy(work_item), "work_package": copy.deepcopy(package),
                   "program_version": row["version"], "created": created}
@@ -715,14 +734,23 @@ class PostgresProgramRepository:
             revision = old["revision"] + 1 if old else 1
             if old: cur.execute("UPDATE design.program_work_package SET status='superseded' WHERE id=%s", (old["id"],))
             owner = item["owner"]
-            cur.execute("INSERT INTO design.program_work_package(program_id,work_item_id,work_key,revision,title,description,status,priority,owner_kind,owner_id,due_on,deliverable_refs,supersedes_id,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at",
-                        (identifier, work_row["id"], item["key"], revision, item["title"], item["description"], item["status"], item["priority"], owner["kind"] if owner else None, owner["id"] if owner else None, item["due_on"], self._json(item["deliverable_refs"]), old["id"] if old else None, who["kind"], who["id"]))
+            cur.execute("INSERT INTO design.program_work_package(program_id,work_item_id,work_key,revision,title,description,status,priority,owner_kind,owner_id,start_on,due_on,deliverable_refs,supersedes_id,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at",
+                        (identifier, work_row["id"], item["key"], revision, item["title"], item["description"], item["status"], item["priority"], owner["kind"] if owner else None, owner["id"] if owner else None, item["start_on"], item["due_on"], self._json(item["deliverable_refs"]), old["id"] if old else None, who["kind"], who["id"]))
             inserted = cur.fetchone()
+            dependency_ids = [dependency["id"] for dependency in item["depends_on_refs"]]
             for dependency in item["depends_on_refs"]:
                 cur.execute("SELECT program_id FROM design.program_work_item WHERE id=%s", (dependency["id"],))
                 dependency_row = cur.fetchone()
                 if dependency_row is None or str(dependency_row["program_id"]) != str(identifier):
                     raise failures.DiracInvalidParameters("Work Item dependencies must belong to the same Program")
+            if str(work_row["id"]) in dependency_ids:
+                raise failures.DiracInvalidParameters("A Work Item cannot depend on itself")
+            if dependency_ids:
+                cur.execute("WITH RECURSIVE ancestors(id) AS (SELECT unnest(%s::uuid[]) UNION SELECT edge.depends_on_work_item_id FROM design.program_work_item_dependency edge JOIN ancestors ON edge.work_item_id=ancestors.id) SELECT 1 FROM ancestors WHERE id=%s LIMIT 1", (dependency_ids, work_row["id"]))
+                if cur.fetchone():
+                    raise failures.DiracInvalidParameters("Work Item dependencies must remain acyclic")
+            cur.execute("DELETE FROM design.program_work_item_dependency WHERE work_item_id=%s", (work_row["id"],))
+            for dependency in item["depends_on_refs"]:
                 cur.execute("INSERT INTO design.program_work_item_dependency(work_item_id,depends_on_work_item_id) VALUES (%s,%s) ON CONFLICT DO NOTHING",
                             (work_row["id"], dependency["id"]))
             cur.execute("UPDATE design.program_work_item SET title=%s,current_package_id=%s WHERE id=%s",
@@ -1413,7 +1441,7 @@ class PostgresProgramRepository:
         out["members"] = [self._member(r, _ref(r["principal_kind"], r["principal_id"]), r["role"]) for r in cur.fetchall()]
         cur.execute("SELECT id,gate_key::text AS key,revision,stage::text,title,criteria,status,evidence_summary,decision_id,target_date,assessed_at,supersedes_id,created_at,created_by_kind::text AS actor_kind,created_by_id AS actor_id FROM design.program_stage_gate WHERE program_id=%s ORDER BY created_at DESC", (identifier,))
         out["stage_gates"] = [self._stage_gate(r) for r in cur.fetchall()]
-        cur.execute("SELECT id,work_item_id,work_key::text AS key,revision,title,description,status,priority,owner_kind::text,owner_id,due_on,deliverable_refs,supersedes_id,created_at,created_by_kind::text AS actor_kind,created_by_id AS actor_id FROM design.program_work_package WHERE program_id=%s ORDER BY created_at DESC", (identifier,))
+        cur.execute("SELECT id,work_item_id,work_key::text AS key,revision,title,description,status,priority,owner_kind::text,owner_id,start_on,due_on,deliverable_refs,supersedes_id,created_at,created_by_kind::text AS actor_kind,created_by_id AS actor_id FROM design.program_work_package WHERE program_id=%s ORDER BY created_at DESC", (identifier,))
         packages = cur.fetchall(); package_ids = [r["id"] for r in packages]
         dependencies: dict[str, list[dict]] = {str(item): [] for item in package_ids}
         if package_ids:
@@ -1421,7 +1449,7 @@ class PostgresProgramRepository:
             for dependency in cur.fetchall():
                 dependencies[str(dependency["work_package_id"])].append(_ref("work_package", dependency["depends_on_id"]))
         out["work_packages"] = [self._work_package(r, dependencies[str(r["id"])]) for r in packages]
-        cur.execute("SELECT item.id,item.work_key::text AS key,item.title,item.current_lane::text AS lane,item.current_package_id,item.created_at,item.created_by_kind::text AS actor_kind,item.created_by_id AS actor_id,package.status,package.priority,package.owner_kind::text,package.owner_id,package.due_on FROM design.program_work_item item LEFT JOIN design.program_work_package package ON package.id=item.current_package_id WHERE item.program_id=%s ORDER BY item.created_at,item.work_key", (identifier,))
+        cur.execute("SELECT item.id,item.work_key::text AS key,item.title,item.current_lane::text AS lane,item.current_package_id,item.created_at,item.created_by_kind::text AS actor_kind,item.created_by_id AS actor_id,package.status,package.priority,package.owner_kind::text,package.owner_id,package.start_on,package.due_on FROM design.program_work_item item LEFT JOIN design.program_work_package package ON package.id=item.current_package_id WHERE item.program_id=%s ORDER BY item.created_at,item.work_key", (identifier,))
         work_rows = cur.fetchall(); work_ids = [row["id"] for row in work_rows]
         work_dependencies: dict[str, list[dict]] = {str(item): [] for item in work_ids}
         work_transitions: dict[str, list[dict]] = {str(item): [] for item in work_ids}
@@ -1547,7 +1575,7 @@ class PostgresProgramRepository:
             "title": row["title"], "lane": row["lane"], "status": row.get("status") or "backlog",
             "priority": row.get("priority"),
             "owner": _ref(row["owner_kind"], row["owner_id"]) if row.get("owner_kind") else None,
-            "due_on": row.get("due_on"), "current_package": package,
+            "start_on": row.get("start_on"), "due_on": row.get("due_on"), "current_package": package,
             "depends_on_refs": dependencies, "transitions": transitions, "executions": executions,
             "created_at": row["created_at"],
             "created_by": {"kind": row["actor_kind"], "id": row["actor_id"]}})

@@ -37,7 +37,10 @@ import invocation
 import jobs
 import traces
 
-DEFAULT_DSN = 'dbname=dirac user=ivan'
+# Deployment and test boundaries must be selectable before the kernel is built.
+# Keeping the fallback preserves the single-machine default; honoring DIRAC_DSN
+# prevents an "isolated" browser rehearsal from silently mutating the main DB.
+DEFAULT_DSN = os.environ.get('DIRAC_DSN', 'dbname=dirac user=ivan')
 DEFAULT_MOTIF_WORKER_IMAGE = (
     'nvcr.io/nvidia/gpu-operator@sha256:'
     '6584c36f153d18cfce284f7e5bc477887ce3c1ac566dc795bd80c9af6c6488f7')

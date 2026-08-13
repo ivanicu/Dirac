@@ -3,8 +3,10 @@ import { scientificContext } from '../context/scientific-context-store';
 import { DiracClient } from '../services/dirac-client';
 
 type Program = Record<string, any> & { ref: ObjectRef<'program'>; version: number };
+type FieldOption = string | { value: string; label: string };
 type Field = { name: string; label: string; value?: string; required?: boolean;
-    multiline?: boolean; options?: readonly string[]; placeholder?: string };
+    multiline?: boolean; options?: readonly FieldOption[]; placeholder?: string;
+    multiple?: boolean; readonly?: boolean; type?: 'text' | 'date' | 'number' };
 
 class ProgramPrerequisiteError extends Error {}
 
@@ -15,6 +17,11 @@ const text = (tag: keyof HTMLElementTagNameMap, value: string, className = '') =
 };
 
 const humanize = (value: unknown) => String(value ?? '—').replace(/_/g, ' ');
+const WORKFLOW_LANES = [
+    ['understand', 'Understand'], ['design', 'Design'], ['decide', 'Decide'],
+    ['make', 'Make'], ['test_learn', 'Test & Learn'],
+] as const;
+const CLOSED_WORK = new Set(['done', 'cancelled']);
 
 const REFERENCE_FAMILIES: Record<string, readonly string[]> = {
     identity: ['target_disease', 'substance_registration', 'sample', 'sample_transfer'],
@@ -246,6 +253,7 @@ export class ProgramWorkspaceController {
             if (!risks.children.length) risks.append(text('span', 'All declared readiness checks are satisfied.'));
             health.append(score, risks);
         }
+        this.renderWorkManagement(program);
         const events = document.querySelector<HTMLOListElement>('[data-program-events]');
         if (events) {
             events.replaceChildren();
@@ -257,6 +265,133 @@ export class ProgramWorkspaceController {
                 events.append(item);
             }
             if (!events.children.length) events.append(text('li', 'No events recorded.'));
+        }
+    }
+
+    private renderWorkManagement(program: Program): void {
+        const items = [...((program.work_items || []) as Array<Record<string, any>>)]
+            .sort((a, b) => (a.priority || 9) - (b.priority || 9)
+                || String(a.due_on || '9999').localeCompare(String(b.due_on || '9999')));
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const isOverdue = (item: Record<string, any>) => item.due_on && !CLOSED_WORK.has(item.status)
+            && new Date(`${item.due_on}T00:00:00`) < today;
+        const summary = document.querySelector<HTMLElement>('[data-program-work-summary]');
+        if (summary) {
+            summary.replaceChildren();
+            for (const [label, value, state] of [
+                ['All work', items.length, 'all'],
+                ['In progress', items.filter(item => item.status === 'active').length, 'active'],
+                ['Blocked', items.filter(item => item.status === 'blocked').length, 'blocked'],
+                ['Overdue', items.filter(isOverdue).length, 'overdue'],
+                ['Complete', items.filter(item => item.status === 'done').length, 'done'],
+            ] as Array<[string, number, string]>) {
+                const metric = document.createElement('div'); metric.dataset.state = state;
+                metric.append(text('dt', label), text('dd', String(value))); summary.append(metric);
+            }
+        }
+        const keyById = new Map(items.map(item => [item.ref.id, item.key]));
+        for (const [lane, label] of WORKFLOW_LANES) {
+            const list = document.querySelector<HTMLElement>(`[data-program-work-lane="${lane}"]`);
+            if (!list) continue;
+            list.replaceChildren();
+            const laneItems = items.filter(item => item.lane === lane);
+            const count = list.closest('.program-workflow-lane')?.querySelector<HTMLElement>('.program-workflow-count');
+            if (count) count.textContent = String(laneItems.length);
+            for (const item of laneItems) {
+                const card = document.createElement('article'); card.className = 'program-task-card';
+                card.dataset.status = item.status; if (isOverdue(item)) card.dataset.overdue = 'true';
+                const top = document.createElement('div'); top.className = 'program-task-card-top';
+                top.append(text('span', item.key, 'program-task-key'), text('span', `P${item.priority || 3}`, 'program-task-priority'));
+                const dependencies = (item.depends_on_refs || []) as ObjectRef[];
+                const dates = item.start_on && item.due_on ? `${item.start_on} → ${item.due_on}`
+                    : item.due_on ? `Finish ${item.due_on} · start not planned` : 'Not scheduled';
+                const owner = item.owner?.id || 'Unassigned';
+                const meta = document.createElement('div'); meta.className = 'program-task-meta';
+                meta.append(text('span', humanize(item.status)), text('span', owner), text('span', dates));
+                const dependencyLine = text('p', dependencies.length
+                    ? `After ${dependencies.map(ref => keyById.get(ref.id) || ref.id).join(', ')}`
+                    : `No dependencies · starts in ${label}`, 'program-task-dependencies');
+                const actions = document.createElement('div'); actions.className = 'program-task-actions';
+                const edit = text('button', 'Edit plan') as HTMLButtonElement; edit.type = 'button';
+                edit.dataset.programAction = `edit-work:${item.ref.id}`;
+                const move = text('button', 'Move stage') as HTMLButtonElement; move.type = 'button';
+                move.dataset.programAction = `move-work:${item.ref.id}`;
+                actions.append(edit, move);
+                card.append(top, text('h5', item.title), meta, dependencyLine, actions); list.append(card);
+            }
+            if (!laneItems.length) list.append(text('p', 'No work in this stage.', 'program-workflow-empty'));
+        }
+        this.renderGantt(items, keyById, today);
+    }
+
+    private renderGantt(items: Array<Record<string, any>>, keyById: Map<string, string>, today: Date): void {
+        const root = document.querySelector<HTMLElement>('[data-program-gantt]');
+        if (!root) return;
+        root.replaceChildren();
+        if (!items.length) {
+            root.append(text('p', 'Plan the first task to create the Program schedule.', 'program-gantt-empty'));
+            return;
+        }
+        const scheduled = items.filter(item => item.start_on && item.due_on);
+        const unscheduled = items.filter(item => !item.start_on || !item.due_on);
+        if (!scheduled.length) {
+            root.append(text('p', 'No invented bars: add a planned start and finish to place work on the Gantt.', 'program-gantt-empty'));
+        } else {
+            const day = 86_400_000;
+            const toDate = (value: string) => new Date(`${value}T00:00:00Z`);
+            let start = new Date(Math.min(...scheduled.map(item => toDate(item.start_on).getTime())));
+            let end = new Date(Math.max(...scheduled.map(item => toDate(item.due_on).getTime())));
+            start = new Date(start.getTime() - 2 * day); end = new Date(Math.max(end.getTime() + 2 * day, start.getTime() + 27 * day));
+            const duration = Math.max(1, (end.getTime() - start.getTime()) / day);
+            const position = (date: Date) => 100 * (date.getTime() - start.getTime()) / (duration * day);
+            const laneOrder = new Map(WORKFLOW_LANES.map(([lane], index) => [lane, index]));
+            scheduled.sort((a, b) => (laneOrder.get(a.lane) ?? 99) - (laneOrder.get(b.lane) ?? 99)
+                || String(a.start_on).localeCompare(String(b.start_on)));
+            const grid = document.createElement('div'); grid.className = 'program-gantt-grid';
+            const corner = text('div', 'Task / owner', 'program-gantt-corner');
+            const axis = document.createElement('div'); axis.className = 'program-gantt-track program-gantt-axis';
+            const depsHeader = text('div', 'Depends on', 'program-gantt-deps-header');
+            const tickCount = 6;
+            for (let index = 0; index < tickCount; index++) {
+                const at = new Date(start.getTime() + duration * day * index / (tickCount - 1));
+                const tick = text('span', at.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }));
+                tick.style.left = `${index * 100 / (tickCount - 1)}%`; axis.append(tick);
+            }
+            grid.append(corner, axis, depsHeader);
+            for (const item of scheduled) {
+                const label = document.createElement('div'); label.className = 'program-gantt-label';
+                label.append(text('strong', item.title), text('span', `${item.owner?.id || 'Unassigned'} · ${humanize(item.lane)}`));
+                const track = document.createElement('div'); track.className = 'program-gantt-track';
+                const bar = document.createElement('button'); bar.type = 'button'; bar.className = 'program-gantt-bar';
+                bar.dataset.status = item.status; bar.dataset.programAction = `edit-work:${item.ref.id}`;
+                const left = Math.max(0, position(toDate(item.start_on)));
+                const width = Math.max(2, 100 * ((toDate(item.due_on).getTime() - toDate(item.start_on).getTime()) / day + 1) / duration);
+                bar.style.left = `${left}%`; bar.style.width = `${Math.min(100 - left, width)}%`;
+                bar.title = `${item.title}: ${item.start_on} to ${item.due_on}`;
+                bar.append(text('span', item.key), text('small', humanize(item.status)));
+                track.append(bar);
+                const todayUtc = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+                const todayPosition = position(todayUtc);
+                if (todayPosition >= 0 && todayPosition <= 100) {
+                    const marker = document.createElement('i'); marker.className = 'program-gantt-today';
+                    marker.style.left = `${todayPosition}%`; marker.title = 'Today'; track.append(marker);
+                }
+                const dependencies = (item.depends_on_refs || []) as ObjectRef[];
+                const deps = text('div', dependencies.length
+                    ? dependencies.map(ref => keyById.get(ref.id) || ref.id).join(', ') : '—', 'program-gantt-deps');
+                grid.append(label, track, deps);
+            }
+            root.append(grid);
+        }
+        if (unscheduled.length) {
+            const queue = document.createElement('section'); queue.className = 'program-unscheduled';
+            queue.append(text('strong', `Unscheduled · ${unscheduled.length}`));
+            const list = document.createElement('div');
+            for (const item of unscheduled) {
+                const edit = text('button', `${item.key} · ${item.title}`) as HTMLButtonElement;
+                edit.type = 'button'; edit.dataset.programAction = `edit-work:${item.ref.id}`; list.append(edit);
+            }
+            queue.append(list); root.append(queue);
         }
     }
 
@@ -280,6 +415,7 @@ export class ProgramWorkspaceController {
         if (action === 'member') return this.member();
         if (action === 'gate') return this.gate();
         if (action === 'work') return this.workPackage();
+        if (action.startsWith('edit-work:')) return this.workPackage(action.slice('edit-work:'.length));
         if (action.startsWith('reference:')) return this.referenceJob(action.slice('reference:'.length));
         if (action.startsWith('move-work:')) return this.moveWork(action.slice('move-work:'.length));
         if (action.startsWith('attach-job:')) return this.attachJob(action.slice('attach-job:'.length));
@@ -416,26 +552,59 @@ export class ProgramWorkspaceController {
         }, 'Stage gate recorded as a versioned readiness contract.'));
     }
 
-    private workPackage(): void {
-        this.form('Record Work Package', [
-            { name: 'key', label: 'Stable work key', required: true }, { name: 'title', label: 'Work package', required: true },
-            { name: 'description', label: 'Scientific deliverable', required: true, multiline: true },
-            { name: 'lane', label: 'Workflow lane', options: ['understand', 'design', 'decide', 'make', 'test_learn'] },
-            { name: 'status', label: 'Status', options: ['backlog', 'ready', 'active', 'blocked', 'done', 'cancelled'] },
-            { name: 'priority', label: 'Priority 1–5', value: '3', required: true },
-            { name: 'owner_id', label: 'Owner ID' }, { name: 'due_on', label: 'Due date', placeholder: 'YYYY-MM-DD' },
-        ], values => this.execute('program.work_package.record', {
-            program_ref: this.current!.ref, expected_version: this.current!.version,
-            work_package: { key: values.key, title: values.title, description: values.description,
-                lane: values.lane, status: values.status, priority: Number(values.priority), due_on: values.due_on || undefined,
-                owner: values.owner_id ? { kind: 'human', id: values.owner_id } : undefined },
-        }, 'Scientific work package recorded.'));
+    private workPackage(workItemId?: string): void {
+        const item = workItemId
+            ? (this.current!.work_items || []).find((candidate: any) => candidate.ref.id === workItemId)
+            : undefined;
+        const spec = item?.current_package || item || {};
+        const dependencyOptions = ((this.current!.work_items || []) as Array<Record<string, any>>)
+            .filter(candidate => candidate.ref.id !== workItemId)
+            .map(candidate => ({ value: candidate.ref.id, label: `${candidate.key} · ${candidate.title}` }));
+        const selectedDependencies = (item?.depends_on_refs || []).map((ref: ObjectRef) => ref.id).join('\n');
+        this.form(item ? 'Edit planned task' : 'Plan a task', [
+            { name: 'title', label: 'Task outcome', required: true, value: item?.title || '',
+                placeholder: 'e.g. Confirm cellular potency' },
+            { name: 'key', label: item ? 'Stable task key' : 'Task key (generated if blank)',
+                value: item?.key || '', readonly: !!item, placeholder: 'confirm-cell-potency' },
+            { name: 'description', label: 'Definition of done', required: true, multiline: true,
+                value: spec.description || '', placeholder: 'What evidence or deliverable makes this complete?' },
+            { name: 'lane', label: 'Discovery stage', options: WORKFLOW_LANES.map(([value, label]) => ({ value, label })),
+                value: item?.lane || 'understand', readonly: !!item },
+            { name: 'status', label: 'Work status', options: ['backlog', 'ready', 'active', 'blocked', 'done', 'cancelled'],
+                value: item?.status || 'backlog' },
+            { name: 'priority', label: 'Priority', type: 'number', value: String(item?.priority || 3), required: true },
+            { name: 'owner_id', label: 'Owner', value: item?.owner?.id || '', placeholder: 'person or agent ID' },
+            { name: 'start_on', label: 'Planned start', type: 'date', value: item?.start_on || '' },
+            { name: 'due_on', label: 'Planned finish', type: 'date', value: item?.due_on || '' },
+            { name: 'depends_on', label: 'Dependencies', options: dependencyOptions, multiple: true,
+                value: selectedDependencies },
+        ], values => {
+            const key = values.key || this.taskKey(values.title);
+            if (values.start_on && values.due_on && values.start_on > values.due_on) {
+                throw new Error('Planned finish must be on or after planned start.');
+            }
+            return this.execute('program.work_package.record', {
+                program_ref: this.current!.ref, expected_version: this.current!.version,
+                work_package: { key, title: values.title, description: values.description,
+                    lane: values.lane, status: values.status, priority: Number(values.priority),
+                    start_on: values.start_on || undefined, due_on: values.due_on || undefined,
+                    depends_on_refs: this.lines(values.depends_on || '').map(id => ({ kind: 'work_item', id })),
+                    owner: values.owner_id ? { kind: 'human', id: values.owner_id } : undefined },
+            }, item ? 'Task plan revised without changing its identity.' : 'Task planned as one canonical Work Item.');
+        });
+    }
+
+    private taskKey(title: string): string {
+        const key = title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
+        const suffix = crypto.randomUUID().slice(0, 6);
+        return `${key || 'task'}-${suffix}`.slice(0, 72);
     }
 
     private moveWork(workItemId: string): void {
         const workItem = (this.current!.work_items || []).find((item: any) => item.ref.id === workItemId);
         this.form('Move Work Item', [
-            { name: 'to_lane', label: 'Destination', options: ['understand', 'design', 'decide', 'make', 'test_learn'] },
+            { name: 'to_lane', label: 'Destination', options: WORKFLOW_LANES
+                .filter(([value]) => value !== workItem.lane).map(([value, label]) => ({ value, label })) },
             { name: 'reason', label: 'Why it is ready to move', required: true, multiline: true },
         ], values => this.execute('program.work_item.transition', {
             program_ref: this.current!.ref, expected_version: this.current!.version,
@@ -739,11 +908,21 @@ export class ProgramWorkspaceController {
             let control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
             if (field.options) {
                 control = document.createElement('select');
-                for (const option of field.options) control.add(new Option(humanize(option), option));
+                control.multiple = !!field.multiple;
+                for (const option of field.options) {
+                    const value = typeof option === 'string' ? option : option.value;
+                    const label = typeof option === 'string' ? humanize(option) : option.label;
+                    control.add(new Option(label, value));
+                }
             } else if (field.multiline) control = document.createElement('textarea');
             else control = document.createElement('input');
             control.name = field.name; control.required = !!field.required;
-            control.value = field.value || '';
+            if (control instanceof HTMLSelectElement && control.multiple) {
+                const selected = new Set((field.value || '').split('\n').filter(Boolean));
+                for (const option of Array.from(control.options)) option.selected = selected.has(option.value);
+            } else control.value = field.value || '';
+            if (control instanceof HTMLInputElement) control.type = field.type || 'text';
+            control.disabled = !!field.readonly;
             if (!(control instanceof HTMLSelectElement)) control.placeholder = field.placeholder || '';
             label.append(control); controls.append(label);
         }
@@ -756,7 +935,14 @@ export class ProgramWorkspaceController {
         form.addEventListener('submit', async event => {
             event.preventDefault(); save.disabled = true; error.textContent = '';
             try {
-                const values = Object.fromEntries(new FormData(form).entries()) as Record<string, string>;
+                const values: Record<string, string> = {};
+                for (const field of fields) {
+                    const control = form.elements.namedItem(field.name) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
+                    if (!control) continue;
+                    if (control instanceof HTMLSelectElement && control.multiple) {
+                        values[field.name] = Array.from(control.selectedOptions).map(option => option.value).join('\n');
+                    } else values[field.name] = control.value;
+                }
                 await submit(values); dialog.close();
             } catch (caught) {
                 error.textContent = caught instanceof Error ? caught.message : String(caught); save.disabled = false;

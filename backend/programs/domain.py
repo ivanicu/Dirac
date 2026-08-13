@@ -265,12 +265,17 @@ def work_package(value: dict[str, Any]) -> dict[str, Any]:
     dependencies = copy.deepcopy(value.get("depends_on_refs", []))
     if not isinstance(deliverables, list) or not isinstance(dependencies, list):
         raise failures.DiracInvalidParameters("deliverable_refs and depends_on_refs must be arrays")
+    start_on = _iso_date(value.get("start_on"), "work_package.start_on")
+    due_on = _iso_date(value.get("due_on"), "work_package.due_on")
+    if start_on is not None and due_on is not None and start_on > due_on:
+        raise failures.DiracInvalidParameters(
+            "work_package.start_on must be on or before work_package.due_on")
     return {"key": key(value.get("key"), "work_package.key"),
             "title": nonempty(value.get("title"), "work_package.title", maximum=256),
             "description": nonempty(value.get("description"), "work_package.description"),
             "lane": lane, "status": status, "priority": priority,
             "owner": actor(owner) if owner is not None else None,
-            "due_on": _iso_date(value.get("due_on"), "work_package.due_on"),
+            "start_on": start_on, "due_on": due_on,
             "deliverable_refs": [ref(item) for item in deliverables],
             "depends_on_refs": [ref(item, "work_item") for item in dependencies]}
 
