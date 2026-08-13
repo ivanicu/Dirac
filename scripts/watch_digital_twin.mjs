@@ -10,6 +10,10 @@ const scope = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/digital_twin_s
 const rootFiles = new Set(scope.include_root_files);
 const roots = scope.include_roots.map(x => x.replace(/\/$/, ''));
 const externalRoots = scope.external_roots.map(x => x.replace(/\/$/, ''));
+const externalPathspecs = externalRoots.flatMap(root => [
+    `:(exclude)${root}`,
+    `:(exclude)${root}/**`,
+]);
 const outputs = new Set(scope.generated_outputs);
 let timer;
 let running = false;
@@ -60,7 +64,12 @@ function schedule(reason) {
 }
 
 function sourceFiles() {
-    const raw = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], {
+    // Exclude classified external roots inside Git itself. Filtering only after
+    // capture made a 6.4 GB conda runtime emit 175k paths and overflow maxBuffer
+    // before inScope() had a chance to reject a single one.
+    const raw = execFileSync('git', [
+        'ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', ...externalPathspecs,
+    ], {
         cwd: ROOT, encoding: 'buffer', maxBuffer: 32 * 1024 * 1024,
     });
     return raw.toString().split('\0').filter(Boolean).map(normalized).filter(inScope).sort();
@@ -88,9 +97,10 @@ function changedFiles(previous, current) {
 
 if (process.argv.includes('--selftest')) {
     const probes = ['backend/new_module.py', 'src/app/new-view.ts', 'future-dir/new.py', 'bin/new-command',
-        'src/mol-plugin/state.ts', 'docs/architecture/dirac-digital-twin.json'];
+        'src/mol-plugin/state.ts', 'openfe-runtime-v2/pkgs/tool/run.py',
+        'docs/architecture/dirac-digital-twin.json'];
     const verdicts = probes.map(file => ({ file, watched: inScope(file) }));
-    const expected = [true, true, true, true, false, false];
+    const expected = [true, true, true, true, false, false, false];
     if (verdicts.some((item, i) => item.watched !== expected[i])) {
         process.stderr.write(`${JSON.stringify(verdicts)}\n`);
         process.exit(1);

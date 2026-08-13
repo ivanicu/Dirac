@@ -46,6 +46,7 @@
   ],
   "external_roots": [
     ".git", ".vscode", "_archive", "build", "data", "examples", "lib", "node_modules",
+    "openfe-runtime-v2",
     "src/apps.reference.viewer-demos.vendored-readonly",
     "src/cli.tools.command-line.vendored-readonly",
     "src/examples.reference.mini-demos.vendored-readonly",

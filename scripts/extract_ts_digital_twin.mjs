@@ -9,13 +9,19 @@ const ROOT = path.resolve(import.meta.dirname, '..');
 const scope = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/digital_twin_scope.json'), 'utf8'));
 const roots = scope.include_roots.map(x => x.replace(/\/$/, ''));
 const externalRoots = scope.external_roots.map(x => x.replace(/\/$/, ''));
+const externalPathspecs = externalRoots.flatMap(root => [
+    `:(exclude)${root}`,
+    `:(exclude)${root}/**`,
+]);
 const rootFiles = new Set(scope.include_root_files);
 const inScope = rel => (rootFiles.has(rel) || roots.some(root => rel === root || rel.startsWith(`${root}/`))
         || (scope.auto_include_code_extensions.includes(path.extname(rel))
             && !externalRoots.some(root => rel === root || rel.startsWith(`${root}/`))))
     && !scope.exclude_fragments.some(fragment => `/${rel}`.includes(fragment))
     && !scope.exclude_suffixes.some(suffix => rel.endsWith(suffix));
-const discovered = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
+const discovered = execFileSync('git', [
+    'ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', ...externalPathspecs,
+],
     { cwd: ROOT, encoding: 'utf8' }).split('\0').filter(Boolean);
 const files = discovered.filter(rel => inScope(rel) && /\.(?:tsx?|m?js)$/.test(rel) && !/\.d\.ts$/.test(rel))
     .map(rel => path.join(ROOT, rel)).filter(file => fs.existsSync(file));

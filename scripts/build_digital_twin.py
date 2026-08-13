@@ -93,7 +93,14 @@ def layer_for(path: str) -> str:
 
 def discovered_files() -> list[pathlib.Path]:
     """Discover tracked and not-yet-tracked first-party files from one ownership policy."""
-    ok, raw = run(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'])
+    external_pathspecs = [pattern for root in SCOPE['external_roots']
+                          for pattern in (f':(exclude){root.rstrip("/")}',
+                                          f':(exclude){root.rstrip("/")}/**')]
+    # Reject external runtime trees during Git enumeration, not after capture.
+    # Otherwise a large untracked environment can overflow the subprocess buffer
+    # before the semantic ownership filter ever sees its paths.
+    ok, raw = run(['git', 'ls-files', '--cached', '--others', '--exclude-standard',
+                   '-z', '--', *external_pathspecs], timeout=30)
     if not ok:
         ok, raw = run(['rg', '--files', '-0'])
     if not ok:
