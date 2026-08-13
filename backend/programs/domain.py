@@ -24,6 +24,27 @@ OBJECTIVE_DIRECTIONS = frozenset({
 DECISION_TYPES = frozenset({
     "scope", "scientific", "portfolio", "stage_gate", "resource", "risk",
 })
+MEMBER_ROLES = frozenset({
+    "program_lead", "medicinal_chemistry", "computational_chemistry", "biology",
+    "dmpk", "toxicology", "synthesis", "data_science", "operations", "reviewer",
+    "observer",
+})
+GATE_STATUSES = frozenset({"planned", "ready", "approved", "rejected"})
+WORK_STATUSES = frozenset({"backlog", "ready", "active", "blocked", "done", "cancelled"})
+EVIDENCE_RELATIONS = frozenset({"supports", "contradicts", "tests", "explains"})
+EVIDENCE_KINDS = frozenset({
+    "evidence", "measurement", "dataset", "artifact", "literature_reference",
+    "prediction", "complex", "pose", "field", "batch", "sample",
+})
+LINEAGE_SHAPES = frozenset({
+    ("compound", "has_form", "compound_form"),
+    ("compound_form", "produced_as", "batch"),
+    ("sample", "sampled_from", "batch"),
+    ("sample", "formulated_as", "formulation"),
+    ("batch", "released_by", "quality_release"),
+    ("sample", "assayed_under", "protocol"),
+    ("sample", "has_measurement", "measurement"),
+})
 
 _LIFECYCLE_TRANSITIONS = {
     "draft": {"draft", "active", "archived"},
@@ -93,13 +114,15 @@ def create_spec(value: dict[str, Any]) -> dict[str, Any]:
         "lifecycle": lifecycle,
         "stage": stage,
         "target_ref": ref(target, "target") if target is not None else None,
+        "portfolio_ref": (ref(value["portfolio_ref"], "portfolio")
+                          if value.get("portfolio_ref") is not None else None),
     }
 
 
 def update_patch(current: dict[str, Any], value: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(value, dict) or not value:
         raise failures.DiracInvalidParameters("patch must contain at least one field")
-    allowed = {"name", "summary", "indication", "modality", "owner_id", "lifecycle", "stage", "target_ref"}
+    allowed = {"name", "summary", "indication", "modality", "owner_id", "lifecycle", "stage", "target_ref", "portfolio_ref"}
     unknown = set(value) - allowed
     if unknown:
         raise failures.DiracInvalidParameters(
@@ -127,7 +150,127 @@ def update_patch(current: dict[str, Any], value: dict[str, Any]) -> dict[str, An
     if "target_ref" in value:
         out["target_ref"] = (ref(value["target_ref"], "target")
                              if value["target_ref"] is not None else None)
+    if "portfolio_ref" in value:
+        out["portfolio_ref"] = (ref(value["portfolio_ref"], "portfolio")
+                                if value["portfolio_ref"] is not None else None)
     return out
+
+
+def portfolio(value: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise failures.DiracInvalidParameters("portfolio must be an object")
+    lifecycle = value.get("lifecycle", "active")
+    if lifecycle not in LIFECYCLES:
+        raise failures.DiracInvalidParameters("unknown Portfolio lifecycle")
+    return {
+        "code": key(value.get("code"), "portfolio.code").upper(),
+        "name": nonempty(value.get("name"), "portfolio.name", maximum=256),
+        "mandate": _optional_text(value.get("mandate"), 4000),
+        "lifecycle": lifecycle,
+    }
+
+
+def member(value: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise failures.DiracInvalidParameters("member must be an object")
+    principal = actor(value.get("principal"))
+    role = value.get("role")
+    if role not in MEMBER_ROLES:
+        raise failures.DiracInvalidParameters("unknown Program member role")
+    return {"principal": principal, "role": role,
+            "responsibility": _optional_text(value.get("responsibility"), 2000)}
+
+
+def stage_gate(value: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise failures.DiracInvalidParameters("stage_gate must be an object")
+    stage = value.get("stage")
+    status = value.get("status", "planned")
+    if stage not in STAGES:
+        raise failures.DiracInvalidParameters("unknown stage gate stage")
+    if status not in GATE_STATUSES:
+        raise failures.DiracInvalidParameters("unknown stage gate status")
+    criteria = copy.deepcopy(value.get("criteria"))
+    if not isinstance(criteria, list) or not criteria:
+        raise failures.DiracInvalidParameters("stage_gate.criteria must be a non-empty array")
+    normalized = []
+    for index, criterion in enumerate(criteria):
+        if isinstance(criterion, str):
+            normalized.append({"criterion": nonempty(criterion, f"criteria[{index}]"), "status": "unmet"})
+        elif isinstance(criterion, dict):
+            state = criterion.get("status", "unmet")
+            if state not in {"unmet", "met", "waived"}:
+                raise failures.DiracInvalidParameters("criterion status must be unmet, met, or waived")
+            normalized.append({"criterion": nonempty(criterion.get("criterion"), f"criteria[{index}].criterion"),
+                               "status": state})
+        else:
+            raise failures.DiracInvalidParameters("each stage gate criterion must be text or an object")
+    decision_ref = value.get("decision_ref")
+    if status in {"approved", "rejected"} and decision_ref is None:
+        raise failures.DiracInvalidParameters("approved or rejected stage gate requires decision_ref")
+    target_date = _iso_date(value.get("target_date"), "stage_gate.target_date")
+    return {"key": key(value.get("key"), "stage_gate.key"),
+            "stage": stage, "title": nonempty(value.get("title"), "stage_gate.title", maximum=256),
+            "criteria": normalized, "status": status,
+            "evidence_summary": _optional_text(value.get("evidence_summary"), 4000),
+            "decision_ref": ref(decision_ref, "decision") if decision_ref is not None else None,
+            "target_date": target_date}
+
+
+def work_package(value: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise failures.DiracInvalidParameters("work_package must be an object")
+    status = value.get("status", "backlog")
+    if status not in WORK_STATUSES:
+        raise failures.DiracInvalidParameters("unknown work package status")
+    priority = value.get("priority", 3)
+    if not isinstance(priority, int) or isinstance(priority, bool) or not 1 <= priority <= 5:
+        raise failures.DiracInvalidParameters("work_package.priority must be an integer from 1 to 5")
+    owner = value.get("owner")
+    deliverables = copy.deepcopy(value.get("deliverable_refs", []))
+    dependencies = copy.deepcopy(value.get("depends_on_refs", []))
+    if not isinstance(deliverables, list) or not isinstance(dependencies, list):
+        raise failures.DiracInvalidParameters("deliverable_refs and depends_on_refs must be arrays")
+    return {"key": key(value.get("key"), "work_package.key"),
+            "title": nonempty(value.get("title"), "work_package.title", maximum=256),
+            "description": nonempty(value.get("description"), "work_package.description"),
+            "status": status, "priority": priority,
+            "owner": actor(owner) if owner is not None else None,
+            "due_on": _iso_date(value.get("due_on"), "work_package.due_on"),
+            "deliverable_refs": [ref(item) for item in deliverables],
+            "depends_on_refs": [ref(item, "work_package") for item in dependencies]}
+
+
+def evidence_binding(value: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise failures.DiracInvalidParameters("binding must be an object")
+    subject = ref(value.get("subject_ref"))
+    evidence = ref(value.get("evidence_ref"))
+    if subject["kind"] not in {"program", "objective", "hypothesis", "decision", "milestone", "stage_gate", "work_package"}:
+        raise failures.DiracInvalidParameters("unsupported evidence subject kind")
+    if evidence["kind"] not in EVIDENCE_KINDS:
+        raise failures.DiracInvalidParameters("unsupported evidence object kind")
+    relation = value.get("relation")
+    if relation not in EVIDENCE_RELATIONS:
+        raise failures.DiracInvalidParameters("evidence relation must support, contradict, test, or explain")
+    strength = value.get("strength")
+    if strength is not None and (not isinstance(strength, (int, float)) or isinstance(strength, bool)
+                                 or not 0 <= strength <= 1):
+        raise failures.DiracInvalidParameters("evidence strength must be between 0 and 1")
+    return {"subject_ref": subject, "evidence_ref": evidence, "relation": relation,
+            "claim": nonempty(value.get("claim"), "binding.claim"),
+            "strength": float(strength) if strength is not None else None}
+
+
+def lineage(value: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise failures.DiracInvalidParameters("lineage must be an object")
+    source = ref(value.get("source_ref")); target = ref(value.get("target_ref"))
+    relation = value.get("relation")
+    if (source["kind"], relation, target["kind"]) not in LINEAGE_SHAPES:
+        raise failures.DiracInvalidParameters("lineage edge does not match the canonical compound-to-result chain",
+            details={"source_kind": source["kind"], "relation": relation, "target_kind": target["kind"]})
+    return {"source_ref": source, "relation": relation, "target_ref": target}
 
 
 def objective(value: dict[str, Any]) -> dict[str, Any]:
@@ -236,6 +379,15 @@ def _optional_text(value: Any, maximum: int) -> str | None:
     if len(text) > maximum:
         raise failures.DiracInvalidParameters(f"text exceeds {maximum} characters")
     return text
+
+
+def _iso_date(value: Any, field: str) -> str | None:
+    if value in (None, ""):
+        return None
+    try:
+        return date.fromisoformat(str(value)).isoformat()
+    except ValueError as exc:
+        raise failures.DiracInvalidParameters(f"{field} must be YYYY-MM-DD") from exc
 
 
 def _json_default(value: Any) -> str:

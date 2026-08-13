@@ -26,6 +26,40 @@ def _version(value: Any) -> int:
     return value
 
 
+def _program_health(program: dict[str, Any]) -> dict[str, Any]:
+    """Transparent, rule-based health; never disguises a heuristic as science."""
+    current = lambda name: [item for item in program.get(name, [])
+                            if item.get("status") not in {"superseded", "retired", "cancelled"}]
+    objectives = current("objectives"); hypotheses = current("hypotheses")
+    members = current("members"); gates = current("stage_gates")
+    work = current("work_packages"); evidence = current("evidence_bindings")
+    checks = [
+        ("target", bool(program.get("target_ref")), "Assign the canonical target."),
+        ("portfolio", bool(program.get("portfolio_ref")), "Place the Program in a Portfolio."),
+        ("lead", any(item.get("role") == "program_lead" for item in members), "Assign a Program lead."),
+        ("objective", bool(objectives), "Record at least one explicit objective."),
+        ("hypothesis", bool(hypotheses), "Record at least one falsifiable hypothesis."),
+        ("stage_gate", any(item.get("stage") == program.get("stage") for item in gates),
+         "Define the current stage gate."),
+        ("evidence", bool(evidence), "Attach evidence to a claim, hypothesis, decision, or gate."),
+        ("delivery", bool(work), "Create an owned scientific work package."),
+    ]
+    met = sum(1 for _key, passed, _action in checks if passed)
+    blocked = [item for item in work if item.get("status") == "blocked"]
+    rejected = [item for item in gates if item.get("status") == "rejected"]
+    risks = [{"code": key, "severity": "high" if key in {"target", "lead", "objective"} else "medium",
+              "action": action} for key, passed, action in checks if not passed]
+    risks.extend({"code": "blocked_work", "severity": "high",
+                  "action": f"Resolve blocked work package {item.get('key')}."} for item in blocked)
+    risks.extend({"code": "rejected_gate", "severity": "high",
+                  "action": f"Resolve rejected stage gate {item.get('key')}."} for item in rejected)
+    return {"score": round(100 * met / len(checks)), "status": "healthy" if met == len(checks) and not blocked
+            else "at_risk" if blocked or rejected or met < len(checks) / 2 else "needs_attention",
+            "basis": "rule-based-operational-readiness-v1", "checks": [
+                {"key": key, "passed": passed, "action": action} for key, passed, action in checks],
+            "risks": risks, "counts": {"blocked_work": len(blocked), "rejected_gates": len(rejected)}}
+
+
 class MemoryProgramRepository:
     """Semantically faithful process-local implementation for focused tests."""
 
@@ -35,6 +69,8 @@ class MemoryProgramRepository:
     def __init__(self) -> None:
         self.programs: dict[str, dict[str, Any]] = {}
         self.by_code: dict[str, str] = {}
+        self.portfolios: dict[str, dict[str, Any]] = {}
+        self.portfolio_by_code: dict[str, str] = {}
         self.events: dict[str, list[dict[str, Any]]] = {}
         self.request_results: dict[tuple[str, str], dict[str, Any]] = {}
         self.snapshots: dict[str, dict[str, Any]] = {}
@@ -56,7 +92,8 @@ class MemoryProgramRepository:
             "target_ref": copy.deepcopy(spec["target_ref"]), "version": 1,
             "created_at": now, "updated_at": now, "updated_by": who,
             "objectives": [], "hypotheses": [], "decisions": [],
-            "milestones": [], "links": [],
+            "milestones": [], "links": [], "members": [], "stage_gates": [],
+            "work_packages": [], "evidence_bindings": [], "lineage": [],
         }
         self.programs[identifier] = row; self.by_code[spec["code"]] = identifier
         self.events[identifier] = []
@@ -76,6 +113,21 @@ class MemoryProgramRepository:
                 if lifecycle is None or p["lifecycle"] == lifecycle]
         rows.sort(key=lambda p: (p["updated_at"], p["code"]), reverse=True)
         return {"programs": rows[:max(1, min(int(limit), 500))]}
+
+    def create_portfolio(self, value: dict, actor: dict, request_id: str | None = None) -> dict:
+        spec = D.portfolio(value); who = D.actor(actor)
+        existing_id = self.portfolio_by_code.get(spec["code"])
+        if existing_id:
+            return {"portfolio": copy.deepcopy(self.portfolios[existing_id]), "created": False}
+        identifier = str(uuid.uuid4()); now = datetime.now(timezone.utc).isoformat()
+        item = {"ref": _ref("portfolio", identifier), **spec, "version": 1,
+                "created_at": now, "updated_at": now, "updated_by": who}
+        self.portfolios[identifier] = item; self.portfolio_by_code[spec["code"]] = identifier
+        return {"portfolio": copy.deepcopy(item), "created": True}
+
+    def list_portfolios(self, limit: int = 100) -> dict:
+        rows = sorted(self.portfolios.values(), key=lambda item: (item["updated_at"], item["code"]), reverse=True)
+        return {"portfolios": copy.deepcopy(rows[:max(1, min(int(limit), 500))])}
 
     def update(self, program_ref: dict, expected_version: int, patch: dict,
                actor: dict, request_id: str | None = None) -> dict:
@@ -104,6 +156,52 @@ class MemoryProgramRepository:
     def record_milestone(self, program_ref: dict, expected_version: int, value: dict,
                          actor: dict, request_id: str | None = None) -> dict:
         return self._record_atom(program_ref, expected_version, "milestone", D.milestone(value), actor, request_id)
+
+
+    def assign_portfolio(self, program_ref: dict, expected_version: int, portfolio_ref: dict,
+                         actor: dict, request_id: str | None = None) -> dict:
+        identifier = self._id(program_ref); who = D.actor(actor); target = D.ref(portfolio_ref, "portfolio")
+        if target["id"] not in self.portfolios:
+            raise failures.DiracNotFound("Portfolio does not exist", details={"portfolio_ref": target})
+        duplicate = self._duplicate(identifier, request_id)
+        if duplicate is not None: return duplicate
+        row = self.programs[identifier]; self._expect(row, expected_version)
+        row["portfolio_ref"] = target; row["version"] += 1
+        result = {"portfolio_ref": target, "program_version": row["version"]}
+        return self._record(identifier, "portfolio.assigned", target, result, who, request_id)
+
+    def assign_member(self, program_ref: dict, expected_version: int, value: dict,
+                      actor: dict, request_id: str | None = None) -> dict:
+        return self._record_unique(program_ref, expected_version, "member", D.member(value), actor,
+                                   request_id, lambda item: (item["principal"], item["role"]),
+                                   "member.assigned")
+
+    def record_stage_gate(self, program_ref: dict, expected_version: int, value: dict,
+                          actor: dict, request_id: str | None = None) -> dict:
+        return self._record_revision(program_ref, expected_version, "stage_gate", D.stage_gate(value),
+                                     actor, request_id, "stage_gates")
+
+    def record_work_package(self, program_ref: dict, expected_version: int, value: dict,
+                            actor: dict, request_id: str | None = None) -> dict:
+        return self._record_revision(program_ref, expected_version, "work_package", D.work_package(value),
+                                     actor, request_id, "work_packages")
+
+    def attach_evidence(self, program_ref: dict, expected_version: int, value: dict,
+                        actor: dict, request_id: str | None = None) -> dict:
+        return self._record_unique(program_ref, expected_version, "evidence_binding",
+                                   D.evidence_binding(value), actor, request_id,
+                                   lambda item: (item["subject_ref"], item["relation"], item["evidence_ref"]),
+                                   "evidence.attached")
+
+    def record_lineage(self, program_ref: dict, expected_version: int, value: dict,
+                       actor: dict, request_id: str | None = None) -> dict:
+        return self._record_unique(program_ref, expected_version, "lineage", D.lineage(value), actor,
+                                   request_id, lambda item: (item["source_ref"], item["relation"], item["target_ref"]),
+                                   "lineage.recorded")
+
+    def health(self, program_ref: dict) -> dict:
+        program = self._overview(self._id(program_ref))
+        return {"health": _program_health(program)}
 
     def link(self, program_ref: dict, expected_version: int, object_ref: dict, role: str,
              rationale: str | None, actor: dict, request_id: str | None = None) -> dict:
@@ -139,6 +237,44 @@ class MemoryProgramRepository:
         self.snapshots[snapshot_id] = copy.deepcopy(snapshot)
         result = {"snapshot": snapshot}
         return self._record(identifier, "snapshot.created", snapshot["ref"], result, who, request_id)
+
+    def _record_revision(self, program_ref, expected_version, kind, value, actor, request_id, collection_name):
+        identifier = self._id(program_ref); who = D.actor(actor)
+        duplicate = self._duplicate(identifier, request_id)
+        if duplicate is not None: return duplicate
+        row = self.programs[identifier]; self._expect(row, expected_version)
+        collection = row[collection_name]
+        current = next((item for item in reversed(collection)
+                        if item["key"].lower() == value["key"].lower()
+                        and item.get("status") != "superseded"), None)
+        if current: current["status"] = "superseded"
+        row["version"] += 1
+        atom = {"ref": _ref(kind, uuid.uuid4()), **copy.deepcopy(value),
+                "revision": current["revision"] + 1 if current else 1,
+                "supersedes_ref": current["ref"] if current else None,
+                "created_by": who, "created_at": datetime.now(timezone.utc).isoformat()}
+        collection.append(atom)
+        result = {kind: copy.deepcopy(atom), "program_version": row["version"]}
+        return self._record(identifier, f"{kind}.recorded", atom["ref"], result, who, request_id)
+
+    def _record_unique(self, program_ref, expected_version, kind, value, actor, request_id,
+                       identity, event_kind):
+        identifier = self._id(program_ref); who = D.actor(actor)
+        duplicate = self._duplicate(identifier, request_id)
+        if duplicate is not None: return duplicate
+        row = self.programs[identifier]; self._expect(row, expected_version)
+        collection_name = {"member":"members", "evidence_binding":"evidence_bindings", "lineage":"lineage"}[kind]
+        collection = row[collection_name]; marker = identity(value)
+        existing = next((item for item in collection if identity(item) == marker), None)
+        if existing:
+            return {kind: copy.deepcopy(existing), "program_version": row["version"], "created": False}
+        row["version"] += 1
+        item = {"ref": _ref("artifact", uuid.uuid4()),
+                **copy.deepcopy(value), "created_by": who,
+                "created_at": datetime.now(timezone.utc).isoformat()}
+        collection.append(item)
+        result = {kind: copy.deepcopy(item), "program_version": row["version"], "created": True}
+        return self._record(identifier, event_kind, item["ref"], result, who, request_id)
 
     def _record_atom(self, program_ref: dict, expected_version: int, kind: str,
                      value: dict, actor: dict, request_id: str | None) -> dict:
@@ -203,11 +339,15 @@ class MemoryProgramRepository:
     def _overview(self, identifier: str) -> dict:
         row = self.programs[identifier]
         base = {k: copy.deepcopy(v) for k, v in row.items()
-                if k not in {"id", "objectives", "hypotheses", "decisions", "milestones", "links"}}
+                if k not in {"id", "objectives", "hypotheses", "decisions", "milestones", "links",
+                             "members", "stage_gates", "work_packages", "evidence_bindings", "lineage"}}
         base.update({k: copy.deepcopy(row[k]) for k in
-                     ("objectives", "hypotheses", "decisions", "milestones", "links")})
+                     ("objectives", "hypotheses", "decisions", "milestones", "links", "members",
+                      "stage_gates", "work_packages", "evidence_bindings", "lineage")})
         base["counts"] = {k: len(row[k]) for k in
-                          ("objectives", "hypotheses", "decisions", "milestones", "links")}
+                          ("objectives", "hypotheses", "decisions", "milestones", "links", "members",
+                           "stage_gates", "work_packages", "evidence_bindings", "lineage")}
+        base["health"] = _program_health(base)
         base["events"] = copy.deepcopy(self.events.get(identifier, [])[-30:][::-1])
         return base
 
@@ -241,12 +381,13 @@ class PostgresProgramRepository:
                     return {"program": self._overview(cur, existing["id"]), "created": False}
                 raise failures.DiracInvalidParameters("Program code already belongs to a different Program")
             target_id = spec["target_ref"]["id"] if spec["target_ref"] else None
+            portfolio_id = spec["portfolio_ref"]["id"] if spec["portfolio_ref"] else None
             archived_at = datetime.now(timezone.utc) if spec["lifecycle"] == "archived" else None
             cur.execute(
-                "INSERT INTO design.project(code,name,target_id,lifecycle,stage,summary,indication,modality,owner_id,"
-                "archived_at,updated_by_kind,updated_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                "INSERT INTO design.project(code,name,target_id,portfolio_id,lifecycle,stage,summary,indication,modality,owner_id,"
+                "archived_at,updated_by_kind,updated_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
                 "RETURNING id",
-                (spec["code"], spec["name"], target_id, spec["lifecycle"], spec["stage"],
+                (spec["code"], spec["name"], target_id, portfolio_id, spec["lifecycle"], spec["stage"],
                  spec["summary"], spec["indication"], spec["modality"], spec["owner_id"],
                  archived_at, who["kind"], who["id"]))
             identifier = cur.fetchone()["id"]
@@ -270,9 +411,27 @@ class PostgresProgramRepository:
         args = (lifecycle, limit) if lifecycle else (limit,)
         with self._connect() as conn, self._cursor(conn) as cur:
             cur.execute(
-                "SELECT id,code::text,name,summary,lifecycle::text,stage::text,version,target_id,owner_id,updated_at "
+                "SELECT id,code::text,name,summary,lifecycle::text,stage::text,version,target_id,portfolio_id,owner_id,updated_at "
                 f"FROM design.project {where} ORDER BY updated_at DESC,code LIMIT %s", args)
             return {"programs": [self._summary(row) for row in cur.fetchall()]}
+
+    def create_portfolio(self, value: dict, actor: dict, request_id: str | None = None) -> dict:
+        spec = D.portfolio(value); who = D.actor(actor)
+        with self._connect() as conn, self._cursor(conn) as cur:
+            cur.execute("SELECT id,code::text,name,mandate,lifecycle,version,created_at,updated_at,updated_by_kind::text,updated_by_id FROM design.portfolio WHERE code=%s", (spec["code"],))
+            row = cur.fetchone()
+            if row:
+                return {"portfolio": self._portfolio(row), "created": False}
+            cur.execute("INSERT INTO design.portfolio(code,name,mandate,lifecycle,updated_by_kind,updated_by_id) "
+                        "VALUES (%s,%s,%s,%s,%s,%s) RETURNING id,code::text,name,mandate,lifecycle,version,created_at,updated_at,updated_by_kind::text,updated_by_id",
+                        (spec["code"], spec["name"], spec["mandate"], spec["lifecycle"], who["kind"], who["id"]))
+            return {"portfolio": self._portfolio(cur.fetchone()), "created": True}
+
+    def list_portfolios(self, limit: int = 100) -> dict:
+        limit = max(1, min(int(limit), 500))
+        with self._connect() as conn, self._cursor(conn) as cur:
+            cur.execute("SELECT id,code::text,name,mandate,lifecycle,version,created_at,updated_at,updated_by_kind::text,updated_by_id FROM design.portfolio ORDER BY updated_at DESC,code LIMIT %s", (limit,))
+            return {"portfolios": [self._portfolio(row) for row in cur.fetchall()]}
 
     def update(self, program_ref: dict, expected_version: int, patch: dict,
                actor: dict, request_id: str | None = None) -> dict:
@@ -283,8 +442,8 @@ class PostgresProgramRepository:
             changes = D.update_patch(self._program(row), patch)
             assignments = []; values = []
             for field, value in changes.items():
-                column = "target_id" if field == "target_ref" else field
-                if field == "target_ref": value = value["id"] if value else None
+                column = {"target_ref":"target_id", "portfolio_ref":"portfolio_id"}.get(field, field)
+                if field in {"target_ref", "portfolio_ref"}: value = value["id"] if value else None
                 assignments.append(f"{column}=%s"); values.append(value)
             if "lifecycle" in changes:
                 assignments.append("archived_at=%s")
@@ -312,6 +471,119 @@ class PostgresProgramRepository:
                          actor: dict, request_id: str | None = None) -> dict:
         return self._record_atom(program_ref, expected_version, "milestone", D.milestone(value), actor, request_id)
 
+    def assign_portfolio(self, program_ref: dict, expected_version: int, portfolio_ref: dict,
+                         actor: dict, request_id: str | None = None) -> dict:
+        target = D.ref(portfolio_ref, "portfolio"); who = D.actor(actor)
+        with self._mutation(program_ref, expected_version, request_id) as state:
+            cur, identifier, _row, duplicate = state
+            if duplicate is not None: return duplicate
+            self._require_entity(cur, target)
+            cur.execute("UPDATE design.project SET portfolio_id=%s,version=version+1,updated_at=now(),updated_by_kind=%s,updated_by_id=%s WHERE id=%s RETURNING version",
+                        (target["id"], who["kind"], who["id"], identifier))
+            version = cur.fetchone()["version"]
+            result = {"portfolio_ref": target, "program_version": version}
+            return self._finish(cur, identifier, version, "portfolio.assigned", target, result, who, request_id)
+
+    def assign_member(self, program_ref: dict, expected_version: int, value: dict,
+                      actor: dict, request_id: str | None = None) -> dict:
+        item = D.member(value); who = D.actor(actor); principal = item["principal"]
+        with self._mutation(program_ref, expected_version, request_id) as state:
+            cur, identifier, row, duplicate = state
+            if duplicate is not None: return duplicate
+            cur.execute("SELECT id,responsibility,assigned_at,assigned_by_kind::text,assigned_by_id FROM design.program_member WHERE program_id=%s AND principal_kind=%s AND principal_id=%s AND role=%s AND retired_at IS NULL",
+                        (identifier, principal["kind"], principal["id"], item["role"]))
+            existing = cur.fetchone()
+            if existing:
+                return {"member": self._member(existing, principal, item["role"]), "program_version": row["version"], "created": False}
+            cur.execute("INSERT INTO design.program_member(program_id,principal_kind,principal_id,role,responsibility,assigned_by_kind,assigned_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id,responsibility,assigned_at,assigned_by_kind::text,assigned_by_id",
+                        (identifier, principal["kind"], principal["id"], item["role"], item["responsibility"], who["kind"], who["id"]))
+            member = self._member(cur.fetchone(), principal, item["role"]); version = self._advance(cur, identifier, who)
+            result = {"member": member, "program_version": version, "created": True}
+            return self._finish(cur, identifier, version, "member.assigned", None, result, who, request_id)
+
+    def record_stage_gate(self, program_ref: dict, expected_version: int, value: dict,
+                          actor: dict, request_id: str | None = None) -> dict:
+        item = D.stage_gate(value); who = D.actor(actor)
+        with self._mutation(program_ref, expected_version, request_id) as state:
+            cur, identifier, _row, duplicate = state
+            if duplicate is not None: return duplicate
+            cur.execute("SELECT id,revision FROM design.program_stage_gate WHERE program_id=%s AND gate_key=%s ORDER BY revision DESC LIMIT 1 FOR UPDATE", (identifier, item["key"]))
+            old = cur.fetchone(); revision = old["revision"] + 1 if old else 1
+            if old: cur.execute("UPDATE design.program_stage_gate SET status='superseded' WHERE id=%s", (old["id"],))
+            assessed_at = datetime.now(timezone.utc) if item["status"] in {"approved", "rejected"} else None
+            decision_id = item["decision_ref"]["id"] if item["decision_ref"] else None
+            cur.execute("INSERT INTO design.program_stage_gate(program_id,gate_key,revision,stage,title,criteria,status,evidence_summary,decision_id,target_date,assessed_at,supersedes_id,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at",
+                        (identifier, item["key"], revision, item["stage"], item["title"], self._json(item["criteria"]), item["status"], item["evidence_summary"], decision_id, item["target_date"], assessed_at, old["id"] if old else None, who["kind"], who["id"]))
+            inserted = cur.fetchone(); gate = {"ref": _ref("stage_gate", inserted["id"]), **item, "revision": revision,
+                "supersedes_ref": _ref("stage_gate", old["id"]) if old else None, "created_by": who, "created_at": inserted["created_at"]}
+            version = self._advance(cur, identifier, who); result = {"stage_gate": gate, "program_version": version}
+            return self._finish(cur, identifier, version, "stage_gate.recorded", gate["ref"], result, who, request_id)
+
+    def record_work_package(self, program_ref: dict, expected_version: int, value: dict,
+                            actor: dict, request_id: str | None = None) -> dict:
+        item = D.work_package(value); who = D.actor(actor)
+        with self._mutation(program_ref, expected_version, request_id) as state:
+            cur, identifier, _row, duplicate = state
+            if duplicate is not None: return duplicate
+            cur.execute("SELECT id,revision FROM design.program_work_package WHERE program_id=%s AND work_key=%s ORDER BY revision DESC LIMIT 1 FOR UPDATE", (identifier, item["key"]))
+            old = cur.fetchone(); revision = old["revision"] + 1 if old else 1
+            if old: cur.execute("UPDATE design.program_work_package SET status='superseded' WHERE id=%s", (old["id"],))
+            owner = item["owner"]
+            cur.execute("INSERT INTO design.program_work_package(program_id,work_key,revision,title,description,status,priority,owner_kind,owner_id,due_on,deliverable_refs,supersedes_id,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at",
+                        (identifier, item["key"], revision, item["title"], item["description"], item["status"], item["priority"], owner["kind"] if owner else None, owner["id"] if owner else None, item["due_on"], self._json(item["deliverable_refs"]), old["id"] if old else None, who["kind"], who["id"]))
+            inserted = cur.fetchone()
+            for dependency in item["depends_on_refs"]:
+                cur.execute("INSERT INTO design.program_work_dependency(work_package_id,depends_on_id) VALUES (%s,%s)", (inserted["id"], dependency["id"]))
+            package = {"ref": _ref("work_package", inserted["id"]), **item, "revision": revision,
+                "supersedes_ref": _ref("work_package", old["id"]) if old else None, "created_by": who, "created_at": inserted["created_at"]}
+            version = self._advance(cur, identifier, who); result = {"work_package": package, "program_version": version}
+            return self._finish(cur, identifier, version, "work_package.recorded", package["ref"], result, who, request_id)
+
+    def attach_evidence(self, program_ref: dict, expected_version: int, value: dict,
+                        actor: dict, request_id: str | None = None) -> dict:
+        item = D.evidence_binding(value); who = D.actor(actor); subject = item["subject_ref"]; evidence = item["evidence_ref"]
+        with self._mutation(program_ref, expected_version, request_id) as state:
+            cur, identifier, row, duplicate = state
+            if duplicate is not None: return duplicate
+            self._require_entity(cur, subject); self._require_entity(cur, evidence)
+            cur.execute("SELECT id,claim,strength,attached_at,attached_by_kind::text,attached_by_id FROM design.program_evidence_binding WHERE program_id=%s AND subject_kind=%s AND subject_id=%s AND relation=%s AND evidence_kind=%s AND evidence_id=%s",
+                        (identifier, subject["kind"], subject["id"], item["relation"], evidence["kind"], evidence["id"]))
+            existing = cur.fetchone()
+            if existing:
+                return {"evidence_binding": self._evidence(existing, item), "program_version": row["version"], "created": False}
+            cur.execute("INSERT INTO design.program_evidence_binding(program_id,subject_kind,subject_id,relation,evidence_kind,evidence_id,claim,strength,attached_by_kind,attached_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,claim,strength,attached_at,attached_by_kind::text,attached_by_id",
+                        (identifier, subject["kind"], subject["id"], item["relation"], evidence["kind"], evidence["id"], item["claim"], item["strength"], who["kind"], who["id"]))
+            binding = self._evidence(cur.fetchone(), item); version = self._advance(cur, identifier, who)
+            result = {"evidence_binding": binding, "program_version": version, "created": True}
+            return self._finish(cur, identifier, version, "evidence.attached", evidence, result, who, request_id)
+
+    def record_lineage(self, program_ref: dict, expected_version: int, value: dict,
+                       actor: dict, request_id: str | None = None) -> dict:
+        item = D.lineage(value); who = D.actor(actor); source = item["source_ref"]; target = item["target_ref"]
+        with self._mutation(program_ref, expected_version, request_id) as state:
+            cur, identifier, row, duplicate = state
+            if duplicate is not None: return duplicate
+            self._require_entity(cur, source); self._require_entity(cur, target)
+            cur.execute("SELECT id,created_at,actor_kind::text,actor_id FROM app.object_relation WHERE source_kind=%s AND source_id=%s AND relation=%s AND target_kind=%s AND target_id=%s",
+                        (source["kind"], source["id"], item["relation"], target["kind"], target["id"]))
+            edge_row = cur.fetchone(); created = edge_row is None
+            if created:
+                cur.execute("INSERT INTO app.object_relation(source_kind,source_id,relation,target_kind,target_id,actor_kind,actor_id) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at,actor_kind::text,actor_id",
+                            (source["kind"], source["id"], item["relation"], target["kind"], target["id"], who["kind"], who["id"]))
+                edge_row = cur.fetchone()
+                for object_ref, role in ((source, "lineage-source"), (target, "lineage-target")):
+                    cur.execute("INSERT INTO design.program_object_link(program_id,object_kind,object_id,role,linked_by_kind,linked_by_id) VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING",
+                                (identifier, object_ref["kind"], object_ref["id"], role, who["kind"], who["id"]))
+            edge = {"ref": _ref("artifact", edge_row["id"]), **item, "created_at": edge_row["created_at"], "created_by": {"kind": edge_row["actor_kind"], "id": edge_row["actor_id"]}}
+            if not created: return {"lineage": edge, "program_version": row["version"], "created": False}
+            version = self._advance(cur, identifier, who); result = {"lineage": edge, "program_version": version, "created": True}
+            return self._finish(cur, identifier, version, "lineage.recorded", None, result, who, request_id)
+
+    def health(self, program_ref: dict) -> dict:
+        identifier = D.ref(program_ref, "program")["id"]
+        with self._connect() as conn, self._cursor(conn) as cur:
+            return {"health": _program_health(self._overview(cur, identifier))}
+
     def link(self, program_ref: dict, expected_version: int, object_ref: dict, role: str,
              rationale: str | None, actor: dict, request_id: str | None = None) -> dict:
         target = D.ref(object_ref); link_role = D.key(role, "role"); who = D.actor(actor)
@@ -320,6 +592,7 @@ class PostgresProgramRepository:
         with self._mutation(program_ref, expected_version, request_id) as state:
             cur, identifier, _row, duplicate = state
             if duplicate is not None: return duplicate
+            self._require_entity(cur, target)
             cur.execute("SELECT id,linked_at,linked_by_kind::text,linked_by_id,rationale FROM design.program_object_link "
                         "WHERE program_id=%s AND object_kind=%s AND object_id=%s AND role=%s AND retired_at IS NULL",
                         (identifier, target["kind"], target["id"], link_role))
@@ -440,6 +713,14 @@ class PostgresProgramRepository:
                     "WHERE id=%s RETURNING version", (who["kind"], who["id"], identifier))
         return cur.fetchone()["version"]
 
+    @staticmethod
+    def _require_entity(cur, object_ref):
+        cur.execute("SELECT canonical_key,label FROM app.entity WHERE kind=%s AND id=%s",
+                    (object_ref["kind"], object_ref["id"]))
+        if cur.fetchone() is None:
+            raise failures.DiracNotFound("ObjectRef does not resolve to a canonical Dirac entity",
+                details={"object_ref": object_ref})
+
     def _finish(self, cur, identifier, version, event_kind, atom_ref, result, who, request_id):
         event_id = self._insert_event(cur, identifier, version, event_kind, atom_ref, result, who, request_id)
         output = D.jsonable(result); output["event_ref"] = _event_ref(event_id)
@@ -458,7 +739,7 @@ class PostgresProgramRepository:
                     (self._json(result), event_id))
 
     def _overview(self, cur, identifier):
-        cur.execute("SELECT id,code::text,name,target_id,lifecycle::text,stage::text,version,summary,indication,modality,owner_id,created_at,updated_at,archived_at,updated_by_kind::text,updated_by_id FROM design.project WHERE id=%s", (identifier,))
+        cur.execute("SELECT id,code::text,name,target_id,portfolio_id,lifecycle::text,stage::text,version,summary,indication,modality,owner_id,created_at,updated_at,archived_at,updated_by_kind::text,updated_by_id FROM design.project WHERE id=%s", (identifier,))
         row = cur.fetchone()
         if row is None: raise failures.DiracNotFound("Program does not exist", details={"program_ref": _ref("program", identifier)})
         out = self._program(row)
@@ -471,13 +752,41 @@ class PostgresProgramRepository:
         kind_map = {"objectives":"objective","hypotheses":"hypothesis","decisions":"decision","milestones":"milestone"}
         for collection, sql in queries.items():
             cur.execute(sql, (identifier,)); out[collection] = [self._atom(r, kind_map[collection]) for r in cur.fetchall()]
+        cur.execute("SELECT id,principal_kind::text,principal_id,role::text,responsibility,assigned_at,assigned_by_kind::text,assigned_by_id FROM design.program_member WHERE program_id=%s AND retired_at IS NULL ORDER BY role,assigned_at", (identifier,))
+        out["members"] = [self._member(r, _ref(r["principal_kind"], r["principal_id"]), r["role"]) for r in cur.fetchall()]
+        cur.execute("SELECT id,gate_key::text AS key,revision,stage::text,title,criteria,status,evidence_summary,decision_id,target_date,assessed_at,supersedes_id,created_at,created_by_kind::text AS actor_kind,created_by_id AS actor_id FROM design.program_stage_gate WHERE program_id=%s ORDER BY created_at DESC", (identifier,))
+        out["stage_gates"] = [self._stage_gate(r) for r in cur.fetchall()]
+        cur.execute("SELECT id,work_key::text AS key,revision,title,description,status,priority,owner_kind::text,owner_id,due_on,deliverable_refs,supersedes_id,created_at,created_by_kind::text AS actor_kind,created_by_id AS actor_id FROM design.program_work_package WHERE program_id=%s ORDER BY created_at DESC", (identifier,))
+        packages = cur.fetchall(); package_ids = [r["id"] for r in packages]
+        dependencies: dict[str, list[dict]] = {str(item): [] for item in package_ids}
+        if package_ids:
+            cur.execute("SELECT work_package_id,depends_on_id FROM design.program_work_dependency WHERE work_package_id=ANY(%s)", (package_ids,))
+            for dependency in cur.fetchall():
+                dependencies[str(dependency["work_package_id"])].append(_ref("work_package", dependency["depends_on_id"]))
+        out["work_packages"] = [self._work_package(r, dependencies[str(r["id"])]) for r in packages]
+        cur.execute("SELECT id,subject_kind::text,subject_id,relation::text,evidence_kind::text,evidence_id,claim,strength,attached_at,attached_by_kind::text,attached_by_id FROM design.program_evidence_binding WHERE program_id=%s ORDER BY attached_at DESC", (identifier,))
+        out["evidence_bindings"] = [self._evidence(r, {"subject_ref": _ref(r["subject_kind"], r["subject_id"]),
+            "evidence_ref": _ref(r["evidence_kind"], r["evidence_id"]), "relation": r["relation"]}) for r in cur.fetchall()]
         cur.execute("SELECT id,object_kind::text,object_id,role,rationale,linked_at,linked_by_kind::text,linked_by_id FROM design.program_object_link WHERE program_id=%s AND retired_at IS NULL ORDER BY linked_at DESC", (identifier,))
         out["links"] = [self._link(r, _ref(r["object_kind"], r["object_id"]), r["role"]) for r in cur.fetchall()]
+        linked_pairs = {(link["object_ref"]["kind"], link["object_ref"]["id"]) for link in out["links"]}
+        if linked_pairs:
+            cur.execute("SELECT id,source_kind::text,source_id,relation::text,target_kind::text,target_id,created_at,actor_kind::text,actor_id FROM app.object_relation WHERE (source_kind::text,source_id) IN (SELECT * FROM unnest(%s::text[],%s::text[])) OR (target_kind::text,target_id) IN (SELECT * FROM unnest(%s::text[],%s::text[])) ORDER BY created_at DESC LIMIT 100",
+                        ([pair[0] for pair in linked_pairs], [pair[1] for pair in linked_pairs],
+                         [pair[0] for pair in linked_pairs], [pair[1] for pair in linked_pairs]))
+            out["lineage"] = [{"ref": _ref("artifact", r["id"]), "source_ref": _ref(r["source_kind"], r["source_id"]),
+                "relation": r["relation"], "target_ref": _ref(r["target_kind"], r["target_id"]),
+                "created_at": r["created_at"], "created_by": {"kind": r["actor_kind"], "id": r["actor_id"]}}
+                for r in cur.fetchall() if (r["source_kind"], r["relation"], r["target_kind"]) in D.LINEAGE_SHAPES]
+        else:
+            out["lineage"] = []
         cur.execute("SELECT id,event_kind,aggregate_version,atom_kind::text,atom_id,occurred_at,actor_kind::text,actor_id FROM design.program_event WHERE program_id=%s ORDER BY aggregate_version DESC LIMIT 30", (identifier,))
         out["events"] = [{"ref": _event_ref(r["id"]), "kind": r["event_kind"], "program_version": r["aggregate_version"],
                           "atom_ref": _ref(r["atom_kind"], r["atom_id"]) if r["atom_kind"] else None,
                           "occurred_at": r["occurred_at"], "actor": {"kind": r["actor_kind"], "id": r["actor_id"]}} for r in cur.fetchall()]
-        out["counts"] = {name: len(out[name]) for name in ("objectives","hypotheses","decisions","milestones","links")}
+        out["counts"] = {name: len(out[name]) for name in ("objectives","hypotheses","decisions","milestones","links",
+            "members","stage_gates","work_packages","evidence_bindings","lineage")}
+        out["health"] = _program_health(out)
         return D.jsonable(out)
 
     @staticmethod
@@ -488,12 +797,20 @@ class PostgresProgramRepository:
                 "summary": row.get("summary"), "indication": row.get("indication"), "modality": row.get("modality"),
                 "owner_id": row.get("owner_id"), "lifecycle": row["lifecycle"], "stage": row["stage"],
                 "version": row["version"], "target_ref": _ref("target", row["target_id"]) if row.get("target_id") else None,
+                "portfolio_ref": _ref("portfolio", row["portfolio_id"]) if row.get("portfolio_id") else None,
                 "created_at": row.get("created_at"), "updated_at": row.get("updated_at"),
                 "archived_at": row.get("archived_at"), "updated_by": actor}
 
     @classmethod
     def _summary(cls, row):
         return D.jsonable(cls._program(row))
+
+    @staticmethod
+    def _portfolio(row):
+        return D.jsonable({"ref": _ref("portfolio", row["id"]), "code": row["code"], "name": row["name"],
+            "mandate": row.get("mandate"), "lifecycle": row["lifecycle"], "version": row["version"],
+            "created_at": row["created_at"], "updated_at": row["updated_at"],
+            "updated_by": {"kind": row["updated_by_kind"], "id": row["updated_by_id"]}})
 
     @staticmethod
     def _atom(row, kind):
@@ -509,3 +826,37 @@ class PostgresProgramRepository:
         return D.jsonable({"ref": _ref("artifact", row["id"]), "object_ref": target, "role": role,
                            "rationale": row.get("rationale"), "linked_at": row["linked_at"],
                            "linked_by": {"kind": row.get("linked_by_kind"), "id": row.get("linked_by_id")}})
+
+    @staticmethod
+    def _member(row, principal, role):
+        return D.jsonable({"ref": _ref("artifact", row["id"]), "principal": principal, "role": role,
+            "responsibility": row.get("responsibility"), "assigned_at": row["assigned_at"],
+            "assigned_by": {"kind": row["assigned_by_kind"], "id": row["assigned_by_id"]}})
+
+    @staticmethod
+    def _stage_gate(row):
+        data = dict(row); identifier = data.pop("id"); supersedes = data.pop("supersedes_id", None)
+        actor_kind = data.pop("actor_kind"); actor_id = data.pop("actor_id"); decision_id = data.pop("decision_id", None)
+        return D.jsonable({"ref": _ref("stage_gate", identifier), **data,
+            "decision_ref": _ref("decision", decision_id) if decision_id else None,
+            "supersedes_ref": _ref("stage_gate", supersedes) if supersedes else None,
+            "created_by": {"kind": actor_kind, "id": actor_id}})
+
+    @staticmethod
+    def _work_package(row, dependencies):
+        data = dict(row); identifier = data.pop("id"); supersedes = data.pop("supersedes_id", None)
+        actor_kind = data.pop("actor_kind"); actor_id = data.pop("actor_id")
+        owner_kind = data.pop("owner_kind", None); owner_id = data.pop("owner_id", None)
+        return D.jsonable({"ref": _ref("work_package", identifier), **data,
+            "owner": {"kind": owner_kind, "id": owner_id} if owner_kind else None,
+            "depends_on_refs": dependencies,
+            "supersedes_ref": _ref("work_package", supersedes) if supersedes else None,
+            "created_by": {"kind": actor_kind, "id": actor_id}})
+
+    @staticmethod
+    def _evidence(row, item):
+        strength = row.get("strength")
+        return D.jsonable({"ref": _ref("artifact", row["id"]), **item, "claim": row["claim"],
+            "strength": float(strength) if strength is not None else None,
+            "attached_at": row["attached_at"],
+            "attached_by": {"kind": row["attached_by_kind"], "id": row["attached_by_id"]}})

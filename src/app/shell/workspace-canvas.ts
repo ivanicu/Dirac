@@ -282,7 +282,8 @@ export class WorkspaceCanvas {
             const node = element('button', secondary ? 'workspace-visual-related' : 'workspace-visual-action', label);
             node.type = 'button'; node.dataset.programAction = action; return node;
         };
-        toolbarActions.append(button('New Program', 'create'), button('Refresh', 'refresh', true));
+        toolbarActions.append(button('New Program', 'create'), button('New Portfolio', 'create-portfolio', true),
+            button('Refresh', 'refresh', true));
         toolbar.append(selectLabel, toolbarActions);
 
         const status = element('p', 'program-load-status', 'Loading durable Program state…');
@@ -304,10 +305,12 @@ export class WorkspaceCanvas {
         identityCopy.querySelector('p')!.dataset.programSummary = '';
         const badges = element('div', 'program-badges'); badges.dataset.programBadges = '';
         const identityActions = element('div', 'program-identity-actions');
-        identityActions.append(button('Edit Program', 'edit', true), button('Freeze snapshot', 'snapshot'));
+        identityActions.append(button('Assign Portfolio', 'assign-portfolio', true),
+            button('Edit Program', 'edit', true), button('Freeze snapshot', 'snapshot'));
         identity.append(identityCopy, badges, identityActions);
 
         const metrics = element('dl', 'program-metrics'); metrics.dataset.programMetrics = '';
+        const health = element('section', 'program-health'); health.dataset.programHealth = '';
         const grid = element('div', 'program-atom-grid');
         const panel = (kind: string, label: string, singular: string, collection: string, help: string) => {
             const section = element('section', 'program-atom-panel');
@@ -321,6 +324,12 @@ export class WorkspaceCanvas {
             panel('hypothesis', 'Hypotheses', 'Hypothesis', 'hypotheses', 'Testable beliefs with falsification criteria.'),
             panel('milestone', 'Milestones', 'Milestone', 'milestones', 'Evidence-bearing stage gates and delivery criteria.'),
             panel('decision', 'Decisions', 'Decision', 'decisions', 'Actor-attributed choices, outcomes, and alternatives.'));
+        const operating = element('div', 'program-operating-grid');
+        operating.append(panel('member', 'Team & roles', 'Member', 'members', 'Explicit scientific responsibility and review authority.'),
+            panel('gate', 'Stage gates', 'Gate', 'stage_gates', 'Evidence-backed readiness criteria and approval decisions.'),
+            panel('work', 'Work packages', 'Work package', 'work_packages', 'Owned scientific delivery with dependencies and due dates.'),
+            panel('evidence', 'Evidence graph', 'Evidence edge', 'evidence_bindings', 'Claims linked to canonical evidence without copying it.'),
+            panel('lineage', 'Entity lineage', 'Lineage edge', 'lineage', 'One compound identity across form, batch, sample and result.'));
         const timeline = element('section', 'program-timeline');
         const timelineHeader = element('header');
         timelineHeader.append(element('div', '', ''), button('Link object', 'link', true));
@@ -328,7 +337,7 @@ export class WorkspaceCanvas {
             element('p', '', 'Ordered aggregate events; newest first.'));
         const events = element('ol'); events.dataset.programEvents = '';
         timeline.append(timelineHeader, events);
-        dashboard.append(identity, metrics, grid, timeline);
+        dashboard.append(identity, health, metrics, operating, grid, timeline);
         workbench.append(toolbar, status, empty, dashboard);
         page.append(header, question, workbench);
         this.host.replaceChildren(page);

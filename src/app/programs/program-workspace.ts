@@ -28,7 +28,8 @@ export class ProgramWorkspaceController {
         document.addEventListener('click', event => {
             const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-program-action]');
             if (!button || !document.querySelector('.program-workspace')) return;
-            void this.action(button.dataset.programAction || '');
+            void this.action(button.dataset.programAction || '').catch(error => this.status(
+                error instanceof Error ? error.message : String(error), 'error'));
         });
         document.addEventListener('change', event => {
             const select = (event.target as Element | null)?.closest<HTMLSelectElement>('[data-program-select]');
@@ -86,6 +87,7 @@ export class ProgramWorkspaceController {
         if (badges) {
             badges.replaceChildren();
             for (const value of [program.lifecycle, program.stage, `v${program.version}`,
+                program.portfolio_ref ? `portfolio · ${program.portfolio_ref.id}` : 'portfolio · unassigned',
                 program.target_ref ? `target · ${program.target_ref.id}` : 'target · unassigned']) {
                 badges.append(text('span', humanize(value)));
             }
@@ -95,7 +97,9 @@ export class ProgramWorkspaceController {
             metrics.replaceChildren();
             const labels: Array<[string, string]> = [
                 ['Objectives', 'objectives'], ['Hypotheses', 'hypotheses'],
-                ['Decisions', 'decisions'], ['Milestones', 'milestones'], ['Linked objects', 'links'],
+                ['Decisions', 'decisions'], ['Milestones', 'milestones'], ['Team', 'members'],
+                ['Stage gates', 'stage_gates'], ['Work', 'work_packages'], ['Evidence', 'evidence_bindings'],
+                ['Lineage', 'lineage'], ['Linked objects', 'links'],
             ];
             for (const [label, key] of labels) {
                 const item = document.createElement('div');
@@ -103,7 +107,8 @@ export class ProgramWorkspaceController {
                 metrics.append(item);
             }
         }
-        for (const collection of ['objectives', 'hypotheses', 'milestones', 'decisions']) {
+        for (const collection of ['objectives', 'hypotheses', 'milestones', 'decisions', 'members',
+            'stage_gates', 'work_packages', 'evidence_bindings', 'lineage']) {
             const list = document.querySelector<HTMLElement>(`[data-program-collection="${collection}"]`);
             if (!list) continue;
             list.replaceChildren();
@@ -115,12 +120,29 @@ export class ProgramWorkspaceController {
             for (const atom of atoms.slice(0, 8)) {
                 const card = document.createElement('article'); card.className = 'program-atom';
                 const heading = document.createElement('div');
-                heading.append(text('strong', atom.title || atom.action || atom.key || 'Untitled'),
-                    text('span', `${atom.key || 'record'} · r${atom.revision || 1}`));
-                const detail = atom.statement || atom.rationale || atom.description || atom.outcome || '';
-                card.append(heading, text('p', detail), text('small', `${humanize(atom.status)} · ${humanize(atom.created_by?.id)} · ${String(atom.created_at || '').slice(0, 10)}`));
+                const edge = atom.source_ref ? `${atom.source_ref.kind} → ${atom.target_ref.kind}`
+                    : atom.subject_ref ? `${atom.subject_ref.kind} ${atom.relation} ${atom.evidence_ref.kind}` : '';
+                const principal = atom.principal ? `${atom.principal.id} · ${humanize(atom.role)}` : '';
+                heading.append(text('strong', atom.title || atom.action || principal || edge || atom.key || atom.claim || 'Record'),
+                    text('span', atom.revision ? `${atom.key || 'record'} · r${atom.revision}` : humanize(atom.status || atom.relation || 'current')));
+                const detail = atom.statement || atom.rationale || atom.description || atom.outcome
+                    || atom.responsibility || atom.evidence_summary || atom.claim || edge || '';
+                const actor = atom.created_by?.id || atom.assigned_by?.id || atom.attached_by?.id || 'system';
+                const at = atom.created_at || atom.assigned_at || atom.attached_at || '';
+                card.append(heading, text('p', detail), text('small', `${humanize(atom.status || 'current')} · ${humanize(actor)} · ${String(at).slice(0, 10)}`));
                 list.append(card);
             }
+        }
+        const health = document.querySelector<HTMLElement>('[data-program-health]');
+        if (health) {
+            const state = program.health || { score: 0, status: 'at_risk', risks: [] };
+            health.dataset.status = state.status; health.replaceChildren();
+            const score = document.createElement('div'); score.className = 'program-health-score';
+            score.append(text('strong', `${state.score}/100`), text('span', `Operational health · ${humanize(state.status)}`));
+            const risks = document.createElement('div'); risks.className = 'program-health-risks';
+            for (const risk of state.risks || []) risks.append(text('span', risk.action));
+            if (!risks.children.length) risks.append(text('span', 'All declared readiness checks are satisfied.'));
+            health.append(score, risks);
         }
         const events = document.querySelector<HTMLOListElement>('[data-program-events]');
         if (events) {
@@ -139,6 +161,7 @@ export class ProgramWorkspaceController {
     private async action(action: string): Promise<void> {
         if (action === 'refresh') return this.refresh();
         if (action === 'create') return this.create();
+        if (action === 'create-portfolio') return this.createPortfolio();
         if (!this.current) return;
         if (action === 'snapshot') {
             await this.execute('program.snapshot.create', {
@@ -151,6 +174,12 @@ export class ProgramWorkspaceController {
         if (action === 'hypothesis') return this.hypothesis();
         if (action === 'decision') return this.decision();
         if (action === 'milestone') return this.milestone();
+        if (action === 'assign-portfolio') return this.assignPortfolio();
+        if (action === 'member') return this.member();
+        if (action === 'gate') return this.gate();
+        if (action === 'work') return this.workPackage();
+        if (action === 'evidence') return this.evidence();
+        if (action === 'lineage') return this.lineage();
         if (action === 'link') return this.link();
     }
 
@@ -166,6 +195,28 @@ export class ProgramWorkspaceController {
             const id = (envelope.data?.program as Program).ref.id;
             this.selectProgram(id);
         });
+    }
+
+    private createPortfolio(): void {
+        this.form('Create Portfolio', [
+            { name: 'code', label: 'Portfolio code', required: true, placeholder: 'NEURO' },
+            { name: 'name', label: 'Portfolio name', required: true },
+            { name: 'mandate', label: 'Investment mandate', multiline: true },
+        ], async values => {
+            await this.command('portfolio.create', { portfolio: values });
+            this.status('Portfolio created. It can now govern one or more Programs.', 'ready');
+        });
+    }
+
+    private async assignPortfolio(): Promise<void> {
+        const envelope = await this.command('portfolio.list', { limit: 200 });
+        const portfolios = (envelope.data?.portfolios || []) as Array<Record<string, any>>;
+        if (!portfolios.length) throw new Error('Create a Portfolio before assigning this Program.');
+        this.form('Assign Portfolio', [{ name: 'portfolio_id', label: 'Portfolio', required: true,
+            options: portfolios.map(item => item.ref.id) }], values => this.execute('program.portfolio.assign', {
+            program_ref: this.current!.ref, expected_version: this.current!.version,
+            portfolio_ref: { kind: 'portfolio', id: values.portfolio_id },
+        }, 'Program assigned to its canonical Portfolio.'));
     }
 
     private edit(): void {
@@ -230,10 +281,88 @@ export class ProgramWorkspaceController {
             criteria: values.criteria.split('\n').map(value => value.trim()).filter(Boolean) }));
     }
 
+    private member(): void {
+        this.form('Assign Program Member', [
+            { name: 'principal_id', label: 'Person or agent ID', required: true },
+            { name: 'principal_kind', label: 'Principal kind', options: ['human', 'agent', 'service'] },
+            { name: 'role', label: 'Program role', options: ['program_lead', 'medicinal_chemistry', 'computational_chemistry', 'biology', 'dmpk', 'toxicology', 'synthesis', 'data_science', 'operations', 'reviewer', 'observer'] },
+            { name: 'responsibility', label: 'Explicit responsibility', multiline: true },
+        ], values => this.execute('program.member.assign', {
+            program_ref: this.current!.ref, expected_version: this.current!.version,
+            member: { principal: { kind: values.principal_kind, id: values.principal_id },
+                role: values.role, responsibility: values.responsibility || undefined },
+        }, 'Program responsibility assigned.'));
+    }
+
+    private gate(): void {
+        const stage = this.current!.stage;
+        this.form('Record Stage Gate', [
+            { name: 'key', label: 'Stable gate key', required: true, value: stage },
+            { name: 'stage', label: 'Discovery stage', options: ['discovery', 'target_validation', 'hit_discovery', 'hit_to_lead', 'lead_optimization', 'candidate_selection', 'preclinical'], value: stage },
+            { name: 'title', label: 'Gate title', required: true },
+            { name: 'criteria', label: 'Readiness criteria (one per line)', required: true, multiline: true },
+            { name: 'status', label: 'Assessment state', options: ['planned', 'ready'] },
+            { name: 'target_date', label: 'Target date', placeholder: 'YYYY-MM-DD' },
+            { name: 'evidence_summary', label: 'Evidence boundary', multiline: true },
+        ], values => this.execute('program.stage_gate.record', {
+            program_ref: this.current!.ref, expected_version: this.current!.version,
+            stage_gate: { ...values, target_date: values.target_date || undefined,
+                criteria: values.criteria.split('\n').map(value => value.trim()).filter(Boolean) },
+        }, 'Stage gate recorded as a versioned readiness contract.'));
+    }
+
+    private workPackage(): void {
+        this.form('Record Work Package', [
+            { name: 'key', label: 'Stable work key', required: true }, { name: 'title', label: 'Work package', required: true },
+            { name: 'description', label: 'Scientific deliverable', required: true, multiline: true },
+            { name: 'status', label: 'Status', options: ['backlog', 'ready', 'active', 'blocked', 'done', 'cancelled'] },
+            { name: 'priority', label: 'Priority 1–5', value: '3', required: true },
+            { name: 'owner_id', label: 'Owner ID' }, { name: 'due_on', label: 'Due date', placeholder: 'YYYY-MM-DD' },
+        ], values => this.execute('program.work_package.record', {
+            program_ref: this.current!.ref, expected_version: this.current!.version,
+            work_package: { key: values.key, title: values.title, description: values.description,
+                status: values.status, priority: Number(values.priority), due_on: values.due_on || undefined,
+                owner: values.owner_id ? { kind: 'human', id: values.owner_id } : undefined },
+        }, 'Scientific work package recorded.'));
+    }
+
+    private evidence(): void {
+        const subjects = ['program', 'objective', 'hypothesis', 'decision', 'milestone', 'stage_gate', 'work_package'];
+        this.form('Attach Canonical Evidence', [
+            { name: 'subject_kind', label: 'Subject kind', options: subjects },
+            { name: 'subject_id', label: 'Subject canonical ID', required: true, value: this.current!.ref.id },
+            { name: 'relation', label: 'Relationship', options: ['supports', 'contradicts', 'tests', 'explains'] },
+            { name: 'evidence_kind', label: 'Evidence kind', options: ['evidence', 'measurement', 'dataset', 'artifact', 'literature_reference', 'prediction', 'complex', 'pose', 'field', 'batch', 'sample'] },
+            { name: 'evidence_id', label: 'Evidence canonical ID', required: true },
+            { name: 'claim', label: 'Claim supported or challenged', required: true, multiline: true },
+            { name: 'strength', label: 'Strength 0–1', value: '0.5' },
+        ], values => this.execute('program.evidence.attach', {
+            program_ref: this.current!.ref, expected_version: this.current!.version,
+            binding: { subject_ref: { kind: values.subject_kind, id: values.subject_id }, relation: values.relation,
+                evidence_ref: { kind: values.evidence_kind, id: values.evidence_id }, claim: values.claim,
+                strength: Number(values.strength) },
+        }, 'Evidence linked to the canonical subject.'));
+    }
+
+    private lineage(): void {
+        this.form('Record Canonical Entity Lineage', [
+            { name: 'shape', label: 'Relationship', options: ['compound|has_form|compound_form', 'compound_form|produced_as|batch', 'sample|sampled_from|batch', 'sample|formulated_as|formulation', 'batch|released_by|quality_release', 'sample|assayed_under|protocol', 'sample|has_measurement|measurement'] },
+            { name: 'source_id', label: 'Source canonical ID', required: true },
+            { name: 'target_id', label: 'Target canonical ID', required: true },
+        ], values => {
+            const [sourceKind, relation, targetKind] = values.shape.split('|');
+            return this.execute('program.lineage.record', {
+                program_ref: this.current!.ref, expected_version: this.current!.version,
+                lineage: { source_ref: { kind: sourceKind, id: values.source_id }, relation,
+                    target_ref: { kind: targetKind, id: values.target_id } },
+            }, 'Canonical entity lineage recorded without duplicating either object.');
+        });
+    }
+
     private link(): void {
         this.form('Link canonical object', [
             { name: 'kind', label: 'Object kind', options: OBJECT_KINDS.filter(kind => kind !== 'program') },
-            { name: 'id', label: 'Canonical ID', required: true }, { name: 'role', label: 'Role', required: true, placeholder: 'primary-campaign' },
+            { name: 'id', label: 'Existing canonical entity ID', required: true }, { name: 'role', label: 'Role', required: true, placeholder: 'primary-campaign' },
             { name: 'rationale', label: 'Why it belongs to this Program', multiline: true },
         ], values => this.execute('program.link', {
             program_ref: this.current!.ref, expected_version: this.current!.version,
@@ -304,7 +433,13 @@ export class ProgramWorkspaceController {
 
     private status(message: string, state: string): void {
         const node = document.querySelector<HTMLElement>('[data-program-status]');
-        if (!node) return; node.textContent = message; node.dataset.state = state;
+        if (node) { node.textContent = message; node.dataset.state = state; }
+        const global = document.getElementById('status');
+        if (global) global.textContent = state === 'ready'
+            ? `Connected · Program v${this.current?.version ?? '—'} ready`
+            : state === 'error' ? `Connected · Program error · ${message}`
+                : state === 'empty' ? 'Connected · Program context required'
+                    : 'Connected · loading Program data';
         const runtime = state === 'ready' ? 'ready' : state === 'error' ? 'error'
             : state === 'empty' ? 'needs-context' : 'loading';
         const evidence = state === 'ready' ? 'provenance-backed' : 'none';

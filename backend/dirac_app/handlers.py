@@ -145,6 +145,24 @@ def model_train(input: dict, ctx) -> dict:
         actor=ctx.actor, command_id=ctx.command_id)
 
 
+def model_mesh_train(input: dict, ctx) -> dict:
+    return ctx.kernel.submit(
+        'ml.motif.mesh.train', input, request_id=ctx.request_id,
+        actor=ctx.actor, command_id=ctx.command_id)
+
+
+def model_mesh_predict(input: dict, ctx) -> dict:
+    return ctx.kernel.submit(
+        'ml.motif.mesh.predict', input, request_id=ctx.request_id,
+        actor=ctx.actor, command_id=ctx.command_id)
+
+
+def campaign_bayesian_rank(input: dict, ctx) -> dict:
+    return ctx.kernel.submit(
+        'design.motif.bayesian_acquire', input, request_id=ctx.request_id,
+        actor=ctx.actor, command_id=ctx.command_id)
+
+
 def proposal_generate(input: dict, ctx) -> dict:
     strategy = input["strategy"]
     method_id = ("design.motif.local_edits" if strategy == "local_edit"
@@ -206,6 +224,14 @@ def program_list(input: dict, ctx) -> dict:
     return _programs(ctx).list(lifecycle=input.get("lifecycle"), limit=input.get("limit", 100))
 
 
+def portfolio_create(input: dict, ctx) -> dict:
+    return _programs(ctx).create_portfolio(input["portfolio"], ctx.actor, ctx.request_id)
+
+
+def portfolio_list(input: dict, ctx) -> dict:
+    return _programs(ctx).list_portfolios(limit=input.get("limit", 100))
+
+
 def program_update(input: dict, ctx) -> dict:
     return _programs(ctx).update(input["program_ref"], input["expected_version"],
                                  input["patch"], ctx.actor, ctx.request_id)
@@ -233,6 +259,46 @@ def program_milestone_record(input: dict, ctx) -> dict:
     return _programs(ctx).record_milestone(
         input["program_ref"], input["expected_version"], input["milestone"],
         ctx.actor, ctx.request_id)
+
+
+def program_portfolio_assign(input: dict, ctx) -> dict:
+    return _programs(ctx).assign_portfolio(
+        input["program_ref"], input["expected_version"], input["portfolio_ref"],
+        ctx.actor, ctx.request_id)
+
+
+def program_member_assign(input: dict, ctx) -> dict:
+    return _programs(ctx).assign_member(
+        input["program_ref"], input["expected_version"], input["member"],
+        ctx.actor, ctx.request_id)
+
+
+def program_stage_gate_record(input: dict, ctx) -> dict:
+    return _programs(ctx).record_stage_gate(
+        input["program_ref"], input["expected_version"], input["stage_gate"],
+        ctx.actor, ctx.request_id)
+
+
+def program_work_package_record(input: dict, ctx) -> dict:
+    return _programs(ctx).record_work_package(
+        input["program_ref"], input["expected_version"], input["work_package"],
+        ctx.actor, ctx.request_id)
+
+
+def program_evidence_attach(input: dict, ctx) -> dict:
+    return _programs(ctx).attach_evidence(
+        input["program_ref"], input["expected_version"], input["binding"],
+        ctx.actor, ctx.request_id)
+
+
+def program_lineage_record(input: dict, ctx) -> dict:
+    return _programs(ctx).record_lineage(
+        input["program_ref"], input["expected_version"], input["lineage"],
+        ctx.actor, ctx.request_id)
+
+
+def program_health_get(input: dict, ctx) -> dict:
+    return _programs(ctx).health(input["program_ref"])
 
 
 def program_link(input: dict, ctx) -> dict:

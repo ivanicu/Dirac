@@ -89,6 +89,43 @@ class ProgramAggregateTest(unittest.TestCase):
         self.assertTrue(loaded["ok"], loaded)
         self.assertEqual(loaded["data"]["program"]["code"], "CMD-1")
 
+    def test_program_operating_system_keeps_governance_in_one_aggregate(self) -> None:
+        portfolio = self.repo.create_portfolio({"code": "NEURO", "name": "Neuroscience"}, ACTOR)["portfolio"]
+        assigned = self.repo.assign_portfolio(self.program_ref, 1, portfolio["ref"], ACTOR, "portfolio-1")
+        self.assertEqual(assigned["program_version"], 2)
+        self.repo.assign_member(self.program_ref, 2, {
+            "principal": ACTOR, "role": "program_lead", "responsibility": "Own the decision loop",
+        }, ACTOR, "member-1")
+        self.repo.record_stage_gate(self.program_ref, 3, {
+            "key": "hit-to-lead", "stage": "hit_to_lead", "title": "Hit-to-lead readiness",
+            "criteria": ["Replicated potency", {"criterion": "Selectivity window", "status": "met"}],
+            "status": "ready",
+        }, ACTOR, "gate-1")
+        work = self.repo.record_work_package(self.program_ref, 4, {
+            "key": "confirm-potency", "title": "Confirm potency",
+            "description": "Run an orthogonal assay", "status": "active", "priority": 1,
+            "owner": ACTOR,
+        }, ACTOR, "work-1")
+        overview = self.repo.get(self.program_ref)["program"]
+        self.assertEqual(overview["portfolio_ref"], portfolio["ref"])
+        self.assertEqual(overview["counts"]["members"], 1)
+        self.assertEqual(overview["counts"]["stage_gates"], 1)
+        self.assertEqual(work["work_package"]["status"], "active")
+        self.assertEqual(overview["health"]["basis"], "rule-based-operational-readiness-v1")
+
+    def test_canonical_lineage_shapes_do_not_collapse_physical_identity(self) -> None:
+        edge = self.repo.record_lineage(self.program_ref, 1, {
+            "source_ref": {"kind": "compound", "id": "compound-1"},
+            "relation": "has_form", "target_ref": {"kind": "compound_form", "id": "form-1"},
+        }, ACTOR, "lineage-1")
+        self.assertEqual(edge["lineage"]["source_ref"]["id"], "compound-1")
+        self.assertEqual(edge["lineage"]["target_ref"]["id"], "form-1")
+        with self.assertRaises(failures.DiracInvalidParameters):
+            self.repo.record_lineage(self.program_ref, 2, {
+                "source_ref": {"kind": "compound", "id": "compound-1"},
+                "relation": "sampled_from", "target_ref": {"kind": "sample", "id": "sample-1"},
+            }, ACTOR, "bad-lineage")
+
 
 if __name__ == "__main__":
     unittest.main()
