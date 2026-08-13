@@ -41,6 +41,8 @@ ledger and gets a working invocation with honest provenance saying so.
 from __future__ import annotations
 
 import sys
+import inspect
+import json
 import threading
 import time
 from dataclasses import dataclass, field
@@ -50,6 +52,8 @@ import artifacts as A
 import catalog as C
 import execution as E
 import failures
+from execution_control.protocol import CancellationToken
+from execution_control.identity import ExecutionIdentity, sha256_digest
 
 
 @dataclass
@@ -77,6 +81,13 @@ class InvocationContext:
     # never has to check whether anyone is listening.
     on_progress: Callable[[str, float], None] = lambda stage, frac: None
     deadline: float | None = None
+    # Narrow data-plane capabilities.  New Motif handlers receive only the
+    # Artifact IDs authorized by their ExecutionRequest; they never receive a
+    # database connection or arbitrary filesystem path.
+    artifact_reader: Any = None
+    artifact_writer: Any = None
+    checkpoint_writer: Any = None
+    cancellation_token: CancellationToken = field(default_factory=CancellationToken)
 
     def check_budget(self) -> None:
         """A handler calls this at its own checkpoints.
@@ -86,6 +97,7 @@ class InvocationContext:
         better than a timeout the architecture cannot honour: an uncooperative handler
         overruns visibly here rather than silently everywhere.
         """
+        self.cancellation_token.check()
         if self.deadline is not None and time.time() > self.deadline:
             raise failures.DiracBudgetExceeded(
                 f'{self.method_id} exceeded its {self.budget_seconds}s budget',
@@ -135,6 +147,13 @@ class InvocationService:
                  cache: Any | None = None,
                  executor: Any | None = None,
                  trace_store: Any | None = None,
+                 artifact_reader: Any | None = None,
+                 artifact_writer: Any | None = None,
+                 checkpoint_writer: Any | None = None,
+                 motif_governance: Any | None = None,
+                 program_repository: Any | None = None,
+                 execution_identity_resolver: Callable[[C.MethodSpec, dict], ExecutionIdentity] | None = None,
+                 production_execution: bool = False,
                  toolkit_versions: dict[str, str] | None = None) -> None:
         self.catalog = catalog
         self.store = store or A.MemoryArtifactStore()
@@ -142,8 +161,16 @@ class InvocationService:
         self.cache = cache
         self.executor = executor or E.InlineExecutor()
         self.command_traces = trace_store
+        self.artifact_reader = artifact_reader
+        self.artifact_writer = artifact_writer
+        self.checkpoint_writer = checkpoint_writer
+        self.motif_governance = motif_governance
+        self.program_repository = program_repository
+        self.execution_identity_resolver = execution_identity_resolver
+        self.production_execution = production_execution
         self.toolkit_versions = toolkit_versions or {}
         self._futures: dict[str, Any] = {}
+        self._cancellation_tokens: dict[str, CancellationToken] = {}
         self._futures_lock = threading.Lock()
         self.counters = {'invoked': 0, 'cache_hit': 0, 'refused': 0, 'failed': 0,
                          'artifacts_registered': 0}
@@ -201,6 +228,14 @@ class InvocationService:
                 'kind': getattr(self.command_traces, 'kind', 'none'),
                 'durability': getattr(self.command_traces, 'durability', 'none'),
             },
+            'motif_governance': {
+                'kind': getattr(self.motif_governance, 'kind', 'none'),
+                'durability': getattr(self.motif_governance, 'durability', 'none'),
+            },
+            'program_repository': {
+                'kind': getattr(self.program_repository, 'kind', 'none'),
+                'durability': getattr(self.program_repository, 'durability', 'none'),
+            },
             # Inline Python cannot interrupt C/Fortran work. Queued cancellation becomes
             # available when ThreadExecutor owns a submitted future.
             'cancellation': 'queued-only',
@@ -227,6 +262,9 @@ class InvocationService:
     def cancel_job(self, job_id: str) -> dict:
         with self._futures_lock:
             future = self._futures.get(job_id)
+            token = self._cancellation_tokens.get(job_id)
+        if token is not None:
+            token.request('job.cancel command')
         if future is not None and not future.running() and not future.done():
             future.cancel()
         row = self.ledger.request_cancel(job_id) if self.ledger is not None and \
@@ -258,7 +296,8 @@ class InvocationService:
         """Create a reconnectable queued Job and execute it on the injected executor."""
         spec = self.catalog.get(method_id)
         self.catalog.validate(method_id, payload)
-        spec.handler()  # fail before minting a handle that can never run
+        handler = spec.handler()  # fail before minting a handle that can never run
+        execution_identity = self._execution_identity(spec, payload, handler)
         if 'job' not in spec.execution.get('supported_modes', []):
             raise failures.DiracUnsupported(
                 f'{method_id} does not declare job execution',
@@ -278,16 +317,20 @@ class InvocationService:
         actor_ref = self._actor(actor)
         job_id, conflicted = self._open_job(
             spec, payload, budget, queued=True, actor=actor_ref,
-            command_id=command_id, request_id=request_id)
+            command_id=command_id, request_id=request_id,
+            execution_identity=execution_identity)
         if job_id is None:
             raise failures.DiracInternal(
                 'the JobStore could not create or resolve a durable job handle')
         if not conflicted:
+            cancellation_token = CancellationToken()
             future = self.executor.submit(
                 self._run_submitted, job_id, method_id, payload,
-                inline_max, budget, request_id, actor_ref, command_id)
+                inline_max, budget, request_id, actor_ref, command_id,
+                cancellation_token)
             with self._futures_lock:
                 self._futures[job_id] = future
+                self._cancellation_tokens[job_id] = cancellation_token
             future.add_done_callback(lambda _f, jid=job_id: self._forget_future(jid))
         return {
             'ok': True,
@@ -295,6 +338,7 @@ class InvocationService:
             'artifacts': [], 'warnings': [],
             'meta': {'envelope': 2, 'method_id': method_id,
                      'version': spec.version, 'job_id': job_id,
+                     'execution_digest': execution_identity.digest,
                      'execution_mode': 'job', 'deduplicated': conflicted,
                      'request_id': request_id, 'actor': actor_ref,
                      'command': command_id},
@@ -303,7 +347,8 @@ class InvocationService:
     def _run_submitted(self, job_id: str, method_id: str, payload: dict,
                        inline_max: int | None, budget_seconds: float | None,
                        request_id: str | None, actor: dict[str, str],
-                       command_id: str | None) -> None:
+                       command_id: str | None,
+                       cancellation_token: CancellationToken) -> None:
         row = self.ledger.get(job_id)
         if row is None or row.get('state') == 'cancelled':
             return
@@ -311,11 +356,13 @@ class InvocationService:
         self.invoke(method_id, payload, inline_max=inline_max,
                     budget_seconds=budget_seconds, request_id=request_id,
                     actor=actor, command_id=command_id,
-                    _preopened_job_id=job_id)
+                    _preopened_job_id=job_id,
+                    _cancellation_token=cancellation_token)
 
     def _forget_future(self, job_id: str) -> None:
         with self._futures_lock:
             self._futures.pop(job_id, None)
+            self._cancellation_tokens.pop(job_id, None)
 
     # ── the write side ────────────────────────────────────────────────────────
     def invoke(self, method_id: str, payload: dict, *,
@@ -324,7 +371,8 @@ class InvocationService:
                request_id: str | None = None,
                actor: dict[str, str] | None = None,
                command_id: str | None = None,
-               _preopened_job_id: str | None = None) -> dict:
+               _preopened_job_id: str | None = None,
+               _cancellation_token: CancellationToken | None = None) -> dict:
         """Run a method and return a v2 envelope. Never raises for a REFUSAL.
 
         A refusal is a RESULT — the molecule is too large, the basis does not cover
@@ -346,6 +394,7 @@ class InvocationService:
             spec = self.catalog.get(method_id)
             self.catalog.validate(method_id, payload)
             handler = spec.handler()
+            execution_identity = self._execution_identity(spec, payload, handler)
 
             budget = budget_seconds
             if budget is None:
@@ -359,7 +408,8 @@ class InvocationService:
             # withholding a free answer.
             hit = None
             if spec.cacheable and self.cache is not None:
-                hit = self.cache.lookup(method_id, payload)
+                hit = self.cache.lookup(
+                    method_id, payload, execution_digest=execution_identity.digest)
             if hit is not None:
                 self.counters['cache_hit'] += 1
                 # VALIDATED, exactly like a computed result. Written without this first, and
@@ -371,7 +421,10 @@ class InvocationService:
                 env = self._envelope(spec, hit, t0, cache='db',
                                      inline_max=inline_max, request_id=request_id,
                                      job_id=job_id, actor=actor_ref,
-                                     command_id=command_id)
+                                     command_id=command_id,
+                                     execution_identity=execution_identity)
+                self._project_completion(spec, payload, hit, env, actor_ref, job_id)
+                self.catalog.validate_output(method_id, hit.result)
                 if job_id is not None and self.ledger is not None:
                     self.ledger.done(
                         job_id, seconds=round(time.time() - t0, 3),
@@ -386,11 +439,16 @@ class InvocationService:
             if self.ledger is not None and job_id is None:
                 job_id, _ = self._open_job(
                     spec, payload, budget, actor=actor_ref,
-                    command_id=command_id, request_id=request_id)
+                    command_id=command_id, request_id=request_id,
+                    execution_identity=execution_identity)
 
             ctx = InvocationContext(
                 method_id=method_id, version=spec.version, budget_seconds=budget,
                 job_id=job_id, spec=spec,
+                artifact_reader=self.artifact_reader,
+                artifact_writer=self.artifact_writer,
+                checkpoint_writer=self.checkpoint_writer,
+                cancellation_token=_cancellation_token or CancellationToken(),
                 deadline=(t0 + budget) if budget else None)
             out = self.executor.execute(handler, payload, ctx)
             if not isinstance(out, HandlerResult):
@@ -407,16 +465,22 @@ class InvocationService:
             env = self._envelope(spec, out, t0, cache=out.cache,
                                  inline_max=inline_max, request_id=request_id,
                                  job_id=job_id, actor=actor_ref,
-                                 command_id=command_id)
-            # Cache only after ArtifactStore has minted stable references. Generic caches
-            # persist those references; specialised field caches may still use the bytes in
-            # HandlerResult. Either way persistence follows validation and cannot turn a
-            # valid scientific result into a failed invocation.
+                                 command_id=command_id,
+                                 execution_identity=execution_identity)
+            self._project_completion(spec, payload, out, env, actor_ref, job_id)
+            # Completion projectors may add governed Dataset/Model release refs.
+            # Validate again so the augmented terminal result is also contractual.
+            self.catalog.validate_output(method_id, out.result)
+            # Cache only after ArtifactStore has minted stable references and governed
+            # completion projection has passed. Generic caches persist those references;
+            # specialised field caches may still use the bytes in HandlerResult. A cache
+            # outage remains non-authoritative and cannot undo a valid terminal result.
             if spec.cacheable and self.cache is not None and hasattr(self.cache, 'store'):
                 try:
                     self.cache.store(method_id, payload, out,
                                      seconds=round(time.time() - t0, 3), job_id=job_id,
-                                     envelope=env)
+                                     envelope=env,
+                                     execution_digest=execution_identity.digest)
                 except Exception as e:                              # noqa: BLE001
                     print(f'[invoke] cache write unavailable ({type(e).__name__}: {e}) — '
                           f'the result is valid but was not persisted', file=sys.stderr,
@@ -480,7 +544,8 @@ class InvocationService:
     def _open_job(self, spec: C.MethodSpec, payload: dict,
                   budget: float | None, *, queued: bool = False,
                   actor: dict[str, str], command_id: str | None,
-                  request_id: str | None) -> tuple[str | None, bool]:
+                  request_id: str | None,
+                  execution_identity: ExecutionIdentity | None = None) -> tuple[str | None, bool]:
         """Open a ledger row, and never let the ledger break the invocation.
 
         A job row is OBSERVABILITY. If the database is down, the science must still
@@ -496,6 +561,9 @@ class InvocationService:
                                       lambda _m: None)(spec.method_id),
                 input_sha256=hashlib.sha256(canonical.encode()).digest(),
                 params=dict(payload.get('parameters') or {}),
+                request_digest=(bytes.fromhex(execution_identity.cache_key(
+                    payload, seed_scope_digest=None).removeprefix('sha256:'))
+                    if execution_identity else None),
                 budget_seconds=budget, queued=queued,
                 actor_kind=actor['kind'], actor_id=actor['id'],
                 command_id=command_id, request_id=request_id)
@@ -538,10 +606,31 @@ class InvocationService:
                            f'not declare; a client planning from the contract will '
                            f'not know to look for it'})
 
+    def _project_completion(self, spec: C.MethodSpec, payload: dict,
+                            out: HandlerResult, envelope: dict,
+                            actor: dict[str, str], job_id: str | None) -> None:
+        governed = {'data.motif.snapshot', 'ml.motif.train'}
+        if spec.method_id not in governed:
+            return
+        if self.motif_governance is None or not hasattr(
+                self.motif_governance, 'project_completion'):
+            raise failures.DiracFailure(
+                'DB_UNAVAILABLE',
+                f'{spec.method_id} requires durable Motif release registration; '
+                'the completion projector is unavailable')
+        projected = self.motif_governance.project_completion(
+            method_id=spec.method_id, payload=payload, result=out.result,
+            artifacts=list(envelope.get('artifacts') or []),
+            envelope_meta=dict(envelope.get('meta') or {}),
+            actor=actor, job_id=job_id)
+        if projected:
+            out.result.update(projected)
+
     def _envelope(self, spec: C.MethodSpec, out: HandlerResult, t0: float, *,
                   cache: str, inline_max: int | None, request_id: str | None,
                   job_id: str | None, actor: dict[str, str],
-                  command_id: str | None) -> dict:
+                  command_id: str | None,
+                  execution_identity: ExecutionIdentity) -> dict:
         refs = []
         for role, data in out.artifacts:
             declared = next((a for a in spec.artifacts if a.role == role), None)
@@ -577,5 +666,39 @@ class InvocationService:
                 'parameters_used': out.parameters_used,
                 'toolkits': self.toolkit_versions,
                 'provenance': out.provenance,
+                'execution_digest': execution_identity.digest,
+                'execution_identity': execution_identity.to_dict(),
             },
         }
+
+    def _execution_identity(self, spec: C.MethodSpec, payload: dict,
+                            handler: Callable) -> ExecutionIdentity:
+        if self.execution_identity_resolver is not None:
+            identity = self.execution_identity_resolver(spec, payload)
+            if identity.method_id != spec.method_id:
+                raise failures.DiracInternal(
+                    'execution identity method_id does not match the invoked Method')
+            return identity
+        if self.production_execution:
+            raise failures.DiracInternal(
+                'production execution requires a complete ExecutionIdentity resolver')
+        descriptor_digest = sha256_digest(json.dumps(
+            spec.descriptor, sort_keys=True, separators=(',', ':')))
+        try:
+            source = inspect.getsource(handler)
+        except (OSError, TypeError):
+            source = f'{handler.__module__}:{handler.__qualname__}'
+        source = f'{source}\nregistered-method-version:{spec.version}'
+        checkpoint = ((payload.get('checkpoint') or {}).get('digest')
+                      if isinstance(payload.get('checkpoint'), dict) else None)
+        calibration = ((payload.get('calibration') or {}).get('digest')
+                       if isinstance(payload.get('calibration'), dict) else None)
+        return ExecutionIdentity.build(
+            method_id=spec.method_id,
+            method_descriptor_digest=descriptor_digest,
+            handler_source_digest=sha256_digest(source),
+            checkpoint_digests=[checkpoint] if checkpoint else (),
+            calibration_digest=calibration,
+            parameter_digest=sha256_digest(json.dumps(
+                payload.get('parameters') or {}, sort_keys=True, separators=(',', ':'))),
+        )

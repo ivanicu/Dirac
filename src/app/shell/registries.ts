@@ -32,7 +32,7 @@ export const WORKBENCH_SURFACES = [
 ] as const;
 
 export const WORKSPACES: readonly WorkspaceDefinition[] = [
-    { id: 'programs', label: 'Programs', icon: '◉', defaultView: 'programs.overview', availability: 'gated', shellReady: true },
+    { id: 'programs', label: 'Programs', icon: '◉', defaultView: 'programs.overview', availability: 'implemented', shellReady: true },
     { id: 'design', label: 'Design', icon: '◇', defaultView: 'design.builder', availability: 'implemented', shellReady: true },
     { id: 'structures', label: 'Structures', icon: '◈', defaultView: 'structures.complex', availability: 'implemented', shellReady: true },
     { id: 'campaigns', label: 'Campaigns', icon: '⊞', defaultView: 'campaigns.compounds', availability: 'gated', shellReady: true },
@@ -54,7 +54,11 @@ const view = (id: string, workspace: WorkspaceId, label: string, route: string,
     shellReady: true, modules, primaryObjectKinds, actions, acceptedContext: primaryObjectKinds });
 
 export const VIEWS: readonly ViewDefinition[] = [
-    view('programs.overview', 'programs', 'Overview', '/p/:programId', false),
+    view('programs.overview', 'programs', 'Overview', '/p/:programId', true,
+        ['program.overview'], ['program'], ['program.list', 'program.get', 'program.create',
+            'program.update', 'program.objective.record', 'program.hypothesis.record',
+            'program.decision.record', 'program.milestone.record', 'program.link',
+            'program.snapshot.create']),
     view('programs.hypotheses', 'programs', 'Hypotheses & Goals', '/p/:programId/hypotheses'),
     view('programs.progress', 'programs', 'Progress & Decisions', '/p/:programId/progress'),
     view('design.builder', 'design', 'Builder', '/p/:programId/design/builder', true,
@@ -96,6 +100,7 @@ export const VIEWS: readonly ViewDefinition[] = [
 ] as const;
 
 export const MODULES: readonly ModuleDefinition[] = [
+    { id: 'program.overview', version: 1, supportedViews: ['programs.overview'], requiresContext: [], consumesObjects: ['program', 'target', 'objective', 'hypothesis', 'decision', 'milestone'], providesCommands: ['program.list', 'program.get', 'program.create', 'program.update', 'program.objective.record', 'program.hypothesis.record', 'program.decision.record', 'program.milestone.record', 'program.link', 'program.snapshot.create'], surfaces: ['ledger'], placement: 'main', priority: 100 },
     { id: 'scene.viewport', version: 1, supportedViews: ['structures.complex', 'structures.site', 'structures.dynamics'], requiresContext: [], consumesObjects: ['complex', 'molecule'], providesCommands: [], surfaces: ['focus', 'semantic', 'vfx'], placement: 'main', priority: 100 },
     { id: 'structure.interaction-map', version: 1, supportedViews: ['structures.complex'], requiresContext: ['complex'], consumesObjects: ['complex'], providesCommands: ['structure.interactions'], surfaces: ['ledger'], placement: 'right', priority: 80 },
     { id: 'structure.field-overlay', version: 1, supportedViews: ['structures.complex', 'structures.site'], requiresContext: ['molecule'], consumesObjects: ['field', 'artifact'], providesCommands: ['structure.field.compute', 'structure.surface.compute'], surfaces: ['fields'], placement: 'right', priority: 90 },

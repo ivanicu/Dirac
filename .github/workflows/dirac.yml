@@ -87,6 +87,13 @@ jobs:
         run: |
           pip install --quiet jsonschema
           python3 scripts/gen_contracts.py --check
+          python3 scripts/check_public_registry.py
+          PYTHONPATH=backend python3 -m unittest \
+            backend.tests.test_motif_contracts \
+            backend.tests.test_execution_identity \
+            backend.tests.test_local_cas \
+            backend.tests.test_execution_control \
+            backend.tests.test_motif_core
 
       - name: 'Gate 7 — contract drift (errors.json / iface.* / FIELD_META_SCHEMA)'
         if: ${{ !cancelled() }}
@@ -143,3 +150,40 @@ jobs:
           node scripts/watch_digital_twin.mjs --selftest
           python3 scripts/check_digital_twin.py --selftest
           python3 scripts/check_digital_twin.py
+
+  contract-database:
+    name: Motif contract and clean-database alignment
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: dirac
+          POSTGRES_DB: dirac
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d dirac"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DIRAC_DSN: postgresql://postgres:dirac@localhost:5432/dirac
+      PGPASSWORD: dirac
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: PostgreSQL client and Python
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Clean migration 000 through current
+        run: |
+          for file in backend/db/migrations/*.sql; do
+            psql "$DIRAC_DSN" -X -v ON_ERROR_STOP=1 -f "$file"
+          done
+      - name: Canonical vocabulary matches the live schema
+        run: |
+          python3 scripts/verify_contract_db_alignment.py
+          bash backend/db/check_migration_hashes.sh

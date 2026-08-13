@@ -114,6 +114,331 @@
       "output_schema": {"type":"object"}
     },
     {
+      "id": "dataset.snapshot.create", "version": 1, "category": "dataset",
+      "mutability": "compute", "execution_class": "long", "executors": ["service"],
+      "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",
+      "input_object_kinds": ["measurement", "dataset"], "output_object_kinds": ["dataset", "artifact", "job"],
+      "errors": ["INVALID_PARAMETERS", "INTERNAL"],
+      "handler": "handlers:dataset_snapshot_create",
+      "input_schema": {
+        "type": "object", "additionalProperties": false,
+        "required": ["selection_query", "endpoint_definitions", "rows", "registration"],
+        "properties": {
+          "selection_query": {"type": "string", "minLength": 1},
+          "split_key": {"type": "string"},
+          "endpoint_definitions": {"type": "array", "minItems": 1, "items": {"type": "object"}},
+          "rows": {"type": "array", "items": {"type": "object"}},
+          "registration": {
+            "type": "object", "additionalProperties": false,
+            "required": ["program_ref", "campaign_ref", "identity_policy_release_id", "data_classification"],
+            "properties": {
+              "program_ref": {"$ref": "object-ref"},
+              "campaign_ref": {"$ref": "object-ref"},
+              "identity_policy_release_id": {"type": "string", "format": "uuid"},
+              "data_classification": {"enum": ["public", "internal", "partner_confidential", "restricted", "regulated"]}
+            }
+          }
+        }
+      },
+      "output_schema": {"type": "object", "required": ["job"]}
+    },
+    {
+      "id": "campaign.rank", "version": 1, "category": "campaign",
+      "mutability": "compute", "execution_class": "long", "executors": ["service"],
+      "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",
+      "input_object_kinds": ["compound", "prediction", "campaign"], "output_object_kinds": ["decision", "artifact", "job"],
+      "errors": ["INVALID_PARAMETERS", "INTERNAL"],
+      "handler": "handlers:campaign_rank",
+      "input_schema": {
+        "type": "object", "additionalProperties": false,
+        "required": ["candidates", "objectives", "capacity"],
+        "properties": {
+          "candidates": {"type": "array", "maxItems": 50000, "items": {"type": "object"}},
+          "objectives": {"type": "array", "minItems": 1, "items": {"type": "object"}},
+          "hard_constraints": {"type": "array", "items": {"type": "object"}},
+          "capacity": {"type": "integer", "minimum": 0}
+        }
+      },
+      "output_schema": {"type": "object", "required": ["job"]}
+    },
+    {
+      "id": "model.train", "version": 1, "category": "model",
+      "mutability": "compute", "execution_class": "long", "executors": ["service"],
+      "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",
+      "input_object_kinds": ["dataset"], "output_object_kinds": ["model", "artifact", "job"],
+      "errors": ["INVALID_PARAMETERS", "PARSE", "INTERNAL"],
+      "handler": "handlers:model_train",
+      "input_schema": {
+        "type": "object", "additionalProperties": false, "required": ["endpoint_key", "rows", "registration"],
+        "properties": {
+          "endpoint_key": {"type": "string", "minLength": 1},
+          "radius": {"type": "integer", "minimum": 1, "maximum": 6},
+          "n_bits": {"type": "integer", "minimum": 128, "maximum": 16384},
+          "ridge_alpha": {"type": "number", "exclusiveMinimum": 0},
+          "rows": {"type": "array", "minItems": 2, "items": {"type": "object"}},
+          "registration": {
+            "type": "object", "additionalProperties": false,
+            "required": ["dataset_snapshot_ref", "model_object_id", "release_name", "source_commit", "intended_use", "prohibited_use", "known_limitations"],
+            "properties": {
+              "dataset_snapshot_ref": {"$ref": "object-ref"},
+              "model_object_id": {"type": "string", "minLength": 1, "maxLength": 256},
+              "release_name": {"type": "string", "minLength": 1, "maxLength": 256},
+              "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+              "intended_use": {"type": "object"}, "prohibited_use": {"type": "object"},
+              "known_limitations": {"type": "object"}
+            }
+          }
+        }
+      },
+      "output_schema": {"type": "object", "required": ["job"]}
+    },
+    {
+      "id": "proposal.generate", "version": 1, "category": "design",
+      "mutability": "compute", "execution_class": "long", "executors": ["service"],
+      "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",
+      "input_object_kinds": ["compound", "building_block", "campaign"], "output_object_kinds": ["compound", "synthesis_route", "artifact", "job"],
+      "errors": ["INVALID_PARAMETERS", "PARSE", "INTERNAL"], "handler": "handlers:proposal_generate",
+      "input_schema": {
+        "type": "object", "required": ["strategy", "generator_release_id", "strategy_release_id", "identity_policy_release_id", "root_seed", "created_at"],
+        "properties": {
+          "strategy": {"enum": ["local_edit", "reaction"]},
+          "parents": {"type": "array", "items": {"type": "object"}},
+          "transforms": {"type": "array", "items": {"type": "object"}},
+          "reactants": {"type": "array", "items": {"type": "object"}},
+          "templates": {"type": "array", "items": {"type": "object"}},
+          "generator_release_id": {"type": "string", "format": "uuid"},
+          "strategy_release_id": {"type": "string", "format": "uuid"},
+          "identity_policy_release_id": {"type": "string", "format": "uuid"},
+          "root_seed": {"type": "integer", "minimum": 0},
+          "created_at": {"type": "string", "format": "date-time"},
+          "constraints": {"type": "object"}, "max_proposals": {"type": "integer", "minimum": 1, "maximum": 50000}
+        },
+        "allOf": [
+          {"if": {"properties": {"strategy": {"const": "local_edit"}}}, "then": {"required": ["parents", "transforms"]}},
+          {"if": {"properties": {"strategy": {"const": "reaction"}}}, "then": {"required": ["reactants", "templates"]}}
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": {"type": "object", "required": ["job"]}
+    },
+    {
+      "id": "endpoint.register", "version": 1, "category": "endpoint",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "content-digest", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["assay", "protocol", "target"], "output_object_kinds": ["artifact"],
+      "errors": ["INVALID_PARAMETERS", "DB_UNAVAILABLE", "INTERNAL"],
+      "handler": "handlers:endpoint_register",
+      "input_schema": {
+        "type": "object", "additionalProperties": false, "required": ["definition"],
+        "properties": {"definition": {"type": "object"}}
+      },
+      "output_schema": {
+        "type": "object", "additionalProperties": false,
+        "required": ["endpoint", "endpoint_definition_id", "digest", "artifact", "created"],
+        "properties": {
+          "endpoint": {"type": "object", "required": ["id", "version"]},
+          "endpoint_definition_id": {"type": "string", "format": "uuid"},
+          "digest": {"type": "string", "format": "sha256-digest"},
+          "artifact": {"type": "object"}, "created": {"type": "boolean"}
+        }
+      }
+    },
+    {
+      "id": "objective.save", "version": 1, "category": "design",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "content-digest", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program", "campaign", "target"], "output_object_kinds": ["campaign", "target", "artifact"],
+      "errors": ["INVALID_PARAMETERS", "DB_UNAVAILABLE", "INTERNAL"],
+      "handler": "handlers:objective_save",
+      "input_schema": {
+        "type": "object", "additionalProperties": false, "required": ["objective"],
+        "properties": {"objective": {"type": "object"}}
+      },
+      "output_schema": {
+        "type": "object", "additionalProperties": false,
+        "required": ["objective_spec_id", "objective", "digest", "artifact", "created"],
+        "properties": {
+          "objective_spec_id": {"type": "string", "format": "uuid"},
+          "objective": {"type": "object"},
+          "digest": {"type": "string", "format": "sha256-digest"},
+          "artifact": {"type": "object"}, "created": {"type": "boolean"}
+        }
+      }
+    },
+    {
+      "id": "policy.release.register", "version": 1, "category": "policy",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "content-digest", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["artifact"], "output_object_kinds": ["artifact"],
+      "errors": ["INVALID_PARAMETERS", "DB_UNAVAILABLE", "INTERNAL"],
+      "handler": "handlers:policy_release_register",
+      "input_schema": {
+        "type": "object", "additionalProperties": false, "required": ["release"],
+        "properties": {"release": {"type": "object"}}
+      },
+      "output_schema": {
+        "type": "object", "additionalProperties": false,
+        "required": ["policy_release_id", "policy_kind", "name", "version", "lifecycle", "digest", "artifact", "created"],
+        "properties": {
+          "policy_release_id": {"type": "string", "format": "uuid"},
+          "policy_kind": {"type": "string"}, "name": {"type": "string"},
+          "version": {"type": "string"}, "lifecycle": {"type": "string"},
+          "digest": {"type": "string", "format": "sha256-digest"},
+          "artifact": {"type": "object"}, "created": {"type": "boolean"}
+        }
+      }
+    },
+    {
+      "id": "result.ingest", "version": 1, "category": "measurement",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "record-identity-and-digest", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["sample", "batch", "compound", "assay", "protocol", "artifact"],
+      "output_object_kinds": ["measurement", "artifact"],
+      "errors": ["INVALID_PARAMETERS", "DB_UNAVAILABLE", "INTERNAL"],
+      "handler": "handlers:result_ingest",
+      "input_schema": {
+        "type": "object", "additionalProperties": false, "required": ["measurements"],
+        "properties": {
+          "measurements": {"type": "array", "minItems": 1, "maxItems": 1000, "items": {"type": "object"}}
+        }
+      },
+      "output_schema": {
+        "type": "object", "additionalProperties": false,
+        "required": ["measurements", "created_count", "deduplicated_count"],
+        "properties": {
+          "measurements": {"type": "array", "items": {"type": "object"}},
+          "created_count": {"type": "integer", "minimum": 0},
+          "deduplicated_count": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    {
+      "id": "program.create", "version": 1, "category": "program",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-or-program-code", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["target"], "output_object_kinds": ["program", "artifact"],
+      "errors": ["INVALID_PARAMETERS", "DB_UNAVAILABLE", "NOT_FOUND", "INTERNAL"],
+      "handler": "handlers:program_create",
+      "input_schema": {
+        "type": "object", "additionalProperties": false, "required": ["program"],
+        "properties": {"program": {
+          "type": "object", "additionalProperties": false, "required": ["code", "name"],
+          "properties": {
+            "code": {"type": "string", "minLength": 1, "maxLength": 96},
+            "name": {"type": "string", "minLength": 1, "maxLength": 256},
+            "summary": {"type": "string", "maxLength": 4000}, "indication": {"type": "string", "maxLength": 256},
+            "modality": {"type": "string", "maxLength": 256}, "owner_id": {"type": "string", "maxLength": 256},
+            "lifecycle": {"enum": ["draft", "active", "paused", "completed", "archived"]},
+            "stage": {"enum": ["discovery", "target_validation", "hit_discovery", "hit_to_lead", "lead_optimization", "candidate_selection", "preclinical"]},
+            "target_ref": {"$ref": "object-ref"}
+          }
+        }}
+      },
+      "output_schema": {"type": "object", "required": ["program", "created"]}
+    },
+    {
+      "id": "program.get", "version": 1, "category": "program",
+      "mutability": "read", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "safe", "job_policy": "forbidden", "provenance_policy": "optional",
+      "input_object_kinds": ["program"], "output_object_kinds": ["program", "objective", "hypothesis", "decision", "milestone"],
+      "errors": ["DB_UNAVAILABLE", "NOT_FOUND", "INTERNAL"], "handler": "handlers:program_get",
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["program_ref"], "properties": {"program_ref": {"$ref": "object-ref"}}},
+      "output_schema": {"type": "object", "required": ["program"]}
+    },
+    {
+      "id": "program.list", "version": 1, "category": "program",
+      "mutability": "read", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "safe", "job_policy": "forbidden", "provenance_policy": "optional",
+      "input_object_kinds": [], "output_object_kinds": ["program"],
+      "errors": ["INVALID_PARAMETERS", "DB_UNAVAILABLE", "INTERNAL"], "handler": "handlers:program_list",
+      "input_schema": {"type": "object", "additionalProperties": false, "properties": {
+        "lifecycle": {"enum": ["draft", "active", "paused", "completed", "archived"]},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 500}
+      }},
+      "output_schema": {"type": "object", "required": ["programs"], "properties": {"programs": {"type": "array"}}}
+    },
+    {
+      "id": "program.update", "version": 1, "category": "program",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-and-expected-version", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program", "target"], "output_object_kinds": ["program", "artifact"],
+      "errors": ["INVALID_PARAMETERS", "DB_UNAVAILABLE", "NOT_FOUND", "INTERNAL"], "handler": "handlers:program_update",
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["program_ref", "expected_version", "patch"], "properties": {
+        "program_ref": {"$ref": "object-ref"}, "expected_version": {"type": "integer", "minimum": 1},
+        "patch": {"type": "object", "minProperties": 1}
+      }},
+      "output_schema": {"type": "object", "required": ["program", "changed_fields", "event_ref"]}
+    },
+    {
+      "id": "program.objective.record", "version": 1, "category": "program",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-and-expected-version", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program"], "output_object_kinds": ["objective", "artifact"],
+      "errors": ["INVALID_PARAMETERS", "DB_UNAVAILABLE", "NOT_FOUND", "INTERNAL"], "handler": "handlers:program_objective_record",
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["program_ref", "expected_version", "objective"], "properties": {
+        "program_ref": {"$ref": "object-ref"}, "expected_version": {"type": "integer", "minimum": 1}, "objective": {"type": "object"}
+      }},
+      "output_schema": {"type": "object", "required": ["objective", "program_version", "event_ref"]}
+    },
+    {
+      "id": "program.hypothesis.record", "version": 1, "category": "program",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-and-expected-version", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program"], "output_object_kinds": ["hypothesis", "artifact"],
+      "errors": ["INVALID_PARAMETERS", "DB_UNAVAILABLE", "NOT_FOUND", "INTERNAL"], "handler": "handlers:program_hypothesis_record",
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["program_ref", "expected_version", "hypothesis"], "properties": {
+        "program_ref": {"$ref": "object-ref"}, "expected_version": {"type": "integer", "minimum": 1}, "hypothesis": {"type": "object"}
+      }},
+      "output_schema": {"type": "object", "required": ["hypothesis", "program_version", "event_ref"]}
+    },
+    {
+      "id": "program.decision.record", "version": 1, "category": "program",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-and-expected-version", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program"], "output_object_kinds": ["decision", "artifact"],
+      "errors": ["INVALID_PARAMETERS", "DB_UNAVAILABLE", "NOT_FOUND", "INTERNAL"], "handler": "handlers:program_decision_record",
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["program_ref", "expected_version", "decision"], "properties": {
+        "program_ref": {"$ref": "object-ref"}, "expected_version": {"type": "integer", "minimum": 1}, "decision": {"type": "object"}
+      }},
+      "output_schema": {"type": "object", "required": ["decision", "program_version", "event_ref"]}
+    },
+    {
+      "id": "program.milestone.record", "version": 1, "category": "program",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-and-expected-version", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program"], "output_object_kinds": ["milestone", "artifact"],
+      "errors": ["INVALID_PARAMETERS", "DB_UNAVAILABLE", "NOT_FOUND", "INTERNAL"], "handler": "handlers:program_milestone_record",
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["program_ref", "expected_version", "milestone"], "properties": {
+        "program_ref": {"$ref": "object-ref"}, "expected_version": {"type": "integer", "minimum": 1}, "milestone": {"type": "object"}
+      }},
+      "output_schema": {"type": "object", "required": ["milestone", "program_version", "event_ref"]}
+    },
+    {
+      "id": "program.link", "version": 1, "category": "program",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-and-link-identity", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program", "target", "campaign", "complex", "series", "compound", "dataset", "model"],
+      "output_object_kinds": ["program", "target", "campaign", "complex", "series", "compound", "dataset", "model", "artifact"],
+      "errors": ["INVALID_PARAMETERS", "DB_UNAVAILABLE", "NOT_FOUND", "INTERNAL"], "handler": "handlers:program_link",
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["program_ref", "expected_version", "object_ref", "role"], "properties": {
+        "program_ref": {"$ref": "object-ref"}, "expected_version": {"type": "integer", "minimum": 1},
+        "object_ref": {"$ref": "object-ref"}, "role": {"type": "string", "minLength": 1, "maxLength": 96},
+        "rationale": {"type": "string", "maxLength": 4000}
+      }},
+      "output_schema": {"type": "object", "required": ["link", "program_version", "created"]}
+    },
+    {
+      "id": "program.snapshot.create", "version": 1, "category": "program",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-and-expected-version", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program"], "output_object_kinds": ["program_snapshot", "artifact"],
+      "errors": ["INVALID_PARAMETERS", "DB_UNAVAILABLE", "NOT_FOUND", "INTERNAL"], "handler": "handlers:program_snapshot_create",
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["program_ref", "expected_version"], "properties": {
+        "program_ref": {"$ref": "object-ref"}, "expected_version": {"type": "integer", "minimum": 1}
+      }},
+      "output_schema": {"type": "object", "required": ["snapshot", "event_ref"]}
+    },
+    {
       "id": "structure.field.compute", "version": 1, "category": "structure",
       "mutability": "compute", "execution_class": "long", "executors": ["service"],
       "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",

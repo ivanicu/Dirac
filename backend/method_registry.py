@@ -35,6 +35,7 @@ import hashlib
 import importlib
 import inspect
 import json
+import pathlib
 import sys
 from typing import Callable, Iterable
 
@@ -186,6 +187,50 @@ UNITS.update({
     'fields.qm.density': _qm_unit('density', 'electron_density', 'e/Bohr^3'),
     'fields.qm.mep_qm': _qm_unit('mep_qm', 'electrostatic_potential', 'Ha/e'),
 })
+
+# Motif methods use the same registry and Job ledger as the existing physics
+# methods. Their contracts are loaded from the canonical descriptors so the DB
+# snapshot cannot drift into a second hand-maintained API definition.
+_CONTRACTS = pathlib.Path(__file__).resolve().parent.parent / 'contracts' / 'methods'
+_MOTIF_UNITS = {
+    'data.motif.snapshot': ('motif.datasets',
+                            ['create_snapshot', 'leakage_report', 'canonical_bytes']),
+    'design.motif.acquire': ('motif.acquisition',
+                             ['rank_portfolio', 'nondominated_ranks', '_dominates',
+                              '_constraint_failures', '_item']),
+    'design.motif.local_edits': ('motif.proposals',
+                                 ['local_edits', 'chemistry_gate', 'generator_metrics',
+                                  '_proposal', '_atom_mapping']),
+    'design.motif.reaction_enumerate': ('motif.proposals',
+                                        ['reaction_enumerate', 'chemistry_gate',
+                                         'generator_metrics', '_proposal', '_atom_mapping']),
+    'ml.motif.train': ('motif.models',
+                       ['train_baselines', 'fingerprint', 'tanimoto', 'predict',
+                        'validation_report', '_metrics', '_counts', '_digest']),
+    'ml.motif.predict': ('motif.models',
+                         ['predict', 'fingerprint', 'tanimoto', '_dense', '_digest']),
+    'ml.motif.calibrate': ('motif.models', ['calibrate', '_digest']),
+}
+for _method_id, (_module, _functions) in _MOTIF_UNITS.items():
+    _descriptor_path = _CONTRACTS / f'{_method_id}.method.json'
+    _descriptor = json.loads(_descriptor_path.read_text(encoding='utf-8'))
+    UNITS[_method_id] = {
+        'module': _module,
+        'fns': _functions,
+        'consts': [],
+        'descriptor_path': str(_descriptor_path),
+        'exec_class': 'job',
+        'in_schema': _descriptor['input']['schema'],
+        'out_schema': _descriptor['output']['schema'],
+        'capabilities': {
+            'resource_class': _descriptor['execution'].get('resource_class'),
+            'determinism': _descriptor['execution'].get('determinism'),
+            'supported_adapters': _descriptor['execution'].get('supported_adapters', []),
+            'artifacts': [item['role'] for item in
+                          (_descriptor.get('invocation') or {}).get('artifacts', [])],
+            'refuses': [item['code'] for item in _descriptor.get('refusals', [])],
+        },
+    }
 UNITS['fields.region.mlp'] = {
     **UNITS['fields.region.mep'],
     'out_schema': {'type': 'object', 'required': ['cube', 'units'],
@@ -275,7 +320,8 @@ def _canonical_repr(value) -> str:
 
 
 def unit_version(module, fns: Iterable[str],
-                 consts: Iterable[str] = ()) -> tuple[str, bytes]:
+                 consts: Iterable[str] = (), *,
+                 descriptor_path: str | None = None) -> tuple[str, bytes]:
     """(short hex version, full sha256) over the SOURCE of the named functions
     AND THE VALUES of the named module-level constants.
 
@@ -315,6 +361,9 @@ def unit_version(module, fns: Iterable[str],
                 f'being part of the version, which is how this hole was made')
         h.update(name.encode())
         h.update(_canonical_repr(getattr(module, name)).encode())
+    if descriptor_path is not None:
+        h.update(b'descriptor\0')
+        h.update(pathlib.Path(descriptor_path).read_bytes())
     digest = h.digest()
     return digest.hex()[:12], digest
 
@@ -325,8 +374,9 @@ def plan(module) -> list[dict]:
     for method_id, spec in sorted(UNITS.items()):
         source_module = (importlib.import_module(spec['module'])
                          if spec.get('module') else module)
-        version, digest = unit_version(source_module, spec['fns'],
-                                       spec.get('consts', ()))
+        version, digest = unit_version(
+            source_module, spec['fns'], spec.get('consts', ()),
+            descriptor_path=spec.get('descriptor_path'))
         out.append({'method_id': method_id, 'version': version, 'sha256': digest,
                     'exec_class': spec['exec_class'], 'fns': sorted(spec['fns']),
                     'in_schema': spec['in_schema'], 'out_schema': spec['out_schema'],

@@ -71,7 +71,8 @@ class FieldCubeCache:
                          'skipped_uncacheable': 0, 'error': 0,
                          'write_queued': 0, 'write_ok': 0, 'write_error': 0}
 
-    def lookup(self, method_id: str, payload: dict) -> HandlerResult | None:
+    def lookup(self, method_id: str, payload: dict, *,
+               execution_digest: str | None = None) -> HandlerResult | None:
         kind = CACHEABLE_KIND.get(method_id)
         if kind is None:
             self.counters['skipped_uncacheable'] += 1
@@ -109,7 +110,8 @@ class FieldCubeCache:
 
     def store(self, method_id: str, payload: dict, out: HandlerResult, *,
               seconds: float, job_id: str | None = None,
-              envelope: dict | None = None) -> None:
+              envelope: dict | None = None,
+              execution_digest: str | None = None) -> None:
         """Queue a validated computed field for durable persistence.
 
         The invocation never waits for PostgreSQL. This preserves the existing interaction

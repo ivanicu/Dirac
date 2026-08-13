@@ -238,10 +238,10 @@ def test_an_artifact_links_to_the_job_that_produced_it():
     art = st.put(data, role='field.cube')
     WRITTEN.append(art.sha256)
     with connect() as conn, conn.cursor() as cur:
-        cur.execute('INSERT INTO app.job (method_row_id, state, input_sha256, worker) '
-                    "VALUES (%s, 'queued', decode(%s, %s), 'artifact-pg-test') "
+        cur.execute('INSERT INTO app.job (method_row_id, state, input_sha256, request_digest, worker) '
+                    "VALUES (%s, 'queued', decode(%s, %s), decode(%s, %s), 'artifact-pg-test') "
                     'RETURNING id',
-                    (any_method_row(), art.sha256, 'hex'))
+                    (any_method_row(), art.sha256, 'hex', art.sha256, 'hex'))
         job_id = str(cur.fetchone()[0])
     try:
         st.link_to_job(job_id, art.id, 'field.cube')
@@ -266,10 +266,10 @@ def test_deleting_a_job_does_not_delete_the_bytes():
     art = st.put(data, role='field.cube')
     WRITTEN.append(art.sha256)
     with connect() as conn, conn.cursor() as cur:
-        cur.execute('INSERT INTO app.job (method_row_id, state, input_sha256, worker) '
-                    "VALUES (%s, 'queued', decode(%s, %s), 'artifact-pg-test') "
+        cur.execute('INSERT INTO app.job (method_row_id, state, input_sha256, request_digest, worker) '
+                    "VALUES (%s, 'queued', decode(%s, %s), decode(%s, %s), 'artifact-pg-test') "
                     'RETURNING id',
-                    (any_method_row(), art.sha256, 'hex'))
+                    (any_method_row(), art.sha256, 'hex', art.sha256, 'hex'))
         job_id = str(cur.fetchone()[0])
     st.link_to_job(job_id, art.id, 'field.cube')
     with connect() as conn, conn.cursor() as cur:

@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "2.0.0", "method_id": "ml.motif.train",
+  "summary": "Train the mandatory Morgan ridge and nearest-neighbor predictor baselines on frozen split labels.",
+  "description": "Censored observations are counted and retained as censored; this baseline never silently converts a bound to a point label.",
+  "implementation": {"module": "backend.motif.models", "functions": ["_counts", "_digest", "_metrics", "fingerprint", "predict", "tanimoto", "train_baselines", "validation_report"]},
+  "input": {"schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object", "additionalProperties": false, "required": ["endpoint_key", "rows", "registration"],
+    "properties": {
+      "endpoint_key": {"type": "string", "minLength": 1},
+      "radius": {"type": "integer", "minimum": 1, "maximum": 6},
+      "n_bits": {"type": "integer", "minimum": 128, "maximum": 16384},
+      "ridge_alpha": {"type": "number", "exclusiveMinimum": 0},
+      "rows": {"type": "array", "minItems": 2, "items": {
+        "type": "object", "additionalProperties": true,
+        "required": ["compound_id", "smiles", "qualifier", "split"],
+        "properties": {
+          "compound_id": {"type": "string", "minLength": 1},
+          "smiles": {"type": "string", "minLength": 1},
+          "value": {"type": ["number", "null"]},
+          "qualifier": {"enum": ["equal", "less_than", "less_or_equal", "greater_than", "greater_or_equal", "interval", "not_tested", "invalid"]},
+          "split": {"enum": ["train", "validation", "test", "calibration", "external"]}
+        }
+      }},
+      "registration": {
+        "type": "object", "additionalProperties": false,
+        "required": ["dataset_snapshot_ref", "model_object_id", "release_name", "source_commit", "intended_use", "prohibited_use", "known_limitations"],
+        "properties": {
+          "dataset_snapshot_ref": {
+            "type": "object", "additionalProperties": false, "required": ["kind", "id"],
+            "properties": {"kind": {"const": "dataset"}, "id": {"type": "string", "format": "uuid"}}
+          },
+          "model_object_id": {"type": "string", "minLength": 1, "maxLength": 256},
+          "release_name": {"type": "string", "minLength": 1, "maxLength": 256},
+          "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+          "intended_use": {"type": "object"},
+          "prohibited_use": {"type": "object"},
+          "known_limitations": {"type": "object"}
+        }
+      }
+    }
+  }},
+  "output": {"schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object", "additionalProperties": false,
+    "required": ["checkpoint_digest", "validation", "algorithm", "featurizer_digest", "runtime_lock_digest"],
+    "properties": {
+      "checkpoint_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+      "validation": {"type": "object"},
+      "algorithm": {"const": "morgan_ridge_and_1nn"},
+      "featurizer_digest": {"type": "string", "format": "sha256-digest"},
+      "runtime_lock_digest": {"type": "string", "format": "sha256-digest"},
+      "model_release": {
+        "type": "object", "additionalProperties": false,
+        "required": ["ref", "model_release_id", "lifecycle", "created"],
+        "properties": {
+          "ref": {"type": "object", "additionalProperties": false,
+                  "required": ["kind", "id"],
+                  "properties": {"kind": {"const": "model"}, "id": {"type": "string", "minLength": 1}}},
+          "model_release_id": {"type": "string", "format": "uuid"},
+          "lifecycle": {"const": "candidate"}, "created": {"type": "boolean"}
+        }
+      }
+    }
+  }},
+  "refusals": [
+    {"code": "INVALID_PARAMETERS", "condition": "fewer than two exact train labels or a molecule cannot be parsed"}
+  ],
+  "execution": {
+    "supported_modes": ["job"], "default_mode": "job", "resource_class": "cpu",
+    "determinism": "numeric_tolerant", "checkpointable": false, "cancellation": "cooperative",
+    "artifact_access": ["read:dataset", "write:model"],
+    "supported_adapters": ["local_cpu", "slurm", "kubernetes"],
+    "scale_profile": {"shardable": false, "distributed": false, "min_gpus": 0, "max_gpus": 0},
+    "cacheable": true, "deterministic": true, "side_effects": "immutable_artifacts"
+  },
+  "exposure": {"sdk": true, "cli": true, "mcp": "hidden"},
+  "invocation": {
+    "handler": "motif.methods:train_handler", "estimate": "motif.methods:train_estimate",
+    "artifacts": [
+      {"role": "model.checkpoint", "media_type": "application/json", "required": true},
+      {"role": "model.validation", "media_type": "application/json", "required": true},
+      {"role": "model.runtime_lock", "media_type": "application/json", "required": true}
+    ]
+  }
+}

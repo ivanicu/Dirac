@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "2.0.0",
+  "method_id": "design.motif.acquire",
+  "summary": "Produce an exhaustive selected/reserve/rejected/refused portfolio with exact hard constraints and deterministic Pareto ranks.",
+  "description": "Uses a disclosed lexicographic policy and never collapses objectives into a hidden total score.",
+  "implementation": {"module": "backend.motif.acquisition", "functions": ["_constraint_failures", "_dominates", "_item", "nondominated_ranks", "rank_portfolio"]},
+  "input": {
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object", "additionalProperties": false,
+      "required": ["candidates", "objectives", "capacity"],
+      "properties": {
+        "capacity": {"type": "integer", "minimum": 0},
+        "objectives": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["key", "direction"],
+            "properties": {
+              "key": {"type": "string", "minLength": 1},
+              "direction": {"enum": ["maximize", "minimize"]}
+            }
+          }
+        },
+        "hard_constraints": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["key"],
+            "properties": {
+              "key": {"type": "string", "minLength": 1},
+              "minimum": {"type": "number"}, "maximum": {"type": "number"},
+              "equals": {"type": ["number", "string", "boolean"]}
+            },
+            "anyOf": [{"required": ["minimum"]}, {"required": ["maximum"]}, {"required": ["equals"]}]
+          }
+        },
+        "candidates": {
+          "type": "array", "maxItems": 50000,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["proposal_id", "objectives", "constraints", "components"],
+            "properties": {
+              "proposal_id": {"type": "string", "format": "uuid"},
+              "objectives": {"type": "object", "additionalProperties": {"type": ["number", "null"]}},
+              "constraints": {"type": "object", "additionalProperties": {"type": ["number", "string", "boolean", "null"]}},
+              "components": {"type": "object", "additionalProperties": {"type": ["number", "null"]}},
+              "evidence_artifact_ids": {"type": "array", "items": {"type": "string", "format": "uuid"}, "uniqueItems": true}
+            }
+          }
+        }
+      }
+    }
+  },
+  "output": {
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object", "additionalProperties": false,
+      "required": ["partitions", "counts", "policy"],
+      "properties": {
+        "partitions": {
+          "type": "object", "additionalProperties": false,
+          "required": ["selected", "reserve", "rejected", "refused"],
+          "properties": {
+            "selected": {"type": "array"}, "reserve": {"type": "array"},
+            "rejected": {"type": "array"}, "refused": {"type": "array"}
+          }
+        },
+        "counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+        "policy": {"const": "deterministic_constrained_pareto_v1"}
+      }
+    }
+  },
+  "refusals": [{"code": "INVALID_PARAMETERS", "condition": "objective or constraint contract is invalid"}],
+  "execution": {
+    "supported_modes": ["sync", "job"], "default_mode": "job",
+    "resource_class": "cpu", "determinism": "bitwise",
+    "checkpointable": false, "cancellation": "cooperative",
+    "artifact_access": ["read:predictions", "write:portfolio"],
+    "supported_adapters": ["inline", "local_cpu", "slurm", "kubernetes"],
+    "scale_profile": {"shardable": false, "distributed": false, "min_gpus": 0, "max_gpus": 0},
+    "cacheable": true, "deterministic": true, "side_effects": "immutable_artifacts"
+  },
+  "exposure": {"sdk": true, "cli": true, "mcp": "curated"},
+  "invocation": {
+    "handler": "motif.methods:acquire_handler",
+    "estimate": "motif.methods:acquire_estimate",
+    "artifacts": [
+      {"role": "portfolio.ranking", "media_type": "application/json", "required": true}
+    ]
+  }
+}

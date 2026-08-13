@@ -127,6 +127,125 @@ def conformer_generate(input: dict, ctx) -> dict:
         actor=ctx.actor, command_id=ctx.command_id)
 
 
+def dataset_snapshot_create(input: dict, ctx) -> dict:
+    return ctx.kernel.submit(
+        'data.motif.snapshot', input, request_id=ctx.request_id,
+        actor=ctx.actor, command_id=ctx.command_id)
+
+
+def campaign_rank(input: dict, ctx) -> dict:
+    return ctx.kernel.submit(
+        'design.motif.acquire', input, request_id=ctx.request_id,
+        actor=ctx.actor, command_id=ctx.command_id)
+
+
+def model_train(input: dict, ctx) -> dict:
+    return ctx.kernel.submit(
+        'ml.motif.train', input, request_id=ctx.request_id,
+        actor=ctx.actor, command_id=ctx.command_id)
+
+
+def proposal_generate(input: dict, ctx) -> dict:
+    strategy = input["strategy"]
+    method_id = ("design.motif.local_edits" if strategy == "local_edit"
+                 else "design.motif.reaction_enumerate")
+    payload = dict(input)
+    payload.pop("strategy")
+    return ctx.kernel.submit(
+        method_id, payload, request_id=ctx.request_id,
+        actor=ctx.actor, command_id=ctx.command_id)
+
+
+def _motif_governance(ctx):
+    store = getattr(ctx.kernel, "motif_governance", None)
+    if store is None:
+        raise failures.DiracFailure(
+            "DB_UNAVAILABLE",
+            "Motif governance Commands require the durable PostgreSQL repository; "
+            "this kernel was assembled without it",
+        )
+    return store
+
+
+def endpoint_register(input: dict, ctx) -> dict:
+    return _motif_governance(ctx).register_endpoint(input["definition"], ctx.actor)
+
+
+def objective_save(input: dict, ctx) -> dict:
+    return _motif_governance(ctx).save_objective(input["objective"], ctx.actor)
+
+
+def policy_release_register(input: dict, ctx) -> dict:
+    return _motif_governance(ctx).register_policy(input["release"], ctx.actor)
+
+
+def result_ingest(input: dict, ctx) -> dict:
+    return _motif_governance(ctx).ingest_measurements(input["measurements"], ctx.actor)
+
+
+def _programs(ctx):
+    repository = getattr(ctx.kernel, "program_repository", None)
+    if repository is None:
+        raise failures.DiracFailure(
+            "DB_UNAVAILABLE",
+            "Program Commands require the durable PostgreSQL repository; "
+            "this kernel was assembled without it",
+        )
+    return repository
+
+
+def program_create(input: dict, ctx) -> dict:
+    return _programs(ctx).create(input["program"], ctx.actor, ctx.request_id)
+
+
+def program_get(input: dict, ctx) -> dict:
+    return _programs(ctx).get(input["program_ref"])
+
+
+def program_list(input: dict, ctx) -> dict:
+    return _programs(ctx).list(lifecycle=input.get("lifecycle"), limit=input.get("limit", 100))
+
+
+def program_update(input: dict, ctx) -> dict:
+    return _programs(ctx).update(input["program_ref"], input["expected_version"],
+                                 input["patch"], ctx.actor, ctx.request_id)
+
+
+def program_objective_record(input: dict, ctx) -> dict:
+    return _programs(ctx).record_objective(
+        input["program_ref"], input["expected_version"], input["objective"],
+        ctx.actor, ctx.request_id)
+
+
+def program_hypothesis_record(input: dict, ctx) -> dict:
+    return _programs(ctx).record_hypothesis(
+        input["program_ref"], input["expected_version"], input["hypothesis"],
+        ctx.actor, ctx.request_id)
+
+
+def program_decision_record(input: dict, ctx) -> dict:
+    return _programs(ctx).record_decision(
+        input["program_ref"], input["expected_version"], input["decision"],
+        ctx.actor, ctx.request_id)
+
+
+def program_milestone_record(input: dict, ctx) -> dict:
+    return _programs(ctx).record_milestone(
+        input["program_ref"], input["expected_version"], input["milestone"],
+        ctx.actor, ctx.request_id)
+
+
+def program_link(input: dict, ctx) -> dict:
+    return _programs(ctx).link(
+        input["program_ref"], input["expected_version"], input["object_ref"],
+        input["role"], input.get("rationale"), ctx.actor, ctx.request_id)
+
+
+def program_snapshot_create(input: dict, ctx) -> dict:
+    return _programs(ctx).create_snapshot(
+        input["program_ref"], input["expected_version"], ctx.actor, ctx.request_id)
+
+
 def structure_field_compute(input: dict, ctx) -> dict:
     kind = input['field_kind']
     method_id = (f'fields.{kind}' if kind in ('mep', 'mlp')

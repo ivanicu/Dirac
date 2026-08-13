@@ -1,0 +1,284 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/design-brief.schema.json",
+  "title": "Dirac Motif Design Brief",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "objective_spec_id", "program", "campaign", "target",
+    "target_state", "objectives", "chemistry_constraints", "synthesis_resources",
+    "compute_budget", "experimental_capacity", "risk_policy", "policy_releases",
+    "created_by", "created_at", "digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "objective_spec_id": {"type": "string", "format": "uuid"},
+    "supersedes_objective_spec_id": {"type": ["string", "null"], "format": "uuid"},
+    "program": {"$ref": "#/$defs/program_ref"},
+    "campaign": {"$ref": "#/$defs/campaign_ref"},
+    "target": {"$ref": "#/$defs/target_ref"},
+    "target_state": {"$ref": "#/$defs/target_state"},
+    "starting_compounds": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/compound_ref"},
+      "uniqueItems": true,
+      "maxItems": 100000
+    },
+    "series": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/series_ref"},
+      "uniqueItems": true,
+      "maxItems": 10000
+    },
+    "objectives": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/objective"}
+    },
+    "selectivity_panel": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/endpoint_ref"},
+      "uniqueItems": true
+    },
+    "antitargets": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/target_ref"},
+      "uniqueItems": true
+    },
+    "chemistry_constraints": {"$ref": "#/$defs/chemistry_constraints"},
+    "synthesis_resources": {"$ref": "#/$defs/synthesis_resources"},
+    "structure_resources": {"$ref": "#/$defs/structure_resources"},
+    "compute_budget": {"$ref": "#/$defs/compute_budget"},
+    "experimental_capacity": {"$ref": "#/$defs/experimental_capacity"},
+    "risk_policy": {"$ref": "#/$defs/risk_policy"},
+    "policy_releases": {"$ref": "#/$defs/policy_releases"},
+    "approval_gates": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/approval_gate"},
+      "maxItems": 32
+    },
+    "created_by": {"$ref": "#/$defs/actor"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "digest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "object_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": {"type": "string"},
+        "id": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "program_ref": {"allOf": [{"$ref": "#/$defs/object_ref"}, {"properties": {"kind": {"const": "program"}}}]},
+    "campaign_ref": {"allOf": [{"$ref": "#/$defs/object_ref"}, {"properties": {"kind": {"const": "campaign"}}}]},
+    "target_ref": {"allOf": [{"$ref": "#/$defs/object_ref"}, {"properties": {"kind": {"const": "target"}}}]},
+    "compound_ref": {"allOf": [{"$ref": "#/$defs/object_ref"}, {"properties": {"kind": {"const": "compound"}}}]},
+    "series_ref": {"allOf": [{"$ref": "#/$defs/object_ref"}, {"properties": {"kind": {"const": "series"}}}]},
+    "artifact_ref": {"allOf": [{"$ref": "#/$defs/object_ref"}, {"properties": {"kind": {"const": "artifact"}}}]},
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": {"enum": ["human", "agent", "service"]},
+        "id": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "endpoint_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "version": {"type": "string", "minLength": 1, "maxLength": 128}
+      }
+    },
+    "target_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state_id", "description", "confidence"],
+      "properties": {
+        "state_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "description": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "structure_refs": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/artifact_ref"},
+          "uniqueItems": true
+        }
+      }
+    },
+    "objective": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endpoint", "direction", "role", "priority", "missing_value_policy"],
+      "properties": {
+        "endpoint": {"$ref": "#/$defs/endpoint_ref"},
+        "direction": {"enum": ["maximize", "minimize", "target_interval", "avoid"]},
+        "role": {"enum": ["hard_constraint", "soft_objective", "monitor", "diagnostic"]},
+        "threshold": {"type": ["number", "null"]},
+        "target_interval": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["lower", "upper"],
+          "properties": {
+            "lower": {"type": "number"},
+            "upper": {"type": "number"}
+          }
+        },
+        "minimum_probability": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "priority": {"type": "number", "minimum": 0, "maximum": 1000},
+        "unit": {"type": ["string", "null"], "maxLength": 64},
+        "missing_value_policy": {"enum": ["refuse", "penalize", "allow_with_warning", "require_measurement"]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"direction": {"const": "target_interval"}}, "required": ["direction"]},
+          "then": {"required": ["target_interval"]}
+        },
+        {
+          "if": {"properties": {"role": {"const": "hard_constraint"}}, "required": ["role"]},
+          "then": {"required": ["minimum_probability"]}
+        }
+      ]
+    },
+    "substructure_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule_id", "representation", "value"],
+      "properties": {
+        "rule_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "representation": {"enum": ["smarts", "smiles", "molblock", "atom_map"]},
+        "value": {"type": "string", "minLength": 1, "maxLength": 100000},
+        "reason": {"type": ["string", "null"], "maxLength": 4096}
+      }
+    },
+    "chemistry_constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protected", "forbidden", "identity_policy_release_id", "max_heavy_atoms", "charge_range"],
+      "properties": {
+        "protected": {"type": "array", "items": {"$ref": "#/$defs/substructure_rule"}},
+        "forbidden": {"type": "array", "items": {"$ref": "#/$defs/substructure_rule"}},
+        "identity_policy_release_id": {"type": "string", "format": "uuid"},
+        "max_heavy_atoms": {"type": "integer", "minimum": 1, "maximum": 500},
+        "molecular_weight_range": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["lower", "upper"],
+          "properties": {"lower": {"type": "number", "minimum": 0}, "upper": {"type": "number", "minimum": 0}}
+        },
+        "charge_range": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lower", "upper"],
+          "properties": {"lower": {"type": "integer", "minimum": -20}, "upper": {"type": "integer", "maximum": 20}}
+        },
+        "allow_unspecified_stereochemistry": {"type": "boolean"},
+        "allow_route_unknown": {"type": "boolean"}
+      }
+    },
+    "synthesis_resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reaction_template_release_ids", "building_block_snapshot_ids", "max_route_depth", "budget"],
+      "properties": {
+        "reaction_template_release_ids": {"type": "array", "items": {"type": "string", "format": "uuid"}, "uniqueItems": true},
+        "building_block_snapshot_ids": {"type": "array", "items": {"type": "string", "format": "uuid"}, "uniqueItems": true},
+        "route_engine_release_ids": {"type": "array", "items": {"type": "string", "format": "uuid"}, "uniqueItems": true},
+        "max_route_depth": {"type": "integer", "minimum": 1, "maximum": 20},
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["currency", "amount", "max_lead_days"],
+          "properties": {
+            "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+            "amount": {"type": "number", "minimum": 0},
+            "max_lead_days": {"type": "integer", "minimum": 0, "maximum": 3650}
+          }
+        }
+      }
+    },
+    "structure_resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "structure_refs": {"type": "array", "items": {"$ref": "#/$defs/artifact_ref"}, "uniqueItems": true},
+        "binding_site_definition_artifact_id": {"type": ["string", "null"], "format": "uuid"},
+        "minimum_structure_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "allow_predicted_structure": {"type": "boolean"}
+      }
+    },
+    "compute_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu_core_hours", "gpu_hours", "artifact_bytes", "walltime_seconds", "external_cost"],
+      "properties": {
+        "cpu_core_hours": {"type": "number", "minimum": 0},
+        "gpu_hours": {"type": "number", "minimum": 0},
+        "artifact_bytes": {"type": "integer", "minimum": 0},
+        "walltime_seconds": {"type": "integer", "minimum": 1},
+        "external_cost": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["currency", "amount"],
+          "properties": {
+            "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+            "amount": {"type": "number", "minimum": 0}
+          }
+        }
+      }
+    },
+    "experimental_capacity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_selected", "max_reserve", "assay_slots"],
+      "properties": {
+        "max_selected": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "max_reserve": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "assay_slots": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0},
+          "maxProperties": 256
+        }
+      }
+    },
+    "risk_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exploration_fraction", "minimum_diversity", "out_of_domain", "missing_evidence"],
+      "properties": {
+        "exploration_fraction": {"type": "number", "minimum": 0, "maximum": 1},
+        "minimum_diversity": {"type": "number", "minimum": 0, "maximum": 1},
+        "out_of_domain": {"enum": ["refuse", "reserve_only", "allow_with_penalty"]},
+        "missing_evidence": {"enum": ["refuse", "penalize", "allow_with_warning"]}
+      }
+    },
+    "policy_releases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generation", "fidelity", "acquisition", "diversity", "explanation"],
+      "properties": {
+        "generation": {"type": "string", "format": "uuid"},
+        "fidelity": {"type": "string", "format": "uuid"},
+        "acquisition": {"type": "string", "format": "uuid"},
+        "diversity": {"type": "string", "format": "uuid"},
+        "explanation": {"type": "string", "format": "uuid"}
+      }
+    },
+    "approval_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate", "required_roles"],
+      "properties": {
+        "gate": {"enum": ["start_expensive_compute", "promote_compound", "external_procurement", "model_promotion"]},
+        "required_roles": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "maxLength": 128}},
+        "minimum_approvals": {"type": "integer", "minimum": 1, "maximum": 100}
+      }
+    }
+  }
+}

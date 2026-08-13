@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "2.0.0",
+  "method_id": "data.motif.snapshot",
+  "summary": "Freeze measurement-lineage rows, endpoint definitions, splits and leakage evidence into a content-addressed dataset snapshot.",
+  "description": "Refuses rows without measurement, compound, endpoint and protocol lineage and refuses endpoint unit or measurement-type incompatibility.",
+  "implementation": {"module": "backend.motif.datasets", "functions": ["canonical_bytes", "create_snapshot", "leakage_report"]},
+  "input": {
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selection_query", "endpoint_definitions", "rows", "registration"],
+      "properties": {
+        "selection_query": {"type": "string", "minLength": 1},
+        "split_key": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+        "endpoint_definitions": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": true,
+            "required": ["endpoint_key", "version", "canonical_unit", "measurement_type"],
+            "properties": {
+              "endpoint_key": {"type": "string", "minLength": 1},
+              "version": {"type": "string", "minLength": 1},
+              "canonical_unit": {"type": "string", "minLength": 1},
+              "measurement_type": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {"type": "object", "additionalProperties": true}
+        },
+        "registration": {
+          "type": "object", "additionalProperties": false,
+          "required": ["program_ref", "campaign_ref", "identity_policy_release_id", "data_classification"],
+          "properties": {
+            "program_ref": {
+              "type": "object", "additionalProperties": false,
+              "required": ["kind", "id"],
+              "properties": {"kind": {"const": "program"}, "id": {"type": "string", "format": "uuid"}}
+            },
+            "campaign_ref": {
+              "type": "object", "additionalProperties": false,
+              "required": ["kind", "id"],
+              "properties": {"kind": {"const": "campaign"}, "id": {"type": "string", "format": "uuid"}}
+            },
+            "identity_policy_release_id": {"type": "string", "format": "uuid"},
+            "data_classification": {"enum": ["public", "internal", "partner_confidential", "restricted", "regulated"]}
+          }
+        }
+      }
+    }
+  },
+  "output": {
+    "schema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object", "additionalProperties": false,
+      "required": ["manifest"],
+      "properties": {
+        "manifest": {"type": "object"},
+        "dataset_snapshot": {
+          "type": "object", "additionalProperties": false,
+          "required": ["ref", "digest", "status", "created"],
+          "properties": {
+            "ref": {"type": "object", "additionalProperties": false,
+                    "required": ["kind", "id"],
+                    "properties": {"kind": {"const": "dataset"}, "id": {"type": "string", "format": "uuid"}}},
+            "digest": {"type": "string", "format": "sha256-digest"},
+            "status": {"enum": ["valid", "invalid"]},
+            "created": {"type": "boolean"}
+          }
+        }
+      }
+    }
+  },
+  "refusals": [
+    {"code": "INVALID_PARAMETERS", "condition": "lineage is missing or endpoint protocol/unit semantics are incompatible"}
+  ],
+  "execution": {
+    "supported_modes": ["job"], "default_mode": "job",
+    "resource_class": "cpu", "determinism": "bitwise",
+    "checkpointable": false, "cancellation": "cooperative",
+    "artifact_access": ["write:dataset"],
+    "supported_adapters": ["local_cpu", "slurm", "kubernetes"],
+    "scale_profile": {"shardable": true, "distributed": false, "min_gpus": 0, "max_gpus": 0},
+    "cacheable": true, "deterministic": true, "side_effects": "immutable_artifacts"
+  },
+  "exposure": {"sdk": true, "cli": true, "mcp": "curated"},
+  "invocation": {
+    "handler": "motif.methods:snapshot_handler",
+    "estimate": "motif.methods:snapshot_estimate",
+    "artifacts": [
+      {"role": "dataset.rows", "media_type": "application/json", "required": true},
+      {"role": "dataset.manifest", "media_type": "application/json", "required": true},
+      {"role": "dataset.split_manifest", "media_type": "application/json", "required": true},
+      {"role": "dataset.leakage_report", "media_type": "application/json", "required": true}
+    ]
+  }
+}

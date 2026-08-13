@@ -1,0 +1,101 @@
+profile:
+  id: kubernetes_kueue_scale_v1
+  description: Dirac Motif Kubernetes JobSet and Kueue adapter profile
+  contract_version: "1.0"
+  deployment_class: S4
+
+control_plane:
+  scheduler_adapter: kubernetes
+  scientific_truth: dirac_postgresql
+  kubernetes_uid_in_public_contract: forbidden
+  artifact_authority: s3_compatible
+
+kubernetes:
+  namespace_template: dirac-{project}
+  workload_apis: [Job, IndexedJob, JobSet]
+  queueing: Kueue
+  local_queue: motif
+  cluster_queue: motif-gpu
+  image_policy:
+    digest_required: true
+    mutable_tags_forbidden: true
+    signature_required: true
+  service_account:
+    per_project: true
+    automount_unneeded_tokens: false
+  pod_security:
+    run_as_non_root: true
+    read_only_root_filesystem: true
+    allow_privilege_escalation: false
+    seccomp_profile: RuntimeDefault
+  network_policy:
+    default_deny: true
+    allow_artifact_backend: true
+    allow_control_gateway: true
+    internet_egress: false
+  termination_grace_period_seconds: 300
+  ephemeral_storage_request_bytes: 107374182400
+  ephemeral_storage_limit_bytes: 214748364800
+
+kueue:
+  admission: required
+  cohort_borrowing: true
+  priority_classes:
+    interactive: motif-interactive
+    standard: motif-standard
+    long_running: motif-long
+  preemption:
+    enabled: true
+    checkpoint_required_for_long_running: true
+  topology_aware_scheduling: true
+  resource_flavors:
+    - name: nvidia-blackwell
+      gpu_arch: blackwell
+    - name: nvidia-hopper
+      gpu_arch: hopper
+
+jobset:
+  enabled: true
+  failure_policy: fail_or_restart_by_dirac_attempt_policy
+  replicated_jobs:
+    leader: 1
+    workers: dynamic
+  success_policy: all_required_replicated_jobs
+
+execution:
+  allocation_agent:
+    enabled: true
+    heartbeat_seconds: 20
+    event_batch_max: 10000
+  lease:
+    ttl_seconds: 120
+    reconcile_seconds: 30
+  cancellation:
+    suspend_when_supported: true
+    delete_after_grace: true
+  retry:
+    kubernetes_job_backoff_limit: 0
+    retries_owned_by_dirac_attempts: true
+
+training:
+  launcher: torchrun
+  operator_optional: true
+  supported_operators: [PyTorchJob, LeaderWorkerSet, KubeRay]
+  operator_semantic_authority: false
+  distributed_checkpoint: pytorch_dcp
+  topology_aware: true
+
+artifact_backend:
+  kind: s3_compatible
+  presigned_or_workload_identity: true
+  database_credentials_in_pod: forbidden
+  multipart: true
+  checksum_required: true
+  local_node_cache_optional: true
+
+scale_guards:
+  max_gpus_per_jobset: 1024
+  multicluster_for_larger_runs: true
+  per_rank_database_connections: 0
+  metrics_high_cardinality_labels: forbidden
+  one_job_per_molecule: forbidden

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "schema_version": "2.0.0",
+  "method_id": "design.motif.local_edits",
+  "summary": "Apply a versioned unary medchem transform release and emit fully traced, identity-gated proposals.",
+  "implementation": {"module": "backend.motif.proposals", "functions": ["_atom_mapping", "_proposal", "chemistry_gate", "generator_metrics", "local_edits"]},
+  "input": {"schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
+    "required": ["parents", "transforms", "generator_release_id", "strategy_release_id", "identity_policy_release_id", "root_seed", "created_at"],
+    "properties": {
+      "parents": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source"}},
+      "transforms": {"type": "array", "minItems": 1, "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["transform_id", "version", "reaction_smarts", "description"],
+        "properties": {"transform_id": {"type": "string", "minLength": 1}, "version": {"type": "string", "minLength": 1},
+          "reaction_smarts": {"type": "string", "minLength": 3}, "description": {"type": "string", "minLength": 1},
+          "evidence_artifact_ids": {"type": "array", "items": {"type": "string", "format": "uuid"}}}
+      }},
+      "generator_release_id": {"type": "string", "format": "uuid"}, "strategy_release_id": {"type": "string", "format": "uuid"},
+      "identity_policy_release_id": {"type": "string", "format": "uuid"}, "root_seed": {"type": "integer", "minimum": 0},
+      "created_at": {"type": "string", "format": "date-time"},
+      "constraints": {"$ref": "#/$defs/constraints"}, "max_proposals": {"type": "integer", "minimum": 1, "maximum": 50000}
+    },
+    "$defs": {
+      "source": {"type": "object", "additionalProperties": false, "required": ["id", "smiles"],
+        "properties": {"id": {"type": "string", "minLength": 1}, "smiles": {"type": "string", "minLength": 1}}},
+      "constraints": {"type": "object", "additionalProperties": false,
+        "properties": {"max_heavy_atoms": {"type": "integer", "minimum": 1},
+          "charge_range": {"type": "array", "prefixItems": [{"type": "integer"}, {"type": "integer"}], "minItems": 2, "maxItems": 2},
+          "forbidden_smarts": {"type": "array", "items": {"type": "string", "minLength": 1}}}}
+  }}},
+  "output": {"schema": {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
+    "required": ["proposal_count", "generator_metrics"], "properties": {"proposal_count": {"type": "integer", "minimum": 0}, "generator_metrics": {"type": "object"}}}},
+  "refusals": [{"code": "INVALID_PARAMETERS", "condition": "parent, transform SMARTS, or chemistry constraint is invalid"}],
+  "execution": {"supported_modes": ["job"], "default_mode": "job", "resource_class": "cpu", "determinism": "bitwise",
+    "checkpointable": false, "cancellation": "cooperative", "artifact_access": ["write:proposals"],
+    "supported_adapters": ["local_cpu", "slurm", "kubernetes"],
+    "scale_profile": {"shardable": true, "distributed": false, "min_gpus": 0, "max_gpus": 0},
+    "cacheable": true, "deterministic": true, "side_effects": "immutable_artifacts"},
+  "exposure": {"sdk": true, "cli": true, "mcp": "curated"},
+  "invocation": {"handler": "motif.methods:proposal_handler", "estimate": "motif.methods:proposal_estimate", "artifacts": [
+    {"role": "design.proposals", "media_type": "application/json", "required": true},
+    {"role": "design.generator_report", "media_type": "application/json", "required": true}]}
+}

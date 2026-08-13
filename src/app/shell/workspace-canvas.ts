@@ -1,6 +1,6 @@
 import type { ShellRoute } from './app-shell';
-import { navigableViews, VIEWS, WORKSPACES, type ViewDefinition } from './registries';
-import { VIEW_EXPERIENCES, WORKSPACE_NARRATIVES, type ExperienceModule } from './workspace-catalog';
+import { VIEWS, WORKSPACES, type ViewDefinition } from './registries';
+import { VIEW_EXPERIENCES, type ExperienceModule } from './workspace-catalog';
 import { renderWorkspaceVisual } from './workspace-visuals';
 import { OBJECT_KINDS, type ObjectKind, type ObjectRef } from '../generated/commands';
 import { scientificContext } from '../context/scientific-context-store';
@@ -36,8 +36,8 @@ export class WorkspaceCanvas {
     private activeViewId = '';
     private search?: HTMLInputElement;
 
-    constructor(private readonly host: HTMLElement, private readonly outline: HTMLElement,
-                private readonly breadcrumb: HTMLElement, private readonly navigate: Navigate) {
+    constructor(private readonly host: HTMLElement, private readonly breadcrumb: HTMLElement,
+                private readonly navigate: Navigate) {
         document.addEventListener('keydown', event => {
             if (event.key === '/' && document.getElementById('app')?.classList.contains('shell-scaffold')
                 && event.target instanceof HTMLElement
@@ -63,9 +63,7 @@ export class WorkspaceCanvas {
         this.breadcrumb.hidden = !scaffold;
         this.breadcrumb.textContent = scaffold ? `${workspace.label}  /  ${definition.label}` : '';
         this.host.hidden = !scaffold;
-        this.outline.hidden = false;
         this.activeViewId = definition.id;
-        this.renderOutline(definition, route.programId);
         if (!scaffold) {
             this.host.replaceChildren();
             this.search = undefined;
@@ -73,40 +71,6 @@ export class WorkspaceCanvas {
         }
         if (connected) this.renderConnectedCanvas(definition, route.programId);
         else this.renderCanvas(definition, route.programId);
-    }
-
-    private renderOutline(active: ViewDefinition, programId?: string): void {
-        const workspace = WORKSPACES.find(item => item.id === active.workspace)!;
-        const views = navigableViews(active.workspace);
-        const heading = element('div', 'workspace-outline-heading');
-        const icon = element('span', 'workspace-outline-icon', workspace.icon);
-        const copy = element('div');
-        copy.append(element('span', 'workspace-outline-kicker', 'Workspace'),
-            element('h2', '', workspace.label));
-        heading.append(icon, copy);
-        const narrative = element('p', 'workspace-outline-copy', WORKSPACE_NARRATIVES[workspace.id]);
-        const label = element('span', 'workspace-outline-label', 'Views');
-        const list = element('nav', 'workspace-outline-list');
-        list.setAttribute('aria-label', `${workspace.label} view map`);
-        for (const view of views) {
-            const button = element('a', 'workspace-outline-view');
-            button.href = view.route.replace(':programId', encodeURIComponent(programId || 'current'));
-            button.dataset.active = String(view.id === active.id);
-            if (view.id === active.id) button.setAttribute('aria-current', 'page');
-            const name = element('span', '', view.label);
-            const status = element('small', view.implemented ? 'is-live' : 'is-preview',
-                view.implemented ? 'Connected' : 'Preview');
-            button.append(name, status);
-            button.addEventListener('click', event => {
-                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-                event.preventDefault();
-                this.navigate({
-                workspace: view.workspace, view: view.id, programId: programId || 'current',
-                });
-            });
-            list.append(button);
-        }
-        this.outline.replaceChildren(heading, narrative, label, list);
     }
 
     private renderCanvas(definition: ViewDefinition, programId?: string): void {
@@ -242,6 +206,10 @@ export class WorkspaceCanvas {
     }
 
     private renderConnectedCanvas(definition: ViewDefinition, programId?: string): void {
+        if (definition.id === 'programs.overview') {
+            this.renderProgramCanvas(definition, programId);
+            return;
+        }
         const experience = VIEW_EXPERIENCES[definition.id];
         const state = deriveViewState(definition, scientificContext.current());
         const page = element('article', 'workspace-page workspace-page--connected');
@@ -278,6 +246,93 @@ export class WorkspaceCanvas {
         runs.append(runsHeading, status, list);
         page.append(header, question, runs);
         this.host.replaceChildren(page);
+    }
+
+    private renderProgramCanvas(definition: ViewDefinition, programId?: string): void {
+        const experience = VIEW_EXPERIENCES[definition.id];
+        const state = deriveViewState(definition, scientificContext.current());
+        const page = element('article', 'workspace-page workspace-page--connected program-page');
+        page.dataset.programId = programId || 'current';
+        const header = element('header', 'workspace-page-header');
+        const titleBlock = element('div', 'workspace-page-title');
+        const eyebrow = element('div', 'workspace-page-eyebrow');
+        eyebrow.append(element('span', 'workspace-page-state', 'Program fact root'),
+            element('span', 'workspace-page-separator', '·'),
+            element('span', '', 'Versioned and provenance backed'));
+        const title = element('h1', '', definition.label);
+        title.id = 'workspace-view-title'; title.tabIndex = -1;
+        titleBlock.append(eyebrow, title, element('p', '', experience.summary));
+        header.append(titleBlock, this.stateStrip(state));
+
+        const question = element('section', 'workspace-question');
+        question.append(element('span', '', 'The human question'),
+            element('blockquote', '', experience.question));
+
+        const workbench = element('section', 'program-workspace');
+        workbench.setAttribute('aria-label', 'Program workspace');
+        const toolbar = element('div', 'program-toolbar');
+        const selectLabel = element('label', 'program-selector');
+        selectLabel.append(element('span', '', 'Current Program'));
+        const select = element('select') as HTMLSelectElement;
+        select.dataset.programSelect = ''; select.setAttribute('aria-label', 'Current Program');
+        select.add(new Option('Loading Programs…', ''));
+        selectLabel.append(select);
+        const toolbarActions = element('div', 'program-toolbar-actions');
+        const button = (label: string, action: string, secondary = false) => {
+            const node = element('button', secondary ? 'workspace-visual-related' : 'workspace-visual-action', label);
+            node.type = 'button'; node.dataset.programAction = action; return node;
+        };
+        toolbarActions.append(button('New Program', 'create'), button('Refresh', 'refresh', true));
+        toolbar.append(selectLabel, toolbarActions);
+
+        const status = element('p', 'program-load-status', 'Loading durable Program state…');
+        status.dataset.programStatus = ''; status.setAttribute('role', 'status');
+        const empty = element('section', 'program-empty-state');
+        empty.dataset.programEmpty = '';
+        empty.append(element('span', 'workspace-section-kicker', 'Start here'),
+            element('h2', '', 'Create or select a Program'),
+            element('p', '', 'A Program owns objectives, hypotheses, decisions, milestones, and the frozen context handed to Design.'),
+            button('Create the first Program', 'create'));
+
+        const dashboard = element('div', 'program-dashboard');
+        dashboard.dataset.programDashboard = ''; dashboard.hidden = true;
+        const identity = element('section', 'program-identity');
+        const identityCopy = element('div');
+        identityCopy.append(element('span', 'workspace-section-kicker', 'Active aggregate'),
+            element('h2', '', '—'), element('p', '', ''));
+        identityCopy.querySelector('h2')!.dataset.programTitle = '';
+        identityCopy.querySelector('p')!.dataset.programSummary = '';
+        const badges = element('div', 'program-badges'); badges.dataset.programBadges = '';
+        const identityActions = element('div', 'program-identity-actions');
+        identityActions.append(button('Edit Program', 'edit', true), button('Freeze snapshot', 'snapshot'));
+        identity.append(identityCopy, badges, identityActions);
+
+        const metrics = element('dl', 'program-metrics'); metrics.dataset.programMetrics = '';
+        const grid = element('div', 'program-atom-grid');
+        const panel = (kind: string, label: string, singular: string, collection: string, help: string) => {
+            const section = element('section', 'program-atom-panel');
+            const heading = element('header');
+            const copy = element('div'); copy.append(element('h3', '', label), element('p', '', help));
+            heading.append(copy, button(`Record ${singular}`, kind, true));
+            const list = element('div', 'program-atom-list'); list.dataset.programCollection = collection;
+            section.append(heading, list); return section;
+        };
+        grid.append(panel('objective', 'Objectives', 'Objective', 'objectives', 'Explicit success conditions and thresholds.'),
+            panel('hypothesis', 'Hypotheses', 'Hypothesis', 'hypotheses', 'Testable beliefs with falsification criteria.'),
+            panel('milestone', 'Milestones', 'Milestone', 'milestones', 'Evidence-bearing stage gates and delivery criteria.'),
+            panel('decision', 'Decisions', 'Decision', 'decisions', 'Actor-attributed choices, outcomes, and alternatives.'));
+        const timeline = element('section', 'program-timeline');
+        const timelineHeader = element('header');
+        timelineHeader.append(element('div', '', ''), button('Link object', 'link', true));
+        timelineHeader.firstElementChild!.append(element('h3', '', 'Program timeline'),
+            element('p', '', 'Ordered aggregate events; newest first.'));
+        const events = element('ol'); events.dataset.programEvents = '';
+        timeline.append(timelineHeader, events);
+        dashboard.append(identity, metrics, grid, timeline);
+        workbench.append(toolbar, status, empty, dashboard);
+        page.append(header, question, workbench);
+        this.host.replaceChildren(page);
+        queueMicrotask(() => document.dispatchEvent(new CustomEvent('dirac:refresh-program')));
     }
 
     private stateStrip(state: ReturnType<typeof deriveViewState>): HTMLElement {

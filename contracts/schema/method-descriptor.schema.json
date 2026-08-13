@@ -15,8 +15,12 @@
     "exposure"
   ],
   "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri"
+    },
     "schema_version": {
-      "const": "1.0.0"
+      "enum": ["1.0.0", "2.0.0"]
     },
     "method_id": {
       "type": "string",
@@ -213,6 +217,36 @@
         "supports_cancellation": {
           "type": "boolean"
         },
+        "determinism": {
+          "enum": ["bitwise", "numeric_tolerant", "statistical", "non_deterministic"]
+        },
+        "checkpointable": {
+          "type": "boolean"
+        },
+        "cancellation": {
+          "enum": ["none", "queued_only", "cooperative"]
+        },
+        "artifact_access": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "supported_adapters": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["inline", "local_cpu", "local_gpu", "slurm", "kubernetes", "hpc_relay"]}
+        },
+        "scale_profile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["shardable", "distributed", "min_gpus", "max_gpus"],
+          "properties": {
+            "shardable": {"type": "boolean"},
+            "distributed": {"type": "boolean"},
+            "min_gpus": {"type": "integer", "minimum": 0, "maximum": 10000},
+            "max_gpus": {"type": "integer", "minimum": 0, "maximum": 10000}
+          }
+        },
         "deterministic": {
           "type": "boolean"
         },
@@ -223,7 +257,8 @@
           "enum": [
             "none",
             "writes_cache",
-            "writes_registry"
+            "writes_registry",
+            "immutable_artifacts"
           ]
         }
       }

@@ -200,11 +200,45 @@ def default_traces(dsn: str = DEFAULT_DSN):
         return traces.MemoryCommandTraceStore()
 
 
+def default_motif_governance(dsn: str = DEFAULT_DSN):
+    """Durable Motif semantic mutations, or None rather than process-local fiction."""
+    try:
+        import psycopg
+        from motif.governance import PostgresMotifGovernanceStore
+        connect = lambda: psycopg.connect(dsn)
+        with connect() as conn, conn.cursor() as cur:
+            cur.execute('SELECT 1 FROM bio.measurement_v2 LIMIT 0')
+        return PostgresMotifGovernanceStore(connect)
+    except Exception as e:                                          # noqa: BLE001
+        print(f'[kernel] Motif governance unavailable '
+              f'({type(e).__name__}: {e}) — governance Commands fail closed',
+              file=sys.stderr, flush=True)
+        return None
+
+
+def default_program_repository(dsn: str = DEFAULT_DSN):
+    """Durable Program aggregate repository, or None so mutations fail closed."""
+    try:
+        import psycopg
+        from programs.repository import PostgresProgramRepository
+        connect = lambda: psycopg.connect(dsn)
+        with connect() as conn, conn.cursor() as cur:
+            cur.execute('SELECT 1 FROM design.program_event LIMIT 0')
+        return PostgresProgramRepository(connect)
+    except Exception as e:                                          # noqa: BLE001
+        print(f'[kernel] Program repository unavailable '
+              f'({type(e).__name__}: {e}) — Program Commands fail closed',
+              file=sys.stderr, flush=True)
+        return None
+
+
 def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
           store: Any | None = None, cache: Any | None = None,
           with_cache: bool = True, job_store: Any | None = None,
           executor: Any | None = None,
-          trace_store: Any | None = None) -> invocation.InvocationService:
+          trace_store: Any | None = None,
+          motif_governance: Any | None = None,
+          program_repository: Any | None = None) -> invocation.InvocationService:
     """A ready kernel. The only supported way to get one.
 
     `with_versions=False` skips the field_server import, for a caller that wants a
@@ -232,11 +266,17 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
         ca = None
     js = job_store if job_store is not None else default_jobs()
     trace = trace_store if trace_store is not None else default_traces(dsn)
+    governance = (motif_governance if motif_governance is not None
+                  else default_motif_governance(dsn))
+    programs = (program_repository if program_repository is not None
+                else default_program_repository(dsn))
     # A ThreadExecutor still executes sync calls inline, while also making descriptor
     # default_mode=job truthful for /v2/jobs submissions.
     ex = executor or execution.ThreadExecutor(max_workers=2)
     svc = invocation.InvocationService(cat, store=st, cache=ca, ledger=js, executor=ex,
                                       trace_store=trace,
+                                      motif_governance=governance,
+                                      program_repository=programs,
                                       toolkit_versions=toolkit_versions())
     svc.store_kind = kind                    # type: ignore[attr-defined]
     svc.cache_kind = ('injected' if cache is not None

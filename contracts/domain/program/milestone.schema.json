@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Program milestone atom",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["key", "title", "criteria"],
+  "properties": {
+    "key": {"type": "string"}, "title": {"type": "string", "minLength": 1},
+    "description": {"type": ["string", "null"]}, "target_date": {"type": ["string", "null"], "format": "date"},
+    "criteria": {"type": "array", "minItems": 1}
+  }
+}

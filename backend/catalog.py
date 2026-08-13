@@ -38,6 +38,7 @@ from typing import Any, Callable
 
 import artifacts as A
 import failures
+from contracts.validation import check_schema, violations
 
 CONTRACTS = pathlib.Path(__file__).resolve().parent.parent / 'contracts'
 
@@ -190,6 +191,15 @@ class MethodCatalog:
                     f'silently pick one and clients would get whichever the '
                     f'filesystem sorted first')
             inv = desc.get('invocation') or {}
+            for direction in ('input', 'output'):
+                schema = (desc.get(direction) or {}).get('schema')
+                if schema is None:
+                    continue
+                try:
+                    check_schema(schema)
+                except Exception as exc:
+                    raise failures.DiracInternal(
+                        f'{mid} declares an invalid {direction} schema: {exc}') from exc
             specs[mid] = MethodSpec(
                 method_id=mid,
                 summary=desc.get('summary', ''),
@@ -267,36 +277,21 @@ class MethodCatalog:
         schema = self.get(method_id).input_schema
         if not schema:
             return payload
-        try:
-            from jsonschema import Draft202012Validator
-        except ImportError:
-            # UNVERIFIED, not valid. Passing an unvalidated payload to a handler
-            # while reporting success would be the exact shape of a check that
-            # cannot fail — so the caller is told the validation did not happen.
-            raise failures.DiracInternal(
-                'jsonschema is not importable, so the input contract cannot be '
-                'enforced. Refusing rather than passing the payload through '
-                'unchecked: an unvalidated request that reports "ok" is worse than '
-                'one that reports why it could not be checked.')
-        errors = sorted(Draft202012Validator(schema).iter_errors(payload),
-                        key=lambda e: list(e.absolute_path))
+        errors = violations(schema, payload)
         if errors:
             first = errors[0]
-            pointer = '/' + '/'.join(str(p) for p in first.absolute_path)
+            pointer = first.pointer
             # INVALID_PARAMETERS, not PARSE. The molecule may be perfectly readable and
             # one named field wrong — which is a different remedy and, until the browser
             # showed a chemist "This molecule could not be parsed" for an unexpected
             # `basis`, a distinction this vocabulary did not make.
             raise failures.DiracInvalidParameters(
-                f'{method_id}: {pointer if first.absolute_path else "(root)"} '
+                f'{method_id}: {pointer if pointer != "/" else "(root)"} '
                 f'{first.message}',
                 details={'method_id': method_id,
-                         'pointer': pointer if first.absolute_path else '',
+                         'pointer': pointer if pointer != '/' else '',
                          'validator': first.validator,
-                         'violations': [
-                             {'pointer': '/' + '/'.join(str(p) for p in e.absolute_path),
-                              'message': e.message, 'validator': e.validator}
-                             for e in errors[:8]],
+                         'violations': [e.to_dict() for e in errors[:8]],
                          'violation_count': len(errors)},
                 hint={'input_schema_url': f'/v2/methods/{method_id}'})
         return payload
@@ -322,22 +317,13 @@ class MethodCatalog:
         schema = self.get(method_id).output_schema
         if not schema:
             return
-        try:
-            from jsonschema import Draft202012Validator
-        except ImportError:
-            raise failures.DiracInternal(
-                'jsonschema is not importable, so the output contract cannot be '
-                'enforced. Refusing rather than shipping an unvalidated result: an '
-                'unchecked payload that reports "ok" is the shape of a check that '
-                'cannot fail.')
-        errors = sorted(Draft202012Validator(schema).iter_errors(result),
-                        key=lambda e: list(e.absolute_path))
+        errors = violations(schema, result)
         if errors:
             first = errors[0]
-            pointer = '/' + '/'.join(str(p) for p in first.absolute_path)
+            pointer = first.pointer
             raise failures.DiracInternal(
                 f'{method_id} produced output its own descriptor forbids: '
-                f'{pointer if first.absolute_path else "(root)"} {first.message}. '
+                f'{pointer if pointer != "/" else "(root)"} {first.message}. '
                 f'Either the handler is wrong or the contract is out of date — and until '
                 f'one of them is fixed, a client planning from the descriptor is planning '
                 f'against something that does not exist. '

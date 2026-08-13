@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/policy-release.schema.json",
+  "title": "Dirac Motif Policy Release",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "policy_release_id", "policy_kind", "name", "version",
+    "lifecycle", "spec", "created_by", "created_at", "digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "policy_release_id": {"type": "string", "format": "uuid"},
+    "policy_kind": {
+      "enum": ["generation", "identity_gate", "synthesis_gate", "fidelity",
+               "acquisition", "diversity", "missing_evidence", "retry", "explanation"]
+    },
+    "name": {"type": "string", "minLength": 1, "maxLength": 256},
+    "version": {"type": "string", "minLength": 1, "maxLength": 128},
+    "lifecycle": {"const": "candidate"},
+    "spec": {"type": "object"},
+    "created_by": {"$ref": "#/$defs/actor"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "digest": {"type": "string", "format": "sha256-digest"}
+  },
+  "$defs": {
+    "actor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": {"enum": ["human", "agent", "service"]},
+        "id": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    }
+  }
+}

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 import failures
+from contracts.validation import check_schema, violations
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -87,6 +88,13 @@ class CommandRegistry:
             if item['job_policy'] == 'required' and item['execution_class'] != 'long':
                 raise failures.DiracInternal(
                     f'{cid}: a required Job must be declared long')
+            for direction in ('input_schema', 'output_schema'):
+                schema = _expand_object_ref(item[direction], domain['object_ref'])
+                try:
+                    check_schema(schema)
+                except Exception as exc:
+                    raise failures.DiracInternal(
+                        f'{cid} declares an invalid {direction}: {exc}') from exc
             defs[cid] = CommandDefinition(cid, int(item['version']), item)
         registry = cls(defs, kinds, domain['object_ref'])
         registry.validate_handlers()
@@ -127,17 +135,12 @@ class CommandRegistry:
 
     def _validate_schema(self, definition: CommandDefinition, value: dict,
                          schema_key: str, direction: str) -> None:
-        try:
-            from jsonschema import Draft202012Validator
-            schema = _expand_object_ref(definition.descriptor[schema_key],
-                                        self.object_ref_schema)
-            errors = sorted(Draft202012Validator(schema).iter_errors(value),
-                            key=lambda e: list(e.path))
-        except ImportError:
-            errors = []
+        schema = _expand_object_ref(definition.descriptor[schema_key],
+                                    self.object_ref_schema)
+        errors = violations(schema, value)
         if errors:
             message = f'{definition.id} {direction}: {errors[0].message}'
-            details = {'path': list(errors[0].path), 'command_id': definition.id,
+            details = {'pointer': errors[0].pointer, 'command_id': definition.id,
                        'direction': direction}
             if direction == 'input':
                 raise failures.DiracInvalidParameters(message, details=details)
@@ -159,7 +162,12 @@ def _expand_object_ref(value: Any, schema: dict) -> Any:
 
 def _validate_refs(value: Any, kinds: frozenset[str]) -> None:
     if isinstance(value, dict):
-        if set(value) == {'kind', 'id'} and value.get('kind') not in kinds:
+        # ActorRef deliberately has the same compact shape as ObjectRef.  It is a
+        # provenance identity, not a domain object, so validate it in the Command /
+        # document schema rather than rejecting its actor kind as an ObjectKind.
+        actor_kinds = {'human', 'agent', 'service'}
+        if (set(value) == {'kind', 'id'} and value.get('kind') not in kinds
+                and value.get('kind') not in actor_kinds):
             raise failures.DiracInvalidParameters(
                 f'unknown ObjectKind {value.get("kind")!r}',
                 details={'known': sorted(kinds)})

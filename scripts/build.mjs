@@ -30,7 +30,7 @@ const Apps = [
     { kind: 'app', name: 'viewer', themes: ['light', 'dark', 'blue'], entryRoot: './src/apps.reference.viewer-demos.vendored-readonly/viewer' },
     { kind: 'app', name: 'docking-viewer', entryRoot: './src/apps.reference.viewer-demos.vendored-readonly/docking-viewer' },
     { kind: 'app', name: 'mesoscale-explorer', entryRoot: './src/apps.reference.viewer-demos.vendored-readonly/mesoscale-explorer' },
-    { kind: 'app', name: 'dirac', filename: 'dirac.js', entryRoot: './src/app.frontend.facets.molstar-rdkit.editable', staticDirs: ['assets/rdkit', 'fonts'], staticFiles: ['fonts.css','fascia-tokens.css','theme-fascia.css','theme-fascia.js','workspace-shell.css','addons.css','palette.js'] },
+    { kind: 'app', name: 'dirac', filename: 'dirac.js', entryRoot: './src/app.frontend.facets.molstar-rdkit.editable', staticDirs: ['assets/rdkit', 'fonts'], staticFiles: ['fonts.css','fascia-tokens.css','theme-fascia.css','theme-fascia.js','workspace-shell.css','voice-composer.css','addons.css','palette.js'], auxiliaryEntries: [{ entry: 'voice-composer-demo.ts', outfile: 'voice-composer-demo/voice-composer-demo.js', staticFiles: [['voice-composer-demo.html', 'voice-composer-demo/index.html'], ['voice-composer.css', 'voice-composer-demo/voice-composer.css']] }] },
     { kind: 'app', name: 'mvs-stories', globalName: 'mvsStories', filename: 'mvs-stories.js', entryRoot: './src/apps.reference.viewer-demos.vendored-readonly/mvs-stories' },
 
     // Examples
@@ -212,6 +212,29 @@ async function createBundle(app) {
     }
     for (const file of app.staticFiles ?? []) {
         await fs.promises.cp(path.resolve(entryRoot, file), path.resolve(prefix, file));
+    }
+    for (const auxiliary of app.auxiliaryEntries ?? []) {
+        const auxiliaryOutfile = path.resolve(prefix, auxiliary.outfile);
+        mkDir(path.dirname(auxiliaryOutfile));
+        await esbuild.build({
+            entryPoints: [path.resolve(entryRoot, auxiliary.entry)],
+            bundle: true,
+            minify: isProduction,
+            minifyIdentifiers: false,
+            sourcemap: includeSourceMap,
+            outfile: auxiliaryOutfile,
+            platform: 'browser',
+            logLevel: 'info',
+            define: {
+                'process.env.NODE_ENV': JSON.stringify(NODE_ENV_PRD ? 'production' : 'development'),
+                'process.env.DEBUG': JSON.stringify(process.env.DEBUG || false),
+            },
+        });
+        for (const [source, destination] of auxiliary.staticFiles ?? []) {
+            const target = path.resolve(prefix, destination);
+            mkDir(path.dirname(target));
+            await fs.promises.cp(path.resolve(entryRoot, source), target);
+        }
     }
 
     if (!isProduction) await ctx.watch();

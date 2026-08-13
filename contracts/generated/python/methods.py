@@ -3,7 +3,27 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-MethodId = Literal["fields.mep", "fields.mlp", "fields.qm.density", "fields.qm.homo", "fields.qm.lumo", "fields.qm.mep_qm", "fields.region.mep", "fields.region.mlp", "molecule.embed", "surface.mep", "surface.mep_at", "torsion.strain"]
+MethodId = Literal["data.motif.snapshot", "design.motif.acquire", "design.motif.local_edits", "design.motif.reaction_enumerate", "fields.mep", "fields.mlp", "fields.qm.density", "fields.qm.homo", "fields.qm.lumo", "fields.qm.mep_qm", "fields.region.mep", "fields.region.mlp", "ml.motif.calibrate", "ml.motif.predict", "ml.motif.train", "molecule.embed", "surface.mep", "surface.mep_at", "torsion.strain"]
+
+# data.motif.snapshot — Freeze measurement-lineage rows, endpoint definitions, splits and leakage evidence into a content-addressed dataset snapshot.
+DATAMOTIFSNAPSHOT_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'bitwise', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['write:dataset'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': True, 'distributed': False, 'min_gpus': 0, 'max_gpus': 0}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
+DATAMOTIFSNAPSHOT_REFUSALS = ['INVALID_PARAMETERS']
+DATAMOTIFSNAPSHOT_WARNINGS = []
+
+# design.motif.acquire — Produce an exhaustive selected/reserve/rejected/refused portfolio with exact hard constraints and deterministic Pareto ranks.
+DESIGNMOTIFACQUIRE_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'bitwise', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['read:predictions', 'write:portfolio'], 'supported_adapters': ['inline', 'local_cpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': False, 'distributed': False, 'min_gpus': 0, 'max_gpus': 0}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
+DESIGNMOTIFACQUIRE_REFUSALS = ['INVALID_PARAMETERS']
+DESIGNMOTIFACQUIRE_WARNINGS = []
+
+# design.motif.local_edits — Apply a versioned unary medchem transform release and emit fully traced, identity-gated proposals.
+DESIGNMOTIFLOCALEDITS_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'bitwise', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['write:proposals'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': True, 'distributed': False, 'min_gpus': 0, 'max_gpus': 0}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
+DESIGNMOTIFLOCALEDITS_REFUSALS = ['INVALID_PARAMETERS']
+DESIGNMOTIFLOCALEDITS_WARNINGS = []
+
+# design.motif.reaction_enumerate — Enumerate unary/binary versioned reaction templates with reactant and atom-map provenance.
+DESIGNMOTIFREACTIONENUMERATE_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'bitwise', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['read:building_blocks', 'write:proposals'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': True, 'distributed': False, 'min_gpus': 0, 'max_gpus': 0}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
+DESIGNMOTIFREACTIONENUMERATE_REFUSALS = ['INVALID_PARAMETERS']
+DESIGNMOTIFREACTIONENUMERATE_WARNINGS = []
 
 # fields.mep — Classical electrostatic potential from Gasteiger point charges, on a grid sized to close its own contour.
 class FieldsMepParameters(TypedDict, total=False):
@@ -74,6 +94,21 @@ FIELDSREGIONMLP_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync'
 FIELDSREGIONMLP_REFUSALS = ['UNPARAMETERIZED']
 FIELDSREGIONMLP_WARNINGS = ['SOURCES_EXCLUDED']
 
+# ml.motif.calibrate — Fit a finite-sample split-conformal absolute-residual calibration release.
+MLMOTIFCALIBRATE_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'numeric_tolerant', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['read:predictions', 'write:model'], 'supported_adapters': ['inline', 'local_cpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': False, 'distributed': False, 'min_gpus': 0, 'max_gpus': 0}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
+MLMOTIFCALIBRATE_REFUSALS = ['INVALID_PARAMETERS']
+MLMOTIFCALIBRATE_WARNINGS = []
+
+# ml.motif.predict — Predict with a digest-verified Morgan baseline checkpoint and report nearest-neighbor applicability domain.
+MLMOTIFPREDICT_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'numeric_tolerant', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['read:model', 'write:predictions'], 'supported_adapters': ['local_cpu', 'local_gpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': True, 'distributed': False, 'min_gpus': 0, 'max_gpus': 10000}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
+MLMOTIFPREDICT_REFUSALS = ['INVALID_PARAMETERS']
+MLMOTIFPREDICT_WARNINGS = []
+
+# ml.motif.train — Train the mandatory Morgan ridge and nearest-neighbor predictor baselines on frozen split labels.
+MLMOTIFTRAIN_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'numeric_tolerant', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['read:dataset', 'write:model'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': False, 'distributed': False, 'min_gpus': 0, 'max_gpus': 0}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
+MLMOTIFTRAIN_REFUSALS = ['INVALID_PARAMETERS']
+MLMOTIFTRAIN_WARNINGS = []
+
 # molecule.embed — SMILES or a 2D molfile to an ETKDG-embedded 3D conformer, MMFF-optimised where MMFF can type it.
 class MoleculeEmbedParameters(TypedDict, total=False):
     seed: int
@@ -116,4 +151,4 @@ TORSIONSTRAIN_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': '
 TORSIONSTRAIN_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
 TORSIONSTRAIN_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
 
-METHOD_IDS = ['fields.mep', 'fields.mlp', 'fields.qm.density', 'fields.qm.homo', 'fields.qm.lumo', 'fields.qm.mep_qm', 'fields.region.mep', 'fields.region.mlp', 'molecule.embed', 'surface.mep', 'surface.mep_at', 'torsion.strain']
+METHOD_IDS = ['data.motif.snapshot', 'design.motif.acquire', 'design.motif.local_edits', 'design.motif.reaction_enumerate', 'fields.mep', 'fields.mlp', 'fields.qm.density', 'fields.qm.homo', 'fields.qm.lumo', 'fields.qm.mep_qm', 'fields.region.mep', 'fields.region.mlp', 'ml.motif.calibrate', 'ml.motif.predict', 'ml.motif.train', 'molecule.embed', 'surface.mep', 'surface.mep_at', 'torsion.strain']

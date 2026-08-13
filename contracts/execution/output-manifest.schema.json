@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/execution/output-manifest.schema.json",
+  "title": "Dirac Execution Output Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "job_id", "attempt_id", "fencing_token",
+    "execution_digest", "artifacts", "result_summary", "warnings",
+    "started_at", "finished_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "job_id": {"type": "string", "format": "uuid"},
+    "attempt_id": {"type": "string", "format": "uuid"},
+    "fencing_token": {"type": "integer", "minimum": 1},
+    "execution_digest": {"$ref": "#/$defs/sha256"},
+    "artifacts": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/artifact"},
+      "maxItems": 100000
+    },
+    "result_summary": {"type": "object", "maxProperties": 256},
+    "warnings": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/warning"},
+      "maxItems": 10000
+    },
+    "checkpoint_artifact_id": {
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "partial": {"type": "boolean", "default": false},
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "sha256", "size_bytes", "media_type", "required"],
+      "properties": {
+        "role": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "stored_size_bytes": {"type": "integer", "minimum": 0},
+        "media_type": {"type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$"},
+        "encoding": {"enum": ["identity", "gzip", "zstd"]},
+        "required": {"type": "boolean"},
+        "row_count": {"type": ["integer", "null"], "minimum": 0},
+        "schema_digest": {
+          "oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+        },
+        "metadata": {"type": "object"}
+      }
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$"},
+        "message": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "details": {"type": "object"}
+      }
+    }
+  }
+}

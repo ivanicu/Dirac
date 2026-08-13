@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Program decision atom",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["key", "type", "action", "outcome", "rationale"],
+  "properties": {
+    "key": {"type": "string"},
+    "type": {"enum": ["scope", "scientific", "portfolio", "stage_gate", "resource", "risk"]},
+    "action": {"type": "string", "minLength": 1}, "outcome": {"type": "string", "minLength": 1},
+    "rationale": {"type": "string", "minLength": 1}, "alternatives": {"type": "array"}
+  }
+}

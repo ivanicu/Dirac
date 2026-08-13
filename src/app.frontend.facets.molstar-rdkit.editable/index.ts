@@ -89,6 +89,8 @@ import { ModuleHost, type ModuleAdapter } from '../app/shell/module-host';
 import { MODULES, navigableViews, VIEWS, WORKSPACES, type ModuleDefinition,
     type WorkspaceId } from '../app/shell/registries';
 import { WorkspaceCanvas } from '../app/shell/workspace-canvas';
+import { ProgramWorkspaceController } from '../app/programs/program-workspace';
+import { VoiceComposer, type VoiceComposerOptions } from '../app/components/voice-composer';
 import { DiracClient } from '../app/services/dirac-client';
 import { observedComputationRun, renderComputationRun } from '../app/services/computation-run';
 // A READ-ONLY handle on the store, for driving the real code from a test rather
@@ -98,6 +100,10 @@ import { observedComputationRun, renderComputationRun } from '../app/services/co
 // cannot be observed from outside is a property nobody will notice losing.
 (window as unknown as Record<string, unknown>).__diracStore = ligandStore;
 (window as unknown as Record<string, unknown>).__diracShell = appShell;
+(window as unknown as Record<string, unknown>).__diracComponents = {
+    mountVoiceComposer: (host: HTMLElement, options?: VoiceComposerOptions) =>
+        new VoiceComposer(host, options),
+};
 import { QueryContext, Structure, StructureElement, StructureSelection, Unit } from '../mol-model/structure';
 import { ShapeGroup } from '../mol-model/shape';
 import { OrderedSet } from '../mol-data/int';
@@ -561,9 +567,8 @@ function initShellNavigation(): void {
     const host = document.getElementById('workspace-nav');
     const viewHost = document.getElementById('view-nav');
     const canvasHost = document.getElementById('workspace-canvas');
-    const outlineHost = document.getElementById('workspace-outline');
     const breadcrumb = document.getElementById('shell-breadcrumb');
-    if (!host || !viewHost || !canvasHost || !outlineHost || !breadcrumb) return;
+    if (!host || !viewHost || !canvasHost || !breadcrumb) return;
     const moduleHost = createDomModuleHost();
     const navigate = (route: Parameters<typeof appShell.navigate>[0]) => {
         const target = VIEWS.find(view => view.id === route.view && view.workspace === route.workspace);
@@ -572,7 +577,14 @@ function initShellNavigation(): void {
         // View performs one deliberate reload so the Mol* capability can attach.
         if (target?.requiresScene && !sceneService.current()) location.reload();
     };
-    const workspaceCanvas = new WorkspaceCanvas(canvasHost, outlineHost, breadcrumb,
+    const programWorkspace = new ProgramWorkspaceController(applicationClient, programId => {
+        const programRef = { kind: 'program' as const, id: programId };
+        scientificContext.patch({ programRef, focusedObject: programRef,
+            selectedObjects: [programRef], origin: 'selection' });
+        navigate({ workspace: 'programs', view: 'programs.overview', programId });
+    });
+    programWorkspace.install();
+    const workspaceCanvas = new WorkspaceCanvas(canvasHost, breadcrumb,
         navigate);
     const render = (active: WorkspaceId, activeView: string) => {
         host.replaceChildren();
@@ -653,7 +665,10 @@ function initShellNavigation(): void {
         const definition = VIEWS.find(view => view.id === route.view);
         document.title = definition ? `${definition.label} · Dirac` : 'Dirac';
         const announcer = document.getElementById('route-announcer');
-        if (announcer && definition) announcer.textContent = `${definition.label} view loaded`;
+        if (announcer && definition) {
+            const workspace = WORKSPACES.find(item => item.id === route.workspace);
+            announcer.textContent = `${workspace?.label || route.workspace} workspace, ${definition.label} view loaded`;
+        }
         if (projectedView && projectedView !== route.view) {
             requestAnimationFrame(() => {
                 const focusTarget = document.getElementById('workspace-view-title')

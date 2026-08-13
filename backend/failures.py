@@ -168,6 +168,13 @@ class DiracNotFound(DiracFailure):
         super().__init__('NOT_FOUND', message, **kw)
 
 
+class DiracCancelled(DiracFailure):
+    """The executor observed a cancellation request at a cooperative boundary."""
+
+    def __init__(self, message: str = 'execution cancelled', **kw: Any) -> None:
+        super().__init__('CANCELLED', message, **kw)
+
+
 class DiracInternal(DiracFailure):
     """Nothing about the request is known to be wrong. OUR fault.
 

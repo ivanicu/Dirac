@@ -1,0 +1,1837 @@
+schema_version: '1.0'
+title: Dirac Motif v2 implementation backlog
+baseline_commit: 9d38ca434c9404843640ed5d7a4cb5d0a315d135
+priority_order:
+- P0
+- P1
+- P2
+release_gates:
+  A: durable local substrate
+  B: credible local closed-loop Motif
+  C: retrospective scientific advantage
+  D: distributed durability and scale
+  E: prospective scientific advantage
+rules:
+- A task is complete only when every acceptance item is automated or attached as an immutable evidence artifact.
+- No scientific or public contract bypass is permitted for a faster demo.
+- Scheduler and framework IDs remain private Allocation or Attempt metadata.
+- P0 dependencies are blocking even if a downstream feature can be made to look functional without them.
+epics:
+- id: E00
+  title: Baseline pin and drift observability
+  release_gate: A
+  tasks:
+  - id: E00-T01
+    title: Pin reviewed repository and twin source commits
+    priority: P0
+    dependencies: []
+    target_files:
+    - README.md
+    - STATUS.md
+    - docs/architecture/*
+    deliverables:
+    - explicit repository baseline
+    - explicit twin source baseline
+    acceptance:
+    - runtime exposes both commits
+    - documentation counts agree
+    risk: low
+    parallelizable_after_dependencies: false
+  - id: E00-T02
+    title: Add canonical vocabulary versus live PostgreSQL check
+    priority: P0
+    dependencies: []
+    target_files:
+    - scripts/verify_contract_db_alignment.py
+    - contracts/domain/*
+    deliverables:
+    - CI drift checker
+    acceptance:
+    - 36 ObjectKinds and 24 RelationKinds match
+    - unknown or missing value fails CI
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E00-T03
+    title: Snapshot current Command and Method registry
+    priority: P0
+    dependencies: []
+    target_files:
+    - contracts/commands/registry.json
+    - contracts/methods/*
+    deliverables:
+    - golden registry fixture
+    acceptance:
+    - unreviewed public ID change fails
+    risk: medium
+    parallelizable_after_dependencies: false
+  - id: E00-T04
+    title: Run clean migration 000 through 019 in CI
+    priority: P0
+    dependencies: []
+    target_files:
+    - backend/db/migrations/*
+    - .github/workflows/*
+    deliverables:
+    - clean-install database job
+    acceptance:
+    - fresh schema applies without manual step
+    - schema dump artifact retained
+    risk: medium
+    parallelizable_after_dependencies: true
+  - id: E00-T05
+    title: Repair root product documentation drift
+    priority: P1
+    dependencies:
+    - E00-T01
+    target_files:
+    - README.md
+    - ARCHITECTURE.md
+    - STATUS.md
+    deliverables:
+    - current substrate/product description
+    acceptance:
+    - README no longer presents optional backend as entire architecture
+    risk: low
+    parallelizable_after_dependencies: true
+- id: E01
+  title: Contract hardening and SQL vocabulary alignment
+  release_gate: A
+  tasks:
+  - id: E01-T01
+    title: Create shared fail-closed JSON Schema validator
+    priority: P0
+    dependencies:
+    - E00-T03
+    target_files:
+    - backend/contracts/validation.py
+    - backend/dirac_app/registry.py
+    - backend/catalog.py
+    deliverables:
+    - single validator implementation
+    acceptance:
+    - missing jsonschema refuses startup/invocation
+    - Command and Method paths use same module
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E01-T02
+    title: Enable Draft 2020-12 FormatChecker
+    priority: P0
+    dependencies:
+    - E01-T01
+    target_files:
+    - backend/contracts/validation.py
+    deliverables:
+    - format validation
+    acceptance:
+    - invalid UUID/date-time/URI/digest rejected
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E01-T03
+    title: Land migration 020
+    priority: P0
+    dependencies:
+    - E00-T02
+    target_files:
+    - backend/db/migrations/020_domain_contract_alignment.sql
+    deliverables:
+    - enum alignment
+    - registry views
+    acceptance:
+    - all canonical kinds/relations insert
+    - alignment script passes
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E01-T04
+    title: Replace generic refs with kind-specific ObjectRefs
+    priority: P0
+    dependencies:
+    - E01-T01
+    target_files:
+    - contracts/domain/medchem-evidence.schema.json
+    - contracts/domain/motif/*
+    deliverables:
+    - kind-specific refs
+    acceptance:
+    - model ref cannot satisfy compound field
+    risk: high
+    parallelizable_after_dependencies: true
+  - id: E01-T05
+    title: Land measurement-v2 conditional semantics
+    priority: P0
+    dependencies:
+    - E01-T01
+    target_files:
+    - contracts/domain/motif/measurement-v2.schema.json
+    deliverables:
+    - censoring/missingness/QC contract
+    acceptance:
+    - not_tested with value rejected
+    - censored bounds required
+    - derived values require derivation
+    risk: critical
+    parallelizable_after_dependencies: true
+  - id: E01-T06
+    title: Add positive and negative contract fixtures
+    priority: P0
+    dependencies:
+    - E01-T02
+    - E01-T04
+    - E01-T05
+    target_files:
+    - contracts/fixtures/*
+    - tests/contracts/*
+    deliverables:
+    - fixture suite
+    acceptance:
+    - every schema has valid and invalid examples
+    - unknown fields fail
+    risk: medium
+    parallelizable_after_dependencies: false
+  - id: E01-T07
+    title: Regenerate and compile Python/TypeScript clients
+    priority: P0
+    dependencies:
+    - E01-T03
+    - E01-T06
+    target_files:
+    - contracts/generated/*
+    - python/src/dirac/*
+    - src/app/generated/*
+    deliverables:
+    - updated generated clients
+    acceptance:
+    - round-trip parity tests pass
+    risk: medium
+    parallelizable_after_dependencies: false
+- id: E02
+  title: Composite execution identity and cache v2
+  release_gate: A
+  tasks:
+  - id: E02-T01
+    title: Define ExecutionIdentity canonical serializer
+    priority: P0
+    dependencies:
+    - E01-T02
+    target_files:
+    - backend/execution_control/identity.py
+    - contracts/execution/*
+    deliverables:
+    - canonical digest builder
+    acceptance:
+    - field ordering does not change digest
+    - missing required component explicit
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E02-T02
+    title: Add image, lockfile and source digests
+    priority: P0
+    dependencies:
+    - E02-T01
+    target_files:
+    - backend/execution_control/identity.py
+    - containers/*
+    deliverables:
+    - runtime identity components
+    acceptance:
+    - mutable image tag refused in production
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E02-T03
+    title: Add checkpoint, featurizer, calibration and policy digests
+    priority: P0
+    dependencies:
+    - E02-T01
+    target_files:
+    - backend/motif/release_service.py
+    deliverables:
+    - scientific identity components
+    acceptance:
+    - each component change invalidates cache
+    risk: critical
+    parallelizable_after_dependencies: true
+  - id: E02-T04
+    title: Implement seed scope and determinism classes
+    priority: P0
+    dependencies:
+    - E02-T01
+    target_files:
+    - backend/execution_control/seeds.py
+    - contracts/methods/*
+    deliverables:
+    - stable seed derivation
+    acceptance:
+    - shard order does not change derived seeds
+    - determinism class in provenance
+    risk: high
+    parallelizable_after_dependencies: true
+  - id: E02-T05
+    title: Introduce cache key v2 with backwards read
+    priority: P0
+    dependencies:
+    - E02-T02
+    - E02-T03
+    - E02-T04
+    target_files:
+    - backend/cache.py
+    - backend/invocation.py
+    deliverables:
+    - cache v2
+    acceptance:
+    - old cache readable but not confused with v2
+    - checkpoint/calibration changes miss cache
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E02-T06
+    title: Expose execution digest in envelopes and Artifacts
+    priority: P0
+    dependencies:
+    - E02-T05
+    target_files:
+    - backend/invocation.py
+    - backend/artifacts.py
+    - contracts/envelope*
+    deliverables:
+    - provenance v2
+    acceptance:
+    - every new scientific Job exposes digest
+    risk: medium
+    parallelizable_after_dependencies: false
+- id: E03
+  title: Streaming Artifact plane
+  release_gate: A
+  tasks:
+  - id: E03-T01
+    title: Define ArtifactReader, ArtifactWriter and CheckpointWriter protocols
+    priority: P0
+    dependencies:
+    - E01-T02
+    target_files:
+    - backend/artifact_backends/protocol.py
+    - backend/invocation.py
+    deliverables:
+    - capability interfaces
+    acceptance:
+    - handlers need no DB/filesystem access
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E03-T02
+    title: Implement Local CAS backend
+    priority: P0
+    dependencies:
+    - E03-T01
+    target_files:
+    - backend/artifact_backends/local_cas.py
+    deliverables:
+    - streaming content-addressed local store
+    acceptance:
+    - atomic temp-to-final commit
+    - verify on write
+    - range read
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E03-T03
+    title: Keep PostgreSQL inline compatibility tier
+    priority: P0
+    dependencies:
+    - E03-T01
+    target_files:
+    - backend/artifact_backends/postgres_inline.py
+    deliverables:
+    - small-object compatibility
+    acceptance:
+    - hard inline threshold enforced
+    risk: medium
+    parallelizable_after_dependencies: true
+  - id: E03-T04
+    title: Implement output manifest validation
+    priority: P0
+    dependencies:
+    - E03-T01
+    - E01-T02
+    target_files:
+    - contracts/execution/output-manifest.schema.json
+    - backend/execution_control/completion.py
+    deliverables:
+    - required-role manifest
+    acceptance:
+    - undeclared/missing required artifacts block completion
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E03-T05
+    title: Land blob location schema from migration 021
+    priority: P0
+    dependencies:
+    - E03-T02
+    target_files:
+    - backend/db/migrations/021_execution_control_plane.sql
+    deliverables:
+    - external blob locations
+    acceptance:
+    - same blob identity can have multiple locations
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E03-T06
+    title: Implement S3-compatible backend
+    priority: P1
+    dependencies:
+    - E03-T01
+    - E03-T04
+    target_files:
+    - backend/artifact_backends/s3.py
+    deliverables:
+    - multipart object backend
+    acceptance:
+    - interrupted upload uncommitted
+    - checksum verified
+    risk: high
+    parallelizable_after_dependencies: true
+  - id: E03-T07
+    title: Add Artifact verify/fetch/range CLI
+    priority: P1
+    dependencies:
+    - E03-T02
+    - E03-T06
+    target_files:
+    - python/src/dirac/cli/*
+    deliverables:
+    - operator/client tooling
+    acceptance:
+    - verify all backends identically
+    risk: medium
+    parallelizable_after_dependencies: false
+  - id: E03-T08
+    title: Implement retention and reference-safe GC
+    priority: P1
+    dependencies:
+    - E03-T05
+    target_files:
+    - backend/artifact_backends/gc.py
+    - bin/dirac-sweep
+    deliverables:
+    - lifecycle-aware sweep
+    acceptance:
+    - dataset/model/evidence-only artifacts retained
+    risk: critical
+    parallelizable_after_dependencies: false
+- id: E04
+  title: Durable execution control plane
+  release_gate: A
+  tasks:
+  - id: E04-T01
+    title: Land Run Step DAG tables
+    priority: P0
+    dependencies:
+    - E01-T03
+    target_files:
+    - backend/db/migrations/021_execution_control_plane.sql
+    deliverables:
+    - run_step
+    - run_step_edge
+    - run_step_job
+    acceptance:
+    - linear, fan-out/fan-in and approval graphs persist
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E04-T02
+    title: Land Job Attempt, Allocation and Shard tables
+    priority: P0
+    dependencies:
+    - E01-T03
+    target_files:
+    - backend/db/migrations/021_execution_control_plane.sql
+    deliverables:
+    - attempt/allocation/shard state
+    acceptance:
+    - one live attempt constraint
+    - deterministic shard identity
+    risk: critical
+    parallelizable_after_dependencies: true
+  - id: E04-T03
+    title: Implement transactional Attempt claim and lease renewal
+    priority: P0
+    dependencies:
+    - E04-T02
+    target_files:
+    - backend/execution_control/leases.py
+    deliverables:
+    - claim/renew APIs
+    acceptance:
+    - concurrent claim has one winner
+    - expired lease recoverable
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E04-T04
+    title: Implement monotonic fencing and stale-result rejection
+    priority: P0
+    dependencies:
+    - E04-T03
+    target_files:
+    - backend/execution_control/leases.py
+    - backend/execution_control/completion.py
+    deliverables:
+    - fencing guard
+    acceptance:
+    - late attempt cannot commit
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E04-T05
+    title: Define SchedulerAdapter and ExecutionRequest protocol
+    priority: P0
+    dependencies:
+    - E02-T01
+    - E04-T02
+    target_files:
+    - backend/executors/protocol.py
+    - contracts/execution/execution-request.schema.json
+    deliverables:
+    - scheduler-neutral interface
+    acceptance:
+    - adapter never receives arbitrary Python callable
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E04-T06
+    title: Inject cancellation/progress/artifact capabilities into InvocationContext
+    priority: P0
+    dependencies:
+    - E03-T01
+    - E04-T05
+    target_files:
+    - backend/invocation.py
+    deliverables:
+    - InvocationContext v2
+    acceptance:
+    - handler checks durable cancel token
+    - no direct DB access
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E04-T07
+    title: Implement retry classification and policy
+    priority: P0
+    dependencies:
+    - E04-T05
+    target_files:
+    - backend/execution_control/retry.py
+    - contracts/errors.json
+    deliverables:
+    - typed retry engine
+    acceptance:
+    - invalid/scientific refusals do not retry
+    - infra/preemption does
+    risk: high
+    parallelizable_after_dependencies: true
+  - id: E04-T08
+    title: Implement atomic terminal completion barrier
+    priority: P0
+    dependencies:
+    - E03-T04
+    - E04-T04
+    target_files:
+    - backend/execution_control/completion.py
+    deliverables:
+    - verified terminal transaction
+    acceptance:
+    - Job done only with verified required artifacts and current token
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E04-T09
+    title: Land transactional outbox and projector cursor
+    priority: P0
+    dependencies:
+    - E04-T08
+    target_files:
+    - backend/db/migrations/021_execution_control_plane.sql
+    - backend/execution_control/outbox.py
+    deliverables:
+    - outbox
+    acceptance:
+    - domain update and event atomic
+    - projector replay idempotent
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E04-T10
+    title: Implement reconciler
+    priority: P0
+    dependencies:
+    - E04-T03
+    - E04-T05
+    - E04-T07
+    target_files:
+    - backend/execution_control/reconciler.py
+    deliverables:
+    - lost/orphan/terminal reconciliation
+    acceptance:
+    - control restart recovers queued/running work
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E04-T11
+    title: Compile RunPlan into Steps/Jobs
+    priority: P0
+    dependencies:
+    - E04-T01
+    - E04-T05
+    target_files:
+    - backend/motif/run_compiler.py
+    deliverables:
+    - Run compiler
+    acceptance:
+    - immutable plan artifact
+    - conditional edges frozen
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E04-T12
+    title: Migrate current InvocationService behind compatibility facade
+    priority: P0
+    dependencies:
+    - E04-T06
+    - E04-T08
+    - E04-T10
+    target_files:
+    - backend/invocation.py
+    - backend/execution.py
+    deliverables:
+    - old/new execution coexistence
+    acceptance:
+    - fields/torsion parity
+    - new durable methods use attempts
+    risk: critical
+    parallelizable_after_dependencies: false
+- id: E05
+  title: Reference local appliance
+  release_gate: A
+  tasks:
+  - id: E05-T01
+    title: Implement LocalProcessAdapter worker entrypoint
+    priority: P0
+    dependencies:
+    - E04-T05
+    - E03-T02
+    target_files:
+    - backend/executors/local_process.py
+    - science/motif/src/dirac_motif/worker.py
+    deliverables:
+    - isolated CPU worker
+    acceptance:
+    - process death recovered
+    - resource limits applied
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E05-T02
+    title: Implement exclusive LocalGpuAdapter
+    priority: P0
+    dependencies:
+    - E04-T05
+    - E03-T02
+    target_files:
+    - backend/executors/local_gpu.py
+    deliverables:
+    - single GPU queue
+    acceptance:
+    - no CUDA in request thread
+    - one resident workload
+    risk: critical
+    parallelizable_after_dependencies: true
+  - id: E05-T03
+    title: Implement resource estimator/admission
+    priority: P0
+    dependencies:
+    - E05-T01
+    - E05-T02
+    target_files:
+    - backend/execution_control/admission.py
+    deliverables:
+    - CPU/GPU/RAM/VRAM/disk estimate and refusal
+    acceptance:
+    - silent downgrade forbidden
+    - swap-requiring work refused
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E05-T04
+    title: Apply local 5080/9900X profile
+    priority: P0
+    dependencies:
+    - E05-T03
+    target_files:
+    - deploy/local/*
+    - config/local-5080-9900x.yaml
+    deliverables:
+    - systemd/compose deployment
+    acceptance:
+    - one-command start
+    - health/capabilities correct
+    risk: medium
+    parallelizable_after_dependencies: false
+  - id: E05-T05
+    title: Implement scratch quotas and cleanup
+    priority: P0
+    dependencies:
+    - E05-T01
+    - E05-T02
+    target_files:
+    - backend/execution_control/scratch.py
+    deliverables:
+    - attempt scratch manager
+    acceptance:
+    - disk full handled before corruption
+    - terminal cleanup policy
+    risk: high
+    parallelizable_after_dependencies: true
+  - id: E05-T06
+    title: Add local OTel collector and bounded metrics
+    priority: P1
+    dependencies:
+    - E05-T04
+    target_files:
+    - deploy/local/otel/*
+    deliverables:
+    - local observability
+    acceptance:
+    - no compound IDs as metric labels
+    risk: medium
+    parallelizable_after_dependencies: true
+  - id: E05-T07
+    title: Run recovery and cancellation chaos suite
+    priority: P0
+    dependencies:
+    - E05-T04
+    - E05-T05
+    target_files:
+    - tests/chaos/local/*
+    deliverables:
+    - fault report
+    acceptance:
+    - restart reconciliation <=60s target
+    - stale completion rejected
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E05-T08
+    title: Run 8-hour appliance soak
+    priority: P0
+    dependencies:
+    - E05-T07
+    target_files:
+    - scripts/bench_motif_local.py
+    deliverables:
+    - soak benchmark artifact
+    acceptance:
+    - no leaked workers/VRAM/DB connections
+    - artifact integrity 100%
+    risk: high
+    parallelizable_after_dependencies: false
+- id: E06
+  title: Motif data and release foundation
+  release_gate: B
+  tasks:
+  - id: E06-T01
+    title: Land migration 022
+    priority: P0
+    dependencies:
+    - E01-T03
+    - E03-T05
+    - E04-T01
+    target_files:
+    - backend/db/migrations/022_motif_foundation.sql
+    deliverables:
+    - endpoint/snapshot/model/policy/objective/cycle tables
+    acceptance:
+    - clean and upgrade migrations pass
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E06-T02
+    title: Implement endpoint registry
+    priority: P0
+    dependencies:
+    - E06-T01
+    - E01-T05
+    target_files:
+    - backend/motif/endpoints.py
+    deliverables:
+    - versioned endpoint definitions
+    acceptance:
+    - protocol/unit incompatible labels cannot merge
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E06-T03
+    title: Implement dataset.snapshot.create Command/Method
+    priority: P0
+    dependencies:
+    - E06-T02
+    - E03-T04
+    target_files:
+    - backend/motif/commands.py
+    - science/motif/src/dirac_motif/datasets/*
+    deliverables:
+    - immutable snapshot
+    acceptance:
+    - selection/query/row lineage/splits frozen
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E06-T04
+    title: Implement leakage suite
+    priority: P0
+    dependencies:
+    - E06-T03
+    target_files:
+    - science/motif/src/dirac_motif/datasets/leakage.py
+    deliverables:
+    - leakage report
+    acceptance:
+    - exact/scaffold/series/time/protocol leakage detected
+    risk: critical
+    parallelizable_after_dependencies: true
+  - id: E06-T05
+    title: Implement objective.save
+    priority: P0
+    dependencies:
+    - E06-T01
+    target_files:
+    - backend/motif/commands.py
+    - contracts/domain/motif/design-brief.schema.json
+    deliverables:
+    - immutable Design Brief versions
+    acceptance:
+    - updates supersede, never overwrite
+    - idempotency/conflict semantics
+    risk: high
+    parallelizable_after_dependencies: true
+  - id: E06-T06
+    title: Implement model release service
+    priority: P0
+    dependencies:
+    - E06-T01
+    - E02-T03
+    target_files:
+    - backend/motif/release_service.py
+    deliverables:
+    - candidate/validated/production/retired lifecycle
+    acceptance:
+    - checkpoint folder alone cannot promote
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E06-T07
+    title: Implement policy release service
+    priority: P0
+    dependencies:
+    - E06-T01
+    target_files:
+    - backend/motif/release_service.py
+    deliverables:
+    - generation/fidelity/acquisition/etc releases
+    acceptance:
+    - policies immutable and digest-addressed
+    risk: high
+    parallelizable_after_dependencies: true
+  - id: E06-T08
+    title: Implement result.ingest with full missing/failure semantics
+    priority: P0
+    dependencies:
+    - E06-T02
+    - E01-T05
+    target_files:
+    - backend/motif/result_ingestion.py
+    deliverables:
+    - assay-aware ingestion
+    acceptance:
+    - negative/censored/failed synthesis/assay retained
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E06-T09
+    title: Implement describe/promote governance Commands
+    priority: P0
+    dependencies:
+    - E06-T06
+    - E06-T07
+    target_files:
+    - backend/motif/commands.py
+    deliverables:
+    - release transparency and promotion
+    acceptance:
+    - validation/model card/reviewer required
+    - rollback supported
+    risk: critical
+    parallelizable_after_dependencies: false
+- id: E07
+  title: Credible predictor mesh
+  release_gate: B
+  tasks:
+  - id: E07-T01
+    title: Implement fingerprint/descriptor feature release
+    priority: P0
+    dependencies:
+    - E06-T03
+    target_files:
+    - science/motif/src/dirac_motif/models/features.py
+    deliverables:
+    - versioned feature artifacts
+    acceptance:
+    - feature digest stable
+    - no label leakage
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E07-T02
+    title: Implement nearest-neighbor and linear baseline
+    priority: P0
+    dependencies:
+    - E07-T01
+    target_files:
+    - science/motif/src/dirac_motif/models/baselines.py
+    deliverables:
+    - mandatory baselines
+    acceptance:
+    - same frozen splits and metrics
+    risk: medium
+    parallelizable_after_dependencies: false
+  - id: E07-T03
+    title: Implement RF/XGBoost baseline
+    priority: P0
+    dependencies:
+    - E07-T01
+    target_files:
+    - science/motif/src/dirac_motif/models/tree.py
+    deliverables:
+    - strong tree baseline
+    acceptance:
+    - reproducible model release
+    risk: medium
+    parallelizable_after_dependencies: true
+  - id: E07-T04
+    title: Implement Chemprop D-MPNN adapter
+    priority: P0
+    dependencies:
+    - E05-T02
+    - E07-T01
+    target_files:
+    - science/motif/src/dirac_motif/models/chemprop.py
+    - containers/pytorch/*
+    deliverables:
+    - deep predictor
+    acceptance:
+    - local 16GB resource profile
+    - checkpoint/release artifacts
+    risk: high
+    parallelizable_after_dependencies: true
+  - id: E07-T05
+    title: Implement censored/ordinal/ranking label heads as needed
+    priority: P0
+    dependencies:
+    - E06-T02
+    - E07-T04
+    target_files:
+    - science/motif/src/dirac_motif/models/labels.py
+    deliverables:
+    - endpoint-aware objectives
+    acceptance:
+    - no silent bound-to-point conversion
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E07-T06
+    title: Implement ensemble and calibration
+    priority: P0
+    dependencies:
+    - E07-T02
+    - E07-T03
+    - E07-T04
+    target_files:
+    - science/motif/src/dirac_motif/uncertainty/*
+    deliverables:
+    - UQ and calibration artifacts
+    acceptance:
+    - coverage/width by split/domain
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E07-T07
+    title: Implement applicability-domain estimators
+    priority: P0
+    dependencies:
+    - E07-T01
+    target_files:
+    - science/motif/src/dirac_motif/uncertainty/domain.py
+    deliverables:
+    - in/borderline/out status
+    acceptance:
+    - known distant fixture out-of-domain
+    risk: critical
+    parallelizable_after_dependencies: true
+  - id: E07-T08
+    title: Implement ml.motif.train/predict/calibrate Methods
+    priority: P0
+    dependencies:
+    - E07-T05
+    - E07-T06
+    - E07-T07
+    target_files:
+    - contracts/methods/ml.motif.*
+    - science/motif/src/dirac_motif/worker.py
+    deliverables:
+    - end-to-end model Methods
+    acceptance:
+    - streaming prediction artifact
+    - composite digest
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E07-T09
+    title: Implement validation specification curve
+    priority: P0
+    dependencies:
+    - E07-T08
+    - E06-T04
+    target_files:
+    - science/motif/src/dirac_motif/models/validation.py
+    deliverables:
+    - model x split x endpoint report
+    acceptance:
+    - bootstrap CIs
+    - simple baselines cannot be omitted
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E07-T10
+    title: Benchmark medium fixture on RTX 5080
+    priority: P0
+    dependencies:
+    - E07-T09
+    - E05-T08
+    target_files:
+    - scripts/bench_motif_local.py
+    deliverables:
+    - predictor benchmark artifact
+    acceptance:
+    - no uncontrolled OOM
+    - peak VRAM/RSS recorded
+    risk: high
+    parallelizable_after_dependencies: false
+- id: E08
+  title: Proposal ensemble and chemistry gates
+  release_gate: B
+  tasks:
+  - id: E08-T01
+    title: Version medchem transform library
+    priority: P0
+    dependencies:
+    - E06-T05
+    target_files:
+    - science/motif/src/dirac_motif/proposals/transforms/*
+    deliverables:
+    - transform release
+    acceptance:
+    - source/evidence/tests per transform
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E08-T02
+    title: Implement local edits, R-group and MMP proposals
+    priority: P0
+    dependencies:
+    - E08-T01
+    target_files:
+    - science/motif/src/dirac_motif/proposals/local_edits.py
+    deliverables:
+    - local proposal strategy
+    acceptance:
+    - parent/edit/atom-map provenance
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E08-T03
+    title: Version reaction template and building-block snapshots
+    priority: P0
+    dependencies:
+    - E06-T03
+    target_files:
+    - science/motif/src/dirac_motif/proposals/reactions.py
+    deliverables:
+    - reaction/action releases
+    acceptance:
+    - template/stock digests frozen
+    risk: high
+    parallelizable_after_dependencies: true
+  - id: E08-T04
+    title: Implement reaction-constrained enumeration
+    priority: P0
+    dependencies:
+    - E08-T03
+    target_files:
+    - science/motif/src/dirac_motif/proposals/reactions.py
+    deliverables:
+    - reaction proposals/routes
+    acceptance:
+    - no naked product without reactant/template lineage
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E08-T05
+    title: Implement identity and project chemistry gates
+    priority: P0
+    dependencies:
+    - E01-T04
+    - E08-T02
+    - E08-T04
+    target_files:
+    - science/motif/src/dirac_motif/identity/*
+    deliverables:
+    - pass/warn/refuse reasons
+    acceptance:
+    - protected/forbidden/stereo/duplicate property tests
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E08-T06
+    title: Implement route evidence adapter boundary
+    priority: P1
+    dependencies:
+    - E08-T04
+    target_files:
+    - science/motif/src/dirac_motif/adapters/retrosynthesis.py
+    deliverables:
+    - AiZynthFinder/other adapter seam
+    acceptance:
+    - route_unknown explicit
+    - adapter failure typed
+    risk: medium
+    parallelizable_after_dependencies: true
+  - id: E08-T07
+    title: Implement design proposal Methods and Command
+    priority: P0
+    dependencies:
+    - E08-T05
+    target_files:
+    - contracts/methods/design.motif.*
+    - backend/motif/commands.py
+    deliverables:
+    - proposal.generate
+    acceptance:
+    - 50k cap
+    - sharded artifacts
+    - all proposals provenance
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E08-T08
+    title: Generator metrics and collapse monitoring
+    priority: P0
+    dependencies:
+    - E08-T07
+    target_files:
+    - science/motif/src/dirac_motif/proposals/metrics.py
+    deliverables:
+    - validity/diversity/domain/route report
+    acceptance:
+    - novelty not mislabeled success
+    risk: high
+    parallelizable_after_dependencies: false
+- id: E09
+  title: Structure and multi-fidelity evidence
+  release_gate: B
+  tasks:
+  - id: E09-T01
+    title: Define structure source/preparation contract
+    priority: P0
+    dependencies:
+    - E01-T04
+    target_files:
+    - contracts/domain/motif/structure-preparation.schema.json
+    deliverables:
+    - chain/site/protonation/cofactor/water provenance
+    acceptance:
+    - incomplete required context refuses
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E09-T02
+    title: Implement conformer Method
+    priority: P0
+    dependencies:
+    - E08-T05
+    target_files:
+    - science/motif/src/dirac_motif/structure/conformers.py
+    deliverables:
+    - SDF/Parquet conformers
+    acceptance:
+    - seed/tolerance/provenance
+    risk: medium
+    parallelizable_after_dependencies: false
+  - id: E09-T03
+    title: Implement AutoDock Vina adapter
+    priority: P0
+    dependencies:
+    - E09-T01
+    - E09-T02
+    target_files:
+    - science/motif/src/dirac_motif/adapters/vina.py
+    - containers/core/*
+    deliverables:
+    - V1 pose baseline
+    acceptance:
+    - cancel/shard/golden fixtures
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E09-T04
+    title: Implement canonical pose and interaction artifacts
+    priority: P0
+    dependencies:
+    - E09-T03
+    target_files:
+    - contracts/domain/motif/pose.schema.json
+    - science/motif/src/dirac_motif/structure/interactions.py
+    deliverables:
+    - pose ensemble conversion
+    acceptance:
+    - no repository-native output leaks
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E09-T05
+    title: Add optional DiffDock adapter
+    priority: P1
+    dependencies:
+    - E09-T04
+    - E05-T02
+    target_files:
+    - science/motif/src/dirac_motif/adapters/diffdock.py
+    - containers/diffdock/*
+    deliverables:
+    - isolated learned pose adapter
+    acceptance:
+    - license/checkpoint/resource/golden gate
+    risk: high
+    parallelizable_after_dependencies: true
+  - id: E09-T06
+    title: Reuse current Dirac fields/torsion through Methods
+    priority: P0
+    dependencies:
+    - E04-T12
+    - E09-T04
+    target_files:
+    - backend/motif/run_compiler.py
+    deliverables:
+    - F3 integration
+    acceptance:
+    - old/new golden parity
+    - no copied implementation
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E09-T07
+    title: Connect Artifact poses/fields to shared SceneService
+    priority: P0
+    dependencies:
+    - E09-T04
+    - E09-T06
+    target_files:
+    - src/app/services/scene-service*
+    - src/app/*
+    deliverables:
+    - single-scene rendering
+    acceptance:
+    - no second Mol* instance
+    - range/stream load
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E09-T08
+    title: Implement fidelity policy and adaptive escalation
+    priority: P0
+    dependencies:
+    - E07-T08
+    - E09-T06
+    target_files:
+    - backend/motif/run_compiler.py
+    - science/motif/src/dirac_motif/acquisition/fidelity.py
+    deliverables:
+    - F1 to F2/F3 selection
+    acceptance:
+    - policy frozen
+    - selection reasons visible
+    risk: critical
+    parallelizable_after_dependencies: false
+- id: E10
+  title: Portfolio, review and product views
+  release_gate: B
+  tasks:
+  - id: E10-T01
+    title: Implement deterministic constrained Pareto baseline
+    priority: P0
+    dependencies:
+    - E07-T08
+    - E08-T07
+    target_files:
+    - science/motif/src/dirac_motif/acquisition/pareto.py
+    deliverables:
+    - auditable acquisition baseline
+    acceptance:
+    - hard constraints exact
+    - deterministic with seed
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E10-T02
+    title: Implement diversity, cost, risk and missing-evidence components
+    priority: P0
+    dependencies:
+    - E10-T01
+    target_files:
+    - science/motif/src/dirac_motif/acquisition/components.py
+    deliverables:
+    - component decomposition
+    acceptance:
+    - every selection exposes components
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E10-T03
+    title: Add optional BoTorch policy adapter
+    priority: P1
+    dependencies:
+    - E10-T01
+    target_files:
+    - science/motif/src/dirac_motif/acquisition/botorch_adapter.py
+    deliverables:
+    - advanced acquisition
+    acceptance:
+    - same frozen replay/budget as baseline
+    risk: high
+    parallelizable_after_dependencies: true
+  - id: E10-T04
+    title: Implement sensitivity analysis
+    priority: P0
+    dependencies:
+    - E10-T02
+    target_files:
+    - science/motif/src/dirac_motif/acquisition/sensitivity.py
+    deliverables:
+    - sensitivity artifact
+    acceptance:
+    - unstable selections highlighted
+    risk: medium
+    parallelizable_after_dependencies: false
+  - id: E10-T05
+    title: Implement campaign.rank Method/Command
+    priority: P0
+    dependencies:
+    - E10-T02
+    - E10-T04
+    target_files:
+    - contracts/methods/design.motif.acquire.json
+    - backend/motif/commands.py
+    deliverables:
+    - selected/reserve/rejected/refused portfolio
+    acceptance:
+    - exhaustive status and reason codes
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E10-T06
+    title: Implement proposal.review and compound.promote
+    priority: P0
+    dependencies:
+    - E06-T05
+    - E10-T05
+    target_files:
+    - backend/motif/commands.py
+    deliverables:
+    - human review and approval
+    acceptance:
+    - actor/evidence/conflict/idempotency preserved
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E10-T07
+    title: Build Motif read-model projectors
+    priority: P0
+    dependencies:
+    - E04-T09
+    - E10-T05
+    target_files:
+    - backend/motif/read_models.py
+    deliverables:
+    - generate/landscape/optimize projections
+    acceptance:
+    - projector idempotent and replayable
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E10-T08
+    title: Implement design.generate product view
+    priority: P0
+    dependencies:
+    - E10-T07
+    - E09-T07
+    target_files:
+    - src/app/views/design.generate/*
+    deliverables:
+    - Design Brief/proposal/run view
+    acceptance:
+    - server pagination
+    - real DAG/progress
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E10-T09
+    title: Implement campaigns.landscape product view
+    priority: P0
+    dependencies:
+    - E10-T07
+    target_files:
+    - src/app/views/campaigns.landscape/*
+    deliverables:
+    - coverage/domain/drift landscape
+    acceptance:
+    - measured/predicted/missing distinct
+    risk: high
+    parallelizable_after_dependencies: true
+  - id: E10-T10
+    title: Implement campaigns.optimize product view
+    priority: P0
+    dependencies:
+    - E10-T07
+    - E10-T06
+    target_files:
+    - src/app/views/campaigns.optimize/*
+    deliverables:
+    - Pareto/review/promote view
+    acceptance:
+    - no hidden total score
+    - sensitivity/reasons/approval visible
+    risk: critical
+    parallelizable_after_dependencies: true
+- id: E11
+  title: Slurm and site-gateway scale
+  release_gate: D
+  tasks:
+  - id: E11-T01
+    title: Define site profile and Execution bundle signing
+    priority: P0
+    dependencies:
+    - E04-T05
+    - E03-T06
+    target_files:
+    - deploy/slurm/site-profile.schema.json
+    - backend/executors/hpc_relay.py
+    deliverables:
+    - site gateway protocol
+    acceptance:
+    - bundle/input/image digests verified
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E11-T02
+    title: Implement Slurm submit/inspect/cancel adapter
+    priority: P0
+    dependencies:
+    - E11-T01
+    target_files:
+    - backend/executors/slurm.py
+    deliverables:
+    - Slurm Allocation adapter
+    acceptance:
+    - scheduler IDs private
+    - typed state mapping
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E11-T03
+    title: Implement job-array shard mapping
+    priority: P0
+    dependencies:
+    - E11-T02
+    - E04-T02
+    target_files:
+    - backend/executors/slurm_arrays.py
+    deliverables:
+    - large homogeneous arrays
+    acceptance:
+    - site MaxArraySize honored
+    - oversized arrays split
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E11-T04
+    title: Implement Allocation Agent aggregation
+    priority: P0
+    dependencies:
+    - E11-T03
+    target_files:
+    - science/motif/src/dirac_motif/allocation_agent.py
+    deliverables:
+    - heartbeat/progress/result aggregation
+    acceptance:
+    - no per-rank DB writes
+    - manifest checkpoint
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E11-T05
+    title: Implement Apptainer image relation and staging
+    priority: P0
+    dependencies:
+    - E11-T01
+    target_files:
+    - containers/apptainer/*
+    - backend/executors/hpc_relay.py
+    deliverables:
+    - OCI to SIF provenance
+    acceptance:
+    - source OCI digest linked
+    - site cache verified
+    risk: high
+    parallelizable_after_dependencies: true
+  - id: E11-T06
+    title: Implement torchrun/FSDP2 launch profiles
+    priority: P1
+    dependencies:
+    - E11-T02
+    - E07-T04
+    target_files:
+    - deploy/slurm/torchrun/*
+    deliverables:
+    - distributed training launch
+    acceptance:
+    - checkpoint/reshard test
+    - topology captured
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E11-T07
+    title: Implement preemption/time-limit checkpoint signaling
+    priority: P0
+    dependencies:
+    - E11-T02
+    - E11-T04
+    target_files:
+    - backend/executors/slurm.py
+    - science/motif/src/dirac_motif/worker.py
+    deliverables:
+    - safe preemption
+    acceptance:
+    - signal->checkpoint->retry lineage
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E11-T08
+    title: Implement site relay reconciliation
+    priority: P0
+    dependencies:
+    - E11-T02
+    - E11-T04
+    target_files:
+    - backend/executors/hpc_relay.py
+    deliverables:
+    - gateway restart recovery
+    acceptance:
+    - duplicate/stale relay rejected
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E11-T09
+    title: Run 10k worker/shard metadata simulation
+    priority: P0
+    dependencies:
+    - E11-T04
+    - E04-T09
+    target_files:
+    - tests/scale/slurm/*
+    deliverables:
+    - scale report
+    acceptance:
+    - PG write cap respected
+    - projector lag bounded
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E11-T10
+    title: Run real small-cluster smoke
+    priority: P0
+    dependencies:
+    - E11-T07
+    - E11-T08
+    target_files:
+    - tests/scale/slurm/*
+    deliverables:
+    - real scheduler evidence
+    acceptance:
+    - submit/cancel/preempt/recover/artifacts pass
+    risk: high
+    parallelizable_after_dependencies: false
+- id: E12
+  title: Kubernetes, Kueue and JobSet scale
+  release_gate: D
+  tasks:
+  - id: E12-T01
+    title: Implement Kubernetes Adapter
+    priority: P0
+    dependencies:
+    - E04-T05
+    - E03-T06
+    target_files:
+    - backend/executors/kubernetes.py
+    deliverables:
+    - Job/IndexedJob adapter
+    acceptance:
+    - UID private
+    - image digest enforced
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E12-T02
+    title: Implement JobSet mapping
+    priority: P0
+    dependencies:
+    - E12-T01
+    target_files:
+    - deploy/kubernetes/jobset/*
+    deliverables:
+    - multi-job Allocation
+    acceptance:
+    - replicated jobs fan-in/failure mapping
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E12-T03
+    title: Implement Kueue queue/quota/priority mapping
+    priority: P0
+    dependencies:
+    - E12-T01
+    target_files:
+    - deploy/kubernetes/kueue/*
+    deliverables:
+    - batch admission mapping
+    acceptance:
+    - Dirac quota separate from Kueue quota
+    risk: high
+    parallelizable_after_dependencies: true
+  - id: E12-T04
+    title: Implement service-account/network/pod security
+    priority: P0
+    dependencies:
+    - E12-T01
+    target_files:
+    - deploy/kubernetes/security/*
+    deliverables:
+    - least privilege runtime
+    acceptance:
+    - no DB credentials
+    - default deny
+    - non-root
+    risk: critical
+    parallelizable_after_dependencies: true
+  - id: E12-T05
+    title: Implement topology-aware distributed profile
+    priority: P1
+    dependencies:
+    - E12-T02
+    - E12-T03
+    - E07-T04
+    target_files:
+    - deploy/kubernetes/training/*
+    deliverables:
+    - multi-node training
+    acceptance:
+    - topology/resource flavor recorded
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E12-T06
+    title: Implement K8s preemption/checkpoint reconciliation
+    priority: P0
+    dependencies:
+    - E12-T02
+    - E04-T10
+    target_files:
+    - backend/executors/kubernetes.py
+    deliverables:
+    - preemption-safe attempts
+    acceptance:
+    - recreated workload is new Attempt/allocation
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E12-T07
+    title: Run quota/priority/failure chaos suite
+    priority: P0
+    dependencies:
+    - E12-T03
+    - E12-T06
+    target_files:
+    - tests/scale/kubernetes/*
+    deliverables:
+    - K8s scale report
+    acceptance:
+    - quota/preemption/restart/partial failure pass
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E12-T08
+    title: Optional MultiKueue site support
+    priority: P2
+    dependencies:
+    - E12-T07
+    target_files:
+    - deploy/kubernetes/multikueue/*
+    deliverables:
+    - multi-cluster allocations
+    acceptance:
+    - data residency and separate allocations enforced
+    risk: high
+    parallelizable_after_dependencies: false
+- id: E13
+  title: Physics escalation
+  release_gate: D
+  tasks:
+  - id: E13-T01
+    title: Build OpenMM isolated image and adapter
+    priority: P1
+    dependencies:
+    - E09-T08
+    - E03-T01
+    target_files:
+    - containers/openmm/*
+    - science/motif/src/dirac_motif/adapters/openmm.py
+    deliverables:
+    - minimization/MD Method
+    acceptance:
+    - forcefield/runtime digest
+    - checkpoint/cancel
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E13-T02
+    title: Define MD input/output/checkpoint contracts
+    priority: P1
+    dependencies:
+    - E13-T01
+    target_files:
+    - contracts/domain/motif/md.schema.json
+    deliverables:
+    - trajectory/observable manifests
+    acceptance:
+    - topology/settings/provenance complete
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E13-T03
+    title: Implement MD checkpoint/restart tests
+    priority: P1
+    dependencies:
+    - E13-T02
+    target_files:
+    - tests/science/md/*
+    deliverables:
+    - restart evidence
+    acceptance:
+    - continuity within tolerance
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E13-T04
+    title: Add GROMACS HPC adapter
+    priority: P2
+    dependencies:
+    - E11-T10
+    - E13-T02
+    target_files:
+    - containers/gromacs/*
+    - science/motif/src/dirac_motif/adapters/gromacs.py
+    deliverables:
+    - HPC MD alternative
+    acceptance:
+    - build/license/MPI/profile frozen
+    risk: high
+    parallelizable_after_dependencies: true
+  - id: E13-T05
+    title: Build OpenFE adapter and RBFE contracts
+    priority: P2
+    dependencies:
+    - E13-T03
+    - E11-T10
+    target_files:
+    - containers/openfe/*
+    - science/motif/src/dirac_motif/adapters/openfe.py
+    deliverables:
+    - RBFE network Method
+    acceptance:
+    - mapping/network/window provenance
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E13-T06
+    title: Implement FEP shard/edge failure semantics
+    priority: P2
+    dependencies:
+    - E13-T05
+    target_files:
+    - science/motif/src/dirac_motif/physics/rbfe.py
+    deliverables:
+    - partial network reports
+    acceptance:
+    - failed edges visible
+    - no fabricated complete result
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E13-T07
+    title: Implement expensive-compute value policy
+    priority: P1
+    dependencies:
+    - E10-T02
+    - E13-T03
+    target_files:
+    - science/motif/src/dirac_motif/acquisition/fidelity.py
+    deliverables:
+    - value-based F4 escalation
+    acceptance:
+    - not all candidates escalated
+    - decision-change recorded
+    risk: high
+    parallelizable_after_dependencies: false
+- id: E14
+  title: Prospective closed-loop evidence
+  release_gate: E
+  tasks:
+  - id: E14-T01
+    title: Define pre-registration Artifact schema
+    priority: P0
+    dependencies:
+    - E10-T10
+    target_files:
+    - contracts/domain/motif/preregistration.schema.json
+    deliverables:
+    - frozen prospective plan
+    acceptance:
+    - objectives/models/policies/baseline/capacity hashed
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E14-T02
+    title: Implement blinded result ingestion mode
+    priority: P0
+    dependencies:
+    - E06-T08
+    - E14-T01
+    target_files:
+    - backend/motif/result_ingestion.py
+    deliverables:
+    - blinding/unblinding evidence
+    acceptance:
+    - selection policy cannot see hidden outcomes
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E14-T03
+    title: Implement campaign-local rapid adaptation
+    priority: P1
+    dependencies:
+    - E07-T08
+    - E06-T08
+    target_files:
+    - science/motif/src/dirac_motif/models/adaptation.py
+    deliverables:
+    - recalibration/delta/NN update
+    acceptance:
+    - production release not silently mutated
+    risk: high
+    parallelizable_after_dependencies: false
+  - id: E14-T04
+    title: Implement complete cycle report
+    priority: P0
+    dependencies:
+    - E14-T02
+    - E14-T03
+    target_files:
+    - backend/motif/cycle_report.py
+    deliverables:
+    - all proposed/selected/synthesis/assay outcomes
+    acceptance:
+    - no survivorship filtering
+    - deviations explicit
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E14-T05
+    title: Add external claim gate
+    priority: P0
+    dependencies:
+    - E14-T04
+    target_files:
+    - backend/motif/claims.py
+    - src/app/*
+    deliverables:
+    - claim-to-evidence enforcement
+    acceptance:
+    - prospective language requires prospective evidence artifact
+    risk: critical
+    parallelizable_after_dependencies: false
+  - id: E14-T06
+    title: Run and archive first pre-registered DMTA cycle
+    priority: P0
+    dependencies:
+    - E14-T05
+    target_files:
+    - artifacts only
+    deliverables:
+    - prospective evidence bundle
+    acceptance:
+    - primary analysis/cost/time/effect/negative outcomes reported
+    risk: critical
+    parallelizable_after_dependencies: false

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/program/program.schema.json",
+  "title": "Dirac Program aggregate read model",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["ref", "code", "name", "lifecycle", "stage", "version", "objectives", "hypotheses", "decisions", "milestones", "links"],
+  "properties": {
+    "ref": {"$ref": "../object-kinds.json#/$defs/object_ref"},
+    "code": {"type": "string", "minLength": 1, "maxLength": 96},
+    "name": {"type": "string", "minLength": 1, "maxLength": 256},
+    "summary": {"type": ["string", "null"]},
+    "lifecycle": {"enum": ["draft", "active", "paused", "completed", "archived"]},
+    "stage": {"enum": ["discovery", "target_validation", "hit_discovery", "hit_to_lead", "lead_optimization", "candidate_selection", "preclinical"]},
+    "version": {"type": "integer", "minimum": 1},
+    "objectives": {"type": "array", "items": {"$ref": "objective.schema.json"}},
+    "hypotheses": {"type": "array", "items": {"$ref": "hypothesis.schema.json"}},
+    "decisions": {"type": "array", "items": {"$ref": "decision.schema.json"}},
+    "milestones": {"type": "array", "items": {"$ref": "milestone.schema.json"}},
+    "links": {"type": "array", "items": {"type": "object"}}
+  }
+}

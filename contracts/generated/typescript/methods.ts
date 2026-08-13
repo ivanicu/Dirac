@@ -33,6 +33,10 @@ export type DiracEnvelope<TData = unknown> = {
 };
 
 export type MethodId =
+    | 'data.motif.snapshot'
+    | 'design.motif.acquire'
+    | 'design.motif.local_edits'
+    | 'design.motif.reaction_enumerate'
     | 'fields.mep'
     | 'fields.mlp'
     | 'fields.qm.density'
@@ -41,10 +45,171 @@ export type MethodId =
     | 'fields.qm.mep_qm'
     | 'fields.region.mep'
     | 'fields.region.mlp'
+    | 'ml.motif.calibrate'
+    | 'ml.motif.predict'
+    | 'ml.motif.train'
     | 'molecule.embed'
     | 'surface.mep'
     | 'surface.mep_at'
     | 'torsion.strain';
+
+/** data.motif.snapshot output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type DataMotifSnapshotOutput = {
+    manifest: Record<string, unknown>;
+    dataset_snapshot?: {
+        ref: {
+            kind: 'dataset';
+            id: string;
+        };
+        digest: string;
+        status: 'valid' | 'invalid';
+        created: boolean;
+    };
+};
+
+/** data.motif.snapshot — Freeze measurement-lineage rows, endpoint definitions, splits and leakage evidence into a content-addressed dataset snapshot. */
+export const DataMotifSnapshotExecution = {
+    "supported_modes": [
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "cpu",
+    "determinism": "bitwise",
+    "checkpointable": false,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "write:dataset"
+    ],
+    "supported_adapters": [
+        "local_cpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "scale_profile": {
+        "shardable": true,
+        "distributed": false,
+        "min_gpus": 0,
+        "max_gpus": 0
+    },
+    "cacheable": true,
+    "deterministic": true,
+    "side_effects": "immutable_artifacts"
+} as const;
+
+/** design.motif.acquire output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type DesignMotifAcquireOutput = {
+    partitions: {
+        selected: Array<unknown>;
+        reserve: Array<unknown>;
+        rejected: Array<unknown>;
+        refused: Array<unknown>;
+    };
+    counts: Record<string, unknown>;
+    policy: 'deterministic_constrained_pareto_v1';
+};
+
+/** design.motif.acquire — Produce an exhaustive selected/reserve/rejected/refused portfolio with exact hard constraints and deterministic Pareto ranks. */
+export const DesignMotifAcquireExecution = {
+    "supported_modes": [
+        "sync",
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "cpu",
+    "determinism": "bitwise",
+    "checkpointable": false,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "read:predictions",
+        "write:portfolio"
+    ],
+    "supported_adapters": [
+        "inline",
+        "local_cpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "scale_profile": {
+        "shardable": false,
+        "distributed": false,
+        "min_gpus": 0,
+        "max_gpus": 0
+    },
+    "cacheable": true,
+    "deterministic": true,
+    "side_effects": "immutable_artifacts"
+} as const;
+
+/** design.motif.local_edits output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type DesignMotifLocal_editsOutput = {
+    proposal_count: number;
+    generator_metrics: Record<string, unknown>;
+};
+
+/** design.motif.local_edits — Apply a versioned unary medchem transform release and emit fully traced, identity-gated proposals. */
+export const DesignMotifLocal_editsExecution = {
+    "supported_modes": [
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "cpu",
+    "determinism": "bitwise",
+    "checkpointable": false,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "write:proposals"
+    ],
+    "supported_adapters": [
+        "local_cpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "scale_profile": {
+        "shardable": true,
+        "distributed": false,
+        "min_gpus": 0,
+        "max_gpus": 0
+    },
+    "cacheable": true,
+    "deterministic": true,
+    "side_effects": "immutable_artifacts"
+} as const;
+
+/** design.motif.reaction_enumerate output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type DesignMotifReaction_enumerateOutput = {
+    proposal_count: number;
+    generator_metrics: Record<string, unknown>;
+};
+
+/** design.motif.reaction_enumerate — Enumerate unary/binary versioned reaction templates with reactant and atom-map provenance. */
+export const DesignMotifReaction_enumerateExecution = {
+    "supported_modes": [
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "cpu",
+    "determinism": "bitwise",
+    "checkpointable": false,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "read:building_blocks",
+        "write:proposals"
+    ],
+    "supported_adapters": [
+        "local_cpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "scale_profile": {
+        "shardable": true,
+        "distributed": false,
+        "min_gpus": 0,
+        "max_gpus": 0
+    },
+    "cacheable": true,
+    "deterministic": true,
+    "side_effects": "immutable_artifacts"
+} as const;
 
 /** fields.mep output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type FieldsMepOutput = {
@@ -593,6 +758,129 @@ export const FieldsRegionMlpExecution = {
     "side_effects": "none"
 } as const;
 
+/** ml.motif.calibrate output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type MlMotifCalibrateOutput = {
+    calibration: Record<string, unknown>;
+};
+
+/** ml.motif.calibrate — Fit a finite-sample split-conformal absolute-residual calibration release. */
+export const MlMotifCalibrateExecution = {
+    "supported_modes": [
+        "sync",
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "cpu",
+    "determinism": "numeric_tolerant",
+    "checkpointable": false,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "read:predictions",
+        "write:model"
+    ],
+    "supported_adapters": [
+        "inline",
+        "local_cpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "scale_profile": {
+        "shardable": false,
+        "distributed": false,
+        "min_gpus": 0,
+        "max_gpus": 0
+    },
+    "cacheable": true,
+    "deterministic": true,
+    "side_effects": "immutable_artifacts"
+} as const;
+
+/** ml.motif.predict output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type MlMotifPredictOutput = {
+    predictions: Array<unknown>;
+    count: number;
+};
+
+/** ml.motif.predict — Predict with a digest-verified Morgan baseline checkpoint and report nearest-neighbor applicability domain. */
+export const MlMotifPredictExecution = {
+    "supported_modes": [
+        "sync",
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "cpu",
+    "determinism": "numeric_tolerant",
+    "checkpointable": false,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "read:model",
+        "write:predictions"
+    ],
+    "supported_adapters": [
+        "local_cpu",
+        "local_gpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "scale_profile": {
+        "shardable": true,
+        "distributed": false,
+        "min_gpus": 0,
+        "max_gpus": 10000
+    },
+    "cacheable": true,
+    "deterministic": true,
+    "side_effects": "immutable_artifacts"
+} as const;
+
+/** ml.motif.train output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type MlMotifTrainOutput = {
+    checkpoint_digest: string;
+    validation: Record<string, unknown>;
+    algorithm: 'morgan_ridge_and_1nn';
+    featurizer_digest: string;
+    runtime_lock_digest: string;
+    model_release?: {
+        ref: {
+            kind: 'model';
+            id: string;
+        };
+        model_release_id: string;
+        lifecycle: 'candidate';
+        created: boolean;
+    };
+};
+
+/** ml.motif.train — Train the mandatory Morgan ridge and nearest-neighbor predictor baselines on frozen split labels. */
+export const MlMotifTrainExecution = {
+    "supported_modes": [
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "cpu",
+    "determinism": "numeric_tolerant",
+    "checkpointable": false,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "read:dataset",
+        "write:model"
+    ],
+    "supported_adapters": [
+        "local_cpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "scale_profile": {
+        "shardable": false,
+        "distributed": false,
+        "min_gpus": 0,
+        "max_gpus": 0
+    },
+    "cacheable": true,
+    "deterministic": true,
+    "side_effects": "immutable_artifacts"
+} as const;
+
 /** molecule.embed output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type MoleculeEmbedOutput = {
     molecule: {
@@ -722,6 +1010,10 @@ export const TorsionStrainExecution = {
 } as const;
 
 export const METHOD_IDS: readonly MethodId[] = [
+    "data.motif.snapshot",
+    "design.motif.acquire",
+    "design.motif.local_edits",
+    "design.motif.reaction_enumerate",
     "fields.mep",
     "fields.mlp",
     "fields.qm.density",
@@ -730,6 +1022,9 @@ export const METHOD_IDS: readonly MethodId[] = [
     "fields.qm.mep_qm",
     "fields.region.mep",
     "fields.region.mlp",
+    "ml.motif.calibrate",
+    "ml.motif.predict",
+    "ml.motif.train",
     "molecule.embed",
     "surface.mep",
     "surface.mep_at",

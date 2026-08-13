@@ -77,30 +77,6 @@
             text-transform: uppercase;
         }
         .topbar-tail { display: flex; gap: 10px; align-items: center; }
-        .workspace-nav { grid-column: 1 / -1; display: flex; gap: 4px; padding: 5px 10px;
-            border-bottom: 1px solid var(--border); background: var(--surface-2); }
-        .workspace-nav a { border: 0; border-radius: 6px; padding: 5px 9px;
-            background: transparent; color: var(--text-3); font-size: 10px; font-weight: 700;
-            text-decoration: none; }
-        .workspace-nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
-        .view-nav { display: flex; gap: 4px; padding: 4px 10px; overflow-x: auto;
-            border-bottom: 1px solid var(--border); background: var(--surface); }
-        .view-nav a { border: 0; padding: 4px 7px; border-radius: 5px; white-space: nowrap;
-            background: transparent; color: var(--text-3); font-size: 9px; text-decoration: none; }
-        .view-nav a[aria-current="page"] { color: var(--text); background: var(--surface-3); }
-        .global-context-bar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 5px; padding: 6px 10px; border-bottom: 1px solid var(--border);
-            background: color-mix(in srgb, var(--surface-2) 80%, transparent); }
-        .context-cell { min-width: 0; }
-        .context-cell span { display: block; color: var(--text-3); font-size: 8px;
-            letter-spacing: .08em; text-transform: uppercase; }
-        .context-cell strong { display: block; overflow: hidden; color: var(--text);
-            font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-        .context-actions { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; }
-        .context-actions button { border: 1px solid var(--border); border-radius: 5px;
-            padding: 4px 7px; background: var(--surface); color: var(--text-2); font-size: 9px; }
-        .attention-slot { margin-left: auto; color: var(--text-3); font-size: 9px; }
-        .attention-slot b { color: var(--warning); }
         #command-palette { width: min(720px, 90vw); border: 1px solid var(--border-strong);
             border-radius: 12px; padding: 14px; background: var(--surface); color: var(--text); }
         #command-palette::backdrop { background: rgb(3 8 12 / 72%); }
@@ -1321,6 +1297,7 @@
     </style>
     <link rel="stylesheet" href="./theme-fascia.css">
     <link rel="stylesheet" href="./workspace-shell.css">
+    <link rel="stylesheet" href="./voice-composer.css">
     <!-- addons.css carries the two chrome additions that are not part of the fascia theme
          itself: the palette picker's column in .topbar-scene, and the save button. Kept out
          of theme-fascia.css on purpose — that file is the THEME, and a control that only
@@ -1354,11 +1331,7 @@
                 <span id="status" class="status-pill" role="status" aria-live="polite">Starting…</span>
                 <button id="clear-selection" type="button" class="btn-ghost">Clear selection</button>
             </div>
-        </header>
-
-        <aside class="sidebar">
             <nav id="workspace-nav" class="workspace-nav" aria-label="Dirac workspaces"></nav>
-            <nav id="view-nav" class="view-nav" aria-label="Workspace views"></nav>
             <section class="global-context-bar" aria-label="Global scientific context">
                 <div class="context-cell"><span>Program</span><strong id="context-program">unassigned</strong></div>
                 <div class="context-cell"><span>Complex</span><strong id="context-complex">none</strong></div>
@@ -1369,7 +1342,10 @@
                     <span class="attention-slot">Attention <b id="attention-count">…</b></span>
                 </div>
             </section>
-            <section id="workspace-outline" class="workspace-outline" aria-label="Workspace implementation map" hidden></section>
+        </header>
+
+        <nav id="view-nav" class="view-nav" aria-label="Workspace views"></nav>
+        <aside class="sidebar">
             <nav class="master-nav" aria-label="Scientific workbench sections">
                 <button type="button" class="master-tab" data-jump="focus" aria-pressed="false">Focus</button>
                 <button type="button" class="master-tab" data-jump="semantic" aria-pressed="true">Semantics</button>

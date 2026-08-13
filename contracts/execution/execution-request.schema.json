@@ -1,0 +1,238 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/execution/execution-request.schema.json",
+  "title": "Dirac ExecutionRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "execution_id",
+    "job_id",
+    "step_id",
+    "attempt_id",
+    "attempt",
+    "fencing_token",
+    "method_id",
+    "execution_digest",
+    "container_image",
+    "entrypoint",
+    "input_manifest_artifact_id",
+    "output_contract_digest",
+    "resource_request",
+    "placement",
+    "retry_policy",
+    "checkpoint_policy",
+    "security_context",
+    "determinism",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "execution_id": {"$ref": "#/$defs/uuid"},
+    "job_id": {"$ref": "#/$defs/uuid"},
+    "step_id": {"$ref": "#/$defs/uuid"},
+    "attempt_id": {"$ref": "#/$defs/uuid"},
+    "attempt": {"type": "integer", "minimum": 1},
+    "fencing_token": {"type": "integer", "minimum": 1},
+    "method_id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:\\.[a-z][a-z0-9_]*)+$"},
+    "execution_digest": {"$ref": "#/$defs/sha256"},
+    "container_image": {
+      "type": "string",
+      "pattern": "^[^\\s]+@sha256:[0-9a-f]{64}$",
+      "description": "Immutable OCI image reference. Mutable tags are forbidden."
+    },
+    "entrypoint": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {"type": "string", "minLength": 1, "maxLength": 4096}
+    },
+    "input_manifest_artifact_id": {"$ref": "#/$defs/uuid"},
+    "output_contract_digest": {"$ref": "#/$defs/sha256"},
+    "resource_request": {"$ref": "#/$defs/resource_request"},
+    "placement": {"$ref": "#/$defs/placement"},
+    "retry_policy": {"$ref": "#/$defs/retry_policy"},
+    "checkpoint_policy": {"$ref": "#/$defs/checkpoint_policy"},
+    "security_context": {"$ref": "#/$defs/security_context"},
+    "determinism": {"$ref": "#/$defs/determinism"},
+    "shard_manifest_artifact_id": {
+      "oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "maxLength": 8192},
+      "propertyNames": {"pattern": "^[A-Z_][A-Z0-9_]*$"},
+      "maxProperties": 64,
+      "description": "Already-filtered non-secret environment. Secret values are passed by opaque handles."
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "expires_at": {
+      "oneOf": [{"type": "string", "format": "date-time"}, {"type": "null"}]
+    }
+  },
+  "$defs": {
+    "uuid": {"type": "string", "format": "uuid"},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "resource_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu_cores", "memory_bytes", "gpus", "scratch_bytes", "walltime_seconds"],
+      "properties": {
+        "cpu_cores": {"type": "number", "exclusiveMinimum": 0, "maximum": 1000000},
+        "memory_bytes": {"type": "integer", "minimum": 268435456},
+        "gpus": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "gpu_arch": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["blackwell", "hopper", "ada", "ampere", "rocm", "xpu", "any"]}
+        },
+        "gpu_memory_bytes_min": {"type": "integer", "minimum": 0},
+        "scratch_bytes": {"type": "integer", "minimum": 0},
+        "walltime_seconds": {"type": "integer", "minimum": 1, "maximum": 2592000},
+        "network": {"enum": ["none", "egress_only", "site_internal", "cluster_fabric", "internet"]},
+        "rdma": {"type": "boolean"},
+        "exclusive_gpu": {"type": "boolean", "default": true}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"gpus": {"minimum": 1}}, "required": ["gpus"]},
+          "then": {"required": ["gpu_arch", "gpu_memory_bytes_min"]}
+        }
+      ]
+    },
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backend", "topology"],
+      "properties": {
+        "backend": {"enum": ["inline", "local_cpu", "local_gpu", "slurm", "kubernetes", "hpc_relay"]},
+        "site": {"type": ["string", "null"], "maxLength": 128},
+        "queue": {"type": ["string", "null"], "maxLength": 128},
+        "account": {"type": ["string", "null"], "maxLength": 128},
+        "qos": {"type": ["string", "null"], "maxLength": 128},
+        "topology": {"enum": ["single_process", "single_node", "multi_node", "job_array", "heterogeneous"]},
+        "node_constraints": {
+          "type": "object",
+          "additionalProperties": {"type": ["string", "number", "boolean"]},
+          "maxProperties": 64
+        },
+        "data_residency": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "maxLength": 128}
+        }
+      }
+    },
+    "retry_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_attempts", "retryable_codes", "backoff", "preserve_seed", "resume_from_checkpoint"],
+      "properties": {
+        "max_attempts": {"type": "integer", "minimum": 1, "maximum": 20},
+        "retryable_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$"}
+        },
+        "backoff": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "initial_seconds", "max_seconds"],
+          "properties": {
+            "kind": {"enum": ["none", "fixed", "exponential"]},
+            "initial_seconds": {"type": "integer", "minimum": 0, "maximum": 86400},
+            "max_seconds": {"type": "integer", "minimum": 0, "maximum": 86400},
+            "jitter_fraction": {"type": "number", "minimum": 0, "maximum": 1}
+          }
+        },
+        "preserve_seed": {"type": "boolean"},
+        "resume_from_checkpoint": {"type": "boolean"},
+        "resize_on": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "batch_scale": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+              "memory_scale": {"type": "number", "minimum": 1, "maximum": 8},
+              "max_resizes": {"type": "integer", "minimum": 0, "maximum": 3}
+            }
+          }
+        }
+      }
+    },
+    "checkpoint_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "upload_mode", "retain_last", "checkpoint_timeout_seconds"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "interval_seconds": {"type": ["integer", "null"], "minimum": 1},
+        "interval_steps": {"type": ["integer", "null"], "minimum": 1},
+        "upload_mode": {"enum": ["sync", "async"]},
+        "retain_last": {"type": "integer", "minimum": 0, "maximum": 100},
+        "checkpoint_timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 86400},
+        "preemption_signal": {"type": ["string", "null"], "maxLength": 32},
+        "compatibility_digest": {
+          "oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"enabled": {"const": true}}, "required": ["enabled"]},
+          "then": {
+            "anyOf": [
+              {"required": ["interval_seconds"]},
+              {"required": ["interval_steps"]},
+              {"required": ["preemption_signal"]}
+            ]
+          }
+        }
+      ]
+    },
+    "security_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor", "project_scope", "artifact_read_ids", "artifact_write_session", "credential_expires_at"],
+      "properties": {
+        "actor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id"],
+          "properties": {
+            "kind": {"enum": ["human", "agent", "service"]},
+            "id": {"type": "string", "minLength": 1, "maxLength": 256}
+          }
+        },
+        "project_scope": {"type": "string", "minLength": 1, "maxLength": 256},
+        "artifact_read_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/uuid"},
+          "maxItems": 100000
+        },
+        "artifact_write_session": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "secret_handles": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "maxLength": 256}
+        },
+        "credential_expires_at": {"type": "string", "format": "date-time"},
+        "network_policy": {"enum": ["deny_all", "artifact_only", "site_internal", "declared_egress"]}
+      }
+    },
+    "determinism": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "root_seed", "numeric_mode"],
+      "properties": {
+        "class": {"enum": ["bitwise", "numeric_tolerant", "statistical", "non_deterministic"]},
+        "root_seed": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+        "seed_scope_digest": {"$ref": "#/$defs/sha256"},
+        "numeric_mode": {"enum": ["fp64", "fp32", "tf32", "bf16", "fp16", "mixed"]},
+        "absolute_tolerance": {"type": ["number", "null"], "minimum": 0},
+        "relative_tolerance": {"type": ["number", "null"], "minimum": 0}
+      }
+    }
+  }
+}

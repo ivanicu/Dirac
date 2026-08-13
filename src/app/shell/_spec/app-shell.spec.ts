@@ -101,11 +101,12 @@ describe('canonical AppShell architecture', () => {
         expect(context.current().programRef).toEqual(objectRef('program', 'KRAS-G12D'));
     });
 
-    it('navigates to a scaffold view without pretending its capability is implemented', () => {
+    it('navigates to the connected Program aggregate view', () => {
         const shell = new AppShell(new ScientificContextStore(), new SceneService());
         shell.navigate({ workspace: 'programs', view: 'programs.overview', programId: 'KRAS-G12D' });
         expect(shell.current().view).toBe('programs.overview');
-        expect(VIEWS.find(v => v.id === shell.current().view)?.implemented).toBe(false);
+        expect(VIEWS.find(v => v.id === shell.current().view)?.implemented).toBe(true);
+        expect(VIEWS.find(v => v.id === shell.current().view)?.delivery).toBe('connected');
     });
 
     it('keeps one molstar instance across navigation and rejects replacement', () => {

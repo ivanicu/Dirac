@@ -1,0 +1,122 @@
+profile:
+  id: slurm_hpc_scale_v1
+  description: Dirac Motif Slurm execution profile from small clusters to 10,000 GPUs
+  contract_version: "1.0"
+  deployment_class: S5
+
+control_plane:
+  direct_database_from_compute_nodes: false
+  scheduler_adapter: slurm
+  site_gateway_required: true
+  event_aggregation: allocation_agent
+  artifact_authority: object_store
+
+site_gateway:
+  mode: relay
+  execution_bundle_signature_required: true
+  accepted_image_formats: [apptainer_sif, oci]
+  input_staging:
+    backend: site_cache
+    verify_digest: true
+    maximum_concurrent_transfers: 32
+  output_relay:
+    manifest_first: true
+    multipart: true
+    retry_max_attempts: 8
+  credential_policy:
+    database_credentials: forbidden
+    execution_credentials_ttl_seconds: 3600
+
+slurm:
+  submission_mode: rest_or_cli
+  partition: null
+  account: null
+  qos: null
+  max_outstanding_allocations_per_project: 256
+  max_array_size_from_site_profile: true
+  split_oversized_arrays: true
+  array_concurrency_limit: null
+  signal_before_timeout_seconds: 300
+  scheduler_poll_seconds: 15
+  scheduler_backoff_seconds: 60
+  native_requeue: policy_controlled
+
+allocation_agent:
+  enabled: true
+  heartbeat_to_control_plane_seconds: 20
+  progress_batch_max_events: 10000
+  shard_manifest_checkpoint_seconds: 60
+  local_retry_max_attempts: 2
+  log_flush_seconds: 30
+  rank_heartbeats_to_database: forbidden
+
+execution:
+  lease:
+    ttl_seconds: 120
+    heartbeat_seconds: 20
+    reconcile_seconds: 30
+  cancellation:
+    cooperative_signal: USR1
+    grace_seconds: 300
+    scheduler_cancel_command: scancel
+  checkpoint:
+    preemption_signal: USR1
+    distributed_checkpoint: pytorch_dcp
+    site_local_then_relay: true
+  retry:
+    node_lost: true
+    preempted: true
+    object_store_timeout: true
+    deterministic_science_failure: false
+
+sharding:
+  default_target_runtime_seconds: 900
+  minimum_target_runtime_seconds: 300
+  maximum_target_runtime_seconds: 1800
+  deterministic_partition: hash_or_range_manifest
+  one_database_job_per_item: forbidden
+  completed_shards_manifest: required
+
+training:
+  launcher: torchrun
+  strategies: [ddp, fsdp2, tensor_parallel, fsdp2_tensor_parallel]
+  elastic: true
+  topology_aware: true
+  checkpoint_reshard_test_required: true
+  communication_backends: [nccl, torchcomms]
+  metrics_aggregation: rank0_or_agent
+  direct_rank_artifact_commit: forbidden
+
+artifact_backend:
+  authority: s3_compatible
+  site_cache: shared_or_parallel_filesystem
+  formats:
+    tables: parquet
+    streaming: arrow_ipc
+    arrays: zarr
+    distributed_checkpoint: pytorch_dcp
+    trajectories: [xtc, dcd, trr]
+  verify_on_write: true
+  verify_on_relay: true
+  immutable_keys: true
+
+scale_guards:
+  max_gpus_per_allocation: 10000
+  max_postgresql_heartbeat_writes_per_second: 100
+  max_ui_visible_shard_rows: 10000
+  scheduler_submission_rate_per_second: 10
+  control_plane_event_batching: true
+  load_shed_nonessential_telemetry: true
+
+fault_injection_gates:
+  - gateway_restart
+  - slurm_controller_unavailable
+  - node_lost
+  - partial_array_failure
+  - preemption
+  - walltime_exceeded
+  - parallel_filesystem_full
+  - interrupted_artifact_relay
+  - duplicate_terminal_manifest
+  - stale_attempt_late_return
+  - checkpoint_world_size_change

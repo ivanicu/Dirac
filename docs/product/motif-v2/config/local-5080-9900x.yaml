@@ -1,0 +1,148 @@
+profile:
+  id: local_appliance_v1
+  description: Dirac Motif reference appliance for Ryzen 9 9900X and RTX 5080 16GB
+  contract_version: "1.0"
+  deployment_class: S1
+
+host:
+  os_family: linux
+  cpu:
+    physical_cores: 12
+    logical_cpus: 24
+    reserved_logical_cpus: 4
+  memory:
+    hard_minimum_bytes: 68719476736        # 64 GiB
+    recommended_bytes: 137438953472        # 128 GiB
+    emergency_headroom_bytes: 6442450944   # 6 GiB
+  gpu:
+    count: 1
+    architecture: blackwell
+    memory_bytes: 17179869184               # 16 GiB
+    exclusive: true
+    safety_margin_bytes: 2147483648         # 2 GiB
+  storage:
+    durable_artifact_root: /var/lib/dirac/artifacts
+    model_cache_root: /var/lib/dirac/cache/models
+    checkpoint_root: /var/lib/dirac/checkpoints
+    scratch_root: /var/tmp/dirac/attempt
+    hard_minimum_bytes: 2199023255552        # 2 TiB
+    recommended_bytes: 4398046511104        # 4 TiB
+
+services:
+  postgresql:
+    memory_limit_bytes: 8589934592
+    shared_buffers_bytes: 4294967296
+    max_connections: 80
+  control_plane:
+    replicas: 1
+    memory_limit_bytes: 4294967296
+    cpu_limit: 2
+  web:
+    replicas: 1
+    memory_limit_bytes: 2147483648
+    cpu_limit: 1
+  projector:
+    replicas: 1
+    memory_limit_bytes: 2147483648
+    cpu_limit: 1
+  local_cpu_worker:
+    processes: 8
+    maximum_processes: 12
+    memory_limit_per_process_bytes: 4294967296
+    environment:
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+  local_gpu_worker:
+    processes: 1
+    gpu_count_per_process: 1
+    memory_limit_host_bytes: 12884901888
+    max_resident_models: 1
+    mixed_precision_order: [bf16, fp16, fp32]
+    cuda_oom_policy:
+      max_resizes: 1
+      batch_scale: 0.5
+
+artifact_backend:
+  kind: tiered_local
+  inline_threshold_bytes: 1048576
+  authority: local_cas
+  local_cas:
+    layout: sha256_prefix_v1
+    fsync_on_commit: true
+    atomic_rename: true
+    verify_on_write: true
+  compression:
+    tabular: zstd
+    logs: zstd
+    trajectories: native
+
+execution:
+  adapters:
+    inline:
+      enabled: true
+      maximum_estimated_seconds: 0.1
+    local_cpu:
+      enabled: true
+      queue_capacity: 128
+    local_gpu:
+      enabled: true
+      queue_capacity: 16
+      exclusive_gpu: true
+  lease:
+    ttl_seconds: 45
+    heartbeat_seconds: 10
+    reconcile_seconds: 10
+  cancellation:
+    acknowledgement_target_seconds: 5
+    cooperative_grace_seconds: 30
+    hard_kill_after_seconds: 120
+  outbox:
+    poll_seconds: 1
+    batch_size: 100
+  recovery:
+    on_startup: true
+    target_seconds: 60
+
+motif_defaults:
+  proposal:
+    max_raw: 50000
+    max_identity_valid: 10000
+    max_synthesis_valid: 5000
+    shard_size: 1000
+  prediction_f1:
+    max_compounds: 5000
+    deep_ensemble_members: 5
+    sequential_model_loading: true
+    inference_batch_probe: true
+  structure_f2:
+    max_compounds: 256
+    shard_size: 16
+    vina_enabled: true
+    diffdock_enabled: false
+  fields_f3:
+    max_compounds: 32
+    shard_size: 4
+  physics_f4:
+    enabled_by_default: false
+    max_compounds: 4
+  portfolio:
+    max_selected: 48
+    max_reserve: 48
+    minimum_exploration_fraction: 0.15
+
+admission:
+  reject_on_swap_requirement: true
+  reject_if_peak_vram_exceeds_bytes: 15032385536
+  reject_if_free_disk_below_bytes: 107374182400
+  reserve_before_submit: true
+  silent_fidelity_downgrade: false
+
+slo_targets:
+  job_visible_p95_seconds: 2
+  read_model_p95_seconds: 0.2
+  process_restart_reconciliation_seconds: 60
+  medium_cycle_p50_seconds: 7200
+  medium_cycle_p95_seconds: 14400
+  terminal_required_artifact_integrity: 1.0

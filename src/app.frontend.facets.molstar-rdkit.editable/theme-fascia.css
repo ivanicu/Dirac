@@ -464,12 +464,6 @@ select, input[type="text"] { min-height: 40px; font-size: 12px; }
 .btn-ghost, .btn-copy, .designer-toolbar button, .designer-add-row button,
 .import-row button, .smarts-search button { min-height: 40px; font-size: 11px; letter-spacing: .08em; }
 .status-pill { font-size: 11px; letter-spacing: .08em; }
-.workspace-nav a,
-.view-nav a { min-height: 36px; font-size: 12px !important; }
-.context-cell span,
-.context-actions,
-.context-actions button { font-size: 11px !important; }
-.context-cell strong { font-size: 13px !important; }
 .master-tab { min-height: 42px; font-size: 11px; letter-spacing: .08em; }
 .scene-summary-row { font-size: 13px; }
 #molecule-note { font-size: 12px; letter-spacing: .03em; }

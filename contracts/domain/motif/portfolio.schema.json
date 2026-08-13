@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/portfolio.schema.json",
+  "title": "Dirac Motif Design Portfolio",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "portfolio_id", "cycle_id", "objective_spec_id",
+    "program_snapshot_id", "selected", "reserve", "rejected", "refused",
+    "capacity_totals", "diversity_summary", "policy", "human_review", "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "portfolio_id": {"type": "string", "format": "uuid"},
+    "cycle_id": {"type": "string", "format": "uuid"},
+    "objective_spec_id": {"type": "string", "format": "uuid"},
+    "program_snapshot_id": {"type": "string", "format": "uuid"},
+    "selected": {"type": "array", "items": {"$ref": "#/$defs/item"}},
+    "reserve": {"type": "array", "items": {"$ref": "#/$defs/item"}},
+    "rejected": {"type": "array", "items": {"$ref": "#/$defs/item"}},
+    "refused": {"type": "array", "items": {"$ref": "#/$defs/item"}},
+    "capacity_totals": {"type": "object", "additionalProperties": {"type": "number", "minimum": 0}},
+    "diversity_summary": {"type": "object"},
+    "sensitivity_artifact_id": {"type": ["string", "null"], "format": "uuid"},
+    "evidence_graph_artifact_id": {"type": ["string", "null"], "format": "uuid"},
+    "policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["acquisition_release_id", "diversity_release_id", "root_seed", "solver_settings_digest"],
+      "properties": {
+        "acquisition_release_id": {"type": "string", "format": "uuid"},
+        "diversity_release_id": {"type": "string", "format": "uuid"},
+        "root_seed": {"type": "integer", "minimum": 0},
+        "solver_settings_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "human_review": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "required_approvals", "approvals"],
+      "properties": {
+        "status": {"enum": ["not_started", "in_review", "approved", "changes_requested", "rejected"]},
+        "required_approvals": {"type": "integer", "minimum": 0},
+        "approvals": {"type": "array", "items": {"$ref": "#/$defs/approval"}}
+      }
+    },
+    "created_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "item": {
+      "type": "object", "additionalProperties": false,
+      "required": ["proposal_id", "status", "pareto_rank", "selection_probability", "components", "reason_codes", "why", "what_changes_decision"],
+      "properties": {
+        "proposal_id": {"type": "string", "format": "uuid"},
+        "status": {"enum": ["selected", "reserve", "rejected", "refused"]},
+        "pareto_rank": {"type": ["integer", "null"], "minimum": 0},
+        "selection_probability": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "components": {
+          "type": "object", "additionalProperties": false,
+          "required": ["feasibility", "pareto_improvement", "information_value", "diversity", "cost", "failure_risk", "missing_evidence"],
+          "properties": {
+            "feasibility": {"type": ["number", "null"]},
+            "pareto_improvement": {"type": ["number", "null"]},
+            "information_value": {"type": ["number", "null"]},
+            "diversity": {"type": ["number", "null"]},
+            "cost": {"type": ["number", "null"]},
+            "failure_risk": {"type": ["number", "null"]},
+            "missing_evidence": {"type": ["number", "null"]}
+          }
+        },
+        "reason_codes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$"}},
+        "why": {"type": "string", "minLength": 1, "maxLength": 8192},
+        "what_changes_decision": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 4096}},
+        "evidence_artifact_ids": {"type": "array", "items": {"type": "string", "format": "uuid"}, "uniqueItems": true}
+      }
+    },
+    "approval": {
+      "type": "object", "additionalProperties": false,
+      "required": ["actor_kind", "actor_id", "decision", "at"],
+      "properties": {
+        "actor_kind": {"enum": ["human", "agent", "service"]},
+        "actor_id": {"type": "string", "minLength": 1},
+        "decision": {"enum": ["approve", "reject", "request_changes"]},
+        "rationale": {"type": ["string", "null"], "maxLength": 8192},
+        "at": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

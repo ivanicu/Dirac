@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "2.0.0", "method_id": "ml.motif.calibrate",
+  "summary": "Fit a finite-sample split-conformal absolute-residual calibration release.",
+  "implementation": {"module": "backend.motif.models", "functions": ["_digest", "calibrate"]},
+  "input": {"schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object", "additionalProperties": false, "required": ["predictions", "observations"],
+    "properties": {
+      "predictions": {"type": "array", "minItems": 2, "items": {"type": "number"}},
+      "observations": {"type": "array", "minItems": 2, "items": {"type": "number"}},
+      "nominal_coverage": {"type": "number", "minimum": 0.5, "exclusiveMaximum": 1}
+    }
+  }},
+  "output": {"schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object", "additionalProperties": false, "required": ["calibration"],
+    "properties": {"calibration": {"type": "object", "required": ["digest", "nominal_coverage", "absolute_residual_quantile"]}}
+  }},
+  "refusals": [{"code": "INVALID_PARAMETERS", "condition": "array lengths mismatch or calibration sample is too small"}],
+  "execution": {
+    "supported_modes": ["sync", "job"], "default_mode": "job", "resource_class": "cpu",
+    "determinism": "numeric_tolerant", "checkpointable": false, "cancellation": "cooperative",
+    "artifact_access": ["read:predictions", "write:model"],
+    "supported_adapters": ["inline", "local_cpu", "slurm", "kubernetes"],
+    "scale_profile": {"shardable": false, "distributed": false, "min_gpus": 0, "max_gpus": 0},
+    "cacheable": true, "deterministic": true, "side_effects": "immutable_artifacts"
+  },
+  "exposure": {"sdk": true, "cli": true, "mcp": "curated"},
+  "invocation": {
+    "handler": "motif.methods:calibrate_handler",
+    "artifacts": [{"role": "model.calibration", "media_type": "application/json", "required": true}]
+  }
+}

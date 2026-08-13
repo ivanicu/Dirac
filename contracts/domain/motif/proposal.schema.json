@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.local/contracts/domain/motif/proposal.schema.json",
+  "title": "Dirac Motif Proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "proposal_id", "compound", "parents", "strategy",
+    "generator_release_id", "generation_trace", "synthesis", "identity_gate",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "proposal_id": {"type": "string", "format": "uuid"},
+    "compound": {"$ref": "#/$defs/compound_ref"},
+    "proposed_identity": {
+      "oneOf": [{"$ref": "#/$defs/proposed_identity"}, {"type": "null"}]
+    },
+    "parents": {
+      "type": "array", "minItems": 1, "maxItems": 32,
+      "items": {"$ref": "#/$defs/compound_ref"}, "uniqueItems": true
+    },
+    "series": {"oneOf": [{"$ref": "#/$defs/series_ref"}, {"type": "null"}]},
+    "strategy": {"enum": ["local_edit", "reaction", "scaffold", "fragment", "linker", "pocket_3d", "explore"]},
+    "generator_release_id": {"type": "string", "format": "uuid"},
+    "generation_trace": {"$ref": "#/$defs/generation_trace"},
+    "synthesis": {"$ref": "#/$defs/synthesis"},
+    "identity_gate": {"$ref": "#/$defs/gate"},
+    "chemistry_gate": {"$ref": "#/$defs/gate"},
+    "novelty": {"$ref": "#/$defs/novelty"},
+    "warnings": {"type": "array", "items": {"$ref": "#/$defs/reason"}},
+    "created_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "object_ref": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "id"],
+      "properties": {"kind": {"type": "string"}, "id": {"type": "string", "minLength": 1}}
+    },
+    "compound_ref": {"allOf": [{"$ref": "#/$defs/object_ref"}, {"properties": {"kind": {"const": "compound"}}}]},
+    "series_ref": {"allOf": [{"$ref": "#/$defs/object_ref"}, {"properties": {"kind": {"const": "series"}}}]},
+    "proposed_identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["canonical_smiles", "identity_policy_release_id", "stereochemistry_status"],
+      "properties": {
+        "canonical_smiles": {"type": "string", "minLength": 1, "maxLength": 100000},
+        "inchi_key": {"type": ["string", "null"], "maxLength": 64},
+        "identity_policy_release_id": {"type": "string", "format": "uuid"},
+        "stereochemistry_status": {"enum": ["complete", "enumerated", "unspecified", "not_applicable"]}
+      }
+    },
+    "edit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["transform_id", "transform_version", "atom_mapping", "description"],
+      "properties": {
+        "transform_id": {"type": "string", "minLength": 1},
+        "transform_version": {"type": "string", "minLength": 1},
+        "atom_mapping": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+        "description": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "evidence_artifact_ids": {"type": "array", "items": {"type": "string", "format": "uuid"}, "uniqueItems": true}
+      }
+    },
+    "reaction": {
+      "type": "object", "additionalProperties": false,
+      "required": ["template_id", "template_version", "reactants", "atom_mapping"],
+      "properties": {
+        "template_id": {"type": "string", "minLength": 1},
+        "template_version": {"type": "string", "minLength": 1},
+        "reactants": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/object_ref"}},
+        "atom_mapping": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}}
+      }
+    },
+    "generation_trace": {
+      "type": "object", "additionalProperties": false,
+      "required": ["root_seed", "strategy_release_id", "constraints_applied_during_generation"],
+      "properties": {
+        "root_seed": {"type": "integer", "minimum": 0},
+        "strategy_release_id": {"type": "string", "format": "uuid"},
+        "edits": {"type": "array", "items": {"$ref": "#/$defs/edit"}},
+        "reaction": {"oneOf": [{"$ref": "#/$defs/reaction"}, {"type": "null"}]},
+        "constraints_applied_during_generation": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "constraints_applied_post_generation": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+      }
+    },
+    "synthesis": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "route_depth", "estimated_cost", "estimated_days"],
+      "properties": {
+        "status": {"enum": ["supported", "plausible", "route_unknown", "refused"]},
+        "route_artifact_id": {"type": ["string", "null"], "format": "uuid"},
+        "route_depth": {"type": ["integer", "null"], "minimum": 0},
+        "estimated_success_probability": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "estimated_cost": {"type": ["number", "null"], "minimum": 0},
+        "currency": {"type": ["string", "null"], "pattern": "^[A-Z]{3}$"},
+        "estimated_days": {"type": ["number", "null"], "minimum": 0},
+        "reason_codes": {"type": "array", "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$"}, "uniqueItems": true}
+      }
+    },
+    "gate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "reason_codes"],
+      "properties": {
+        "status": {"enum": ["pass", "warn", "refuse"]},
+        "reason_codes": {"type": "array", "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$"}, "uniqueItems": true},
+        "details": {"type": "object"}
+      }
+    },
+    "novelty": {
+      "type": "object", "additionalProperties": false,
+      "required": ["exact_duplicate", "nearest_training_similarity", "applicability_hint"],
+      "properties": {
+        "exact_duplicate": {"type": "boolean"},
+        "nearest_training_similarity": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "nearest_compound": {"oneOf": [{"$ref": "#/$defs/compound_ref"}, {"type": "null"}]},
+        "applicability_hint": {"enum": ["in_domain", "borderline", "out_of_domain", "unknown"]}
+      }
+    },
+    "reason": {
+      "type": "object", "additionalProperties": false, "required": ["code", "message"],
+      "properties": {"code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$"}, "message": {"type": "string", "minLength": 1}, "details": {"type": "object"}}
+    }
+  }
+}
