@@ -1,5 +1,8 @@
-12
-# Suites that import on a clean interpreter (no RDKit/numpy/pyscf), out of 18.
+22
+# Suites that import on a clean interpreter (no RDKit/numpy/pyscf), out of 30.
+# 12 → 22 on 2026-08-12: execution-control, identity, Local CAS, Motif contracts,
+# governance, predictor/structure modules and the Program aggregate keep optional
+# science imports inside execution functions instead of at test-module import time.
 # 10 → 12 on 2026-08-12: remote-security policy and its PostgreSQL adapter remain
 # import-light; adding an infrastructure boundary did not couple the test suite to
 # the chemistry stack.

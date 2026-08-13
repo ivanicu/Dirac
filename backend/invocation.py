@@ -609,7 +609,7 @@ class InvocationService:
     def _project_completion(self, spec: C.MethodSpec, payload: dict,
                             out: HandlerResult, envelope: dict,
                             actor: dict[str, str], job_id: str | None) -> None:
-        governed = {'data.motif.snapshot', 'ml.motif.train'}
+        governed = {'data.motif.snapshot', 'ml.motif.train', 'ml.motif.mesh.train'}
         if spec.method_id not in governed:
             return
         if self.motif_governance is None or not hasattr(
@@ -699,6 +699,18 @@ class InvocationService:
             handler_source_digest=sha256_digest(source),
             checkpoint_digests=[checkpoint] if checkpoint else (),
             calibration_digest=calibration,
-            parameter_digest=sha256_digest(json.dumps(
-                payload.get('parameters') or {}, sort_keys=True, separators=(',', ':'))),
+            # The old fallback hashed only payload["parameters"]. Most canonical
+            # Methods expose typed fields at the payload root, so two different
+            # molecules or training datasets could receive the same execution
+            # identity. Hash every scientific request field while excluding only
+            # release-presentation metadata; retain the Dataset Snapshot reference.
+            parameter_digest=sha256_digest(json.dumps({
+                **{key: value for key, value in payload.items() if key != 'registration'},
+                **({'registration': {
+                    key: payload['registration'][key]
+                    for key in ('dataset_snapshot_ref', 'program_ref', 'campaign_ref',
+                                'identity_policy_release_id', 'source_commit')
+                    if key in payload['registration']}}
+                   if isinstance(payload.get('registration'), dict) else {}),
+            }, sort_keys=True, separators=(',', ':'), allow_nan=False)),
         )

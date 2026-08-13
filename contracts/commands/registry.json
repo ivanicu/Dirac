@@ -193,6 +193,59 @@
       "output_schema": {"type": "object", "required": ["job"]}
     },
     {
+      "id": "model.mesh.train", "version": 1, "category": "model",
+      "mutability": "compute", "execution_class": "long", "executors": ["service"],
+      "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",
+      "input_object_kinds": ["dataset"], "output_object_kinds": ["model", "artifact", "job"],
+      "errors": ["INVALID_PARAMETERS", "PARSE", "INTERNAL"],
+      "handler": "handlers:model_mesh_train",
+      "input_schema": {
+        "type": "object", "additionalProperties": false,
+        "required": ["endpoint_key", "rows", "registration"],
+        "properties": {
+          "endpoint_key": {"type": "string", "minLength": 1},
+          "radius": {"type": "integer"}, "n_bits": {"type": "integer"},
+          "seed": {"type": "integer"}, "include_chemprop": {"type": "boolean"},
+          "chemprop_ensemble_size": {"type": "integer"}, "chemprop_epochs": {"type": "integer"},
+          "bootstrap_samples": {"type": "integer"}, "accelerator": {"type": "string"},
+          "rows": {"type": "array", "minItems": 3, "items": {"type": "object"}},
+          "registration": {"type": "object"}
+        }
+      },
+      "output_schema": {"type": "object", "required": ["job"]}
+    },
+    {
+      "id": "model.mesh.predict", "version": 1, "category": "model",
+      "mutability": "compute", "execution_class": "long", "executors": ["service"],
+      "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",
+      "input_object_kinds": ["model", "compound"], "output_object_kinds": ["prediction", "artifact", "job"],
+      "errors": ["INVALID_PARAMETERS", "PARSE", "INTERNAL"],
+      "handler": "handlers:model_mesh_predict",
+      "input_schema": {"type": "object", "additionalProperties": false,
+        "required": ["checkpoint", "smiles"], "properties": {
+          "checkpoint": {"type": "object"}, "smiles": {"type": "array", "minItems": 1},
+          "accelerator": {"type": "string"}}},
+      "output_schema": {"type": "object", "required": ["job"]}
+    },
+    {
+      "id": "campaign.bayesian-rank", "version": 1, "category": "campaign",
+      "mutability": "compute", "execution_class": "long", "executors": ["service"],
+      "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",
+      "input_object_kinds": ["campaign", "prediction", "compound"],
+      "output_object_kinds": ["decision", "artifact", "job"],
+      "errors": ["INVALID_PARAMETERS", "INTERNAL"],
+      "handler": "handlers:campaign_bayesian_rank",
+      "input_schema": {"type": "object", "additionalProperties": false,
+        "required": ["train_features", "train_objectives", "reference_point", "candidates", "objectives", "capacity"],
+        "properties": {
+          "train_features": {"type": "array"}, "train_objectives": {"type": "array"},
+          "reference_point": {"type": "array"}, "candidates": {"type": "array"},
+          "objectives": {"type": "array"}, "hard_constraints": {"type": "array"},
+          "capacity": {"type": "integer"}, "mc_samples": {"type": "integer"},
+          "seed": {"type": "integer"}}},
+      "output_schema": {"type": "object", "required": ["job"]}
+    },
+    {
       "id": "proposal.generate", "version": 1, "category": "design",
       "mutability": "compute", "execution_class": "long", "executors": ["service"],
       "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",
@@ -220,6 +273,63 @@
         "additionalProperties": false
       },
       "output_schema": {"type": "object", "required": ["job"]}
+    },
+    {
+      "id": "structure.conformers", "version": 1, "category": "structure",
+      "mutability": "compute", "execution_class": "long", "executors": ["service"],
+      "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",
+      "input_object_kinds": ["compound"], "output_object_kinds": ["conformer", "artifact", "job"],
+      "errors": ["INVALID_PARAMETERS", "PARSE", "INTERNAL"], "handler": "handlers:structure_conformers",
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["smiles"], "properties": {
+        "smiles": {"type": "string"}, "count": {"type": "integer"}, "seed": {"type": "integer"},
+        "prune_rms_thresh": {"type": "number"}, "max_attempts": {"type": "integer"}, "minimize": {"type": "boolean"}
+      }}, "output_schema": {"type": "object", "required": ["job"]}
+    },
+    {
+      "id": "structure.vina", "version": 1, "category": "structure",
+      "mutability": "compute", "execution_class": "long", "executors": ["service"],
+      "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",
+      "input_object_kinds": ["protein_structure", "compound"], "output_object_kinds": ["pose", "artifact", "job"],
+      "errors": ["INVALID_PARAMETERS", "PARSE", "INTERNAL"], "handler": "handlers:structure_vina",
+      "input_schema": {"type": "object", "additionalProperties": false,
+        "required": ["receptor_pdbqt", "ligands", "center", "box_size"], "properties": {
+          "receptor_pdbqt": {"type": "string"}, "ligands": {"type": "array"}, "center": {"type": "array"},
+          "box_size": {"type": "array"}, "seed": {"type": "integer"}, "exhaustiveness": {"type": "integer"},
+          "n_poses": {"type": "integer"}, "energy_range": {"type": "number"}, "cpu": {"type": "integer"}
+      }}, "output_schema": {"type": "object", "required": ["job"]}
+    },
+    {
+      "id": "physics.openmm-md", "version": 1, "category": "physics",
+      "mutability": "compute", "execution_class": "long", "executors": ["service"],
+      "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",
+      "input_object_kinds": ["protein_structure", "artifact"], "output_object_kinds": ["run", "artifact", "job"],
+      "errors": ["INVALID_PARAMETERS", "INTERNAL"], "handler": "handlers:physics_openmm_md",
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["system_xml", "topology_pdb", "steps"], "properties": {
+        "system_xml": {"type": "string"}, "topology_pdb": {"type": "string"}, "steps": {"type": "integer"},
+        "temperature_kelvin": {"type": "number"}, "friction_per_ps": {"type": "number"}, "timestep_fs": {"type": "number"},
+        "seed": {"type": "integer"}, "report_interval": {"type": "integer"}, "checkpoint_base64": {"type": ["string", "null"]},
+        "minimize": {"type": "boolean"}, "platform_name": {"type": ["string", "null"]}, "precision": {"type": "string"}
+      }}, "output_schema": {"type": "object", "required": ["job"]}
+    },
+    {
+      "id": "physics.rbfe-network", "version": 1, "category": "physics",
+      "mutability": "compute", "execution_class": "long", "executors": ["service"],
+      "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",
+      "input_object_kinds": ["compound"], "output_object_kinds": ["run", "artifact", "job"],
+      "errors": ["INVALID_PARAMETERS", "INTERNAL"], "handler": "handlers:physics_rbfe_network",
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["compounds"], "properties": {
+        "compounds": {"type": "array"}, "extra_edge_fraction": {"type": "number"}, "minimum_similarity": {"type": "number"}
+      }}, "output_schema": {"type": "object", "required": ["job"]}
+    },
+    {
+      "id": "physics.rbfe-aggregate", "version": 1, "category": "physics",
+      "mutability": "compute", "execution_class": "long", "executors": ["service"],
+      "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",
+      "input_object_kinds": ["run", "artifact"], "output_object_kinds": ["run", "artifact", "job"],
+      "errors": ["INVALID_PARAMETERS", "INTERNAL"], "handler": "handlers:physics_rbfe_aggregate",
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["network", "observations"], "properties": {
+        "network": {"type": "object"}, "observations": {"type": "array"}
+      }}, "output_schema": {"type": "object", "required": ["job"]}
     },
     {
       "id": "endpoint.register", "version": 1, "category": "endpoint",

@@ -49,7 +49,8 @@ def test_memory_store_lifecycle_and_durability_are_explicit():
 
 
 def test_outcome_classes_separate_refusals_science_and_operations():
-    expected = ('PARSE', 'UNPARAMETERIZED', 'BUDGET', 'UNSUPPORTED', 'TOO_LARGE')
+    expected = ('PARSE', 'UNPARAMETERIZED', 'BUDGET', 'UNSUPPORTED', 'TOO_LARGE',
+                'INVALID_PARAMETERS')
     for code in expected:
         assert jobs.job_outcome_class('failed', code) == 'expected_refusal'
     assert jobs.job_outcome_class('failed', 'UNCONVERGED') == 'scientific_failure'

@@ -123,23 +123,81 @@ def reaction_enumerate(reactants: Iterable[dict[str, str]], *,
 
 def chemistry_gate(molecule: Any, constraints: dict[str, Any]) -> dict[str, Any]:
     Chem, _ = _toolkit()
+    from rdkit.Chem import Crippen, Descriptors, Lipinski, rdMolDescriptors
+    from rdkit.Chem.FilterCatalog import FilterCatalog, FilterCatalogParams
     reasons = []
     heavy_atoms = molecule.GetNumHeavyAtoms()
     charge = Chem.GetFormalCharge(molecule)
+    properties = {
+        "heavy_atoms": heavy_atoms, "formal_charge": charge,
+        "molecular_weight": float(Descriptors.MolWt(molecule)),
+        "clogp": float(Crippen.MolLogP(molecule)),
+        "tpsa": float(rdMolDescriptors.CalcTPSA(molecule)),
+        "hbd": int(Lipinski.NumHDonors(molecule)),
+        "hba": int(Lipinski.NumHAcceptors(molecule)),
+        "rotatable_bonds": int(Lipinski.NumRotatableBonds(molecule)),
+        "ring_count": int(Lipinski.RingCount(molecule)),
+    }
     if heavy_atoms > int(constraints.get("max_heavy_atoms", 1000000)):
         reasons.append("MAX_HEAVY_ATOMS")
     lower, upper = constraints.get("charge_range", [-1000, 1000])
     if charge < lower or charge > upper:
         reasons.append("FORMAL_CHARGE_RANGE")
+    for key, property_key in (
+            ("molecular_weight_range", "molecular_weight"),
+            ("clogp_range", "clogp"), ("tpsa_range", "tpsa"),
+            ("hbd_range", "hbd"), ("hba_range", "hba"),
+            ("rotatable_bonds_range", "rotatable_bonds"),
+            ("ring_count_range", "ring_count")):
+        if key in constraints:
+            minimum, maximum = constraints[key]
+            if properties[property_key] < minimum or properties[property_key] > maximum:
+                reasons.append(key.upper())
     for pattern in constraints.get("forbidden_smarts", ()):
         query = Chem.MolFromSmarts(pattern)
         if query is None:
             raise ValueError(f"cannot parse forbidden SMARTS {pattern!r}")
         if molecule.HasSubstructMatch(query):
             reasons.append("FORBIDDEN_SUBSTRUCTURE")
+    for pattern in constraints.get("required_smarts", ()):
+        query = Chem.MolFromSmarts(pattern)
+        if query is None:
+            raise ValueError(f"cannot parse required SMARTS {pattern!r}")
+        if not molecule.HasSubstructMatch(query):
+            reasons.append("REQUIRED_SUBSTRUCTURE_MISSING")
+    if constraints.get("reject_unassigned_stereo", False):
+        unassigned = [center for center, label in
+                      Chem.FindMolChiralCenters(molecule, includeUnassigned=True)
+                      if label == "?"]
+        properties["unassigned_stereocenters"] = unassigned
+        if unassigned:
+            reasons.append("UNASSIGNED_STEREOCHEMISTRY")
+    if constraints.get("pains", False):
+        parameters = FilterCatalogParams()
+        parameters.AddCatalog(FilterCatalogParams.FilterCatalogs.PAINS)
+        match = FilterCatalog(parameters).GetFirstMatch(molecule)
+        properties["pains_match"] = match.GetDescription() if match else None
+        if match:
+            reasons.append("PAINS_ALERT")
+    reactive_patterns = {
+        "acyl_halide": "[CX3](=[OX1])[F,Cl,Br,I]",
+        "alkyl_halide": "[CX4][Cl,Br,I]",
+        "isocyanate": "N=C=O", "aldehyde": "[CX3H1](=O)[#6]",
+        "peroxide": "[OX2,OX1-][OX2,OX1-]",
+        "azide": "[$([NX1-]=[NX2+]=[NX1-]),$([NX1]#[NX2+][NX1-])]",
+    }
+    matched_reactive = []
+    for name in constraints.get("reactive_group_filters", ()):
+        if name not in reactive_patterns:
+            raise ValueError(f"unknown reactive-group filter {name!r}")
+        if molecule.HasSubstructMatch(Chem.MolFromSmarts(reactive_patterns[name])):
+            matched_reactive.append(name)
+    properties["reactive_group_matches"] = matched_reactive
+    if matched_reactive:
+        reasons.append("REACTIVE_GROUP")
     return {"status": "refuse" if reasons else "pass",
             "reason_codes": sorted(set(reasons)),
-            "details": {"heavy_atoms": heavy_atoms, "formal_charge": charge}}
+            "details": properties}
 
 
 def generator_metrics(proposals: Iterable[dict[str, Any]]) -> dict[str, Any]:

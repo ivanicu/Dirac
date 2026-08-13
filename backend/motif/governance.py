@@ -267,7 +267,7 @@ class MemoryMotifGovernanceStore:
             return {"dataset_snapshot": {
                 "ref": {"kind": "dataset", "id": existing["id"]},
                 "digest": digest, "status": existing["status"], "created": created}}
-        if method_id == "ml.motif.train":
+        if method_id in {"ml.motif.train", "ml.motif.mesh.train"}:
             registration = payload["registration"]
             snapshot_id = registration["dataset_snapshot_ref"]["id"]
             snapshot = next((item for item in self.datasets.values()
@@ -275,8 +275,11 @@ class MemoryMotifGovernanceStore:
             if snapshot is None or snapshot["status"] != "valid":
                 raise failures.DiracInvalidParameters(
                     "model release requires a valid Dataset Snapshot")
+            normalized_rows = sorted(
+                (dict(row) for row in payload["rows"]),
+                key=lambda row: (row["measurement_id"], row["compound_id"]))
             rows_digest = "sha256:" + hashlib.sha256(
-                canonical_bytes(payload["rows"])).hexdigest()
+                canonical_bytes(normalized_rows)).hexdigest()
             if rows_digest != snapshot["data_digest"]:
                 raise failures.DiracInvalidParameters(
                     "training rows do not match the Dataset Snapshot data Artifact")
@@ -606,9 +609,9 @@ class PostgresMotifGovernanceStore:
         if method_id == "data.motif.snapshot":
             return self._register_dataset_completion(
                 payload, result, artifacts, actor=actor, job_id=job_id)
-        if method_id == "ml.motif.train":
+        if method_id in {"ml.motif.train", "ml.motif.mesh.train"}:
             return self._register_model_completion(
-                payload, result, artifacts, envelope_meta=envelope_meta,
+                method_id, payload, result, artifacts, envelope_meta=envelope_meta,
                 actor=actor, job_id=job_id)
         return {}
 
@@ -716,7 +719,7 @@ class PostgresMotifGovernanceStore:
             "ref": {"kind": "dataset", "id": snapshot_id}, "digest": digest,
             "status": status, "created": created}}
 
-    def _register_model_completion(self, payload: dict, result: dict,
+    def _register_model_completion(self, method_id: str, payload: dict, result: dict,
                                    artifacts: list[dict], *, envelope_meta: dict,
                                    actor: dict[str, str], job_id: str | None) -> dict:
         from psycopg.types.json import Jsonb
@@ -737,7 +740,10 @@ class PostgresMotifGovernanceStore:
         if runtime_digest != result["runtime_lock_digest"]:
             raise failures.DiracInternal(
                 "runtime lock result digest does not match its stored Artifact")
-        row_data_digest = hashlib.sha256(canonical_bytes(payload["rows"])).digest()
+        normalized_rows = sorted(
+            (dict(row) for row in payload["rows"]),
+            key=lambda row: (row["measurement_id"], row["compound_id"]))
+        row_data_digest = hashlib.sha256(canonical_bytes(normalized_rows)).digest()
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 "SELECT ds.status,a.blob_sha256 FROM app.dataset_snapshot ds "
@@ -770,13 +776,13 @@ class PostgresMotifGovernanceStore:
                 raise failures.DiracInvalidParameters(
                     "training endpoint is not part of the Dataset Snapshot")
             cur.execute(
-                "SELECT id FROM meta.method WHERE method_id='ml.motif.train' AND version=%s",
-                (envelope_meta.get("version"),),
+                "SELECT id FROM meta.method WHERE method_id=%s AND version=%s",
+                (method_id, envelope_meta.get("version")),
             )
             method = cur.fetchone()
             if method is None:
                 raise failures.DiracInternal(
-                    "the executing ml.motif.train Method version is not registered")
+                    f"the executing {method_id} Method version is not registered")
             raw_execution = bytes.fromhex(execution_digest.removeprefix("sha256:"))
             cur.execute(
                 "SELECT id,model_object_id,release_name FROM meta.model_release "
@@ -822,6 +828,18 @@ class PostgresMotifGovernanceStore:
                         raise failures.DiracInvalidParameters(
                             "model object/release name already exists with different execution")
                 release_id = str(row[0])
+            # A model release trigger registers the release UUID as a model entity,
+            # while public Commands intentionally refer to the stable model_object_id.
+            # Register that aggregate root before writing lineage relations so a new
+            # model name works without relying on a historical backfill.
+            cur.execute(
+                "INSERT INTO app.entity "
+                "(kind,id,canonical_key,label,origin_schema,origin_table) "
+                "VALUES ('model',%s,%s,%s,'meta','model_release') "
+                "ON CONFLICT (kind,id) DO NOTHING",
+                (registration["model_object_id"], registration["model_object_id"],
+                 registration["model_object_id"]),
+            )
             cur.execute(
                 "INSERT INTO meta.model_release_dataset "
                 "(model_release_id,dataset_snapshot_id,role) VALUES (%s,%s,'train') "

@@ -69,11 +69,12 @@ _lock = threading.Lock()
 # be a worse outcome than losing the code's precision.
 _JOB_ERROR = {
     'PARSE', 'UNCONVERGED', 'UNPARAMETERIZED', 'BUDGET',
-    'UNSUPPORTED', 'TOO_LARGE', 'INTERNAL', 'CANCELLED',
+    'UNSUPPORTED', 'TOO_LARGE', 'INVALID_PARAMETERS', 'INTERNAL', 'CANCELLED',
 }
 
 _EXPECTED_REFUSALS = {
     'PARSE', 'UNPARAMETERIZED', 'BUDGET', 'UNSUPPORTED', 'TOO_LARGE',
+    'INVALID_PARAMETERS',
 }
 
 

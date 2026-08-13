@@ -15,14 +15,16 @@ STEP_METHODS = {
     "proposal.reaction_enumerate": "design.motif.reaction_enumerate",
     "chemistry.identity_gate": "chem.identity.standardize",
     "synthesis.route_gate": "synthesis.motif.assess",
-    "prediction.f1": "ml.motif.predict",
+    "prediction.f1": "ml.motif.mesh.predict",
     "structure.conformer": "structure.motif.conformers",
-    "structure.pose_f2": "structure.motif.pose",
+    "structure.pose_f2": "structure.motif.vina",
     "structure.fields_f3": "fields.mep",
     "acquisition.portfolio": "design.motif.acquire",
     "review.human": None,
     "result.ingest": None,
     "model.recalibrate": "ml.motif.calibrate",
+    "physics.md_f4": "physics.motif.openmm_md",
+    "physics.rbfe_network_f4": "physics.motif.rbfe_network",
 }
 
 

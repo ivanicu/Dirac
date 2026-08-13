@@ -30,7 +30,7 @@ if str(_BACKEND) not in sys.path:
 import envelope as env                                   # noqa: E402
 
 ERRORS_JSON = _REPO / 'contracts' / 'errors.json'
-MIGRATION_007 = _REPO / 'backend' / 'db' / 'migrations' / '007_method_registry_and_job_ledger.sql'
+MIGRATIONS = _REPO / 'backend' / 'db' / 'migrations'
 GENERATOR = _REPO / 'scripts' / 'gen_error_codes.mjs'
 GENERATED_TS = _REPO / 'src' / 'app' / 'services' / 'error-codes.ts'
 EMBED_CONSUMER = (_REPO / 'src' / 'app.frontend.facets.molstar-rdkit.editable'
@@ -98,14 +98,19 @@ def test_error_code_enum_is_string_like_and_complete():
 def _parse_job_error_enum_independently() -> set[str]:
     """A SECOND parser, written differently from envelope.py's own (which
     anchors on `CREATE TYPE app.job_error` and globs every migration file).
-    This one just hunts for `job_error ... ENUM ( ... )` in migration 007
-    directly. If the two disagree, one of the parsers is wrong — that is the
-    point of writing it twice."""
-    assert MIGRATION_007.exists(), f'{MIGRATION_007} not found — did the migration move?'
-    text = MIGRATION_007.read_text(encoding='utf-8')
-    m = re.search(r'job_error\s+AS\s+ENUM\s*\(([^)]*)\)', text, re.IGNORECASE | re.DOTALL)
-    assert m, 'no `... job_error AS ENUM (...)` found in migration 007'
-    return set(re.findall(r"'([^']+)'", m.group(1)))
+    This parser concatenates the ordered chain, finds the original enum body,
+    then separately collects every ADD VALUE. If it disagrees with the
+    production parser, one of them is wrong."""
+    text = '\n'.join(path.read_text(encoding='utf-8')
+                     for path in sorted(MIGRATIONS.glob('*.sql')))
+    m = re.search(r'job_error\s+AS\s+ENUM\s*\(([^)]*)\)', text,
+                  re.IGNORECASE | re.DOTALL)
+    assert m, 'no `... job_error AS ENUM (...)` found in migration chain'
+    values = set(re.findall(r"'([^']+)'", m.group(1)))
+    values.update(re.findall(
+        r"ALTER\s+TYPE\s+app\.job_error\s+ADD\s+VALUE(?:\s+IF\s+NOT\s+EXISTS)?\s+'([^']+)'",
+        text, re.IGNORECASE))
+    return values
 
 
 def test_independent_parser_agrees_with_envelope_pys_parser():
@@ -140,7 +145,6 @@ def test_the_reverse_does_not_hold_and_the_gap_is_exactly_named_codes():
     only_in_vocabulary = set(env.CODES) - env.JOB_ERROR_ENUM
     assert only_in_vocabulary == {
         'BAD_HOST', 'OPEN_SHELL_SPIN_REQUIRED', 'NOT_FOUND', 'DB_UNAVAILABLE',
-        'INVALID_PARAMETERS',
         'AUTH_REQUIRED', 'FORBIDDEN', 'RATE_LIMITED', 'QUOTA_EXCEEDED',
         'TLS_REQUIRED'}, (
         f'the errors.json-minus-enum set difference moved to '

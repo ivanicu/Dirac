@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "2.0.0", "method_id": "structure.motif.conformers",
+  "summary": "Generate, minimize, energy-rank and cluster a deterministic ETKDGv3 conformer ensemble.",
+  "implementation": {"module": "backend.motif.structure", "functions": ["_digest", "generate_conformers"], "constants": []},
+  "input": {"schema": {"type": "object", "additionalProperties": false, "required": ["smiles"], "properties": {
+    "smiles": {"type": "string", "minLength": 1}, "count": {"type": "integer", "minimum": 1, "maximum": 1000},
+    "seed": {"type": "integer", "minimum": 0}, "prune_rms_thresh": {"type": "number", "exclusiveMinimum": 0},
+    "max_attempts": {"type": "integer", "minimum": 1}, "minimize": {"type": "boolean"}
+  }}},
+  "output": {"schema": {"type": "object", "additionalProperties": false,
+    "required": ["ensemble_digest", "generated_count", "cluster_count", "force_field"], "properties": {
+      "ensemble_digest": {"type": "string", "format": "sha256-digest"}, "generated_count": {"type": "integer"},
+      "cluster_count": {"type": "integer"}, "force_field": {"enum": ["MMFF94s", "UFF"]}
+  }}},
+  "refusals": [{"code": "INVALID_PARAMETERS", "condition": "invalid chemistry or embedding/minimization failure"}],
+  "execution": {"supported_modes": ["sync", "job"], "default_mode": "job", "resource_class": "cpu",
+    "determinism": "numeric_tolerant", "checkpointable": false, "cancellation": "cooperative",
+    "artifact_access": ["write:conformer"], "supported_adapters": ["local_cpu", "slurm", "kubernetes"],
+    "cacheable": true, "deterministic": true, "side_effects": "immutable_artifacts"},
+  "exposure": {"sdk": true, "cli": true, "mcp": "curated"},
+  "invocation": {"handler": "motif.structure_methods:conformer_handler", "estimate": "motif.structure_methods:conformer_estimate",
+    "artifacts": [{"role": "structure.conformers_sdf", "media_type": "chemical/x-mdl-sdfile", "required": true},
+      {"role": "structure.conformer_report", "media_type": "application/json", "required": true}]}
+}

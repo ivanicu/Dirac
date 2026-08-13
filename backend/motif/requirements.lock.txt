@@ -1,0 +1,24 @@
+# Motif algorithm runtime validated together on 2026-08-12 / Python 3.12.
+# Package names and versions are immutable model-runtime inputs; Invocation emits
+# the full installed-distribution manifest as model.runtime_lock as well.
+rdkit==2026.3.5
+numpy==2.5.2
+scipy==1.18.0
+scikit-learn==1.9.0
+xgboost-cpu==3.4.0
+torch==2.11.0+cu128
+chemprop==2.3.1
+lightning==2.6.1
+pytorch-lightning==2.6.1
+botorch==0.18.1
+gpytorch==1.15.2
+pandas==3.0.5
+pyarrow==25.0.1
+vina==1.2.7
+meeko==0.7.1
+openmm==8.5.2
+openmm-cuda-12==8.5.2
+MDAnalysis==2.10.0
+prolif==2.2.1
+Pillow==11.3.0
+psycopg[binary]==3.3.3

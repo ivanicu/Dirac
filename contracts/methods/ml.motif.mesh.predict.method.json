@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "2.0.0", "method_id": "ml.motif.mesh.predict",
+  "summary": "Predict from every frozen Motif mesh member with ensemble uncertainty, applicability domain and conformal intervals.",
+  "implementation": {"module": "backend.motif.mesh", "functions": ["_digest", "predict_predictor_mesh"], "constants": ["PREDICTOR_SOURCE_DIGESTS"]},
+  "input": {"schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object",
+    "additionalProperties": false, "required": ["checkpoint", "smiles"],
+    "properties": {
+      "checkpoint": {"type": "object", "required": ["schema_version", "algorithm", "digest", "feature_release", "members"]},
+      "smiles": {"type": "array", "minItems": 1, "maxItems": 50000, "items": {"type": "string", "minLength": 1}},
+      "accelerator": {"enum": ["auto", "cpu", "gpu"]}
+    }
+  }},
+  "output": {"schema": {"$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object", "additionalProperties": false, "required": ["predictions", "count"],
+    "properties": {"predictions": {"type": "array"}, "count": {"type": "integer", "minimum": 0}}}},
+  "refusals": [{"code": "INVALID_PARAMETERS", "condition": "checkpoint digest, feature release or molecule identity is invalid"}],
+  "execution": {
+    "supported_modes": ["sync", "job"], "default_mode": "job", "resource_class": "gpu",
+    "determinism": "numeric_tolerant", "checkpointable": false, "cancellation": "cooperative",
+    "artifact_access": ["read:model", "write:predictions"],
+    "supported_adapters": ["local_cpu", "local_gpu", "slurm", "kubernetes"],
+    "scale_profile": {"shardable": true, "distributed": false, "min_gpus": 0, "max_gpus": 10000},
+    "cacheable": true, "deterministic": true, "side_effects": "immutable_artifacts"
+  },
+  "exposure": {"sdk": true, "cli": true, "mcp": "curated"},
+  "invocation": {"handler": "motif.mesh_methods:predict_handler", "estimate": "motif.mesh_methods:predict_estimate",
+    "artifacts": [{"role": "model.predictions", "media_type": "application/json", "required": true}]}
+}

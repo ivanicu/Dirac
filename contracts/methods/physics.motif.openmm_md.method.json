@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "schema_version": "2.0.0",
+  "method_id": "physics.motif.openmm_md", "summary": "Run or restart caller-parameterized OpenMM minimization and molecular dynamics.",
+  "implementation": {"module": "backend.motif.physics", "functions": ["_digest", "_sha", "run_openmm_md"], "constants": []},
+  "input": {"schema": {"type": "object", "additionalProperties": false, "required": ["system_xml", "topology_pdb", "steps"], "properties": {
+    "system_xml": {"type": "string", "minLength": 1}, "topology_pdb": {"type": "string", "minLength": 1},
+    "steps": {"type": "integer", "minimum": 1}, "temperature_kelvin": {"type": "number", "exclusiveMinimum": 0},
+    "friction_per_ps": {"type": "number", "exclusiveMinimum": 0}, "timestep_fs": {"type": "number", "exclusiveMinimum": 0},
+    "seed": {"type": "integer", "minimum": 0}, "report_interval": {"type": "integer", "minimum": 1},
+    "checkpoint_base64": {"type": ["string", "null"]}, "minimize": {"type": "boolean"},
+    "platform_name": {"type": ["string", "null"]}, "precision": {"enum": ["single", "mixed", "double"]}
+  }}},
+  "output": {"schema": {"type": "object", "additionalProperties": false,
+    "required": ["run_digest", "platform", "resumed", "observables"], "properties": {
+      "run_digest": {"type": "string", "format": "sha256-digest"}, "platform": {"type": "string"},
+      "resumed": {"type": "boolean"}, "observables": {"type": "object"}
+  }}},
+  "refusals": [{"code": "INVALID_PARAMETERS", "condition": "invalid or incompatible System, topology, checkpoint or platform"}],
+  "execution": {"supported_modes": ["job"], "default_mode": "job", "resource_class": "gpu", "determinism": "numeric_tolerant",
+    "checkpointable": true, "cancellation": "cooperative", "artifact_access": ["read:system", "write:trajectory", "write:checkpoint"],
+    "supported_adapters": ["local_cpu", "local_gpu", "slurm", "kubernetes"], "cacheable": false, "deterministic": false,
+    "side_effects": "immutable_artifacts"},
+  "exposure": {"sdk": true, "cli": true, "mcp": "hidden"},
+  "invocation": {"handler": "motif.structure_methods:openmm_handler", "estimate": "motif.structure_methods:openmm_estimate",
+    "artifacts": [{"role": "md.trajectory", "media_type": "chemical/x-dcd", "required": true},
+      {"role": "md.checkpoint", "media_type": "application/octet-stream", "required": true},
+      {"role": "md.state", "media_type": "application/xml", "required": true},
+      {"role": "md.final_structure", "media_type": "chemical/x-pdb", "required": true},
+      {"role": "md.run_report", "media_type": "application/json", "required": true}]}
+}

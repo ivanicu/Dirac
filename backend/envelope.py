@@ -64,20 +64,32 @@ ErrorCode = enum.Enum('ErrorCode', {code: code for code in CODES}, type=str)
 def _job_error_enum_from_migrations() -> tuple[frozenset[str], pathlib.Path]:
     """Parse `CREATE TYPE app.job_error AS ENUM (...)` out of the migration
     CHAIN (git, not a live database — this module must import with Postgres
-    down). A later migration that redefines the type would win; today there
-    is exactly one `CREATE TYPE`, in 007, and none since."""
-    pattern = re.compile(
+    down). Later ``ALTER TYPE ... ADD VALUE`` migrations extend the set in
+    order, exactly as PostgreSQL does."""
+    create_pattern = re.compile(
         r'CREATE\s+TYPE\s+app\.job_error\s+AS\s+ENUM\s*\(([^)]*)\)',
         re.IGNORECASE | re.DOTALL)
+    add_pattern = re.compile(
+        r'ALTER\s+TYPE\s+app\.job_error\s+ADD\s+VALUE(?:\s+IF\s+NOT\s+EXISTS)?'
+        r"\s+'([^']+)'", re.IGNORECASE)
     found: tuple[frozenset[str], pathlib.Path] | None = None
+    values: set[str] = set()
+    source: pathlib.Path | None = None
     for path in sorted(_MIGRATIONS_DIR.glob('*.sql')):
-        m = pattern.search(path.read_text(encoding='utf-8'))
+        text = path.read_text(encoding='utf-8')
+        m = create_pattern.search(text)
         if m:
-            found = (frozenset(re.findall(r"'([^']*)'", m.group(1))), path)
-    if found is None:
+            values = set(re.findall(r"'([^']*)'", m.group(1)))
+            source = path
+        for added in add_pattern.findall(text):
+            if source is not None:
+                values.add(added)
+                source = path
+    if source is None:
         raise ImportError(
             f'no `CREATE TYPE app.job_error` found under {_MIGRATIONS_DIR} — '
             'the DB-enum subset check below has nothing to check against.')
+    found = (frozenset(values), source)
     return found
 
 

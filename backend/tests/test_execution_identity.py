@@ -29,6 +29,17 @@ def identity(**changes):
 
 
 class ExecutionIdentityTests(unittest.TestCase):
+    def test_invocation_fallback_identity_covers_root_scientific_payload(self):
+        from catalog import MethodCatalog
+        from invocation import InvocationService
+        catalog = MethodCatalog.load().bind_versions({"molecule.embed": "identity-test"})
+        service = InvocationService(catalog)
+        spec = catalog.get("molecule.embed")
+        handler = spec.handler()
+        ethanol = service._execution_identity(spec, {"smiles": "CCO", "seed": 1}, handler)
+        ethylamine = service._execution_identity(spec, {"smiles": "CCN", "seed": 1}, handler)
+        self.assertNotEqual(ethanol.digest, ethylamine.digest)
+
     def test_order_does_not_change_identity_or_cache_key(self):
         first = identity(
             checkpoint_digests=[sha256_digest("b"), sha256_digest("a")],

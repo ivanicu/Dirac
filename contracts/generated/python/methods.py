@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-MethodId = Literal["data.motif.snapshot", "design.motif.acquire", "design.motif.local_edits", "design.motif.reaction_enumerate", "fields.mep", "fields.mlp", "fields.qm.density", "fields.qm.homo", "fields.qm.lumo", "fields.qm.mep_qm", "fields.region.mep", "fields.region.mlp", "ml.motif.calibrate", "ml.motif.predict", "ml.motif.train", "molecule.embed", "surface.mep", "surface.mep_at", "torsion.strain"]
+MethodId = Literal["data.motif.snapshot", "design.motif.acquire", "design.motif.bayesian_acquire", "design.motif.local_edits", "design.motif.reaction_enumerate", "fields.mep", "fields.mlp", "fields.qm.density", "fields.qm.homo", "fields.qm.lumo", "fields.qm.mep_qm", "fields.region.mep", "fields.region.mlp", "ml.motif.calibrate", "ml.motif.mesh.predict", "ml.motif.mesh.train", "ml.motif.predict", "ml.motif.train", "molecule.embed", "physics.motif.openmm_md", "physics.motif.rbfe_aggregate", "physics.motif.rbfe_network", "structure.motif.conformers", "structure.motif.vina", "surface.mep", "surface.mep_at", "torsion.strain"]
 
 # data.motif.snapshot — Freeze measurement-lineage rows, endpoint definitions, splits and leakage evidence into a content-addressed dataset snapshot.
 DATAMOTIFSNAPSHOT_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'bitwise', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['write:dataset'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': True, 'distributed': False, 'min_gpus': 0, 'max_gpus': 0}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
@@ -14,6 +14,11 @@ DATAMOTIFSNAPSHOT_WARNINGS = []
 DESIGNMOTIFACQUIRE_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'bitwise', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['read:predictions', 'write:portfolio'], 'supported_adapters': ['inline', 'local_cpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': False, 'distributed': False, 'min_gpus': 0, 'max_gpus': 0}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
 DESIGNMOTIFACQUIRE_REFUSALS = ['INVALID_PARAMETERS']
 DESIGNMOTIFACQUIRE_WARNINGS = []
+
+# design.motif.bayesian_acquire — Score candidates with BoTorch qLogEHVI and VOI, then apply exact hard constraints, Pareto ranking and sensitivity analysis.
+DESIGNMOTIFBAYESIANACQUIRE_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'numeric_tolerant', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['read:predictions', 'write:portfolio'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': True, 'distributed': False, 'min_gpus': 0, 'max_gpus': 0}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
+DESIGNMOTIFBAYESIANACQUIRE_REFUSALS = ['INVALID_PARAMETERS']
+DESIGNMOTIFBAYESIANACQUIRE_WARNINGS = []
 
 # design.motif.local_edits — Apply a versioned unary medchem transform release and emit fully traced, identity-gated proposals.
 DESIGNMOTIFLOCALEDITS_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'bitwise', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['write:proposals'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': True, 'distributed': False, 'min_gpus': 0, 'max_gpus': 0}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
@@ -99,6 +104,16 @@ MLMOTIFCALIBRATE_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode'
 MLMOTIFCALIBRATE_REFUSALS = ['INVALID_PARAMETERS']
 MLMOTIFCALIBRATE_WARNINGS = []
 
+# ml.motif.mesh.predict — Predict from every frozen Motif mesh member with ensemble uncertainty, applicability domain and conformal intervals.
+MLMOTIFMESHPREDICT_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'resource_class': 'gpu', 'determinism': 'numeric_tolerant', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['read:model', 'write:predictions'], 'supported_adapters': ['local_cpu', 'local_gpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': True, 'distributed': False, 'min_gpus': 0, 'max_gpus': 10000}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
+MLMOTIFMESHPREDICT_REFUSALS = ['INVALID_PARAMETERS']
+MLMOTIFMESHPREDICT_WARNINGS = []
+
+# ml.motif.mesh.train — Train the governed Motif predictor mesh: Ridge/1NN, RF, XGBoost, censored Tobit, ranking and Chemprop D-MPNN ensemble.
+MLMOTIFMESHTRAIN_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'gpu', 'determinism': 'numeric_tolerant', 'checkpointable': True, 'cancellation': 'cooperative', 'artifact_access': ['read:dataset', 'write:model', 'write:checkpoint'], 'supported_adapters': ['local_gpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': False, 'distributed': True, 'min_gpus': 1, 'max_gpus': 10000}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
+MLMOTIFMESHTRAIN_REFUSALS = ['INVALID_PARAMETERS']
+MLMOTIFMESHTRAIN_WARNINGS = []
+
 # ml.motif.predict — Predict with a digest-verified Morgan baseline checkpoint and report nearest-neighbor applicability domain.
 MLMOTIFPREDICT_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'numeric_tolerant', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['read:model', 'write:predictions'], 'supported_adapters': ['local_cpu', 'local_gpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': True, 'distributed': False, 'min_gpus': 0, 'max_gpus': 10000}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
 MLMOTIFPREDICT_REFUSALS = ['INVALID_PARAMETERS']
@@ -117,6 +132,31 @@ class MoleculeEmbedParameters(TypedDict, total=False):
 MOLECULEEMBED_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 'inline_threshold_seconds': 5.0, 'resource_class': 'cpu-cheminformatics', 'concurrency_class': 'classical', 'supports_cancellation': False, 'deterministic': True, 'cacheable': False, 'side_effects': 'none'}
 MOLECULEEMBED_REFUSALS = ['PARSE', 'UNPARAMETERIZED']
 MOLECULEEMBED_WARNINGS = []
+
+# physics.motif.openmm_md — Run or restart caller-parameterized OpenMM minimization and molecular dynamics.
+PHYSICSMOTIFOPENMMMD_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'gpu', 'determinism': 'numeric_tolerant', 'checkpointable': True, 'cancellation': 'cooperative', 'artifact_access': ['read:system', 'write:trajectory', 'write:checkpoint'], 'supported_adapters': ['local_cpu', 'local_gpu', 'slurm', 'kubernetes'], 'cacheable': False, 'deterministic': False, 'side_effects': 'immutable_artifacts'}
+PHYSICSMOTIFOPENMMMD_REFUSALS = ['INVALID_PARAMETERS']
+PHYSICSMOTIFOPENMMMD_WARNINGS = []
+
+# physics.motif.rbfe_aggregate — Aggregate completed and failed RBFE edges with uncertainty and closure diagnostics.
+PHYSICSMOTIFRBFEAGGREGATE_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'bitwise', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['read:rbfe', 'write:rbfe'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
+PHYSICSMOTIFRBFEAGGREGATE_REFUSALS = ['INVALID_PARAMETERS']
+PHYSICSMOTIFRBFEAGGREGATE_WARNINGS = []
+
+# physics.motif.rbfe_network — Plan an auditable RBFE network and optionally aggregate explicit edge observations.
+PHYSICSMOTIFRBFENETWORK_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'bitwise', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['read:rbfe', 'write:rbfe'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
+PHYSICSMOTIFRBFENETWORK_REFUSALS = ['INVALID_PARAMETERS']
+PHYSICSMOTIFRBFENETWORK_WARNINGS = []
+
+# structure.motif.conformers — Generate, minimize, energy-rank and cluster a deterministic ETKDGv3 conformer ensemble.
+STRUCTUREMOTIFCONFORMERS_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'numeric_tolerant', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['write:conformer'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
+STRUCTUREMOTIFCONFORMERS_REFUSALS = ['INVALID_PARAMETERS']
+STRUCTUREMOTIFCONFORMERS_WARNINGS = []
+
+# structure.motif.vina — Dock prepared ligands into an explicitly prepared receptor/grid using AutoDock Vina.
+STRUCTUREMOTIFVINA_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'numeric_tolerant', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['read:receptor', 'write:pose'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
+STRUCTUREMOTIFVINA_REFUSALS = ['INVALID_PARAMETERS']
+STRUCTUREMOTIFVINA_WARNINGS = []
 
 # surface.mep — Electrostatic potential on the molecular surface, from a QM density — the route that can answer a sigma-hole question.
 class SurfaceMepParameters(TypedDict, total=False):
@@ -151,4 +191,4 @@ TORSIONSTRAIN_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': '
 TORSIONSTRAIN_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
 TORSIONSTRAIN_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
 
-METHOD_IDS = ['data.motif.snapshot', 'design.motif.acquire', 'design.motif.local_edits', 'design.motif.reaction_enumerate', 'fields.mep', 'fields.mlp', 'fields.qm.density', 'fields.qm.homo', 'fields.qm.lumo', 'fields.qm.mep_qm', 'fields.region.mep', 'fields.region.mlp', 'ml.motif.calibrate', 'ml.motif.predict', 'ml.motif.train', 'molecule.embed', 'surface.mep', 'surface.mep_at', 'torsion.strain']
+METHOD_IDS = ['data.motif.snapshot', 'design.motif.acquire', 'design.motif.bayesian_acquire', 'design.motif.local_edits', 'design.motif.reaction_enumerate', 'fields.mep', 'fields.mlp', 'fields.qm.density', 'fields.qm.homo', 'fields.qm.lumo', 'fields.qm.mep_qm', 'fields.region.mep', 'fields.region.mlp', 'ml.motif.calibrate', 'ml.motif.mesh.predict', 'ml.motif.mesh.train', 'ml.motif.predict', 'ml.motif.train', 'molecule.embed', 'physics.motif.openmm_md', 'physics.motif.rbfe_aggregate', 'physics.motif.rbfe_network', 'structure.motif.conformers', 'structure.motif.vina', 'surface.mep', 'surface.mep_at', 'torsion.strain']

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "schema_version": "2.0.0",
+  "method_id": "physics.motif.rbfe_network", "summary": "Plan an auditable RBFE network and optionally aggregate explicit edge observations.",
+  "implementation": {"module": "backend.motif.rbfe", "functions": ["_chemistry", "_digest", "plan_rbfe_network"], "constants": []},
+  "input": {"schema":
+    {"type": "object", "additionalProperties": false, "required": ["compounds"], "properties": {
+      "compounds": {"type": "array", "minItems": 2, "items": {"type": "object", "additionalProperties": false,
+        "required": ["id", "smiles"], "properties": {"id": {"type": "string", "minLength": 1}, "smiles": {"type": "string", "minLength": 1}}}},
+      "extra_edge_fraction": {"type": "number", "minimum": 0, "maximum": 5}, "minimum_similarity": {"type": "number", "minimum": 0, "maximum": 1}
+    }}},
+  "output": {"schema": {"type": "object"}},
+  "refusals": [{"code": "INVALID_PARAMETERS", "condition": "invalid chemistry, mapping, disconnected results or invalid uncertainty"}],
+  "execution": {"supported_modes": ["sync", "job"], "default_mode": "job", "resource_class": "cpu", "determinism": "bitwise",
+    "checkpointable": false, "cancellation": "cooperative", "artifact_access": ["read:rbfe", "write:rbfe"],
+    "supported_adapters": ["local_cpu", "slurm", "kubernetes"], "cacheable": true, "deterministic": true,
+    "side_effects": "immutable_artifacts"},
+  "exposure": {"sdk": true, "cli": true, "mcp": "hidden"},
+  "invocation": {"handler": "motif.structure_methods:rbfe_plan_handler", "estimate": "motif.structure_methods:rbfe_estimate",
+    "artifacts": [{"role": "rbfe.network", "media_type": "application/json", "required": true}]}
+}

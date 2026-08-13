@@ -35,6 +35,7 @@ export type DiracEnvelope<TData = unknown> = {
 export type MethodId =
     | 'data.motif.snapshot'
     | 'design.motif.acquire'
+    | 'design.motif.bayesian_acquire'
     | 'design.motif.local_edits'
     | 'design.motif.reaction_enumerate'
     | 'fields.mep'
@@ -46,9 +47,16 @@ export type MethodId =
     | 'fields.region.mep'
     | 'fields.region.mlp'
     | 'ml.motif.calibrate'
+    | 'ml.motif.mesh.predict'
+    | 'ml.motif.mesh.train'
     | 'ml.motif.predict'
     | 'ml.motif.train'
     | 'molecule.embed'
+    | 'physics.motif.openmm_md'
+    | 'physics.motif.rbfe_aggregate'
+    | 'physics.motif.rbfe_network'
+    | 'structure.motif.conformers'
+    | 'structure.motif.vina'
     | 'surface.mep'
     | 'surface.mep_at'
     | 'torsion.strain';
@@ -131,6 +139,45 @@ export const DesignMotifAcquireExecution = {
     ],
     "scale_profile": {
         "shardable": false,
+        "distributed": false,
+        "min_gpus": 0,
+        "max_gpus": 0
+    },
+    "cacheable": true,
+    "deterministic": true,
+    "side_effects": "immutable_artifacts"
+} as const;
+
+/** design.motif.bayesian_acquire output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type DesignMotifBayesian_acquireOutput = {
+    portfolio: Record<string, unknown>;
+    counts: Record<string, unknown>;
+    acquisition_digest: string;
+    sensitivity_digest: string;
+};
+
+/** design.motif.bayesian_acquire — Score candidates with BoTorch qLogEHVI and VOI, then apply exact hard constraints, Pareto ranking and sensitivity analysis. */
+export const DesignMotifBayesian_acquireExecution = {
+    "supported_modes": [
+        "sync",
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "cpu",
+    "determinism": "numeric_tolerant",
+    "checkpointable": false,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "read:predictions",
+        "write:portfolio"
+    ],
+    "supported_adapters": [
+        "local_cpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "scale_profile": {
+        "shardable": true,
         "distributed": false,
         "min_gpus": 0,
         "max_gpus": 0
@@ -795,6 +842,94 @@ export const MlMotifCalibrateExecution = {
     "side_effects": "immutable_artifacts"
 } as const;
 
+/** ml.motif.mesh.predict output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type MlMotifMeshPredictOutput = {
+    predictions: Array<unknown>;
+    count: number;
+};
+
+/** ml.motif.mesh.predict — Predict from every frozen Motif mesh member with ensemble uncertainty, applicability domain and conformal intervals. */
+export const MlMotifMeshPredictExecution = {
+    "supported_modes": [
+        "sync",
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "gpu",
+    "determinism": "numeric_tolerant",
+    "checkpointable": false,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "read:model",
+        "write:predictions"
+    ],
+    "supported_adapters": [
+        "local_cpu",
+        "local_gpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "scale_profile": {
+        "shardable": true,
+        "distributed": false,
+        "min_gpus": 0,
+        "max_gpus": 10000
+    },
+    "cacheable": true,
+    "deterministic": true,
+    "side_effects": "immutable_artifacts"
+} as const;
+
+/** ml.motif.mesh.train output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type MlMotifMeshTrainOutput = {
+    checkpoint_digest: string;
+    validation: Record<string, unknown>;
+    algorithm: 'motif_predictor_mesh';
+    members: Array<string>;
+    featurizer_digest: string;
+    runtime_lock_digest: string;
+    model_release?: {
+        ref: {
+            kind: 'model';
+            id: string;
+        };
+        model_release_id: string;
+        lifecycle: 'candidate';
+        created: boolean;
+    };
+};
+
+/** ml.motif.mesh.train — Train the governed Motif predictor mesh: Ridge/1NN, RF, XGBoost, censored Tobit, ranking and Chemprop D-MPNN ensemble. */
+export const MlMotifMeshTrainExecution = {
+    "supported_modes": [
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "gpu",
+    "determinism": "numeric_tolerant",
+    "checkpointable": true,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "read:dataset",
+        "write:model",
+        "write:checkpoint"
+    ],
+    "supported_adapters": [
+        "local_gpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "scale_profile": {
+        "shardable": false,
+        "distributed": true,
+        "min_gpus": 1,
+        "max_gpus": 10000
+    },
+    "cacheable": true,
+    "deterministic": true,
+    "side_effects": "immutable_artifacts"
+} as const;
+
 /** ml.motif.predict output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type MlMotifPredictOutput = {
     predictions: Array<unknown>;
@@ -925,6 +1060,162 @@ export const MoleculeEmbedExecution = {
     "side_effects": "none"
 } as const;
 
+/** physics.motif.openmm_md output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type PhysicsMotifOpenmm_mdOutput = {
+    run_digest: string;
+    platform: string;
+    resumed: boolean;
+    observables: Record<string, unknown>;
+};
+
+/** physics.motif.openmm_md — Run or restart caller-parameterized OpenMM minimization and molecular dynamics. */
+export const PhysicsMotifOpenmm_mdExecution = {
+    "supported_modes": [
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "gpu",
+    "determinism": "numeric_tolerant",
+    "checkpointable": true,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "read:system",
+        "write:trajectory",
+        "write:checkpoint"
+    ],
+    "supported_adapters": [
+        "local_cpu",
+        "local_gpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "cacheable": false,
+    "deterministic": false,
+    "side_effects": "immutable_artifacts"
+} as const;
+
+/** physics.motif.rbfe_aggregate output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type PhysicsMotifRbfe_aggregateOutput = {
+    result_digest: string;
+    status: 'complete' | 'partial';
+    node_estimates: Array<unknown>;
+    failed_edges: Array<unknown>;
+    cycle_closure: Array<unknown>;
+};
+
+/** physics.motif.rbfe_aggregate — Aggregate completed and failed RBFE edges with uncertainty and closure diagnostics. */
+export const PhysicsMotifRbfe_aggregateExecution = {
+    "supported_modes": [
+        "sync",
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "cpu",
+    "determinism": "bitwise",
+    "checkpointable": false,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "read:rbfe",
+        "write:rbfe"
+    ],
+    "supported_adapters": [
+        "local_cpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "cacheable": true,
+    "deterministic": true,
+    "side_effects": "immutable_artifacts"
+} as const;
+
+/** physics.motif.rbfe_network — Plan an auditable RBFE network and optionally aggregate explicit edge observations. */
+export const PhysicsMotifRbfe_networkExecution = {
+    "supported_modes": [
+        "sync",
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "cpu",
+    "determinism": "bitwise",
+    "checkpointable": false,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "read:rbfe",
+        "write:rbfe"
+    ],
+    "supported_adapters": [
+        "local_cpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "cacheable": true,
+    "deterministic": true,
+    "side_effects": "immutable_artifacts"
+} as const;
+
+/** structure.motif.conformers output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type StructureMotifConformersOutput = {
+    ensemble_digest: string;
+    generated_count: number;
+    cluster_count: number;
+    force_field: 'MMFF94s' | 'UFF';
+};
+
+/** structure.motif.conformers — Generate, minimize, energy-rank and cluster a deterministic ETKDGv3 conformer ensemble. */
+export const StructureMotifConformersExecution = {
+    "supported_modes": [
+        "sync",
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "cpu",
+    "determinism": "numeric_tolerant",
+    "checkpointable": false,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "write:conformer"
+    ],
+    "supported_adapters": [
+        "local_cpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "cacheable": true,
+    "deterministic": true,
+    "side_effects": "immutable_artifacts"
+} as const;
+
+/** structure.motif.vina output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type StructureMotifVinaOutput = {
+    docking_digest: string;
+    ligand_count: number;
+    results: Array<unknown>;
+};
+
+/** structure.motif.vina — Dock prepared ligands into an explicitly prepared receptor/grid using AutoDock Vina. */
+export const StructureMotifVinaExecution = {
+    "supported_modes": [
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "cpu",
+    "determinism": "numeric_tolerant",
+    "checkpointable": false,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "read:receptor",
+        "write:pose"
+    ],
+    "supported_adapters": [
+        "local_cpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "cacheable": true,
+    "deterministic": true,
+    "side_effects": "immutable_artifacts"
+} as const;
+
 /** surface.mep output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type SurfaceMepOutput = {
     summary?: Record<string, unknown>;
@@ -1012,6 +1303,7 @@ export const TorsionStrainExecution = {
 export const METHOD_IDS: readonly MethodId[] = [
     "data.motif.snapshot",
     "design.motif.acquire",
+    "design.motif.bayesian_acquire",
     "design.motif.local_edits",
     "design.motif.reaction_enumerate",
     "fields.mep",
@@ -1023,9 +1315,16 @@ export const METHOD_IDS: readonly MethodId[] = [
     "fields.region.mep",
     "fields.region.mlp",
     "ml.motif.calibrate",
+    "ml.motif.mesh.predict",
+    "ml.motif.mesh.train",
     "ml.motif.predict",
     "ml.motif.train",
     "molecule.embed",
+    "physics.motif.openmm_md",
+    "physics.motif.rbfe_aggregate",
+    "physics.motif.rbfe_network",
+    "structure.motif.conformers",
+    "structure.motif.vina",
     "surface.mep",
     "surface.mep_at",
     "torsion.strain"

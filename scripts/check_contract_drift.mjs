@@ -225,12 +225,16 @@ const mig007 = fs.readdirSync(migDir).find(f => /^007_.*\.sql$/.test(f));
 if (!mig007) {
     fail('no backend/db/migrations/007_*.sql found');
 } else {
-    const migText = fs.readFileSync(path.join(migDir, mig007), 'utf8');
+    const migText = fs.readdirSync(migDir).filter(f => /^\d+_.*\.sql$/.test(f)).sort()
+        .map(f => fs.readFileSync(path.join(migDir, f), 'utf8')).join('\n');
     const enumM = /CREATE\s+TYPE\s+app\.job_error\s+AS\s+ENUM\s*\(([^)]*)\)/i.exec(migText);
     if (!enumM) {
         fail(`${mig007}: no \`CREATE TYPE app.job_error AS ENUM (...)\` found`);
     } else {
         const dbCodes = new Set([...enumM[1].matchAll(/'([^']*)'/g)].map(m => m[1]));
+        for (const match of migText.matchAll(/ALTER\s+TYPE\s+app\.job_error\s+ADD\s+VALUE(?:\s+IF\s+NOT\s+EXISTS)?\s+'([^']+)'/gi)) {
+            dbCodes.add(match[1]);
+        }
         note(`${mig007} declares app.job_error = ${JSON.stringify([...dbCodes].sort())}`);
 
         const dbNotCanonical = setDiff(dbCodes, canonical);

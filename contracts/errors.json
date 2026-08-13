@@ -167,7 +167,7 @@
   },
   "db_enum_note": [
     "app.job_error (migration 007) is a SUBSET, and the omissions are deliberate:",
-    "INVALID_PARAMETERS \u2014 the input schema is checked BEFORE a job row is opened (invocation.py: validate, then _open_job), so no job can ever carry it. Adding it to the enum would declare a state the state machine cannot reach.",
+    "Runtime scientific parameter refusals are Job-reachable because schemas validate shape before opening a row, while chemistry engines can still reject inconsistent values after the Job starts; migration 029 added that state.",
     "BAD_HOST, AUTH_REQUIRED, FORBIDDEN, RATE_LIMITED, QUOTA_EXCEEDED and TLS_REQUIRED are rejected by the remote transport boundary before a job exists;",
     "OPEN_SHELL_SPIN_REQUIRED was added after 007 shipped; and the two ops codes NOT_FOUND / DB_UNAVAILABLE \u2014 neither",
     "of which can ever be a job's error, because a job that failed BECAUSE the",

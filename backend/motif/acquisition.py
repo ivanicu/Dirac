@@ -76,8 +76,9 @@ def rank_portfolio(candidates: Iterable[dict[str, Any]], *,
                    capacity: int) -> dict[str, list[dict[str, Any]]]:
     """Partition every input into selected/reserve/rejected/refused.
 
-    Ordering is lexicographic and visible: Pareto rank, missing evidence,
-    failure risk, cost, then proposal UUID. There is deliberately no weighted total.
+    Ordering is lexicographic and visible: Pareto rank, missing evidence, expected
+    Pareto improvement, information value, diversity, failure risk, cost, then
+    proposal UUID. There is deliberately no weighted total.
     """
     if capacity < 0:
         raise ValueError("capacity cannot be negative")
@@ -100,6 +101,9 @@ def rank_portfolio(candidates: Iterable[dict[str, Any]], *,
     ordered = sorted(eligible, key=lambda row: (
         ranks[row["proposal_id"]],
         float(row.get("components", {}).get("missing_evidence", 0)),
+        -float(row.get("components", {}).get("pareto_improvement") or 0),
+        -float(row.get("components", {}).get("information_value") or 0),
+        -float(row.get("components", {}).get("diversity") or 0),
         float(row.get("components", {}).get("failure_risk", 0)),
         float(row.get("components", {}).get("cost", 0)),
         row["proposal_id"],

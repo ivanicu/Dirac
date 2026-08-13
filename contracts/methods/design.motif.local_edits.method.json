@@ -26,7 +26,15 @@
       "constraints": {"type": "object", "additionalProperties": false,
         "properties": {"max_heavy_atoms": {"type": "integer", "minimum": 1},
           "charge_range": {"type": "array", "prefixItems": [{"type": "integer"}, {"type": "integer"}], "minItems": 2, "maxItems": 2},
-          "forbidden_smarts": {"type": "array", "items": {"type": "string", "minLength": 1}}}}
+          "forbidden_smarts": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "required_smarts": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "reject_unassigned_stereo": {"type": "boolean"}, "pains": {"type": "boolean"},
+          "reactive_group_filters": {"type": "array", "items": {"enum": ["acyl_halide", "alkyl_halide", "isocyanate", "aldehyde", "peroxide", "azide"]}},
+          "molecular_weight_range": {"$ref": "#/$defs/range"}, "clogp_range": {"$ref": "#/$defs/range"},
+          "tpsa_range": {"$ref": "#/$defs/range"}, "hbd_range": {"$ref": "#/$defs/range"},
+          "hba_range": {"$ref": "#/$defs/range"}, "rotatable_bonds_range": {"$ref": "#/$defs/range"},
+          "ring_count_range": {"$ref": "#/$defs/range"}}},
+      "range": {"type": "array", "prefixItems": [{"type": "number"}, {"type": "number"}], "minItems": 2, "maxItems": 2}
   }}},
   "output": {"schema": {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "additionalProperties": false,
     "required": ["proposal_count", "generator_metrics"], "properties": {"proposal_count": {"type": "integer", "minimum": 0}, "generator_metrics": {"type": "object"}}}},

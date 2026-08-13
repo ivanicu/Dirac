@@ -14,6 +14,22 @@ from motif.models import calibrate, predict, train_baselines
 from motif.proposals import generator_metrics, local_edits, reaction_enumerate
 
 
+def _runtime_manifest(ctx: InvocationContext) -> dict:
+    """Freeze the local runtime identity shared by every Motif trainer."""
+    return {
+        "schema_version": "1.0", "kind": "local_python_environment",
+        "python": {"implementation": platform.python_implementation(),
+                   "version": platform.python_version()},
+        "platform": platform.platform(), "method_version": ctx.version,
+        "distributions": sorted(
+            ({"name": (dist.metadata.get("Name") or "unknown").lower(),
+              "version": dist.version}
+             for dist in importlib.metadata.distributions()),
+            key=lambda item: (item["name"], item["version"])),
+        "limitation": "installed versions are frozen; wheel/source archive hashes are unavailable",
+    }
+
+
 def snapshot_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
     ctx.check_budget()
     try:
@@ -97,18 +113,7 @@ def train_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
         raise failures.DiracInvalidParameters(str(exc)) from exc
     checkpoint_bytes = json.dumps(checkpoint, sort_keys=True, separators=(",", ":")).encode()
     report_bytes = json.dumps(report, sort_keys=True, separators=(",", ":")).encode()
-    runtime_lock = {
-        "schema_version": "1.0", "kind": "local_python_environment",
-        "python": {"implementation": platform.python_implementation(),
-                   "version": platform.python_version()},
-        "platform": platform.platform(), "method_version": ctx.version,
-        "distributions": sorted(
-            ({"name": (dist.metadata.get("Name") or "unknown").lower(),
-              "version": dist.version}
-             for dist in importlib.metadata.distributions()),
-            key=lambda item: (item["name"], item["version"])),
-        "limitation": "installed versions are frozen; wheel/source archive hashes are unavailable",
-    }
+    runtime_lock = _runtime_manifest(ctx)
     runtime_bytes = json.dumps(
         runtime_lock, sort_keys=True, separators=(",", ":")).encode()
     featurizer_digest = "sha256:" + hashlib.sha256(json.dumps(

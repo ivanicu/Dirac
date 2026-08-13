@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "2.0.0", "method_id": "ml.motif.mesh.train",
+  "summary": "Train the governed Motif predictor mesh: Ridge/1NN, RF, XGBoost, censored Tobit, ranking and Chemprop D-MPNN ensemble.",
+  "implementation": {"module": "backend.motif.mesh", "functions": ["_digest", "predict_predictor_mesh", "train_predictor_mesh"], "constants": ["PREDICTOR_SOURCE_DIGESTS"]},
+  "input": {"schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object", "additionalProperties": false,
+    "required": ["endpoint_key", "rows", "registration"],
+    "properties": {
+      "endpoint_key": {"type": "string", "minLength": 1},
+      "radius": {"type": "integer", "minimum": 1, "maximum": 6},
+      "n_bits": {"type": "integer", "minimum": 128, "maximum": 16384},
+      "seed": {"type": "integer", "minimum": 0},
+      "include_chemprop": {"type": "boolean"},
+      "chemprop_ensemble_size": {"type": "integer", "minimum": 2, "maximum": 20},
+      "chemprop_epochs": {"type": "integer", "minimum": 1, "maximum": 1000},
+      "bootstrap_samples": {"type": "integer", "minimum": 20, "maximum": 10000},
+      "accelerator": {"enum": ["auto", "cpu", "gpu"]},
+      "rows": {"type": "array", "minItems": 3, "items": {
+        "type": "object", "additionalProperties": true,
+        "required": ["compound_id", "smiles", "endpoint_key", "qualifier", "split"],
+        "properties": {
+          "compound_id": {"type": "string", "minLength": 1},
+          "smiles": {"type": "string", "minLength": 1},
+          "endpoint_key": {"type": "string", "minLength": 1},
+          "value": {"type": ["number", "null"]}, "lower": {"type": ["number", "null"]},
+          "upper": {"type": ["number", "null"]},
+          "qualifier": {"enum": ["equal", "less_than", "less_or_equal", "greater_than", "greater_or_equal", "interval", "not_tested", "invalid"]},
+          "split": {"enum": ["train", "validation", "test", "calibration", "external"]}
+        }
+      }},
+      "registration": {
+        "type": "object", "additionalProperties": false,
+        "required": ["dataset_snapshot_ref", "model_object_id", "release_name", "source_commit", "intended_use", "prohibited_use", "known_limitations"],
+        "properties": {
+          "dataset_snapshot_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"],
+            "properties": {"kind": {"const": "dataset"}, "id": {"type": "string", "format": "uuid"}}},
+          "model_object_id": {"type": "string", "minLength": 1, "maxLength": 256},
+          "release_name": {"type": "string", "minLength": 1, "maxLength": 256},
+          "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+          "intended_use": {"type": "object"}, "prohibited_use": {"type": "object"},
+          "known_limitations": {"type": "object"}
+        }
+      }
+    }
+  }},
+  "output": {"schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object", "additionalProperties": false,
+    "required": ["checkpoint_digest", "validation", "algorithm", "members", "featurizer_digest", "runtime_lock_digest"],
+    "properties": {
+      "checkpoint_digest": {"type": "string", "format": "sha256-digest"},
+      "validation": {"type": "object"}, "algorithm": {"const": "motif_predictor_mesh"},
+      "members": {"type": "array", "minItems": 5, "items": {"type": "string"}},
+      "featurizer_digest": {"type": "string", "format": "sha256-digest"},
+      "runtime_lock_digest": {"type": "string", "format": "sha256-digest"},
+      "model_release": {"type": "object", "additionalProperties": false,
+        "required": ["ref", "model_release_id", "lifecycle", "created"],
+        "properties": {
+          "ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"],
+            "properties": {"kind": {"const": "model"}, "id": {"type": "string", "minLength": 1}}},
+          "model_release_id": {"type": "string", "format": "uuid"},
+          "lifecycle": {"const": "candidate"}, "created": {"type": "boolean"}
+        }}
+    }
+  }},
+  "refusals": [{"code": "INVALID_PARAMETERS", "condition": "insufficient labels, invalid chemistry, failed bounded training or dataset mismatch"}],
+  "execution": {
+    "supported_modes": ["job"], "default_mode": "job", "resource_class": "gpu",
+    "determinism": "numeric_tolerant", "checkpointable": true, "cancellation": "cooperative",
+    "artifact_access": ["read:dataset", "write:model", "write:checkpoint"],
+    "supported_adapters": ["local_gpu", "slurm", "kubernetes"],
+    "scale_profile": {"shardable": false, "distributed": true, "min_gpus": 1, "max_gpus": 10000},
+    "cacheable": true, "deterministic": true, "side_effects": "immutable_artifacts"
+  },
+  "exposure": {"sdk": true, "cli": true, "mcp": "hidden"},
+  "invocation": {
+    "handler": "motif.mesh_methods:train_handler", "estimate": "motif.mesh_methods:train_estimate",
+    "artifacts": [
+      {"role": "model.checkpoint", "media_type": "application/json", "required": true},
+      {"role": "model.validation", "media_type": "application/json", "required": true},
+      {"role": "model.runtime_lock", "media_type": "application/json", "required": true}
+    ]
+  }
+}

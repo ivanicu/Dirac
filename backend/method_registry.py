@@ -210,6 +210,23 @@ _MOTIF_UNITS = {
     'ml.motif.predict': ('motif.models',
                          ['predict', 'fingerprint', 'tanimoto', '_dense', '_digest']),
     'ml.motif.calibrate': ('motif.models', ['calibrate', '_digest']),
+    'ml.motif.mesh.train': ('motif.mesh',
+                            ['train_predictor_mesh', 'predict_predictor_mesh', '_digest']),
+    'ml.motif.mesh.predict': ('motif.mesh',
+                              ['predict_predictor_mesh', '_digest']),
+    'design.motif.bayesian_acquire': ('motif.advanced_acquisition',
+                                      ['botorch_qehvi', 'information_value',
+                                       'greedy_diversity', 'selection_sensitivity', '_digest']),
+    'structure.motif.conformers': ('motif.structure',
+                                   ['generate_conformers', '_digest']),
+    'structure.motif.vina': ('motif.docking',
+                             ['dock_vina', '_ligand_pdbqt', '_digest']),
+    'physics.motif.openmm_md': ('motif.physics',
+                               ['run_openmm_md', '_sha', '_digest']),
+    'physics.motif.rbfe_network': ('motif.rbfe',
+                                  ['plan_rbfe_network', '_chemistry', '_digest']),
+    'physics.motif.rbfe_aggregate': ('motif.rbfe',
+                                    ['aggregate_rbfe_results', '_digest']),
 }
 for _method_id, (_module, _functions) in _MOTIF_UNITS.items():
     _descriptor_path = _CONTRACTS / f'{_method_id}.method.json'
@@ -217,7 +234,9 @@ for _method_id, (_module, _functions) in _MOTIF_UNITS.items():
     UNITS[_method_id] = {
         'module': _module,
         'fns': _functions,
-        'consts': [],
+        'consts': (['PREDICTOR_SOURCE_DIGESTS'] if _module == 'motif.mesh' else
+                   ['ACQUISITION_SOURCE_DIGESTS']
+                   if _module == 'motif.advanced_acquisition' else []),
         'descriptor_path': str(_descriptor_path),
         'exec_class': 'job',
         'in_schema': _descriptor['input']['schema'],

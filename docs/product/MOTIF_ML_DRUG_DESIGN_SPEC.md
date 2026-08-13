@@ -1,6 +1,6 @@
 # Dirac Motif：工业级闭环 ML 药物设计引擎规格书
 
-**状态：** Foundation implemented / scientific validation pending
+**状态：** Local algorithm stack implemented / scientific validation pending
 **版本：** 2.0
 **基线：** 2026-08-12 的 Dirac 仓库、运行服务与 PostgreSQL 架构
 **产品定位：** 小分子药物发现的闭环、多目标、证据驱动设计引擎
@@ -23,16 +23,19 @@ Motif 是运行在 Dirac 之上的**闭环药物设计决策系统**：它读取
 
 - Dirac 现有 Command、Method、Job、Artifact、cache 与 PostgreSQL 控制面被保留，未建立第二套公共 API 或真值源；
 - migrations 020–024 已先在临时数据库完整重放，再应用到 live `dirac` 数据库；25 个迁移哈希检查通过；024 允许 model release 如实声明 digest-pinned container 或 immutable local-runtime manifest，禁止用伪造 container digest 代替本机环境；
-- Motif 已注册 7 个 canonical Methods 和 8 个 public Commands；
-- dataset snapshot、Morgan ridge/1NN baseline、RDKit proposal generation 与 constrained Pareto ranking 已通过真实 CPU Job 持久化 Artifact；
+- Motif 当前已注册 27 个 compute Methods；新增 predictor mesh、Bayesian acquisition、conformer、Vina、OpenMM 与 RBFE network 均服从原有 Command/Method/Job/Artifact 控制面；
+- predictor mesh 已包含 Morgan/RDKit descriptor release、ridge/1NN、random forest、XGBoost、删失 Tobit、pairwise rank、Chemprop D-MPNN ensemble、conditional conformal、适用域、bootstrap CI 与完整 specification curve；
+- proposal chemistry gate 已加入 property window、required/forbidden SMARTS、未指派立体化学、PAINS 与显式 reactive-group 规则；采集层包含硬约束 Pareto、BoTorch qLogEHVI、information value 与 sensitivity，不使用隐藏总分；
+- ETKDGv3 conformer、AutoDock Vina、OpenMM MD checkpoint/restart 和 RBFE network/aggregation 已形成正式 Method 与 Artifact；docking score 明确不是 binding free energy，RBFE 未完成边不会被补造成结果；
 - `dataset.snapshot.create` 的完成屏障会在 Job 标记 `done` 前原子注册 governed Dataset Snapshot、Endpoint linkage、四类必需 Artifact、lineage 与 outbox；`model.train` 同样在完成前注册 candidate Model Release、checkpoint、validation、local runtime manifest 和训练 Dataset linkage；投影失败会使 Job 失败，不能留下“Artifact 成功但领域 release 缺失”的假完成；
 - live synthetic release smoke 已创建 valid Dataset Snapshot `83c18208-aa6a-4080-9147-09a4e75ecbdc` 和 candidate Model Release `8db47cac-0953-4026-a782-fa04544f5bb9`；精确重放复用同一领域身份并各保持一个 outbox 事件；训练行与 snapshot 数据 Artifact 的 canonical SHA-256 不一致时会 fail closed，且不创建 model release；
 - Attempt 的 lease、takeover、fencing、stale completion rejection、idempotent completion 与 outbox 已在 PostgreSQL 集成验证；
 - `endpoint.register`、`objective.save` 与 `result.ingest` 已通过 live CommandDispatcher 验证；规范文档、领域记录、Artifact 和 outbox 在同一 PostgreSQL 事务写入，重复提交按内容幂等；
 - `policy.release.register` 已为 generation、identity gate、fidelity、acquisition、diversity 与 explanation 建立真实 candidate releases；Objective 保存前会验证引用存在、policy kind 匹配、Program/Campaign/Target 一致以及 Objective/Endpoint 方向一致；
 - protocol-resolved measurement v2 ledger 能原样保存 `not_tested`、`missing`、上下界删失和 QC 状态；这些记录不会被强制投影成 `bio.result.value_num = 0`；
-- 本机 pueue `gpu` group 正常运行，但排队执行的 GPU smoke task 842 被 NVML 以 `Driver/library version mismatch` 拒绝；因此当前证据只支持“GPU 调度通路已接入”，不支持“本机 CUDA workload 已通过”；
-- Chemprop、docking、DiffDock、MD/RBFE、Slurm/Kubernetes 和 prospective wet-lab validation 仍是有门禁的后续能力，不计入本次完成范围。
+- 本机 pueue GPU task 845 已在 RTX 5080/CUDA 12.8 完成两成员 Chemprop D-MPNN 训练、验证和预测；task 847 已用 OpenMM CUDA 写入 checkpoint 并恢复续跑；
+- public `model.mesh.train` 链已持久化含两成员 Chemprop 的 valid Dataset Snapshot `35be1d08-6b27-43ea-b9c5-be0412ea7dde` 与 candidate Model Release `873a5bfe-539b-4a85-9691-508f203049c9`。它们是 synthetic control-plane fixture，只证明软件链，不证明模型科学效果；
+- DiffDock 与 OpenFE edge simulation 的 license/checkpoint/image/golden-fixture fail-closed gate 已落地，但尚未提供可验证外部执行包；Slurm/Kubernetes 和 prospective wet-lab validation 也仍保留外部门禁。
 
 上述边界是融资和产品叙事必须遵守的证据边界：软件基础层已运行，不等于模型获得 prospective scientific validation，也不等于发现了临床候选物。
 

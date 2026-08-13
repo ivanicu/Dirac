@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "schema_version": "2.0.0",
+  "method_id": "structure.motif.vina", "summary": "Dock prepared ligands into an explicitly prepared receptor/grid using AutoDock Vina.",
+  "implementation": {"module": "backend.motif.docking", "functions": ["_digest", "_ligand_pdbqt", "dock_vina"], "constants": []},
+  "input": {"schema": {"type": "object", "additionalProperties": false,
+    "required": ["receptor_pdbqt", "ligands", "center", "box_size"], "properties": {
+      "receptor_pdbqt": {"type": "string", "minLength": 1},
+      "ligands": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"type": "object", "additionalProperties": false,
+        "required": ["id", "smiles"], "properties": {"id": {"type": "string", "minLength": 1}, "smiles": {"type": "string", "minLength": 1}}}},
+      "center": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "number"}},
+      "box_size": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "number", "exclusiveMinimum": 0}},
+      "seed": {"type": "integer", "minimum": 0}, "exhaustiveness": {"type": "integer", "minimum": 1, "maximum": 128},
+      "n_poses": {"type": "integer", "minimum": 1, "maximum": 100}, "energy_range": {"type": "number", "exclusiveMinimum": 0},
+      "cpu": {"type": "integer", "minimum": 1, "maximum": 256}
+  }}},
+  "output": {"schema": {"type": "object", "additionalProperties": false,
+    "required": ["docking_digest", "ligand_count", "results"], "properties": {
+      "docking_digest": {"type": "string", "format": "sha256-digest"}, "ligand_count": {"type": "integer"}, "results": {"type": "array"}
+  }}},
+  "refusals": [{"code": "INVALID_PARAMETERS", "condition": "invalid receptor, ligand, grid or Vina failure"}],
+  "execution": {"supported_modes": ["job"], "default_mode": "job", "resource_class": "cpu", "determinism": "numeric_tolerant",
+    "checkpointable": false, "cancellation": "cooperative", "artifact_access": ["read:receptor", "write:pose"],
+    "supported_adapters": ["local_cpu", "slurm", "kubernetes"], "cacheable": true, "deterministic": true, "side_effects": "immutable_artifacts"},
+  "exposure": {"sdk": true, "cli": true, "mcp": "curated"},
+  "invocation": {"handler": "motif.structure_methods:vina_handler", "estimate": "motif.structure_methods:vina_estimate",
+    "artifacts": [{"role": "structure.poses_pdbqt", "media_type": "chemical/x-pdbqt", "required": true},
+      {"role": "structure.docking_report", "media_type": "application/json", "required": true}]}
+}

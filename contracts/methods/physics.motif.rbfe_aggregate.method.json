@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "schema_version": "2.0.0",
+  "method_id": "physics.motif.rbfe_aggregate", "summary": "Aggregate completed and failed RBFE edges with uncertainty and closure diagnostics.",
+  "implementation": {"module": "backend.motif.rbfe", "functions": ["_digest", "aggregate_rbfe_results"], "constants": []},
+  "input": {"schema": {"type": "object", "additionalProperties": false, "required": ["network", "observations"], "properties": {
+    "network": {"type": "object"}, "observations": {"type": "array", "items": {"type": "object"}}
+  }}},
+  "output": {"schema": {"type": "object", "additionalProperties": false,
+    "required": ["result_digest", "status", "node_estimates", "failed_edges", "cycle_closure"], "properties": {
+      "result_digest": {"type": "string", "format": "sha256-digest"}, "status": {"enum": ["complete", "partial"]},
+      "node_estimates": {"type": "array"}, "failed_edges": {"type": "array"}, "cycle_closure": {"type": "array"}
+  }}},
+  "refusals": [{"code": "INVALID_PARAMETERS", "condition": "unknown edge or invalid value/uncertainty"}],
+  "execution": {"supported_modes": ["sync", "job"], "default_mode": "job", "resource_class": "cpu", "determinism": "bitwise",
+    "checkpointable": false, "cancellation": "cooperative", "artifact_access": ["read:rbfe", "write:rbfe"],
+    "supported_adapters": ["local_cpu", "slurm", "kubernetes"], "cacheable": true, "deterministic": true,
+    "side_effects": "immutable_artifacts"},
+  "exposure": {"sdk": true, "cli": true, "mcp": "hidden"},
+  "invocation": {"handler": "motif.structure_methods:rbfe_aggregate_handler", "estimate": "motif.structure_methods:rbfe_estimate",
+    "artifacts": [{"role": "rbfe.result", "media_type": "application/json", "required": true}]}
+}

@@ -163,6 +163,36 @@ def campaign_bayesian_rank(input: dict, ctx) -> dict:
         actor=ctx.actor, command_id=ctx.command_id)
 
 
+def structure_conformers(input: dict, ctx) -> dict:
+    return ctx.kernel.submit(
+        'structure.motif.conformers', input, request_id=ctx.request_id,
+        actor=ctx.actor, command_id=ctx.command_id)
+
+
+def structure_vina(input: dict, ctx) -> dict:
+    return ctx.kernel.submit(
+        'structure.motif.vina', input, request_id=ctx.request_id,
+        actor=ctx.actor, command_id=ctx.command_id)
+
+
+def physics_openmm_md(input: dict, ctx) -> dict:
+    return ctx.kernel.submit(
+        'physics.motif.openmm_md', input, request_id=ctx.request_id,
+        actor=ctx.actor, command_id=ctx.command_id)
+
+
+def physics_rbfe_network(input: dict, ctx) -> dict:
+    return ctx.kernel.submit(
+        'physics.motif.rbfe_network', input, request_id=ctx.request_id,
+        actor=ctx.actor, command_id=ctx.command_id)
+
+
+def physics_rbfe_aggregate(input: dict, ctx) -> dict:
+    return ctx.kernel.submit(
+        'physics.motif.rbfe_aggregate', input, request_id=ctx.request_id,
+        actor=ctx.actor, command_id=ctx.command_id)
+
+
 def proposal_generate(input: dict, ctx) -> dict:
     strategy = input["strategy"]
     method_id = ("design.motif.local_edits" if strategy == "local_edit"
