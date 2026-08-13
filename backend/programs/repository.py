@@ -356,7 +356,7 @@ class MemoryProgramRepository:
             if not linked:
                 raise failures.DiracNotFound("Target-disease pair does not belong to this Program")
         object_kind = {
-            "target_disease": "disease", "substance_registration": "substance_registration",
+            "target_disease": "disease", "substance_registration": "substance_registration", "batch": "batch",
             "sample": "sample", "sample_transfer": "sample", "work_comment": "artifact",
             "work_attachment": "artifact", "gate_criterion": "artifact",
             "protocol_version": "protocol_version", "dataset_version": "dataset_version",
@@ -370,7 +370,7 @@ class MemoryProgramRepository:
                   "recorded_at": datetime.now(timezone.utc).isoformat(), "recorded_by": who}
         row["reference_jobs"].append(record); row["version"] += 1
         event_kind = {
-            "target_disease": "target_disease.linked", "substance_registration": "substance_registration.recorded",
+            "target_disease": "target_disease.linked", "substance_registration": "substance_registration.recorded", "batch": "batch.registered",
             "sample": "sample.created", "sample_transfer": "sample.transferred",
             "work_comment": "work_comment.recorded", "work_attachment": "work_attachment.recorded",
             "gate_criterion": "gate_criterion.assessed", "protocol_version": "protocol.recorded",
@@ -408,6 +408,16 @@ class MemoryProgramRepository:
         row["links"].append(link)
         result = {"link": copy.deepcopy(link), "program_version": row["version"], "created": True}
         return self._record(identifier, "object.linked", target, result, who, request_id)
+
+    def register_compound(self, program_ref: dict, expected_version: int, compound: dict,
+                          role: str, rationale: str | None, actor: dict,
+                          request_id: str | None = None) -> dict:
+        identifier = str(uuid.uuid5(uuid.NAMESPACE_URL,
+                                    "dirac:compound:" + compound["inchikey"]))
+        linked = self.link(program_ref, expected_version, _ref("compound", identifier),
+                           role, rationale, actor, request_id)
+        return {"compound": {"ref": _ref("compound", identifier), **copy.deepcopy(compound)},
+                **linked}
 
     def create_snapshot(self, program_ref: dict, expected_version: int,
                         actor: dict, request_id: str | None = None) -> dict:
@@ -863,7 +873,7 @@ class PostgresProgramRepository:
         item = D.reference_job(kind, value); who = D.actor(actor)
         request_digest = D.digest({"kind": kind, "record": item})
         event_kind = {
-            "target_disease": "target_disease.linked", "substance_registration": "substance_registration.recorded",
+            "target_disease": "target_disease.linked", "substance_registration": "substance_registration.recorded", "batch": "batch.registered",
             "sample": "sample.created", "sample_transfer": "sample.transferred",
             "work_comment": "work_comment.recorded", "work_attachment": "work_attachment.recorded",
             "gate_criterion": "gate_criterion.assessed", "protocol_version": "protocol.recorded",
@@ -888,7 +898,7 @@ class PostgresProgramRepository:
 
     def _reference_duplicate(self, cur, program_id, event_kind, kind, item):
         """Honor declared natural-key idempotency before touching domain tables."""
-        if kind not in {"target_disease", "sample", "work_attachment", "protocol_version",
+        if kind not in {"target_disease", "batch", "sample", "work_attachment", "protocol_version",
                         "experiment", "dataset_version", "structure_observation",
                         "evidence_release", "external_evidence"}:
             return None
@@ -903,6 +913,8 @@ class PostgresProgramRepository:
                 matches = (record.get("disease_key") == item["disease_key"]
                            and record.get("target_ref") == item["target_ref"]
                            and record.get("role") == item["role"])
+            elif kind == "batch":
+                matches = record.get("batch_code") == item["batch_code"]
             elif kind == "sample":
                 matches = record.get("sample_code") == item["sample_code"]
             elif kind == "work_attachment":
@@ -979,6 +991,32 @@ class PostgresProgramRepository:
             return ({"ref": atom, **item, "revision": revision,
                      "supersedes_ref": _ref("substance_registration", old["id"]) if old else None,
                      "created_at": row["created_at"], "created_by": who}, atom)
+        if kind == "batch":
+            self._require_entity(cur, item["compound_ref"])
+            self._advisory_lock(cur, "batch", item["batch_code"].lower())
+            cur.execute("SELECT id,inchikey,smiles,mw_monoisotopic FROM chem.compound WHERE id=%s AND retracted_at IS NULL",
+                        (item["compound_ref"]["id"],))
+            compound = cur.fetchone()
+            if compound is None:
+                raise failures.DiracNotFound("Compound does not exist")
+            cur.execute("INSERT INTO chem.form(compound_id,form_kind,full_inchikey,components,mw_form,label) "
+                        "VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT(full_inchikey) DO NOTHING RETURNING id",
+                        (compound["id"], item["form_kind"], compound["inchikey"],
+                         self._json([{"smiles": compound["smiles"], "stoichiometry": 1}]),
+                         compound["mw_monoisotopic"], item["label"]))
+            form_row = cur.fetchone()
+            if form_row is None:
+                cur.execute("SELECT id FROM chem.form WHERE full_inchikey=%s", (compound["inchikey"],))
+                form_row = cur.fetchone()
+            cur.execute("INSERT INTO chem.batch(form_id,batch_code,provenance,purity_pct,purity_method,"
+                        "amount_mg,supplier,synthesized_on) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) "
+                        "RETURNING id,registered_at",
+                        (form_row["id"], item["batch_code"], item["provenance"], item["purity_pct"],
+                         item["purity_method"], item["amount_mg"], item["supplier"], item["synthesized_on"]))
+            row = cur.fetchone(); atom = _ref("batch", row["id"])
+            form_ref = _ref("compound_form", form_row["id"])
+            return ({"ref": atom, **item, "form_ref": form_ref,
+                     "registered_at": row["registered_at"], "registered_by": who}, atom)
         if kind == "sample":
             self._require_entity(cur, item["batch_ref"])
             if item["parent_sample_ref"]:
@@ -1239,6 +1277,66 @@ class PostgresProgramRepository:
             version = self._advance(cur, identifier, who)
             result = {"link": link, "program_version": version, "created": True}
             return self._finish(cur, identifier, version, "object.linked", target, result, who, request_id)
+
+    def register_compound(self, program_ref: dict, expected_version: int, compound: dict,
+                          role: str, rationale: str | None, actor: dict,
+                          request_id: str | None = None) -> dict:
+        who = D.actor(actor); link_role = D.key(role, "role")
+        request_digest = D.digest({"compound": compound, "role": link_role,
+                                   "rationale": rationale})
+        with self._mutation(program_ref, expected_version, request_id,
+                            request_digest=request_digest) as state:
+            cur, program_id, row, duplicate = state
+            if duplicate is not None:
+                return duplicate
+            standardizer = compound["standardizer"]
+            cur.execute("INSERT INTO meta.toolkit(name,version,build_note) VALUES (%s,%s,%s) "
+                        "ON CONFLICT(name,version) DO UPDATE SET name=EXCLUDED.name RETURNING id",
+                        (standardizer["toolkit"], standardizer["version"],
+                         "compound.register server-side identity"))
+            toolkit_id = cur.fetchone()["id"]
+            cur.execute("INSERT INTO chem.standardizer(label,toolkit_id,rules) VALUES (%s,%s,%s) "
+                        "ON CONFLICT(label) DO UPDATE SET label=EXCLUDED.label RETURNING id",
+                        (standardizer["label"], toolkit_id,
+                         self._json(standardizer["rules"])))
+            standardizer_id = cur.fetchone()["id"]
+            cur.execute("INSERT INTO chem.compound(inchikey,inchi,smiles,formula,mw_monoisotopic,"
+                        "net_charge,stereo,standardizer_id,is_virtual) "
+                        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                        "ON CONFLICT(inchikey) DO NOTHING RETURNING id,registry_id,created_at",
+                        (compound["inchikey"], compound["inchi"], compound["smiles"],
+                         compound["formula"], compound["mw_monoisotopic"],
+                         compound["net_charge"], compound["stereo"], standardizer_id,
+                         compound["is_virtual"]))
+            created_row = cur.fetchone()
+            if created_row is None:
+                cur.execute("SELECT id,registry_id,created_at FROM chem.compound "
+                            "WHERE inchikey=%s AND retracted_at IS NULL",
+                            (compound["inchikey"],))
+                created_row = cur.fetchone()
+            compound_ref = _ref("compound", created_row["id"])
+            cur.execute("SELECT id,linked_at,linked_by_kind::text,linked_by_id,rationale "
+                        "FROM design.program_object_link WHERE program_id=%s AND object_kind='compound' "
+                        "AND object_id=%s AND role=%s AND retired_at IS NULL",
+                        (program_id, compound_ref["id"], link_role))
+            existing = cur.fetchone()
+            if existing:
+                return {"compound": {"ref": compound_ref,
+                                      "registry_id": created_row["registry_id"], **compound},
+                        "link": self._link(existing, compound_ref, link_role),
+                        "program_version": row["version"], "created": False}
+            cur.execute("INSERT INTO design.program_object_link(program_id,object_kind,object_id,role,"
+                        "rationale,linked_by_kind,linked_by_id) VALUES (%s,'compound',%s,%s,%s,%s,%s) "
+                        "RETURNING id,linked_at,linked_by_kind::text,linked_by_id,rationale",
+                        (program_id, compound_ref["id"], link_role, rationale,
+                         who["kind"], who["id"]))
+            link = self._link(cur.fetchone(), compound_ref, link_role)
+            version = self._advance(cur, program_id, who)
+            result = {"compound": {"ref": compound_ref,
+                                    "registry_id": created_row["registry_id"], **compound},
+                      "link": link, "program_version": version, "created": True}
+            return self._finish(cur, program_id, version, "object.linked", compound_ref,
+                                result, who, request_id, request_digest=request_digest)
 
     def create_snapshot(self, program_ref: dict, expected_version: int,
                         actor: dict, request_id: str | None = None) -> dict:

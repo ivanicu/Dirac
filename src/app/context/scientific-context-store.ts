@@ -6,7 +6,14 @@ export type ContextOrigin = 'navigation' | 'selection' | 'import' | 'command' | 
 
 export interface ScientificContext {
     readonly programRef?: ObjectRef<'program'>;
+    readonly workItemRef?: ObjectRef<'work_item'>;
     readonly complexRef?: ObjectRef<'complex'>;
+    readonly moleculeRef?: ObjectRef<'molecule'>;
+    readonly compoundRef?: ObjectRef<'compound'>;
+    readonly sampleRef?: ObjectRef<'sample'>;
+    readonly experimentRef?: ObjectRef<'experiment'>;
+    readonly datasetVersionRef?: ObjectRef<'dataset_version'>;
+    readonly moleculeSmiles?: string;
     readonly focusedObject?: ObjectRef;
     readonly selectedObjects: readonly ObjectRef[];
     readonly targetRef?: ObjectRef<'target'>;
@@ -65,7 +72,14 @@ export class ScientificContextStore {
             if (ref) p.set(key, `${ref.kind}:${ref.id}`);
         };
         put('program', this.state.programRef);
+        put('work', this.state.workItemRef);
         put('complex', this.state.complexRef);
+        put('molecule', this.state.moleculeRef);
+        put('compound', this.state.compoundRef);
+        put('sample', this.state.sampleRef);
+        put('experiment', this.state.experimentRef);
+        put('dataset', this.state.datasetVersionRef);
+        if (this.state.moleculeSmiles) p.set('smiles', this.state.moleculeSmiles);
         put('focus', this.state.focusedObject);
         put('target', this.state.targetRef);
         put('campaign', this.state.campaignRef);
@@ -92,7 +106,14 @@ export class ScientificContextStore {
             .filter((value): value is ObjectRef<'hypothesis'> => !!value);
         return this.commit({
             programRef: parse('program', 'program') as ObjectRef<'program'> | undefined,
+            workItemRef: parse('work', 'work_item') as ObjectRef<'work_item'> | undefined,
             complexRef: parse('complex', 'complex') as ObjectRef<'complex'> | undefined,
+            moleculeRef: parse('molecule', 'molecule') as ObjectRef<'molecule'> | undefined,
+            compoundRef: parse('compound', 'compound') as ObjectRef<'compound'> | undefined,
+            sampleRef: parse('sample', 'sample') as ObjectRef<'sample'> | undefined,
+            experimentRef: parse('experiment', 'experiment') as ObjectRef<'experiment'> | undefined,
+            datasetVersionRef: parse('dataset', 'dataset_version') as ObjectRef<'dataset_version'> | undefined,
+            moleculeSmiles: params.get('smiles') || undefined,
             focusedObject: parse('focus'),
             targetRef: parse('target', 'target') as ObjectRef<'target'> | undefined,
             campaignRef: parse('campaign', 'campaign') as ObjectRef<'campaign'> | undefined,

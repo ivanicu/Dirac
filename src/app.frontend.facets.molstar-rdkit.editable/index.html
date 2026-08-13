@@ -1334,10 +1334,11 @@
             <nav id="workspace-nav" class="workspace-nav" aria-label="Dirac workspaces"></nav>
             <section class="global-context-bar" aria-label="Global scientific context">
                 <div class="context-cell"><span>Program</span><strong id="context-program">unassigned</strong></div>
-                <div class="context-cell context-work-item"><span>Stage work</span><select id="context-work-item" aria-label="Current Program Work Item"><option value="">none</option></select></div>
+                <div class="context-cell context-work-item"><span>Current work</span><select id="context-work-item" aria-label="Current Program Work Item"><option value="">none</option></select></div>
                 <div class="context-cell"><span>Complex</span><strong id="context-complex">none</strong></div>
                 <div class="context-cell"><span>Focus</span><strong id="context-focus">none</strong></div>
                 <div class="context-actions">
+                    <button id="workflow-handoff" type="button" aria-live="polite">Continue workflow</button>
                     <button id="command-palette-open" type="button">Commands · ⌘K</button>
                     <span>Actor <strong id="agent-identity">human:local</strong></span>
                     <span class="attention-slot">Attention <b id="attention-count">…</b></span>

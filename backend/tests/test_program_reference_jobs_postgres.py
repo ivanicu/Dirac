@@ -105,9 +105,16 @@ class PostgresProgramReferenceJobsTests(unittest.TestCase):
             "status": "approved", "definition": {"parent": "CH4"},
             "validation": {"structure": "matched"}, "decision": "Accepted by identity review.",
         })
+        batch = record("batch", {
+            "compound_ref": {"kind": "compound", "id": seeded["compound"]},
+            "batch_code": f"RB-{uuid.uuid4().hex[:8]}", "form_kind": "neutral",
+            "provenance": "internal_synthesis", "purity_pct": 99.2,
+            "purity_method": "hplc_uv", "amount_mg": 25,
+            "label": "Program-registered batch",
+        })
         sample_input = {
             "sample_code": f"S-{uuid.uuid4().hex[:8]}",
-            "batch_ref": {"kind": "batch", "id": seeded["batch"]},
+            "batch_ref": batch["ref"],
             "amount_value": 10, "amount_unit": "mg", "location": "freezer-a",
         }
         sample = record("sample", sample_input)
@@ -189,10 +196,10 @@ class PostgresProgramReferenceJobsTests(unittest.TestCase):
                 {**sample_input, "amount_value": 9}, self.actor, request_id=str(uuid.uuid4()))
 
         overview = self.repo.get(program_ref)["program"]
-        self.assertEqual(version, 19)
-        self.assertEqual(overview["counts"]["reference_jobs"], 16)
+        self.assertEqual(version, 20)
+        self.assertEqual(overview["counts"]["reference_jobs"], 17)
         self.assertEqual({item["job_kind"] for item in overview["reference_jobs"]}, {
-            "target_disease", "substance_registration", "sample", "sample_transfer",
+            "target_disease", "substance_registration", "batch", "sample", "sample_transfer",
             "work_comment", "work_attachment", "gate_criterion", "protocol_version",
             "experiment", "dataset_version", "structure_observation", "annotation",
             "review", "analysis_snapshot", "evidence_release", "external_evidence",

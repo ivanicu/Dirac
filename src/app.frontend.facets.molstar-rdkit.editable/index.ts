@@ -88,6 +88,7 @@ import { scientificContext } from '../app/context/scientific-context-store';
 import { ModuleHost, type ModuleAdapter } from '../app/shell/module-host';
 import { MODULES, navigableViews, VIEWS, WORKSPACES, type ModuleDefinition,
     type WorkspaceId } from '../app/shell/registries';
+import { handoffFor } from '../app/shell/workflow-handoffs';
 import { WorkspaceCanvas } from '../app/shell/workspace-canvas';
 import { ProgramWorkspaceController } from '../app/programs/program-workspace';
 import { VoiceComposer, type VoiceComposerOptions } from '../app/components/voice-composer';
@@ -408,13 +409,28 @@ async function refreshRuns(): Promise<void> {
     }
     setWorkspaceStateDimension('runtime', 'loading');
     try {
-        const env = await applicationClient.execute('job.list', { limit: 50 });
+        const context = scientificContext.current();
+        const [env, programEnvelope] = await Promise.all([
+            applicationClient.execute('job.list', { limit: 50 }),
+            context.programRef ? applicationClient.execute('program.get', {
+                program_ref: context.programRef,
+            }) : Promise.resolve(undefined),
+        ]);
         if (!env.ok) throw new Error(env.error?.user_message || env.error?.message || 'job.list refused');
         const jobs = (env.data?.jobs || []) as Array<Record<string, any>>;
+        const program = programEnvelope?.ok
+            ? programEnvelope.data?.program as Record<string, any> : undefined;
+        const workItem = (program?.work_items || []).find((item: Record<string, any>) =>
+            item.ref?.id === context.workItemRef?.id);
+        const linked = new Set<string>((workItem?.executions || [])
+            .map((execution: Record<string, any>) => String(execution.job_ref?.id || ''))
+            .filter(Boolean));
         for (const list of lists) list.replaceChildren();
         const stamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         for (const summary of summaries) {
-            summary.textContent = `${jobs.length} recent jobs · updated ${stamp} · Mission / Run / Job remain distinct`;
+            summary.textContent = context.workItemRef
+                ? `${linked.size} linked to current Work Item · ${jobs.length} recent jobs · updated ${stamp}`
+                : `${jobs.length} recent jobs · select a Work Item to bind execution · updated ${stamp}`;
             summary.dataset.runtime = jobs.length ? 'ready' : 'empty';
         }
         setWorkspaceStateDimension('runtime', jobs.length ? 'ready' : 'empty');
@@ -425,14 +441,50 @@ async function refreshRuns(): Promise<void> {
             for (const list of lists) list.appendChild(empty.cloneNode(true));
             return;
         }
-        for (const job of jobs) {
-            const row = document.createElement('article'); row.className = 'run-job-row';
-            const title = document.createElement('strong');
-            title.textContent = `${job.method_id || 'method'} · ${job.state}`;
-            const detail = document.createElement('span');
-            detail.textContent = `${String(job.id).slice(0, 12)} · ${job.seconds ?? '—'}s · ${job.durability || 'unknown durability'}`;
-            row.append(title, detail);
-            for (const list of lists) list.appendChild(row.cloneNode(true));
+        const ordered = [...jobs].sort((left, right) =>
+            Number(linked.has(String(right.id))) - Number(linked.has(String(left.id))));
+        for (const job of ordered) {
+            const jobId = String(job.id || job.ref?.id || '');
+            for (const list of lists) {
+                const row = document.createElement('article'); row.className = 'run-job-row';
+                row.dataset.linked = String(linked.has(jobId)); row.dataset.jobId = jobId;
+                const copy = document.createElement('div'); copy.className = 'run-job-copy';
+                const title = document.createElement('strong');
+                title.textContent = `${job.method_id || 'method'} · ${job.state}`;
+                const detail = document.createElement('span');
+                detail.textContent = `${jobId.slice(0, 12)} · ${job.seconds ?? '—'}s · ${job.durability || 'unknown durability'}`;
+                copy.append(title, detail); row.append(copy);
+                if (linked.has(jobId)) {
+                    const badge = document.createElement('span'); badge.className = 'run-job-linked';
+                    badge.textContent = 'Linked to current Work Item'; row.append(badge);
+                } else if (context.programRef && context.workItemRef && program) {
+                    const attach = document.createElement('button'); attach.type = 'button';
+                    attach.className = 'workspace-visual-related'; attach.textContent = 'Attach to Work Item';
+                    attach.addEventListener('click', async () => {
+                        attach.disabled = true; attach.textContent = 'Attaching…';
+                        const fresh = await applicationClient.execute('program.get', {
+                            program_ref: context.programRef,
+                        });
+                        const currentProgram = fresh.data?.program as Record<string, any> | undefined;
+                        const result = fresh.ok && currentProgram
+                            ? await applicationClient.execute('program.work_execution.attach', {
+                                program_ref: context.programRef, expected_version: currentProgram.version,
+                                execution: { work_item_ref: context.workItemRef,
+                                    job_ref: { kind: 'job', id: jobId },
+                                    purpose: `Attached from Compute · ${job.method_id || 'method'}` },
+                            }, { requestId: crypto.randomUUID() }) : fresh;
+                        if (!result.ok) {
+                            attach.disabled = false; attach.textContent = 'Attach failed';
+                            attach.title = result.error?.user_message || result.error?.message || 'Attachment refused';
+                            return;
+                        }
+                        document.dispatchEvent(new CustomEvent('dirac:refresh-program'));
+                        await refreshRuns();
+                    });
+                    row.append(attach);
+                }
+                list.append(row);
+            }
         }
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -450,7 +502,11 @@ function initGlobalContext(): void {
         if (node) node.textContent = value;
     };
     scientificContext.subscribe(context => {
-        set('context-program', context.programRef?.id || 'unassigned');
+        const program = document.getElementById('context-program');
+        if (program && program.dataset.ref !== context.programRef?.id) {
+            program.textContent = context.programRef?.id || 'unassigned';
+            program.dataset.ref = context.programRef?.id || '';
+        }
         set('context-complex', context.complexRef?.id || 'none');
         set('context-focus', context.focusedObject
             ? `${context.focusedObject.kind}:${context.focusedObject.id}` : 'none');
@@ -577,6 +633,58 @@ function initShellNavigation(): void {
         // View performs one deliberate reload so the Mol* capability can attach.
         if (target?.requiresScene && !sceneService.current()) location.reload();
     };
+    const renderWorkflowHandoff = () => {
+        const button = document.getElementById('workflow-handoff') as HTMLButtonElement | null;
+        if (!button) return;
+        const handoff = handoffFor(appShell.current().workspace, scientificContext.current());
+        button.textContent = handoff.ready
+            ? handoff.definition.label
+            : `${handoff.definition.label} · needs ${handoff.missing.map(value => value.replace('_', ' ')).join(' or ')}`;
+        button.disabled = !handoff.ready;
+        button.dataset.ready = String(handoff.ready);
+        button.title = handoff.ready ? handoff.definition.purpose
+            : `Handoff blocked: select ${handoff.missing.map(value => value.replace('_', ' ')).join(' or ')} first.`;
+        button.onclick = handoff.ready ? async () => {
+            const source = appShell.current().workspace;
+            const context = scientificContext.current();
+            button.disabled = true; button.textContent = 'Preserving handoff…';
+            try {
+                if (source === 'design' && !context.compoundRef) {
+                    if (!context.programRef || !context.moleculeSmiles) {
+                        throw new Error('The designed molecule has no restorable canonical SMILES. Import it again.');
+                    }
+                    const program = await applicationClient.execute('program.get', {
+                        program_ref: context.programRef,
+                    });
+                    if (!program.ok) throw new Error(program.error?.user_message
+                        || program.error?.message || 'Could not read Program version.');
+                    const registered = await applicationClient.execute('compound.register', {
+                        program_ref: context.programRef,
+                        expected_version: Number((program.data?.program as Record<string, unknown>)?.version),
+                        smiles: context.moleculeSmiles,
+                        role: 'design-candidate',
+                        rationale: `Promoted from Work Item ${context.workItemRef?.id}`,
+                    }, { requestId: crypto.randomUUID() });
+                    if (!registered.ok) throw new Error(registered.error?.user_message
+                        || registered.error?.message || 'Compound registration refused.');
+                    const compound = registered.data?.compound as { ref?: { kind: 'compound'; id: string } } | undefined;
+                    if (!compound?.ref) throw new Error('Compound registration returned no canonical reference.');
+                    scientificContext.patch({ compoundRef: compound.ref,
+                        focusedObject: compound.ref, selectedObjects: [compound.ref], origin: 'command' });
+                }
+                navigate({ ...handoff.definition.to,
+                    programId: appShell.current().programId
+                        || scientificContext.current().programRef?.id || 'current' });
+            } catch (error) {
+                button.disabled = false;
+                button.dataset.ready = 'false';
+                button.textContent = 'Handoff failed · inspect reason';
+                button.title = error instanceof Error ? error.message : String(error);
+                const status = document.getElementById('status');
+                if (status) status.textContent = `Handoff failed · ${button.title}`;
+            }
+        } : null;
+    };
     const programWorkspace = new ProgramWorkspaceController(applicationClient, programId => {
         const programRef = { kind: 'program' as const, id: programId };
         scientificContext.patch({ programRef, focusedObject: programRef,
@@ -618,7 +726,7 @@ function initShellNavigation(): void {
             navLabel.className = 'workspace-nav-label';
             navLabel.textContent = workspace.id === 'runs' ? 'Compute' : workspace.label;
             button.append(icon, navLabel);
-            button.setAttribute('aria-label', workspace.label);
+            button.setAttribute('aria-label', `Open ${workspace.label} workspace`);
             button.title = workspace.label;
             button.dataset.capability = workspace.availability;
             if (workspace.id === active) button.setAttribute('aria-current', 'page');
@@ -678,10 +786,16 @@ function initShellNavigation(): void {
             });
         }
         projectedView = route.view;
+        renderWorkflowHandoff();
     };
     appShell.restore();
     appShell.subscribe(project);
-    scientificContext.subscribe(() => moduleHost.activate(appShell.current().view, scientificContext.current()));
+    scientificContext.subscribe(context => {
+        moduleHost.activate(appShell.current().view, context);
+        if (context.origin === 'selection' || context.origin === 'import'
+            || context.origin === 'command') appShell.replaceCurrentUrl();
+        renderWorkflowHandoff();
+    });
     window.addEventListener('popstate', () => project(appShell.restore()));
     document.getElementById('run-job-refresh')?.addEventListener('click', () => void refreshRuns());
     document.addEventListener('dirac:refresh-runs', () => void refreshRuns());
@@ -793,8 +907,9 @@ class MolecularVfxLab {
         example.type = 'button'; example.className = 'btn-primary';
         example.textContent = 'Open explicit example · PDB 1CBS';
         example.addEventListener('click', () => {
-            scientificContext.patch({ complexRef: { kind: 'complex', id: 'pdb:1CBS' },
-                origin: 'selection' });
+            const ref = { kind: 'complex' as const, id: 'pdb:1CBS' };
+            scientificContext.patch({ complexRef: ref, moleculeRef: undefined,
+                focusedObject: ref, selectedObjects: [ref], origin: 'selection' });
             location.href = appShell.urlFor(appShell.current());
         });
         card.append(title, copy, example);
@@ -2078,7 +2193,10 @@ class MolecularVfxLab {
         // today, so it waits — but a reader must not conclude that an /embed
         // import is a SMILES paste.
         this.setPastedMolecule(payload.molfile);
-        scientificContext.patch({ complexRef: undefined, origin: 'import' });
+        const moleculeRef = { kind: 'molecule' as const, id: meta.inchikey };
+        scientificContext.patch({ complexRef: undefined, moleculeRef,
+            compoundRef: undefined, moleculeSmiles: meta.smiles_canonical,
+            focusedObject: moleculeRef, selectedObjects: [moleculeRef], origin: 'import' });
         this.currentMolecule = {
             id: meta.inchikey,
             label: `Imported · ${meta.smiles_canonical}`,
@@ -2111,8 +2229,9 @@ class MolecularVfxLab {
         // THE MISSING RESET. Without this a pasted molecule survives loading a
         // deposited structure and keeps winning the depiction branch.
         this.setPastedMolecule(null);
-        scientificContext.patch({ complexRef: { kind: 'complex', id: `pdb:${control.id}` },
-            origin: 'navigation' });
+        const complexRef = { kind: 'complex' as const, id: `pdb:${control.id}` };
+        scientificContext.patch({ complexRef, moleculeRef: undefined,
+            focusedObject: complexRef, selectedObjects: [complexRef], origin: 'selection' });
         byId('status').textContent = `Loading ${control.id}…`;
         // A route such as /p/KRAS-G12D/structures/complex must still resolve
         // bundled structures from the application root. window.location.href

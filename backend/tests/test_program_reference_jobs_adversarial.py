@@ -29,6 +29,14 @@ CASES: dict[str, tuple[str, dict]] = {
         "status": "approved", "definition": {"parent": "C"},
         "validation": {"identity": "matched"}, "decision": "Approved by review",
     }),
+    "material.batch.register": ("batch", {
+        "compound_ref": {"kind": "compound", "id": "compound-1"},
+        "batch_code": "BATCH-1", "form_kind": "neutral",
+        "provenance": "internal_synthesis", "purity_pct": 98.5,
+        "purity_method": "hplc_uv", "amount_mg": 25.0,
+        "supplier": "internal", "synthesized_on": "2026-08-13",
+        "label": "Discovery batch",
+    }),
     "sample.create": ("sample", {
         "sample_code": "SAMPLE-1", "batch_ref": {"kind": "batch", "id": "batch-1"},
         "amount_value": 1.0, "amount_unit": "mg", "location": "freezer-a",

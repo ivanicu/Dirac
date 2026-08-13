@@ -385,6 +385,52 @@ def program_link(input: dict, ctx) -> dict:
         input["role"], input.get("rationale"), ctx.actor, ctx.request_id)
 
 
+def compound_register(input: dict, ctx) -> dict:
+    """Standardize a designed molecule once, then link that canonical Compound."""
+    import rdkit
+    from rdkit import Chem
+    from rdkit.Chem import Descriptors, rdMolDescriptors
+    from rdkit.Chem.MolStandardize import rdMolStandardize
+
+    raw = Chem.MolFromSmiles(input["smiles"])
+    if raw is None:
+        raise failures.DiracParseFailure("cannot parse designed molecule SMILES")
+    try:
+        parent = rdMolStandardize.Cleanup(raw)
+        parent = rdMolStandardize.FragmentParent(parent)
+        parent = rdMolStandardize.Uncharger().uncharge(parent)
+        parent = rdMolStandardize.TautomerEnumerator().Canonicalize(parent)
+        Chem.AssignStereochemistry(parent, cleanIt=True, force=True)
+    except Exception as error:  # noqa: BLE001 - convert toolkit failure to contract error
+        raise failures.DiracInvalidParameters(
+            "molecule standardization failed", details={"reason": str(error)}) from error
+    centers = Chem.FindMolChiralCenters(
+        parent, includeUnassigned=True, useLegacyImplementation=False)
+    unassigned = sum(1 for _, tag in centers if tag == "?")
+    stereo = ("no_stereocenters" if not centers else "fully_defined" if not unassigned
+              else "undefined" if unassigned == len(centers) else "partially_defined")
+    inchikey = Chem.MolToInchiKey(parent)
+    inchi = Chem.MolToInchi(parent)
+    if not inchikey or not inchi:
+        raise failures.DiracParseFailure("standardized molecule has no InChI identity")
+    compound = {
+        "inchikey": inchikey, "inchi": inchi,
+        "smiles": Chem.MolToSmiles(parent, canonical=True),
+        "formula": rdMolDescriptors.CalcMolFormula(parent),
+        "mw_monoisotopic": Descriptors.ExactMolWt(parent),
+        "net_charge": Chem.GetFormalCharge(parent), "stereo": stereo,
+        "standardizer": {"label": "dirac-parent-v1", "toolkit": "rdkit",
+                         "version": rdkit.__version__,
+                         "rules": ["Cleanup", "FragmentParent", "Uncharger",
+                                   "TautomerCanonicalize", "AssignStereochemistry"]},
+        "is_virtual": True,
+    }
+    return _programs(ctx).register_compound(
+        input["program_ref"], input["expected_version"], compound,
+        input.get("role", "design-candidate"), input.get("rationale"),
+        ctx.actor, ctx.request_id)
+
+
 def program_snapshot_create(input: dict, ctx) -> dict:
     return _programs(ctx).create_snapshot(
         input["program_ref"], input["expected_version"], ctx.actor, ctx.request_id)
@@ -393,6 +439,7 @@ def program_snapshot_create(input: dict, ctx) -> dict:
 _REFERENCE_JOB_BY_COMMAND = {
     "program.target_disease.link": "target_disease",
     "identity.substance_registration.record": "substance_registration",
+    "material.batch.register": "batch",
     "sample.create": "sample",
     "sample.transfer": "sample_transfer",
     "program.work_comment.record": "work_comment",

@@ -591,6 +591,15 @@
       "output_schema": {"type": "object", "required": ["link", "program_version", "created"]}
     },
     {
+      "id": "compound.register", "version": 1, "category": "identity",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-and-standardized-inchikey", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program", "molecule"], "output_object_kinds": ["compound", "program", "artifact"],
+      "errors": ["INVALID_PARAMETERS", "PARSE", "DB_UNAVAILABLE", "NOT_FOUND", "INTERNAL"], "handler": "handlers:compound_register",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","smiles"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"smiles":{"type":"string","minLength":1},"role":{"type":"string","minLength":1,"maxLength":96},"rationale":{"type":"string","maxLength":4000}}},
+      "output_schema": {"type":"object","required":["compound","link","program_version","created"]}
+    },
+    {
       "id": "program.snapshot.create", "version": 1, "category": "program",
       "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
       "idempotency_policy": "request-id-and-expected-version", "job_policy": "forbidden", "provenance_policy": "required",
@@ -718,6 +727,15 @@
       "input_object_kinds": ["program","compound"], "output_object_kinds": ["substance_registration","compound","artifact"],
       "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
       "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["compound_ref","status","definition"],"properties":{"compound_ref":{"$ref":"object-ref"},"status":{"enum":["draft","candidate_match","conflict","validated","approved","rejected"]},"definition":{"type":"object"},"validation":{"type":"object"},"decision":{"type":"string"}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
+      "id": "material.batch.register", "version": 1, "category": "sample",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-or-batch-code", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","compound"], "output_object_kinds": ["compound_form","batch","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["compound_ref","batch_code","provenance"],"properties":{"compound_ref":{"$ref":"object-ref"},"batch_code":{"type":"string","minLength":1},"form_kind":{"enum":["neutral","free_base","free_acid","salt","hydrate","solvate","cocrystal","mixture"]},"provenance":{"enum":["internal_synthesis","purchase","gift","literature_only","virtual"]},"purity_pct":{"type":"number","exclusiveMinimum":0,"maximum":100},"purity_method":{"enum":["hplc_uv","lcms","nmr","elemental","qnmr","supplier_coa"]},"amount_mg":{"type":"number","minimum":0},"supplier":{"type":"string"},"synthesized_on":{"type":"string"},"label":{"type":"string"}}}}},
       "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
     },
     {

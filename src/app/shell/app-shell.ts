@@ -64,6 +64,12 @@ export class AppShell {
         return path + (query ? `?${query}` : '');
     }
 
+    /** Persist a user-selected scientific object without adding a history entry. */
+    replaceCurrentUrl(): void {
+        if (typeof history === 'undefined') return;
+        history.replaceState(this.route, '', this.urlFor(this.route));
+    }
+
     private pathFor(view: ViewDefinition, programId?: string): string {
         return view.route.replace(':programId', encodeURIComponent(programId || 'current'));
     }

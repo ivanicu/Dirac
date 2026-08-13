@@ -24,7 +24,7 @@ const WORKFLOW_LANES = [
 const CLOSED_WORK = new Set(['done', 'cancelled']);
 
 const REFERENCE_FAMILIES: Record<string, readonly string[]> = {
-    identity: ['target_disease', 'substance_registration', 'sample', 'sample_transfer'],
+    identity: ['target_disease', 'substance_registration', 'batch', 'sample', 'sample_transfer'],
     delivery: ['work_comment', 'work_attachment', 'gate_criterion'],
     data: ['protocol_version', 'experiment', 'dataset_version'],
     structure: ['structure_observation', 'annotation', 'review', 'analysis_snapshot'],
@@ -44,7 +44,7 @@ export class ProgramWorkspaceController {
         document.addEventListener('dirac:refresh-program', () => void this.refresh());
         document.addEventListener('click', event => {
             const button = (event.target as Element | null)?.closest<HTMLButtonElement>('[data-program-action]');
-            if (!button || !document.querySelector('.program-workspace')) return;
+            if (!button) return;
             void this.action(button.dataset.programAction || '').catch(error => this.status(
                 error instanceof Error ? error.message : String(error),
                 error instanceof ProgramPrerequisiteError ? 'needs-context' : 'error'));
@@ -53,7 +53,7 @@ export class ProgramWorkspaceController {
             const workItem = (event.target as Element | null)?.closest<HTMLSelectElement>('#context-work-item');
             if (workItem?.value) {
                 const ref = { kind: 'work_item' as const, id: workItem.value };
-                scientificContext.patch({ focusedObject: ref, selectedObjects: [ref], origin: 'selection' });
+                scientificContext.patch({ workItemRef: ref, origin: 'selection' });
                 return;
             }
             const select = (event.target as Element | null)?.closest<HTMLSelectElement>('[data-program-select]');
@@ -92,6 +92,7 @@ export class ProgramWorkspaceController {
                 }
                 this.renderWorkflow(undefined);
                 this.renderGlobalWork(undefined);
+                this.publish(undefined);
                 return;
             }
             if (selector) selector.value = activeId;
@@ -101,20 +102,31 @@ export class ProgramWorkspaceController {
             if (!envelope.ok) throw new Error(envelope.error?.user_message
                 || envelope.error?.message || 'program.get refused');
             this.current = envelope.data?.program as Program;
-            scientificContext.patch({ programRef: this.current.ref,
-                focusedObject: this.current.ref, origin: 'restore' });
-            if (root) {
-                this.render(this.current); this.showEmpty(false);
-                this.status(`Version ${this.current.version} · durable PostgreSQL aggregate · ${this.current.events?.length || 0} recent events`, 'ready');
+            scientificContext.patch({ programRef: this.current.ref, origin: 'restore' });
+            const globalProgram = document.getElementById('context-program');
+            if (globalProgram) {
+                globalProgram.dataset.ref = this.current.ref.id;
+                globalProgram.textContent = this.current.code || this.current.ref.id;
+                globalProgram.title = `${this.current.name || this.current.code} · ${this.current.ref.id}`;
             }
+            if (root) { this.render(this.current); this.showEmpty(false); }
+            this.status(`Version ${this.current.version} · durable PostgreSQL aggregate · ${this.current.events?.length || 0} recent events`, 'ready');
             this.renderWorkflow(this.current);
             this.renderGlobalWork(this.current);
+            this.publish(this.current);
         } catch (error) {
             this.current = undefined; this.showEmpty(true);
-            if (root) this.status(error instanceof Error ? error.message : String(error), 'error');
+            this.status(error instanceof Error ? error.message : String(error), 'error');
             this.renderWorkflow(undefined, error instanceof Error ? error.message : String(error));
             this.renderGlobalWork(undefined);
+            this.publish(undefined, error instanceof Error ? error.message : String(error));
         }
+    }
+
+    private publish(program?: Program, error?: string): void {
+        document.dispatchEvent(new CustomEvent('dirac:program-state', {
+            detail: { program, error },
+        }));
     }
 
     private renderGlobalWork(program?: Program): void {
@@ -123,15 +135,22 @@ export class ProgramWorkspaceController {
         const workspace = document.getElementById('app')?.dataset.workspace || '';
         const lane = ({ structures: 'understand', design: 'design', campaigns: 'decide',
             synthesis: 'make', experiments: 'test_learn' } as Record<string, string>)[workspace];
-        const items = ((program?.work_items || []) as Array<Record<string, any>>)
-            .filter(item => !lane || item.lane === lane);
-        const previous = select.value;
-        select.replaceChildren(new Option(lane ? `${humanize(lane)} · no active work` : 'No active work', ''));
-        for (const item of items) select.add(new Option(`${item.key} · ${item.title}`, item.ref.id));
-        if (items.some(item => item.ref.id === previous)) select.value = previous;
-        else if (items[0]) select.value = items[0].ref.id;
-        select.title = lane ? `Unique Program Work Items currently in ${humanize(lane)}`
-            : 'Unique Program Work Items';
+        const items = ((program?.work_items || []) as Array<Record<string, any>>);
+        const previous = scientificContext.current().workItemRef?.id || select.value;
+        select.replaceChildren(new Option('No Work Item selected', ''));
+        for (const item of items) select.add(new Option(
+            `${humanize(item.lane)} · ${item.key} · ${item.title}`, item.ref.id));
+        const preferred = items.find(item => item.ref.id === previous)
+            || items.find(item => item.lane === lane) || items[0];
+        if (preferred) {
+            select.value = preferred.ref.id;
+            if (scientificContext.current().workItemRef?.id !== preferred.ref.id) {
+                scientificContext.patch({ workItemRef: preferred.ref, origin: 'selection' });
+            }
+        }
+        select.title = lane
+            ? `Current unique Program Work Item; ${humanize(lane)} tasks are suggested but context is never replaced`
+            : 'Current unique Program Work Item across all stages';
     }
 
     private renderWorkflow(program?: Program, failure?: string): void {
@@ -142,14 +161,18 @@ export class ProgramWorkspaceController {
             if (!list || !status) continue;
             list.replaceChildren();
             if (failure) { status.textContent = failure; continue; }
-            const items = ((program?.work_items || []) as Array<Record<string, any>>)
-                .filter(item => item.lane === lane);
-            status.textContent = program
+            const allItems = (program?.work_items || []) as Array<Record<string, any>>;
+            const selectedId = scientificContext.current().workItemRef?.id;
+            const selected = allItems.find(item => item.ref.id === selectedId);
+            const items = selected ? [selected] : allItems.filter(item => item.lane === lane);
+            status.textContent = program && selected
+                ? `The same unique Work Item is carried from ${humanize(selected.lane)} into ${humanize(lane)} · Program ${program.code}`
+                : program
                 ? `${items.length} unique Work Item${items.length === 1 ? '' : 's'} in this stage · Program ${program.code}`
                 : 'Select or create a Program to route work through this stage.';
             for (const item of items) {
                 const card = document.createElement('article'); card.className = 'workspace-workflow-item';
-                card.append(text('strong', item.title), text('span', `${item.ref.id} · ${humanize(item.status)}`),
+                card.append(text('strong', item.title), text('span', `${humanize(item.lane)} → ${humanize(lane)} · ${item.ref.id} · ${humanize(item.status)}`),
                     text('span', `${item.executions?.length || 0} execution job(s) · canonical`));
                 list.append(card);
             }
@@ -671,9 +694,21 @@ export class ProgramWorkspaceController {
 
     private referenceJob(action: string): void {
         const program = this.current!;
-        const run = (command: string, record: Record<string, unknown>, success: string) => this.execute(command, {
-            program_ref: program.ref, expected_version: program.version, record,
-        }, success);
+        const run = async (command: string, record: Record<string, unknown>, success: string) => {
+            const envelope = await this.command(command, {
+                program_ref: program.ref, expected_version: program.version, record,
+            });
+            const ref = envelope.data?.record?.ref as ObjectRef | undefined;
+            if (ref) scientificContext.patch({
+                focusedObject: ref, selectedObjects: [ref], origin: 'command',
+                ...(ref.kind === 'compound' ? { compoundRef: ref as ObjectRef<'compound'> } : {}),
+                ...(ref.kind === 'sample' ? { sampleRef: ref as ObjectRef<'sample'> } : {}),
+                ...(ref.kind === 'experiment' ? { experimentRef: ref as ObjectRef<'experiment'> } : {}),
+                ...(ref.kind === 'dataset_version'
+                    ? { datasetVersionRef: ref as ObjectRef<'dataset_version'> } : {}),
+            });
+            this.status(success, 'ready'); await this.refresh();
+        };
         const workItems = (program.work_items || []) as Array<Record<string, any>>;
         const gates = (program.stage_gates || []) as Array<Record<string, any>>;
         const references = (program.reference_jobs || []) as Array<Record<string, any>>;
@@ -703,7 +738,8 @@ export class ProgramWorkspaceController {
             }, 'Target–disease scope linked to this Program.'));
         }
         if (action === 'substance') return this.form('Register Substance Identity', [
-            { name: 'compound_id', label: 'Canonical compound ID', required: true },
+            { name: 'compound_id', label: 'Canonical compound ID', required: true,
+                value: scientificContext.current().compoundRef?.id || '' },
             { name: 'status', label: 'Review state', options: ['draft', 'candidate_match', 'conflict', 'validated', 'approved', 'rejected'] },
             { name: 'definition', label: 'Registration definition (JSON)', required: true, multiline: true, value: '{\n  "parent": ""\n}' },
             { name: 'validation', label: 'Validation findings (JSON)', multiline: true, value: '{}' },
@@ -713,9 +749,31 @@ export class ProgramWorkspaceController {
             definition: this.parseJson(values.definition, 'Registration definition'),
             validation: this.parseJson(values.validation || '{}', 'Validation findings'), decision: values.decision || undefined,
         }, 'Substance identity revision recorded; the compound itself remains canonical.'));
+        if (action === 'batch') return this.form('Register Material Batch', [
+            { name: 'compound_id', label: 'Canonical compound', required: true,
+                value: scientificContext.current().compoundRef?.id || '' },
+            { name: 'batch_code', label: 'Batch code', required: true },
+            { name: 'form_kind', label: 'Chemical form', options: ['neutral', 'free_base', 'free_acid', 'salt', 'hydrate', 'solvate', 'cocrystal', 'mixture'] },
+            { name: 'provenance', label: 'Provenance', options: ['internal_synthesis', 'purchase', 'gift', 'literature_only', 'virtual'] },
+            { name: 'purity_pct', label: 'Purity %' },
+            { name: 'purity_method', label: 'Purity method', options: ['', 'hplc_uv', 'lcms', 'nmr', 'elemental', 'qnmr', 'supplier_coa'] },
+            { name: 'amount_mg', label: 'Amount (mg)' }, { name: 'supplier', label: 'Supplier' },
+            { name: 'synthesized_on', label: 'Synthesized on', type: 'date' },
+            { name: 'label', label: 'Form label' },
+        ], values => run('material.batch.register', {
+            compound_ref: { kind: 'compound', id: values.compound_id }, batch_code: values.batch_code,
+            form_kind: values.form_kind, provenance: values.provenance,
+            purity_pct: values.purity_pct ? Number(values.purity_pct) : undefined,
+            purity_method: values.purity_method || undefined,
+            amount_mg: values.amount_mg ? Number(values.amount_mg) : undefined,
+            supplier: values.supplier || undefined, synthesized_on: values.synthesized_on || undefined,
+            label: values.label || undefined,
+        }, 'Canonical form and material batch registered.'));
         if (action === 'sample') return this.form('Create Physical Sample', [
             { name: 'sample_code', label: 'Sample code', required: true },
-            { name: 'batch_id', label: 'Source batch ID', required: true },
+            { name: 'batch_id', label: 'Source batch ID', required: true,
+                value: scientificContext.current().focusedObject?.kind === 'batch'
+                    ? scientificContext.current().focusedObject?.id : '' },
             { name: 'parent_sample_id', label: 'Parent sample ID (aliquot only)' },
             { name: 'amount_value', label: 'Amount', required: true },
             { name: 'amount_unit', label: 'Unit', options: ['mg', 'g', 'ug', 'mmol', 'umol', 'mol'] },
@@ -770,7 +828,9 @@ export class ProgramWorkspaceController {
         if (action === 'experiment') return this.form('Record Experiment', [
             { name: 'experiment_key', label: 'Stable experiment key', required: true },
             { name: 'title', label: 'Experiment title', required: true },
-            { name: 'work_item_id', label: 'Work Item', required: true, options: requiredOptions(workItems.map(item => item.ref.id), 'a Work Item') },
+            { name: 'work_item_id', label: 'Work Item', required: true,
+                options: requiredOptions(workItems.map(item => item.ref.id), 'a Work Item'),
+                value: scientificContext.current().workItemRef?.id || '' },
             { name: 'protocol_id', label: 'Protocol version', required: true, options: requiredOptions(refs('protocol_version'), 'a protocol version') },
             { name: 'sample_ids', label: 'Sample IDs (one per line)', multiline: true },
             { name: 'status', label: 'Status', options: ['planned', 'running', 'completed', 'failed', 'cancelled'] },

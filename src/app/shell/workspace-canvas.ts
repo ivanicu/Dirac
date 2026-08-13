@@ -35,6 +35,7 @@ function writeLocal(key: string, value: string): boolean {
 export class WorkspaceCanvas {
     private activeViewId = '';
     private search?: HTMLInputElement;
+    private program?: Record<string, any>;
 
     private workflowLane(workspace: string): string | undefined {
         return ({ structures: 'understand', design: 'design', campaigns: 'decide',
@@ -55,6 +56,12 @@ export class WorkspaceCanvas {
 
     constructor(private readonly host: HTMLElement, private readonly breadcrumb: HTMLElement,
                 private readonly navigate: Navigate) {
+        document.addEventListener('dirac:program-state', event => {
+            const detail = (event as CustomEvent<{ program?: Record<string, any> }>).detail;
+            this.program = detail?.program;
+            const projection = this.host.querySelector<HTMLElement>('[data-program-projection]');
+            if (projection) this.renderProgramProjection(projection);
+        });
         document.addEventListener('keydown', event => {
             if (event.key === '/' && document.getElementById('app')?.classList.contains('shell-scaffold')
                 && event.target instanceof HTMLElement
@@ -86,7 +93,9 @@ export class WorkspaceCanvas {
             this.search = undefined;
             return;
         }
-        if (connected) this.renderConnectedCanvas(definition, route.programId);
+        if (connected && (definition.workspace === 'programs' || definition.workspace === 'runs')) {
+            this.renderConnectedCanvas(definition, route.programId);
+        }
         else this.renderCanvas(definition, route.programId);
     }
 
@@ -104,7 +113,8 @@ export class WorkspaceCanvas {
         eyebrow.append(element('span', 'workspace-page-icon', workspace.icon),
             element('span', '', `${workspace.label} workspace`),
             element('span', 'workspace-page-separator', '·'),
-            element('span', 'workspace-page-state', 'Preview'));
+            element('span', 'workspace-page-state', definition.delivery === 'connected'
+                ? 'Connected Program records' : 'Preview'));
         const title = element('h1', '', definition.label);
         title.id = 'workspace-view-title';
         title.tabIndex = -1;
@@ -219,9 +229,98 @@ export class WorkspaceCanvas {
         readiness.append(readinessSummary, toolbar, resultStatus, moduleGrid, lower);
 
         const workflow = this.workflowContext(definition.workspace);
-        page.append(header, question, ...(workflow ? [workflow] : []), visual, readiness);
+        const projection = this.programProjection(definition);
+        const connectedProgramSurface = definition.delivery === 'connected' && !!projection;
+        page.append(header, question, ...(workflow ? [workflow] : []),
+            ...(projection ? [projection] : []),
+            ...(connectedProgramSurface ? [] : [visual, readiness]));
         this.host.replaceChildren(page);
         if (workflow) queueMicrotask(() => document.dispatchEvent(new CustomEvent('dirac:refresh-program')));
+    }
+
+    private programProjection(definition: ViewDefinition): HTMLElement | undefined {
+        const supported = new Set(['programs', 'campaigns', 'synthesis', 'experiments', 'knowledge']);
+        if (!supported.has(definition.workspace)) return undefined;
+        const section = element('section', 'workspace-program-projection');
+        section.dataset.programProjection = definition.workspace;
+        this.renderProgramProjection(section);
+        return section;
+    }
+
+    private renderProgramProjection(section: HTMLElement): void {
+        const workspace = section.dataset.programProjection || '';
+        const program = this.program;
+        section.replaceChildren();
+        const header = element('header', 'workspace-program-projection-header');
+        const copy = element('div');
+        copy.append(element('span', 'workspace-section-kicker', 'Canonical Program records'),
+            element('h2', '', program ? `${program.code} · shared facts` : 'Loading Program records'),
+            element('p', '', 'These are durable objects from the Program aggregate, not local preview data.'));
+        header.append(copy); section.append(header);
+        if (!program) {
+            section.append(element('p', 'program-atom-empty', 'Select a Program before continuing this workflow.'));
+            return;
+        }
+        const references = (program.reference_jobs || []) as Array<Record<string, any>>;
+        const links = (program.links || []) as Array<Record<string, any>>;
+        const evidence = (program.evidence_bindings || []) as Array<Record<string, any>>;
+        const collections: Record<string, Array<Record<string, any>>> = {
+            programs: [
+                ...(program.objectives || []), ...(program.hypotheses || []),
+                ...(program.decisions || []), ...(program.milestones || []),
+            ],
+            campaigns: [
+                ...links.filter(item => ['compound', 'series', 'campaign'].includes(item.object_ref?.kind)),
+                ...references.filter(item => item.job_kind === 'substance_registration'),
+            ],
+            synthesis: [
+                ...links.filter(item => ['compound', 'compound_form', 'batch', 'sample'].includes(item.object_ref?.kind)),
+                ...references.filter(item => ['batch', 'sample', 'sample_transfer'].includes(item.job_kind)),
+                ...(program.lineage || []),
+            ],
+            experiments: references.filter(item =>
+                ['protocol_version', 'experiment', 'dataset_version'].includes(item.job_kind)),
+            knowledge: [
+                ...references.filter(item => ['evidence_release', 'external_evidence',
+                    'structure_observation', 'annotation', 'review', 'analysis_snapshot'].includes(item.job_kind)),
+                ...evidence, ...links,
+            ],
+        };
+        const actions: Record<string, Array<[string, string]>> = {
+            programs: [['objective', 'Record objective'], ['hypothesis', 'Record hypothesis'],
+                ['decision', 'Record decision']],
+            campaigns: [['reference:substance', 'Review compound identity'], ['link', 'Link existing object']],
+            synthesis: [['reference:batch', 'Register batch'], ['reference:sample', 'Create sample'], ['reference:sample-transfer', 'Transfer sample'],
+                ['lineage', 'Record identity lineage']],
+            experiments: [['reference:protocol', 'Version protocol'], ['reference:experiment', 'Record experiment'],
+                ['reference:dataset', 'Commit dataset']],
+            knowledge: [['reference:evidence-release', 'Import evidence release'],
+                ['reference:external-evidence', 'Record external evidence'], ['evidence', 'Attach evidence']],
+        };
+        const controls = element('div', 'workspace-program-projection-actions');
+        for (const [action, label] of actions[workspace] || []) {
+            const button = element('button', 'workspace-visual-related', label);
+            button.type = 'button'; button.dataset.programAction = action; controls.append(button);
+        }
+        header.append(controls);
+        const records = collections[workspace] || [];
+        const grid = element('div', 'workspace-program-record-grid');
+        for (const record of records.slice(0, 24)) {
+            const ref = record.object_ref || record.evidence_ref || record.subject_ref
+                || record.source_ref || record.ref;
+            const card = element('article', 'workspace-program-record');
+            card.append(element('span', 'workspace-section-kicker',
+                String(record.job_kind || ref?.kind || 'record').replace(/_/g, ' ')),
+                element('strong', '', record.title || record.key || record.registry_id
+                    || record.batch_code || record.sample_code || record.protocol_key
+                    || record.experiment_key || record.dataset_key || record.source_record_id
+                    || ref?.id || 'Canonical record'),
+                element('small', '', [record.status, record.role, ref?.id].filter(Boolean).join(' · ')));
+            grid.append(card);
+        }
+        if (!records.length) grid.append(element('p', 'program-atom-empty',
+            'No records in this part of the shared Program yet. Use the actions above; the UI will not invent rows.'));
+        section.append(grid);
     }
 
     private renderConnectedCanvas(definition: ViewDefinition, programId?: string): void {
@@ -486,6 +585,13 @@ export class WorkspaceCanvas {
                 focusedObject: ref, selectedObjects: [ref], origin: 'selection',
                 ...(ref.kind === 'program' ? { programRef: ref as ObjectRef<'program'> } : {}),
                 ...(ref.kind === 'complex' ? { complexRef: ref as ObjectRef<'complex'> } : {}),
+                ...(ref.kind === 'molecule' ? { moleculeRef: ref as ObjectRef<'molecule'> } : {}),
+                ...(ref.kind === 'compound' ? { compoundRef: ref as ObjectRef<'compound'> } : {}),
+                ...(ref.kind === 'work_item' ? { workItemRef: ref as ObjectRef<'work_item'> } : {}),
+                ...(ref.kind === 'sample' ? { sampleRef: ref as ObjectRef<'sample'> } : {}),
+                ...(ref.kind === 'experiment' ? { experimentRef: ref as ObjectRef<'experiment'> } : {}),
+                ...(ref.kind === 'dataset_version'
+                    ? { datasetVersionRef: ref as ObjectRef<'dataset_version'> } : {}),
                 ...(ref.kind === 'target' ? { targetRef: ref as ObjectRef<'target'> } : {}),
                 ...(ref.kind === 'campaign' ? { campaignRef: ref as ObjectRef<'campaign'> } : {}),
                 ...(ref.kind === 'series' ? { seriesRef: ref as ObjectRef<'series'> } : {}),

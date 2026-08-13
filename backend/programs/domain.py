@@ -48,7 +48,7 @@ LINEAGE_SHAPES = frozenset({
     ("sample", "has_measurement", "measurement"),
 })
 REFERENCE_JOB_KINDS = frozenset({
-    "target_disease", "substance_registration", "sample", "sample_transfer",
+    "target_disease", "substance_registration", "batch", "sample", "sample_transfer",
     "work_comment", "work_attachment", "gate_criterion", "protocol_version",
     "dataset_version", "experiment", "structure_observation", "annotation",
     "review", "analysis_snapshot", "evidence_release", "external_evidence",
@@ -56,6 +56,8 @@ REFERENCE_JOB_KINDS = frozenset({
 REFERENCE_JOB_FIELDS = {
     "target_disease": frozenset({"disease_key", "name", "description", "ontology", "target_ref", "role", "rationale"}),
     "substance_registration": frozenset({"compound_ref", "status", "definition", "validation", "decision"}),
+    "batch": frozenset({"compound_ref", "batch_code", "form_kind", "provenance", "purity_pct",
+                         "purity_method", "amount_mg", "supplier", "synthesized_on", "label"}),
     "sample": frozenset({"sample_code", "batch_ref", "parent_sample_ref", "amount_value", "amount_unit", "container", "location"}),
     "sample_transfer": frozenset({"sample_ref", "to_location", "reason"}),
     "work_comment": frozenset({"work_item_ref", "body"}),
@@ -364,6 +366,31 @@ def reference_job(kind: str, value: dict[str, Any]) -> dict[str, Any]:
         return {"compound_ref": ref(value.get("compound_ref"), "compound"), "status": status,
                 "definition": _object(value.get("definition"), "definition"),
                 "validation": _object(value.get("validation", {}), "validation"), "decision": decision}
+    if kind == "batch":
+        form_kind = _choice(value.get("form_kind", "neutral"),
+            {"neutral", "free_base", "free_acid", "salt", "hydrate", "solvate", "cocrystal", "mixture"},
+            "form_kind")
+        provenance = _choice(value.get("provenance", "internal_synthesis"),
+            {"internal_synthesis", "purchase", "gift", "literature_only", "virtual"}, "provenance")
+        purity = value.get("purity_pct")
+        purity_method = value.get("purity_method")
+        if (purity is None) != (purity_method is None):
+            raise failures.DiracInvalidParameters("purity_pct and purity_method must be recorded together")
+        if purity is not None:
+            purity = _positive_number(purity, "purity_pct")
+            if purity > 100:
+                raise failures.DiracInvalidParameters("purity_pct cannot exceed 100")
+            purity_method = _choice(purity_method,
+                {"hplc_uv", "lcms", "nmr", "elemental", "qnmr", "supplier_coa"}, "purity_method")
+        amount = value.get("amount_mg")
+        return {"compound_ref": ref(value.get("compound_ref"), "compound"),
+                "batch_code": key(value.get("batch_code"), "batch_code").upper(),
+                "form_kind": form_kind, "provenance": provenance,
+                "purity_pct": purity, "purity_method": purity_method,
+                "amount_mg": _positive_number(amount, "amount_mg", allow_zero=True) if amount is not None else None,
+                "supplier": _optional_text(value.get("supplier"), 256),
+                "synthesized_on": _iso_date(value.get("synthesized_on"), "synthesized_on"),
+                "label": _optional_text(value.get("label"), 256)}
     if kind == "sample":
         amount = _positive_number(value.get("amount_value"), "amount_value", allow_zero=True)
         unit = str(value.get("amount_unit", ""))

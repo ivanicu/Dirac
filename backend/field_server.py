@@ -179,7 +179,11 @@ OPEN_SHELL_METAL_Z = (set(range(21, 30)) | set(range(39, 48))
 # not its ground state is a singlet.
 COORDINATION_METAL_Z = (set(range(21, 31)) | set(range(39, 49))
                         | set(range(57, 81)) | set(range(89, 104)))
-DB_DSN = 'dbname=dirac user=ivan'
+# One process must not split canonical Programs from the Job ledger and cache.
+# The former already honored DIRAC_DSN through kernel.py; this route-local seam
+# used to stay pinned to the main database, making a Job visible in Compute but
+# impossible to attach to a Program served from an isolated/alternate database.
+DB_DSN = os.environ.get('DIRAC_DSN', 'dbname=dirac user=ivan')
 CUBE_MEDIA_TYPE = 'chemical/x-gaussian-cube'
 # Bound on POST bodies: the daemon binds 0.0.0.0 now, and an unbounded read
 # lets any LAN peer feed it a multi-GB body (peer session's hardening, ported).

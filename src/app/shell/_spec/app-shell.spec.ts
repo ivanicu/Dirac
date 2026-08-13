@@ -16,6 +16,8 @@ describe('canonical AppShell architecture', () => {
         expect(WORKSPACES.flatMap(w => navigableViews(w.id))).toHaveLength(30);
         expect(WORKSPACES.every(w => w.shellReady)).toBe(true);
         expect(WORKSPACES.flatMap(w => availableViews(w.id)).every(v => v.implemented)).toBe(true);
+        expect(WORKSPACES.every(workspace =>
+            VIEWS.some(view => view.workspace === workspace.id && view.delivery === 'connected'))).toBe(true);
         expect(Object.keys(VIEW_EXPERIENCES)).toHaveLength(30);
         expect(() => assertExperienceCatalog(VIEWS.map(v => v.id))).not.toThrow();
         expect(Object.keys(WORKSPACE_VISUALS)).toHaveLength(30);
@@ -45,11 +47,13 @@ describe('canonical AppShell architecture', () => {
         const shell = new AppShell(context, new SceneService());
         const route = shell.restore({
             pathname: '/p/prog-7/structures/complex',
-            search: '?focus=molecule:mol-42&target=target:t-1',
+            search: '?work=work_item:w-9&molecule=molecule:mol-42&focus=molecule:mol-42&target=target:t-1',
         } as Location);
         expect(route).toEqual({ workspace: 'structures', view: 'structures.complex', programId: 'prog-7' });
         expect(context.current().programRef).toEqual(objectRef('program', 'prog-7'));
         expect(context.current().focusedObject).toEqual(objectRef('molecule', 'mol-42'));
+        expect(context.current().workItemRef).toEqual(objectRef('work_item', 'w-9'));
+        expect(context.current().moleculeRef).toEqual(objectRef('molecule', 'mol-42'));
         expect(context.current().targetRef).toEqual(objectRef('target', 't-1'));
     });
 

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import copy
+import ast
 import os
+import pathlib
 import subprocess
 import sys
 import unittest
@@ -92,11 +94,39 @@ class ProgramAggregateTest(unittest.TestCase):
         self.assertTrue(loaded["ok"], loaded)
         self.assertEqual(loaded["data"]["program"]["code"], "CMD-1")
 
+    def test_registered_compound_is_one_canonical_program_entity(self) -> None:
+        compound = {
+            "inchikey": "BSYNRYMUTXBXSQ-UHFFFAOYSA-N", "inchi": "InChI=1S/C9H8O4",
+            "smiles": "CC(=O)Oc1ccccc1C(=O)O", "formula": "C9H8O4",
+            "mw_monoisotopic": 180.042258736, "net_charge": 0,
+            "stereo": "no_stereocenters", "is_virtual": True,
+            "standardizer": {"label": "dirac-parent-v1", "toolkit": "rdkit",
+                "version": "test", "rules": ["Cleanup"]},
+        }
+        first = self.repo.register_compound(self.program_ref, 1, compound,
+            "design-candidate", "promoted from Design", ACTOR, "compound-1")
+        again = self.repo.register_compound(self.program_ref, first["program_version"], compound,
+            "design-candidate", "promoted from Design", ACTOR, "compound-2")
+        self.assertEqual(first["compound"]["ref"], again["compound"]["ref"])
+        self.assertEqual(first["program_version"], again["program_version"])
+        overview = self.repo.get(self.program_ref)["program"]
+        self.assertEqual(len([link for link in overview["links"]
+            if link["object_ref"] == first["compound"]["ref"]]), 1)
+
     def test_kernel_honors_database_boundary_before_assembly(self) -> None:
         env = {**os.environ, "PYTHONPATH": "backend", "DIRAC_DSN": "dbname=isolated-program-test"}
         result = subprocess.run([sys.executable, "-c", "import kernel; print(kernel.DEFAULT_DSN)"],
                                 cwd=os.getcwd(), env=env, check=True, capture_output=True, text=True)
         self.assertEqual(result.stdout.strip(), "dbname=isolated-program-test")
+
+    def test_field_server_and_kernel_share_the_same_database_boundary(self) -> None:
+        source = pathlib.Path("backend/field_server.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        assignment = next(node for node in tree.body if isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == "DB_DSN" for target in node.targets))
+        namespace = {"os": SimpleNamespace(environ={"DIRAC_DSN": "dbname=isolated-program-test"})}
+        exec(compile(ast.Module(body=[assignment], type_ignores=[]), "field_server.py", "exec"), namespace)
+        self.assertEqual(namespace["DB_DSN"], "dbname=isolated-program-test")
 
     def test_program_operating_system_keeps_governance_in_one_aggregate(self) -> None:
         portfolio = self.repo.create_portfolio({"code": "NEURO", "name": "Neuroscience"}, ACTOR)["portfolio"]
