@@ -571,6 +571,32 @@ def add_system_and_flows(twin: Twin) -> None:
                   ('object-kind:mission', 'sets objective'), ('object-kind:run', 'records attempt'),
                   ('object-kind:job', 'records execution'), ('object-kind:artifact', 'addresses result'),
                   ('store:postgres', 'retains relations + actors + versions')])
+    twin.flow('program-reference-loop', 'Program reference-job scientific loop',
+              'A guided custody and decision tour of the Program aggregate: canonical identities stay unique '
+              'while versioned evidence moves from scope through make/test/structure review and back into a '
+              'governed decision snapshot. Steps show the information lineage, not a mandatory linear UI wizard.', [
+                  ('actor:human', 'owns the scientific intent'),
+                  ('object-kind:program', 'governs one drug-discovery aggregate'),
+                  ('object-kind:target', 'defines the intervention target'),
+                  ('object-kind:disease', 'anchors the disease context'),
+                  ('object-kind:compound', 'reuses one canonical chemical entity'),
+                  ('object-kind:substance_registration', 'governs substance identity'),
+                  ('object-kind:batch', 'materializes a manufactured lot'),
+                  ('object-kind:sample', 'tracks the aliquot and custody'),
+                  ('object-kind:work_item', 'carries one durable job across stages'),
+                  ('object-kind:protocol_version', 'pins the executed method'),
+                  ('object-kind:experiment', 'records the scientific execution'),
+                  ('object-kind:measurement', 'captures sample-level observations'),
+                  ('object-kind:dataset_version', 'commits an immutable data release'),
+                  ('object-kind:structure_observation', 'registers structure evidence'),
+                  ('object-kind:annotation', 'adds collaborative interpretation'),
+                  ('object-kind:review', 'records governed scientific review'),
+                  ('object-kind:analysis_snapshot', 'freezes reproducible analysis'),
+                  ('object-kind:external_evidence_release', 'pins an imported source release'),
+                  ('object-kind:external_evidence_record', 'links external target-disease evidence'),
+                  ('object-kind:stage_gate', 'evaluates explicit criteria'),
+                  ('object-kind:decision', 'records the accountable outcome'),
+                  ('object-kind:program_snapshot', 'returns the evidence state to the Program')])
     twin.flow('source-sync', 'Automatic source synchronization',
               'Every in-scope first-party file change regenerates structural nodes, references, diagnostics and the offline twin.', [
                   ('service:twin-watcher', 'observes recursive first-party roots'),
