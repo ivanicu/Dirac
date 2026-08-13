@@ -35,6 +35,10 @@ WorkingDirectory=/home/ivan/dirac
 # line exists so an operator reading the unit can SEE where the scratch lives.
 Environment=TMPDIR=/home/ivan/.cache/dirac/scratch
 Environment=PYSCF_TMPDIR=/home/ivan/.cache/dirac/scratch
+# GPU-class Motif methods cross the fenced Kubernetes/Kueue worker protocol.
+# CPU methods remain local inside the bounded controller pool.
+Environment=DIRAC_EXECUTOR=kubernetes
+Environment=DIRAC_KUBERNETES_EXCHANGE_HOST=/home/ivan/dirac/.runtime/pv/exchange
 ExecStart=/home/ivan/dirac/backend/env/bin/python backend/field_server.py
 Restart=on-failure
 RestartSec=5

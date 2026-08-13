@@ -8,6 +8,86 @@ metadata:
     pod-security.kubernetes.io/warn: restricted
 ---
 apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dirac-motif-runtime-local
+  labels:
+    app.kubernetes.io/name: dirac-worker
+    app.kubernetes.io/component: runtime-snapshot
+spec:
+  capacity:
+    storage: 16Gi
+  volumeMode: Filesystem
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: dirac-local-static
+  local:
+    path: /home/ivan/dirac/.runtime/pv/runtime
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: [icu]
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dirac-motif-exchange-local
+  labels:
+    app.kubernetes.io/name: dirac-worker
+    app.kubernetes.io/component: fenced-exchange
+spec:
+  capacity:
+    storage: 20Gi
+  volumeMode: Filesystem
+  accessModes: [ReadWriteOnce]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: dirac-local-static
+  local:
+    path: /home/ivan/dirac/.runtime/pv/exchange
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: [icu]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dirac-motif-runtime
+  namespace: dirac-motif
+  labels:
+    app.kubernetes.io/name: dirac-worker
+    app.kubernetes.io/component: runtime-snapshot
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: dirac-local-static
+  volumeName: dirac-motif-runtime-local
+  resources:
+    requests:
+      storage: 16Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dirac-motif-exchange
+  namespace: dirac-motif
+  labels:
+    app.kubernetes.io/name: dirac-worker
+    app.kubernetes.io/component: fenced-exchange
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: dirac-local-static
+  volumeName: dirac-motif-exchange-local
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: dirac-motif-worker

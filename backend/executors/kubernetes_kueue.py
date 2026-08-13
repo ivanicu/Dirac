@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import math
+from pathlib import PurePosixPath
 import re
 import subprocess
 from typing import Any, Callable, Sequence
@@ -45,6 +46,50 @@ class KubernetesKueueConfig:
             raise ValueError("network_policy_settle_seconds must be between 0 and 30")
 
 
+@dataclass(frozen=True)
+class StaticHostMount:
+    """An optional deployment-owned host mount, never caller-controlled.
+
+    Production installations should bake the worker runtime into the immutable
+    image and use an object store for exchange. Restricted-PSS deployments should
+    use ``StaticPvcMount`` instead. Keeping this option in adapter construction
+    (and out of ExecutionRequest) prevents a submitted job from choosing paths.
+    """
+
+    name: str
+    host_path: str
+    mount_path: str
+    read_only: bool = True
+
+    def __post_init__(self) -> None:
+        if len(self.name) > 63 or not _DNS_LABEL.fullmatch(self.name):
+            raise ValueError("static mount name must be a Kubernetes DNS label")
+        for field in ("host_path", "mount_path"):
+            value = getattr(self, field)
+            path = PurePosixPath(value)
+            if not value.startswith("/") or ".." in path.parts:
+                raise ValueError(f"{field} must be an absolute normalized path")
+
+
+@dataclass(frozen=True)
+class StaticPvcMount:
+    """A deployment-owned PersistentVolumeClaim mount allowed by Restricted PSS."""
+
+    name: str
+    claim_name: str
+    mount_path: str
+    read_only: bool = True
+
+    def __post_init__(self) -> None:
+        for field in ("name", "claim_name"):
+            value = getattr(self, field)
+            if len(value) > 63 or not _DNS_LABEL.fullmatch(value):
+                raise ValueError(f"{field} must be a Kubernetes DNS label")
+        path = PurePosixPath(self.mount_path)
+        if not self.mount_path.startswith("/") or ".." in path.parts:
+            raise ValueError("mount_path must be an absolute normalized path")
+
+
 class KubernetesKueueAdapter:
     """Submit fixed-worker Jobs while Kueue controls admission.
 
@@ -60,6 +105,8 @@ class KubernetesKueueAdapter:
         worker_command: Sequence[str],
         allowed_images: Sequence[str],
         policy_init_image: str | None = None,
+        static_host_mounts: Sequence[StaticHostMount] = (),
+        static_pvc_mounts: Sequence[StaticPvcMount] = (),
         config: KubernetesKueueConfig | None = None,
         runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
     ) -> None:
@@ -80,6 +127,12 @@ class KubernetesKueueAdapter:
             if not _is_digest_image(policy_init_image):
                 raise ValueError("policy_init_image must be an immutable OCI digest")
         self.policy_init_image = policy_init_image
+        names = [mount.name for mount in (*static_host_mounts, *static_pvc_mounts)]
+        targets = [mount.mount_path for mount in (*static_host_mounts, *static_pvc_mounts)]
+        if len(names) != len(set(names)) or len(targets) != len(set(targets)):
+            raise ValueError("static mount names and targets must be unique")
+        self.static_host_mounts = tuple(static_host_mounts)
+        self.static_pvc_mounts = tuple(static_pvc_mounts)
         self._runner = runner or subprocess.run
 
     def admit(self, request: dict[str, Any]) -> AdmissionDecision:
@@ -359,6 +412,12 @@ class KubernetesKueueAdapter:
                                  "readOnly": True},
                                 {"name": "scratch", "mountPath": "/scratch"},
                                 {"name": "tmp", "mountPath": "/tmp"},
+                                *[{
+                                    "name": mount.name,
+                                    "mountPath": mount.mount_path,
+                                    "readOnly": mount.read_only,
+                                } for mount in (*self.static_host_mounts,
+                                                *self.static_pvc_mounts)],
                             ],
                         }],
                         # K3s' NetworkPolicy controller is eventually consistent
@@ -390,6 +449,17 @@ class KubernetesKueueAdapter:
                             {"name": "scratch", "emptyDir": {
                                 "sizeLimit": _byte_quantity(max(resources["scratch_bytes"], 1 << 20))}},
                             {"name": "tmp", "emptyDir": {}},
+                            *[{
+                                "name": mount.name,
+                                "hostPath": {"path": mount.host_path, "type": "Directory"},
+                            } for mount in self.static_host_mounts],
+                            *[{
+                                "name": mount.name,
+                                "persistentVolumeClaim": {
+                                    "claimName": mount.claim_name,
+                                    "readOnly": mount.read_only,
+                                },
+                            } for mount in self.static_pvc_mounts],
                         ],
                     },
                 },

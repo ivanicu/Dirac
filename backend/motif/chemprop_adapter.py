@@ -21,7 +21,9 @@ def _imports():
         import torch
         from chemprop import data, featurizers, models, nn
     except ImportError as exc:  # pragma: no cover - dependency boundary
-        raise RuntimeError("Chemprop, Lightning and PyTorch are required for D-MPNN") from exc
+        raise RuntimeError(
+            "Chemprop, Lightning and PyTorch are required for D-MPNN "
+            f"({type(exc).__name__}: {exc})") from exc
     return pl, np, torch, data, featurizers, models, nn
 
 

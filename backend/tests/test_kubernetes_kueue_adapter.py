@@ -6,7 +6,8 @@ import subprocess
 import unittest
 
 from backend.tests.test_motif_contracts import EXECUTION_REQUEST
-from executors.kubernetes_kueue import KubernetesKueueAdapter
+from executors.kubernetes_kueue import (
+    KubernetesKueueAdapter, StaticHostMount, StaticPvcMount)
 
 
 IMAGE = "registry.example/dirac-worker@sha256:" + "1" * 64
@@ -123,6 +124,48 @@ class KubernetesKueueAdapterTests(unittest.TestCase):
         resources = pod_spec["containers"][0]["resources"]
         self.assertEqual(resources["requests"]["nvidia.com/gpu"], "1")
         self.assertEqual(resources["limits"]["nvidia.com/gpu"], "1")
+
+    def test_deployment_owned_host_mounts_are_fixed_and_not_request_controlled(self):
+        adapter = KubernetesKueueAdapter(
+            worker_command=["worker"], allowed_images=[IMAGE],
+            policy_init_image=IMAGE, runner=self.runner,
+            static_host_mounts=[
+                StaticHostMount("runtime", "/srv/dirac", "/srv/dirac", True),
+                StaticHostMount("exchange", "/var/lib/dirac", "/exchange", False),
+            ])
+        adapter.submit(self.request)
+        manifests = [json.loads(body) for command, body in self.runner.calls
+                     if command[1:3] == ("apply", "--server-side")]
+        pod = manifests[-1]["spec"]["template"]["spec"]
+        mounts = {item["name"]: item for item in pod["containers"][0]["volumeMounts"]}
+        volumes = {item["name"]: item for item in pod["volumes"]}
+        self.assertEqual(mounts["runtime"]["readOnly"], True)
+        self.assertEqual(mounts["exchange"]["readOnly"], False)
+        self.assertEqual(volumes["runtime"]["hostPath"]["path"], "/srv/dirac")
+        self.assertNotIn("host_path", json.dumps(self.request))
+
+        with self.assertRaisesRegex(ValueError, "absolute normalized"):
+            StaticHostMount("escape", "../etc", "/etc")
+
+    def test_restricted_pss_compatible_pvc_mounts_are_fixed(self):
+        adapter = KubernetesKueueAdapter(
+            worker_command=["worker"], allowed_images=[IMAGE],
+            policy_init_image=IMAGE, runner=self.runner,
+            static_pvc_mounts=[
+                StaticPvcMount("runtime", "dirac-runtime", "/srv/dirac", True),
+                StaticPvcMount("exchange", "dirac-exchange", "/exchange", False),
+            ])
+        adapter.submit(self.request)
+        manifests = [json.loads(body) for command, body in self.runner.calls
+                     if command[1:3] == ("apply", "--server-side")]
+        pod = manifests[-1]["spec"]["template"]["spec"]
+        self.assertFalse(any("hostPath" in volume for volume in pod["volumes"]))
+        claims = {volume["name"]: volume["persistentVolumeClaim"]
+                  for volume in pod["volumes"] if "persistentVolumeClaim" in volume}
+        self.assertEqual(claims["runtime"], {
+            "claimName": "dirac-runtime", "readOnly": True})
+        self.assertEqual(claims["exchange"], {
+            "claimName": "dirac-exchange", "readOnly": False})
 
     def test_state_mapping_cancel_and_events(self):
         self.adapter.submit(self.request)

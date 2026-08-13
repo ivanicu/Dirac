@@ -25,6 +25,8 @@ difference instead of discovering it when a 404 arrives.
 from __future__ import annotations
 
 import contextlib
+import os
+from pathlib import Path
 import sys
 from typing import Any
 
@@ -36,6 +38,57 @@ import jobs
 import traces
 
 DEFAULT_DSN = 'dbname=dirac user=ivan'
+DEFAULT_MOTIF_WORKER_IMAGE = (
+    'nvcr.io/nvidia/gpu-operator@sha256:'
+    '6584c36f153d18cfce284f7e5bc477887ce3c1ac566dc795bd80c9af6c6488f7')
+DEFAULT_POLICY_IMAGE = (
+    'docker.io/library/busybox@sha256:'
+    '9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0')
+
+
+def default_executor():
+    """Select the deployed executor explicitly; never infer GPU capability.
+
+    The Kubernetes mode is a single-node deployment bridge: the immutable base
+    image supplies the container boundary while deployment-owned PersistentVolumes
+    mount a read-only Dirac runtime snapshot and a narrowly scoped fenced exchange.
+    A registry-built worker plus object storage can replace those volumes without
+    changing InvocationService or the worker protocol.
+    """
+    mode = os.environ.get('DIRAC_EXECUTOR', 'thread').strip().lower()
+    if mode in ('', 'thread'):
+        return execution.ThreadExecutor(max_workers=2)
+    if mode != 'kubernetes':
+        raise RuntimeError(
+            f"unsupported DIRAC_EXECUTOR={mode!r}; expected thread or kubernetes")
+    from executors.kubernetes_invocation import KubernetesInvocationExecutor
+    from executors.kubernetes_kueue import (
+        KubernetesKueueAdapter, StaticPvcMount)
+
+    repository = Path(__file__).resolve().parents[1]
+    exchange = Path(os.environ.get(
+        'DIRAC_KUBERNETES_EXCHANGE_HOST',
+        repository / '.runtime/pv/exchange')).resolve()
+    worker_repository = Path('/home/ivan/dirac')
+    worker_exchange = worker_repository / '.runtime/kubernetes-exchange'
+    worker_image = os.environ.get('DIRAC_MOTIF_WORKER_IMAGE',
+                                  DEFAULT_MOTIF_WORKER_IMAGE)
+    policy_image = os.environ.get('DIRAC_KUBERNETES_POLICY_IMAGE',
+                                  DEFAULT_POLICY_IMAGE)
+    worker = worker_repository / 'backend/env/bin/python'
+    entrypoint = worker_repository / 'backend/motif_worker.py'
+    adapter = KubernetesKueueAdapter(
+        worker_command=[str(worker), str(entrypoint),
+                        '--exchange-root', str(worker_exchange)],
+        allowed_images=[worker_image], policy_init_image=policy_image,
+        static_pvc_mounts=[
+            StaticPvcMount('dirac-runtime', 'dirac-motif-runtime',
+                           str(worker_repository), True),
+            StaticPvcMount('dirac-exchange', 'dirac-motif-exchange',
+                           str(worker_exchange), False),
+        ])
+    return KubernetesInvocationExecutor(
+        adapter=adapter, exchange_root=exchange, container_image=worker_image)
 
 
 def toolkit_versions() -> dict[str, str]:
@@ -272,7 +325,7 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
                 else default_program_repository(dsn))
     # A ThreadExecutor still executes sync calls inline, while also making descriptor
     # default_mode=job truthful for /v2/jobs submissions.
-    ex = executor or execution.ThreadExecutor(max_workers=2)
+    ex = executor or default_executor()
     svc = invocation.InvocationService(cat, store=st, cache=ca, ledger=js, executor=ex,
                                       trace_store=trace,
                                       motif_governance=governance,

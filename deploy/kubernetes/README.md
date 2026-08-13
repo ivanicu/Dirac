@@ -6,15 +6,16 @@ decides when declared resources may start.
 
 ```mermaid
 flowchart LR
-  A["Dirac Run / Job"] --> B["immutable ExecutionRequest"]
-  B --> C["SchedulerRouter"]
-  C --> D["KubernetesKueueAdapter"]
-  D --> E["Kubernetes Job (suspended)"]
-  E --> F["Kueue quota + priority admission"]
-  F --> G["Dirac worker Pod"]
-  G --> H["Artifact write session"]
-  H --> I["Dirac PostgreSQL truth"]
-  E --> J["Postgres execution_allocation mirror"]
+  A["HTTP /v2/jobs"] --> B["InvocationService"]
+  B --> C["KubernetesInvocationExecutor"]
+  C --> D["immutable ExecutionRequest"]
+  D --> E["KubernetesKueueAdapter"]
+  E --> F["Kubernetes Job (suspended)"]
+  F --> G["Kueue quota + priority admission"]
+  G --> H["network-isolated GPU worker Pod"]
+  H --> I["fenced result + artifact digests"]
+  I --> B
+  B --> J["PostgreSQL Job + Artifact truth"]
 ```
 
 ## Authority boundaries
@@ -40,6 +41,9 @@ flowchart LR
 - GPU Operator: host driver mode (`driver.enabled=false`), with the toolkit
   writing a k3s containerd v3 drop-in.
 - Namespace: restricted Pod Security plus default-deny ingress and egress.
+- Two deployment-owned local PersistentVolumes bridge the read-only runtime
+  snapshot and read/write exchange into Restricted-PSS Pods. No `hostPath`
+  permission or privileged worker is required.
 - Worker Pods hold the main process behind a three-second policy-settle init
   barrier, closing the K3s per-Pod firewall installation race.
 - Deadline termination has a five-second hard-kill grace by default; deployments
@@ -66,6 +70,33 @@ will not turn on a quota for a GPU that Kubernetes cannot actually schedule.
 
 ## Runtime construction
 
+The checked-in systemd profile selects this executor explicitly:
+
+```ini
+Environment=DIRAC_EXECUTOR=kubernetes
+Environment=DIRAC_KUBERNETES_EXCHANGE_HOST=/home/ivan/dirac/.runtime/pv/exchange
+```
+
+GPU-class Motif methods then take this path automatically. CPU-class methods
+stay in the API process. The worker verifies the input digest, method/source
+version, Job/Attempt/fencing identities, output schema and artifact digests;
+`InvocationService` remains the only component allowed to persist final public
+Artifacts and terminal Job state.
+
+The local profile mounts:
+
+- PVC `dirac-motif-runtime` read-only at `/home/ivan/dirac`;
+- PVC `dirac-motif-exchange` read/write at
+  `/home/ivan/dirac/.runtime/kubernetes-exchange`.
+
+The runtime PVC is an operational bridge for this single-node installation, not
+the final multi-node packaging story. A production rollout should build the
+worker and Python environment into a content-addressed OCI image and replace the
+local exchange volume with scoped object-storage sessions. The ExecutionRequest
+and fencing protocol do not change.
+
+The lower-level adapter can also be assembled directly:
+
 ```python
 import psycopg
 
@@ -74,12 +105,16 @@ from execution_control.allocation_store import (
     PostgresAllocationStore,
 )
 from execution_control.router import SchedulerRouter
-from executors.kubernetes_kueue import KubernetesKueueAdapter
+from executors.kubernetes_kueue import KubernetesKueueAdapter, StaticPvcMount
 
 adapter = KubernetesKueueAdapter(
     worker_command=["python", "-m", "dirac_worker"],
     allowed_images=["registry/dirac-worker@sha256:<64 lowercase hex>"],
     policy_init_image="registry/dirac-policy-init@sha256:<64 lowercase hex>",
+    static_pvc_mounts=[
+        StaticPvcMount("runtime", "dirac-motif-runtime", "/opt/dirac", True),
+        StaticPvcMount("exchange", "dirac-motif-exchange", "/exchange", False),
+    ],
 )
 durable = DurableSchedulerAdapter(
     adapter,
@@ -102,7 +137,14 @@ kubectl get localqueue motif -n dirac-motif
 kubectl get jobs,workloads -n dirac-motif
 kubectl get pods -n gpu-operator
 kubectl get node icu -o jsonpath='{.status.allocatable.nvidia\.com/gpu}'
+curl -s http://127.0.0.1:8901/v2/meta
 ```
+
+`/v2/meta` must report executor `kind=remote`, adapter `kubernetes`,
+`gpu_execution=true`, and cancellation `cooperative+remote-hard`. A successful
+GPU Job's provenance must include `remote_execution.backend=kubernetes`, Kueue,
+and CUDA device evidence; a green Kubernetes Pod alone is not scientific
+completion.
 
 `pueue` remains a local development fallback during migration. It is no longer
 the scale architecture: it has no cluster resource model, durable scheduler

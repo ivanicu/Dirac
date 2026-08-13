@@ -1,6 +1,12 @@
 """Scheduler adapters for fixed, versioned Dirac worker entrypoints."""
 
 from .local_process import LocalProcessAdapter
-from .kubernetes_kueue import KubernetesKueueAdapter, KubernetesKueueConfig
+from .kubernetes_invocation import KubernetesInvocationExecutor
+from .kubernetes_kueue import (
+    KubernetesKueueAdapter, KubernetesKueueConfig, StaticHostMount, StaticPvcMount)
 
-__all__ = ["KubernetesKueueAdapter", "KubernetesKueueConfig", "LocalProcessAdapter"]
+__all__ = [
+    "KubernetesInvocationExecutor", "KubernetesKueueAdapter",
+    "KubernetesKueueConfig", "LocalProcessAdapter", "StaticHostMount",
+    "StaticPvcMount",
+]

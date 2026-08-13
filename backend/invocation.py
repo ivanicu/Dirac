@@ -68,6 +68,8 @@ class InvocationContext:
 
     method_id: str
     version: str | None = None
+    execution_digest: str | None = None
+    actor: dict[str, str] | None = None
     budget_seconds: float | None = None
     job_id: str | None = None
     # THE CONTRACT ITSELF, handed to the handler. Not a convenience: without it a handler
@@ -243,9 +245,10 @@ class InvocationService:
                 'kind': getattr(self.program_repository, 'kind', 'none'),
                 'durability': getattr(self.program_repository, 'durability', 'none'),
             },
-            # Inline Python cannot interrupt C/Fortran work. Queued cancellation becomes
-            # available when ThreadExecutor owns a submitted future.
-            'cancellation': 'queued-only',
+            # Remote workers observe the token and also expose scheduler hard-cancel.
+            # Local thread execution remains honest about queued-only cancellation.
+            'cancellation': getattr(
+                self.executor, 'cancellation_capability', 'queued-only'),
         }
 
     def _executor_adapter(self) -> str:
@@ -316,6 +319,15 @@ class InvocationService:
         if row is None:
             raise failures.DiracNotFound(
                 f'no job {job_id!r}', details={'job_id': job_id})
+        capability = getattr(self.executor, 'cancellation_capability', 'queued-only')
+        if token is not None and capability != 'queued-only':
+            row['cancel'] = {
+                'requested': True,
+                'accepted': True,
+                'capability': capability,
+                'terminal_pending': row.get('state') not in (
+                    'done', 'failed', 'cancelled'),
+            }
         return row
 
     def wait_job(self, job_id: str, *, timeout: float = 300.0,
@@ -489,7 +501,9 @@ class InvocationService:
                     execution_identity=execution_identity)
 
             ctx = InvocationContext(
-                method_id=method_id, version=spec.version, budget_seconds=budget,
+                method_id=method_id, version=spec.version,
+                execution_digest=execution_identity.digest, actor=actor_ref,
+                budget_seconds=budget,
                 job_id=job_id, spec=spec,
                 artifact_reader=self.artifact_reader,
                 artifact_writer=self.artifact_writer,
