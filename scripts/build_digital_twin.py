@@ -599,7 +599,7 @@ def add_system_and_flows(twin: Twin) -> None:
                   ('object-kind:program_snapshot', 'returns the evidence state to the Program')])
     twin.flow('source-sync', 'Automatic source synchronization',
               'Every in-scope first-party file change regenerates structural nodes, references, diagnostics and the offline twin.', [
-                  ('service:twin-watcher', 'observes recursive first-party roots'),
+                  ('service:twin-watcher', 'polls Git-aware first-party content'),
                   ('system:file-discovery', 'enumerates tracked and untracked files from ownership policy'),
                   ('store:twin-model', 'replaces JSON and embedded HTML atomically at generation completion')])
 
@@ -917,7 +917,7 @@ def architecture_analysis(twin: Twin, ts_data: dict, runtime: dict) -> dict:
                 'runtime_metrics_available': runtime_sync,
             },
             'is_continuously_synchronized': source_sync,
-            'synchronization': ('recursive source events with runtime captured at each rebuild; source and '
+            'synchronization': ('Git-aware content polling with runtime captured at each rebuild; source and '
                                 'telemetry freshness are reported separately'),
             'source_sync': 'continuous while dirac-digital-twin.service is active',
             'runtime_sync': 'snapshot on every source-triggered or manual twin rebuild',

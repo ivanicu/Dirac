@@ -2,7 +2,8 @@
 /** Continuously regenerate the Dirac Architecture Optimization Twin on source changes. */
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { execFileSync, spawn } from 'node:child_process';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const scope = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/digital_twin_scope.json'), 'utf8'));
@@ -10,7 +11,6 @@ const rootFiles = new Set(scope.include_root_files);
 const roots = scope.include_roots.map(x => x.replace(/\/$/, ''));
 const externalRoots = scope.external_roots.map(x => x.replace(/\/$/, ''));
 const outputs = new Set(scope.generated_outputs);
-const watched = new Map();
 let timer;
 let running = false;
 let rerun = false;
@@ -59,47 +59,31 @@ function schedule(reason) {
     timer = setTimeout(() => build(reason), 900);
 }
 
-function observed(base, filename) {
-    if (!filename) return;
-    const rel = normalized(path.relative(ROOT, path.join(base, filename.toString())));
-    if (!inScope(rel)) return;
-    changed.add(rel);
-    schedule('source change');
-}
-
-function watchDirectory(absolute) {
-    if (watched.has(absolute) || !fs.existsSync(absolute)) return;
-    const watcher = fs.watch(absolute, { recursive: true }, (_event, filename) => observed(absolute, filename));
-    watcher.on('error', () => {
-        watcher.close();
-        watched.delete(absolute);
+function sourceFiles() {
+    const raw = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], {
+        cwd: ROOT, encoding: 'buffer', maxBuffer: 32 * 1024 * 1024,
     });
-    watched.set(absolute, watcher);
+    return raw.toString().split('\0').filter(Boolean).map(normalized).filter(inScope).sort();
 }
 
-function watchChildren(parent, parentRel) {
-    const key = `${parent}:children`;
-    if (watched.has(key) || !fs.existsSync(parent)) return;
-    for (const entry of fs.readdirSync(parent, { withFileTypes: true })) {
-        if (!entry.isDirectory()) continue;
-        const rel = normalized(`${parentRel}/${entry.name}`);
-        if (!externalRoots.some(root => rel === root || rel.startsWith(`${root}/`))) {
-            watchDirectory(path.join(parent, entry.name));
+function sourceState() {
+    const state = new Map();
+    for (const rel of sourceFiles()) {
+        try {
+            const absolute = path.join(ROOT, rel);
+            if (!fs.statSync(absolute).isFile()) continue;
+            const digest = createHash('sha256').update(fs.readFileSync(absolute)).digest('hex');
+            state.set(rel, digest);
+        } catch (error) {
+            if (error?.code !== 'ENOENT') throw error;
         }
     }
-    const watcher = fs.watch(parent, (_event, filename) => {
-        if (!filename) return;
-        const name = filename.toString();
-        const rel = normalized(`${parentRel}/${name}`);
-        const absolute = path.join(parent, name);
-        const external = externalRoots.some(root => rel === root || rel.startsWith(`${root}/`));
-        if (fs.existsSync(absolute) && fs.statSync(absolute).isDirectory() && !external) {
-            watchDirectory(absolute);
-        } else if (inScope(rel)) {
-            observed(parent, filename);
-        }
-    });
-    watched.set(key, watcher);
+    return state;
+}
+
+function changedFiles(previous, current) {
+    const paths = new Set([...previous.keys(), ...current.keys()]);
+    return [...paths].filter(rel => previous.get(rel) !== current.get(rel)).sort();
 }
 
 if (process.argv.includes('--selftest')) {
@@ -111,37 +95,28 @@ if (process.argv.includes('--selftest')) {
         process.stderr.write(`${JSON.stringify(verdicts)}\n`);
         process.exit(1);
     }
-    process.stdout.write(`watch scope OK · ${roots.length} first-party roots · upstream and generated outputs excluded\n`);
+    const discovered = sourceState().size;
+    if (!discovered) throw new Error('source poller discovered no first-party files');
+    process.stdout.write(`watch scope OK · ${roots.length} first-party roots · ${discovered} files polled · upstream and generated outputs excluded\n`);
     process.exit(0);
 }
 
 if (process.argv.includes('--once')) {
     build('one-shot synchronization');
 } else {
+    let baseline = sourceState();
     build();
-    for (const root of roots) watchDirectory(path.join(ROOT, root));
-    for (const entry of fs.readdirSync(ROOT, { withFileTypes: true })) {
-        if (!entry.isDirectory()) continue;
-        if (entry.name === 'src') {
-            watchChildren(path.join(ROOT, 'src'), 'src');
-            continue;
+    setInterval(() => {
+        try {
+            const current = sourceState();
+            const updates = changedFiles(baseline, current);
+            baseline = current;
+            if (!updates.length) return;
+            for (const rel of updates) changed.add(rel);
+            schedule('source change');
+        } catch (error) {
+            process.stderr.write(`[${new Date().toISOString()}] source poll failed · ${error.message}\n`);
         }
-        if (externalRoots.includes(entry.name)) continue;
-        watchDirectory(path.join(ROOT, entry.name));
-    }
-    fs.watch(ROOT, (_event, filename) => {
-        if (!filename) return;
-        const name = filename.toString();
-        const absolute = path.join(ROOT, name);
-        if (!fs.existsSync(absolute) && watched.has(absolute)) {
-            watched.get(absolute).close();
-            watched.delete(absolute);
-        }
-        if (fs.existsSync(absolute) && fs.statSync(absolute).isDirectory()
-            && !externalRoots.some(root => name === root || root.startsWith(`${name}/`))) {
-            watchDirectory(absolute);
-        }
-        if (rootFiles.has(name) || inScope(name)) observed(ROOT, filename);
-    });
-    process.stdout.write(`watching ${roots.length} first-party roots · debounce 900 ms · runtime captured on rebuild\n`);
+    }, 2_000);
+    process.stdout.write(`polling ${baseline.size} first-party files · interval 2 s · debounce 900 ms · runtime captured on rebuild\n`);
 }
