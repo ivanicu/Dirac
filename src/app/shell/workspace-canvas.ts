@@ -63,15 +63,14 @@ export class WorkspaceCanvas {
         this.breadcrumb.hidden = !scaffold;
         this.breadcrumb.textContent = scaffold ? `${workspace.label}  /  ${definition.label}` : '';
         this.host.hidden = !scaffold;
-        this.outline.hidden = !scaffold;
-        if (!scaffold) {
-            this.host.replaceChildren();
-            this.outline.replaceChildren();
-            this.activeViewId = '';
-            return;
-        }
+        this.outline.hidden = false;
         this.activeViewId = definition.id;
         this.renderOutline(definition, route.programId);
+        if (!scaffold) {
+            this.host.replaceChildren();
+            this.search = undefined;
+            return;
+        }
         if (connected) this.renderConnectedCanvas(definition, route.programId);
         else this.renderCanvas(definition, route.programId);
     }

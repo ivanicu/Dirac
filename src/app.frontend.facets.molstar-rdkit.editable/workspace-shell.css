@@ -1505,12 +1505,12 @@
  * Workspace rail plus one contextual pane now serves every route.
  */
 #app.workspace-shell {
-    grid-template-columns: 336px minmax(0, 1fr);
+    grid-template-columns: 376px minmax(0, 1fr);
 }
 
 #app.workspace-shell .sidebar {
     display: grid;
-    grid-template-columns: 88px minmax(0, 1fr);
+    grid-template-columns: 108px minmax(0, 1fr);
     min-width: 0;
     overflow: hidden;
     border-right: 1px solid var(--line);
@@ -1537,13 +1537,13 @@
 #app.workspace-shell .workspace-nav a {
     display: flex;
     min-width: 0;
-    min-height: 54px;
-    padding: 6px 3px;
+    min-height: 58px;
+    padding: 7px 5px;
     overflow: hidden;
     align-items: center;
     justify-content: center;
     flex-direction: column;
-    gap: 5px;
+    gap: 6px;
     border: 1px solid transparent;
     border-radius: 3px;
     background: transparent;
@@ -1562,8 +1562,8 @@
     max-width: 100%;
     overflow: hidden;
     color: inherit;
-    font: 500 6.5px/1.15 var(--mono) !important;
-    letter-spacing: .025em;
+    font: 500 9px/1.15 var(--mono) !important;
+    letter-spacing: .02em;
     text-overflow: clip;
     white-space: nowrap;
 }
@@ -1597,19 +1597,16 @@
     min-width: 0;
 }
 
+/* Desktop has one View list in the contextual pane. This duplicate remains
+ * available only as a compact switcher below 900px. */
+#app.workspace-shell .view-nav { display: none; }
+
 #app.workspace-shell:not(.shell-scaffold) .sidebar {
     grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
 }
 
 #app.workspace-shell:not(.shell-scaffold) .view-nav {
-    grid-row: 1;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 4px;
-    padding: 8px;
-    overflow: visible;
-    border-bottom: 1px solid var(--line);
-    background: var(--plate);
+    display: none;
 }
 
 #app.workspace-shell:not(.shell-scaffold) .view-switcher { display: none; }
@@ -1643,6 +1640,16 @@
     background: var(--pressed);
     box-shadow: var(--hold);
     color: var(--ink);
+}
+
+#app.workspace-shell:not(.shell-scaffold) .workspace-outline {
+    grid-row: 1;
+    display: block;
+    max-height: 344px;
+    padding: 12px 10px;
+    overflow: auto;
+    border-bottom: 1px solid var(--line);
+    background: var(--plate-2);
 }
 
 #app.workspace-shell:not(.shell-scaffold) .global-context-bar {
@@ -1739,7 +1746,7 @@
 #app.workspace-shell:not(.shell-scaffold) .diag-strip { grid-row: 6; }
 
 #app.shell-scaffold.workspace-shell .sidebar {
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
 }
 
 #app.shell-scaffold.workspace-shell .workspace-nav {
@@ -1749,12 +1756,13 @@
 
 #app.shell-scaffold.workspace-shell .global-context-bar {
     grid-column: 2;
-    grid-row: 1;
+    grid-row: 2;
 }
 
 #app.shell-scaffold.workspace-shell .workspace-outline {
     grid-column: 2;
-    grid-row: 2;
+    grid-row: 1;
+    border-bottom: 1px solid var(--line);
 }
 
 @media (max-width: 900px) {
@@ -1765,23 +1773,44 @@
 
     #app.workspace-shell .sidebar {
         grid-template-columns: 1fr;
-        max-height: 460px;
+        max-height: 520px;
     }
 
     #app.workspace-shell .workspace-nav {
         grid-column: 1;
         grid-row: 1;
-        display: flex;
-        padding: 6px;
-        overflow-x: auto;
-        overflow-y: hidden;
-        flex-direction: row;
+        display: block;
+        padding: 7px 10px;
+        overflow: visible;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
     }
 
-    #app.workspace-shell .workspace-nav a {
-        min-width: 82px;
-        min-height: 50px;
-        flex: 0 0 82px;
+    #app.shell-scaffold.workspace-shell .workspace-nav {
+        grid-row: 1;
+    }
+
+    #app.workspace-shell .workspace-switcher,
+    #app.workspace-shell .view-switcher {
+        display: grid;
+        grid-template-columns: 84px minmax(0, 1fr);
+        align-items: center;
+        gap: 10px;
+        color: var(--etch);
+        font: 600 10px/1 var(--sans);
+    }
+
+    #app.workspace-shell .workspace-nav > a,
+    #app.workspace-shell .view-nav > a { display: none; }
+
+    #app.workspace-shell .view-nav,
+    #app.workspace-shell:not(.shell-scaffold) .view-nav {
+        grid-column: 1;
+        grid-row: 2;
+        display: block;
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--line);
+        background: var(--plate);
     }
 
     #app.workspace-shell .view-nav,
@@ -1794,9 +1823,9 @@
         grid-column: 1;
     }
 
-    #app.shell-scaffold.workspace-shell .global-context-bar { grid-row: 2; }
+    #app.shell-scaffold.workspace-shell .global-context-bar { grid-row: 3; }
     #app.shell-scaffold.workspace-shell .workspace-outline { display: none; }
-    #app.workspace-shell:not(.shell-scaffold) .view-nav { grid-row: 2; }
+    #app.workspace-shell:not(.shell-scaffold) .workspace-outline { display: none; }
     #app.workspace-shell:not(.shell-scaffold) .global-context-bar { display: none; }
     #app.workspace-shell:not(.shell-scaffold) .master-nav { grid-row: 3; }
     #app.workspace-shell:not(.shell-scaffold) .scene-summary { grid-row: 4; }
