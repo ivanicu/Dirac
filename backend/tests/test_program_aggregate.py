@@ -104,14 +104,47 @@ class ProgramAggregateTest(unittest.TestCase):
         work = self.repo.record_work_package(self.program_ref, 4, {
             "key": "confirm-potency", "title": "Confirm potency",
             "description": "Run an orthogonal assay", "status": "active", "priority": 1,
-            "owner": ACTOR,
+            "owner": ACTOR, "lane": "test_learn",
         }, ACTOR, "work-1")
         overview = self.repo.get(self.program_ref)["program"]
         self.assertEqual(overview["portfolio_ref"], portfolio["ref"])
         self.assertEqual(overview["counts"]["members"], 1)
         self.assertEqual(overview["counts"]["stage_gates"], 1)
         self.assertEqual(work["work_package"]["status"], "active")
+        self.assertEqual(work["work_item"]["ref"]["kind"], "work_item")
         self.assertEqual(overview["health"]["basis"], "rule-based-operational-readiness-v1")
+
+    def test_one_work_item_moves_between_workflow_lanes_without_copying(self) -> None:
+        created = self.repo.record_work_package(self.program_ref, 1, {
+            "key": "select-series", "title": "Select series", "description": "Choose the lead series",
+            "lane": "understand", "status": "active",
+        }, ACTOR, "work-create")
+        work_ref = created["work_item"]["ref"]
+        moved = self.repo.transition_work_item(self.program_ref, 2, {
+            "work_item_ref": work_ref, "to_lane": "design", "reason": "Target context is ready",
+        }, ACTOR, "work-move")
+        self.assertEqual(moved["work_item"]["ref"], work_ref)
+        self.assertEqual(moved["transition"]["from_lane"], "understand")
+        self.assertEqual(moved["transition"]["to_lane"], "design")
+        overview = self.repo.get(self.program_ref)["program"]
+        self.assertEqual(overview["counts"]["work_items"], 1)
+        self.assertEqual(overview["work_items"][0]["lane"], "design")
+
+    def test_runtime_job_can_belong_to_only_one_work_item(self) -> None:
+        first = self.repo.record_work_package(self.program_ref, 1, {
+            "key": "first", "title": "First", "description": "First job",
+        }, ACTOR, "first")
+        second = self.repo.record_work_package(self.program_ref, 2, {
+            "key": "second", "title": "Second", "description": "Second job",
+        }, ACTOR, "second")
+        job = {"kind": "job", "id": "job-1"}
+        self.repo.attach_work_execution(self.program_ref, 3, {
+            "work_item_ref": first["work_item"]["ref"], "job_ref": job,
+        }, ACTOR, "attach-first")
+        with self.assertRaises(failures.DiracInvalidParameters):
+            self.repo.attach_work_execution(self.program_ref, 4, {
+                "work_item_ref": second["work_item"]["ref"], "job_ref": job,
+            }, ACTOR, "attach-second")
 
     def test_canonical_lineage_shapes_do_not_collapse_physical_identity(self) -> None:
         edge = self.repo.record_lineage(self.program_ref, 1, {

@@ -31,6 +31,7 @@ MEMBER_ROLES = frozenset({
 })
 GATE_STATUSES = frozenset({"planned", "ready", "approved", "rejected"})
 WORK_STATUSES = frozenset({"backlog", "ready", "active", "blocked", "done", "cancelled"})
+WORKFLOW_LANES = frozenset({"understand", "design", "decide", "make", "test_learn"})
 EVIDENCE_RELATIONS = frozenset({"supports", "contradicts", "tests", "explains"})
 EVIDENCE_KINDS = frozenset({
     "evidence", "measurement", "dataset", "artifact", "literature_reference",
@@ -223,6 +224,9 @@ def work_package(value: dict[str, Any]) -> dict[str, Any]:
     status = value.get("status", "backlog")
     if status not in WORK_STATUSES:
         raise failures.DiracInvalidParameters("unknown work package status")
+    lane = value.get("lane", "understand")
+    if lane not in WORKFLOW_LANES:
+        raise failures.DiracInvalidParameters("unknown Program workflow lane")
     priority = value.get("priority", 3)
     if not isinstance(priority, int) or isinstance(priority, bool) or not 1 <= priority <= 5:
         raise failures.DiracInvalidParameters("work_package.priority must be an integer from 1 to 5")
@@ -234,11 +238,30 @@ def work_package(value: dict[str, Any]) -> dict[str, Any]:
     return {"key": key(value.get("key"), "work_package.key"),
             "title": nonempty(value.get("title"), "work_package.title", maximum=256),
             "description": nonempty(value.get("description"), "work_package.description"),
-            "status": status, "priority": priority,
+            "lane": lane, "status": status, "priority": priority,
             "owner": actor(owner) if owner is not None else None,
             "due_on": _iso_date(value.get("due_on"), "work_package.due_on"),
             "deliverable_refs": [ref(item) for item in deliverables],
-            "depends_on_refs": [ref(item, "work_package") for item in dependencies]}
+            "depends_on_refs": [ref(item, "work_item") for item in dependencies]}
+
+
+def work_transition(value: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise failures.DiracInvalidParameters("transition must be an object")
+    lane = value.get("to_lane")
+    if lane not in WORKFLOW_LANES:
+        raise failures.DiracInvalidParameters("unknown Program workflow lane")
+    return {"work_item_ref": ref(value.get("work_item_ref"), "work_item"),
+            "to_lane": lane,
+            "reason": nonempty(value.get("reason"), "transition.reason", maximum=4000)}
+
+
+def work_execution(value: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise failures.DiracInvalidParameters("execution binding must be an object")
+    return {"work_item_ref": ref(value.get("work_item_ref"), "work_item"),
+            "job_ref": ref(value.get("job_ref"), "job"),
+            "purpose": _optional_text(value.get("purpose"), 2000)}
 
 
 def evidence_binding(value: dict[str, Any]) -> dict[str, Any]:
@@ -246,7 +269,7 @@ def evidence_binding(value: dict[str, Any]) -> dict[str, Any]:
         raise failures.DiracInvalidParameters("binding must be an object")
     subject = ref(value.get("subject_ref"))
     evidence = ref(value.get("evidence_ref"))
-    if subject["kind"] not in {"program", "objective", "hypothesis", "decision", "milestone", "stage_gate", "work_package"}:
+    if subject["kind"] not in {"program", "objective", "hypothesis", "decision", "milestone", "stage_gate", "work_item", "work_package"}:
         raise failures.DiracInvalidParameters("unsupported evidence subject kind")
     if evidence["kind"] not in EVIDENCE_KINDS:
         raise failures.DiracInvalidParameters("unsupported evidence object kind")

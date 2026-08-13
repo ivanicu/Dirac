@@ -285,6 +285,18 @@ def program_work_package_record(input: dict, ctx) -> dict:
         ctx.actor, ctx.request_id)
 
 
+def program_work_item_transition(input: dict, ctx) -> dict:
+    return _programs(ctx).transition_work_item(
+        input["program_ref"], input["expected_version"], input["transition"],
+        ctx.actor, ctx.request_id)
+
+
+def program_work_execution_attach(input: dict, ctx) -> dict:
+    return _programs(ctx).attach_work_execution(
+        input["program_ref"], input["expected_version"], input["execution"],
+        ctx.actor, ctx.request_id)
+
+
 def program_evidence_attach(input: dict, ctx) -> dict:
     return _programs(ctx).attach_evidence(
         input["program_ref"], input["expected_version"], input["binding"],

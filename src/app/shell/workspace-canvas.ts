@@ -36,6 +36,23 @@ export class WorkspaceCanvas {
     private activeViewId = '';
     private search?: HTMLInputElement;
 
+    private workflowLane(workspace: string): string | undefined {
+        return ({ structures: 'understand', design: 'design', campaigns: 'decide',
+            synthesis: 'make', experiments: 'test_learn' } as Record<string, string>)[workspace];
+    }
+
+    private workflowContext(workspace: string): HTMLElement | undefined {
+        const lane = this.workflowLane(workspace);
+        if (!lane) return undefined;
+        const section = element('section', 'workspace-workflow-context');
+        section.dataset.workflowLane = lane;
+        section.append(element('span', 'workspace-section-kicker', 'Program workflow'),
+            element('h2', '', `${lane.replace('_', ' & ')} work`),
+            element('p', 'workspace-workflow-status', 'Loading unique Program Work Items…'));
+        const list = element('div', 'workspace-workflow-items'); list.dataset.workflowItems = '';
+        section.append(list); return section;
+    }
+
     constructor(private readonly host: HTMLElement, private readonly breadcrumb: HTMLElement,
                 private readonly navigate: Navigate) {
         document.addEventListener('keydown', event => {
@@ -201,8 +218,10 @@ export class WorkspaceCanvas {
             element('span', '', 'Planned modules, connection sequence, and private note'));
         readiness.append(readinessSummary, toolbar, resultStatus, moduleGrid, lower);
 
-        page.append(header, question, visual, readiness);
+        const workflow = this.workflowContext(definition.workspace);
+        page.append(header, question, ...(workflow ? [workflow] : []), visual, readiness);
         this.host.replaceChildren(page);
+        if (workflow) queueMicrotask(() => document.dispatchEvent(new CustomEvent('dirac:refresh-program')));
     }
 
     private renderConnectedCanvas(definition: ViewDefinition, programId?: string): void {
@@ -244,8 +263,10 @@ export class WorkspaceCanvas {
         list.dataset.runList = '';
         list.setAttribute('aria-live', 'polite');
         runs.append(runsHeading, status, list);
-        page.append(header, question, runs);
+        const workflow = this.workflowContext(definition.workspace);
+        page.append(header, question, ...(workflow ? [workflow] : []), runs);
         this.host.replaceChildren(page);
+        if (workflow) queueMicrotask(() => document.dispatchEvent(new CustomEvent('dirac:refresh-program')));
     }
 
     private renderProgramCanvas(definition: ViewDefinition, programId?: string): void {
@@ -327,7 +348,7 @@ export class WorkspaceCanvas {
         const operating = element('div', 'program-operating-grid');
         operating.append(panel('member', 'Team & roles', 'Member', 'members', 'Explicit scientific responsibility and review authority.'),
             panel('gate', 'Stage gates', 'Gate', 'stage_gates', 'Evidence-backed readiness criteria and approval decisions.'),
-            panel('work', 'Work packages', 'Work package', 'work_packages', 'Owned scientific delivery with dependencies and due dates.'),
+            panel('work', 'Workflow jobs', 'Work item', 'work_items', 'One stable job moves through Understand, Design, Decide, Make, and Test & Learn.'),
             panel('evidence', 'Evidence graph', 'Evidence edge', 'evidence_bindings', 'Claims linked to canonical evidence without copying it.'),
             panel('lineage', 'Entity lineage', 'Lineage edge', 'lineage', 'One compound identity across form, batch, sample and result.'));
         const timeline = element('section', 'program-timeline');

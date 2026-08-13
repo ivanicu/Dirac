@@ -1249,6 +1249,16 @@
 .program-atom span,
 .program-atom small { color: var(--ink-2); font: 500 9px/1.3 var(--mono); }
 .program-atom p { color: var(--ink-2); font: 500 11px/1.45 var(--sans); }
+.program-atom .program-atom-actions { justify-content: flex-start; gap: 6px; margin-top: 10px; }
+.program-atom-actions button { min-height: 32px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
+.workspace-workflow-context { border: 1px solid var(--line); background: var(--surface); padding: 16px; }
+.workspace-workflow-context h2 { margin: 4px 0; font: 700 18px/1.2 var(--sans); text-transform: capitalize; }
+.workspace-workflow-status { margin: 0 0 10px; color: var(--ink-2); font: 500 11px/1.4 var(--sans); }
+.workspace-workflow-items { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.workspace-workflow-item { border: 1px solid var(--line); padding: 10px; display: grid; gap: 4px; }
+.workspace-workflow-item strong { font: 650 12px/1.3 var(--sans); }
+.workspace-workflow-item span { color: var(--ink-2); font: 500 9px/1.3 var(--mono); }
+.context-work-item select { width: 100%; max-width: 220px; border: 0; background: transparent; font: 650 9px/1.2 var(--mono); }
 .program-atom-empty { margin: 0; padding: 28px 16px; color: var(--ink-2); font: 500 11px/1.4 var(--sans); }
 .program-timeline ol { display: grid; margin: 0; padding: 0; list-style: none; }
 .program-timeline li { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; gap: 12px; padding: 11px 16px; border-bottom: 1px solid var(--line); }
@@ -1351,6 +1361,7 @@
 }
 #app.workspace-shell .global-context-bar .context-cell { display: none; }
 #app.workspace-shell .global-context-bar .context-cell:first-child { display: block; min-width: 88px; }
+#app.workspace-shell .global-context-bar .context-work-item { display: block; min-width: 150px; }
 #app.workspace-shell .global-context-bar .context-cell span { color: var(--etch); font: 500 7px/1 var(--mono); letter-spacing: .16em; }
 #app.workspace-shell .global-context-bar .context-cell strong { display: block; margin-top: 2px; color: var(--ink); font: 600 9px/1 var(--mono); }
 #app.workspace-shell .global-context-bar .context-actions { display: block; grid-column: auto; white-space: nowrap; }

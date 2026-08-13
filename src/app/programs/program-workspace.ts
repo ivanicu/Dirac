@@ -32,6 +32,12 @@ export class ProgramWorkspaceController {
                 error instanceof Error ? error.message : String(error), 'error'));
         });
         document.addEventListener('change', event => {
+            const workItem = (event.target as Element | null)?.closest<HTMLSelectElement>('#context-work-item');
+            if (workItem?.value) {
+                const ref = { kind: 'work_item' as const, id: workItem.value };
+                scientificContext.patch({ focusedObject: ref, selectedObjects: [ref], origin: 'selection' });
+                return;
+            }
             const select = (event.target as Element | null)?.closest<HTMLSelectElement>('[data-program-select]');
             if (!select?.value) return;
             this.selectProgram(select.value);
@@ -40,28 +46,35 @@ export class ProgramWorkspaceController {
 
     async refresh(): Promise<void> {
         const root = document.querySelector<HTMLElement>('.program-workspace');
-        if (!root) return;
-        this.status('Loading durable Program state…', 'loading');
+        const workflowRoots = document.querySelectorAll<HTMLElement>('[data-workflow-lane]');
+        const globalWork = document.querySelector<HTMLSelectElement>('#context-work-item');
+        if (!root && !workflowRoots.length && !globalWork) return;
+        if (root) this.status('Loading durable Program state…', 'loading');
         try {
             const listEnvelope = await this.client.execute('program.list', { limit: 200 });
             if (!listEnvelope.ok) throw new Error(listEnvelope.error?.user_message
                 || listEnvelope.error?.message || 'program.list refused');
             const programs = (listEnvelope.data?.programs || []) as Program[];
-            const selector = root.querySelector<HTMLSelectElement>('[data-program-select]')!;
-            selector.replaceChildren(new Option(programs.length ? 'Select a Program' : 'No Programs yet', ''));
-            for (const program of programs) selector.add(new Option(
-                `${program.code} · ${program.name}`, program.ref.id));
+            const selector = root?.querySelector<HTMLSelectElement>('[data-program-select]');
+            if (selector) {
+                selector.replaceChildren(new Option(programs.length ? 'Select a Program' : 'No Programs yet', ''));
+                for (const program of programs) selector.add(new Option(
+                    `${program.code} · ${program.name}`, program.ref.id));
+            }
             const routeId = document.querySelector<HTMLElement>('.program-page')?.dataset.programId;
             const contextId = scientificContext.current().programRef?.id;
             const requested = routeId && routeId !== 'current' ? routeId : contextId;
             const activeId = requested && programs.some(item => item.ref.id === requested)
                 ? requested : programs[0]?.ref.id;
             if (!activeId) {
-                this.current = undefined; this.showEmpty(true);
-                this.status('No Program exists yet. Create the project fact root before entering Design.', 'empty');
+                this.current = undefined;
+                if (root) { this.showEmpty(true);
+                    this.status('No Program exists yet. Create the project fact root before entering Design.', 'empty'); }
+                this.renderWorkflow(undefined);
+                this.renderGlobalWork(undefined);
                 return;
             }
-            selector.value = activeId;
+            if (selector) selector.value = activeId;
             const envelope = await this.client.execute('program.get', {
                 program_ref: { kind: 'program', id: activeId },
             });
@@ -70,11 +83,57 @@ export class ProgramWorkspaceController {
             this.current = envelope.data?.program as Program;
             scientificContext.patch({ programRef: this.current.ref,
                 focusedObject: this.current.ref, origin: 'restore' });
-            this.render(this.current); this.showEmpty(false);
-            this.status(`Version ${this.current.version} · durable PostgreSQL aggregate · ${this.current.events?.length || 0} recent events`, 'ready');
+            if (root) {
+                this.render(this.current); this.showEmpty(false);
+                this.status(`Version ${this.current.version} · durable PostgreSQL aggregate · ${this.current.events?.length || 0} recent events`, 'ready');
+            }
+            this.renderWorkflow(this.current);
+            this.renderGlobalWork(this.current);
         } catch (error) {
             this.current = undefined; this.showEmpty(true);
-            this.status(error instanceof Error ? error.message : String(error), 'error');
+            if (root) this.status(error instanceof Error ? error.message : String(error), 'error');
+            this.renderWorkflow(undefined, error instanceof Error ? error.message : String(error));
+            this.renderGlobalWork(undefined);
+        }
+    }
+
+    private renderGlobalWork(program?: Program): void {
+        const select = document.querySelector<HTMLSelectElement>('#context-work-item');
+        if (!select) return;
+        const workspace = document.getElementById('app')?.dataset.workspace || '';
+        const lane = ({ structures: 'understand', design: 'design', campaigns: 'decide',
+            synthesis: 'make', experiments: 'test_learn' } as Record<string, string>)[workspace];
+        const items = ((program?.work_items || []) as Array<Record<string, any>>)
+            .filter(item => !lane || item.lane === lane);
+        const previous = select.value;
+        select.replaceChildren(new Option(lane ? `${humanize(lane)} · no active work` : 'No active work', ''));
+        for (const item of items) select.add(new Option(`${item.key} · ${item.title}`, item.ref.id));
+        if (items.some(item => item.ref.id === previous)) select.value = previous;
+        else if (items[0]) select.value = items[0].ref.id;
+        select.title = lane ? `Unique Program Work Items currently in ${humanize(lane)}`
+            : 'Unique Program Work Items';
+    }
+
+    private renderWorkflow(program?: Program, failure?: string): void {
+        for (const root of document.querySelectorAll<HTMLElement>('[data-workflow-lane]')) {
+            const lane = root.dataset.workflowLane;
+            const status = root.querySelector<HTMLElement>('.workspace-workflow-status');
+            const list = root.querySelector<HTMLElement>('[data-workflow-items]');
+            if (!list || !status) continue;
+            list.replaceChildren();
+            if (failure) { status.textContent = failure; continue; }
+            const items = ((program?.work_items || []) as Array<Record<string, any>>)
+                .filter(item => item.lane === lane);
+            status.textContent = program
+                ? `${items.length} unique Work Item${items.length === 1 ? '' : 's'} in this stage · Program ${program.code}`
+                : 'Select or create a Program to route work through this stage.';
+            for (const item of items) {
+                const card = document.createElement('article'); card.className = 'workspace-workflow-item';
+                card.append(text('strong', item.title), text('span', `${item.ref.id} · ${humanize(item.status)}`),
+                    text('span', `${item.executions?.length || 0} execution job(s) · canonical`));
+                list.append(card);
+            }
+            if (program && !items.length) list.append(text('p', 'No Work Item is currently in this stage.', 'program-atom-empty'));
         }
     }
 
@@ -98,7 +157,7 @@ export class ProgramWorkspaceController {
             const labels: Array<[string, string]> = [
                 ['Objectives', 'objectives'], ['Hypotheses', 'hypotheses'],
                 ['Decisions', 'decisions'], ['Milestones', 'milestones'], ['Team', 'members'],
-                ['Stage gates', 'stage_gates'], ['Work', 'work_packages'], ['Evidence', 'evidence_bindings'],
+                ['Stage gates', 'stage_gates'], ['Work items', 'work_items'], ['Executions', 'work_executions'], ['Evidence', 'evidence_bindings'],
                 ['Lineage', 'lineage'], ['Linked objects', 'links'],
             ];
             for (const [label, key] of labels) {
@@ -108,7 +167,7 @@ export class ProgramWorkspaceController {
             }
         }
         for (const collection of ['objectives', 'hypotheses', 'milestones', 'decisions', 'members',
-            'stage_gates', 'work_packages', 'evidence_bindings', 'lineage']) {
+            'stage_gates', 'work_items', 'work_packages', 'work_executions', 'evidence_bindings', 'lineage']) {
             const list = document.querySelector<HTMLElement>(`[data-program-collection="${collection}"]`);
             if (!list) continue;
             list.replaceChildren();
@@ -124,12 +183,21 @@ export class ProgramWorkspaceController {
                     : atom.subject_ref ? `${atom.subject_ref.kind} ${atom.relation} ${atom.evidence_ref.kind}` : '';
                 const principal = atom.principal ? `${atom.principal.id} · ${humanize(atom.role)}` : '';
                 heading.append(text('strong', atom.title || atom.action || principal || edge || atom.key || atom.claim || 'Record'),
-                    text('span', atom.revision ? `${atom.key || 'record'} · r${atom.revision}` : humanize(atom.status || atom.relation || 'current')));
+                    text('span', atom.lane ? `${humanize(atom.lane)} · ${humanize(atom.status)}`
+                        : atom.revision ? `${atom.key || 'record'} · r${atom.revision}` : humanize(atom.status || atom.relation || 'current')));
                 const detail = atom.statement || atom.rationale || atom.description || atom.outcome
                     || atom.responsibility || atom.evidence_summary || atom.claim || edge || '';
                 const actor = atom.created_by?.id || atom.assigned_by?.id || atom.attached_by?.id || 'system';
                 const at = atom.created_at || atom.assigned_at || atom.attached_at || '';
                 card.append(heading, text('p', detail), text('small', `${humanize(atom.status || 'current')} · ${humanize(actor)} · ${String(at).slice(0, 10)}`));
+                if (collection === 'work_items') {
+                    const actions = document.createElement('div'); actions.className = 'program-atom-actions';
+                    const move = text('button', 'Move stage') as HTMLButtonElement; move.type = 'button';
+                    move.dataset.programAction = `move-work:${atom.ref.id}`;
+                    const attach = text('button', 'Attach execution') as HTMLButtonElement; attach.type = 'button';
+                    attach.dataset.programAction = `attach-job:${atom.ref.id}`;
+                    actions.append(move, attach); card.append(actions);
+                }
                 list.append(card);
             }
         }
@@ -178,6 +246,8 @@ export class ProgramWorkspaceController {
         if (action === 'member') return this.member();
         if (action === 'gate') return this.gate();
         if (action === 'work') return this.workPackage();
+        if (action.startsWith('move-work:')) return this.moveWork(action.slice('move-work:'.length));
+        if (action.startsWith('attach-job:')) return this.attachJob(action.slice('attach-job:'.length));
         if (action === 'evidence') return this.evidence();
         if (action === 'lineage') return this.lineage();
         if (action === 'link') return this.link();
@@ -315,19 +385,43 @@ export class ProgramWorkspaceController {
         this.form('Record Work Package', [
             { name: 'key', label: 'Stable work key', required: true }, { name: 'title', label: 'Work package', required: true },
             { name: 'description', label: 'Scientific deliverable', required: true, multiline: true },
+            { name: 'lane', label: 'Workflow lane', options: ['understand', 'design', 'decide', 'make', 'test_learn'] },
             { name: 'status', label: 'Status', options: ['backlog', 'ready', 'active', 'blocked', 'done', 'cancelled'] },
             { name: 'priority', label: 'Priority 1–5', value: '3', required: true },
             { name: 'owner_id', label: 'Owner ID' }, { name: 'due_on', label: 'Due date', placeholder: 'YYYY-MM-DD' },
         ], values => this.execute('program.work_package.record', {
             program_ref: this.current!.ref, expected_version: this.current!.version,
             work_package: { key: values.key, title: values.title, description: values.description,
-                status: values.status, priority: Number(values.priority), due_on: values.due_on || undefined,
+                lane: values.lane, status: values.status, priority: Number(values.priority), due_on: values.due_on || undefined,
                 owner: values.owner_id ? { kind: 'human', id: values.owner_id } : undefined },
         }, 'Scientific work package recorded.'));
     }
 
+    private moveWork(workItemId: string): void {
+        const workItem = (this.current!.work_items || []).find((item: any) => item.ref.id === workItemId);
+        this.form('Move Work Item', [
+            { name: 'to_lane', label: 'Destination', options: ['understand', 'design', 'decide', 'make', 'test_learn'] },
+            { name: 'reason', label: 'Why it is ready to move', required: true, multiline: true },
+        ], values => this.execute('program.work_item.transition', {
+            program_ref: this.current!.ref, expected_version: this.current!.version,
+            transition: { work_item_ref: workItem.ref, to_lane: values.to_lane, reason: values.reason },
+        }, 'The same Work Item moved to its next workflow lane.'));
+    }
+
+    private attachJob(workItemId: string): void {
+        const workItem = (this.current!.work_items || []).find((item: any) => item.ref.id === workItemId);
+        this.form('Attach Runtime Job', [
+            { name: 'job_id', label: 'Existing Job ID', required: true },
+            { name: 'purpose', label: 'Purpose of this execution', multiline: true },
+        ], values => this.execute('program.work_execution.attach', {
+            program_ref: this.current!.ref, expected_version: this.current!.version,
+            execution: { work_item_ref: workItem.ref, job_ref: { kind: 'job', id: values.job_id },
+                purpose: values.purpose || undefined },
+        }, 'Runtime Job attached to this unique Work Item.'));
+    }
+
     private evidence(): void {
-        const subjects = ['program', 'objective', 'hypothesis', 'decision', 'milestone', 'stage_gate', 'work_package'];
+        const subjects = ['program', 'objective', 'hypothesis', 'decision', 'milestone', 'stage_gate', 'work_item', 'work_package'];
         this.form('Attach Canonical Evidence', [
             { name: 'subject_kind', label: 'Subject kind', options: subjects },
             { name: 'subject_id', label: 'Subject canonical ID', required: true, value: this.current!.ref.id },

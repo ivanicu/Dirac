@@ -661,6 +661,7 @@ function initShellNavigation(): void {
         render(route.workspace, route.view);
         moduleHost.activate(route.view, scientificContext.current());
         workspaceCanvas.render(route);
+        queueMicrotask(() => document.dispatchEvent(new CustomEvent('dirac:refresh-program')));
         if (route.workspace === 'runs') void refreshRuns();
         const definition = VIEWS.find(view => view.id === route.view);
         document.title = definition ? `${definition.label} · Dirac` : 'Dirac';

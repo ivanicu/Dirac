@@ -493,10 +493,28 @@
       "output_schema": {"type":"object","required":["work_package","program_version","event_ref"]}
     },
     {
+      "id": "program.work_item.transition", "version": 1, "category": "program",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-and-expected-version", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","work_item"], "output_object_kinds": ["work_item","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_work_item_transition",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","transition"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"transition":{"type":"object"}}},
+      "output_schema": {"type":"object","required":["work_item","transition","program_version","event_ref"]}
+    },
+    {
+      "id": "program.work_execution.attach", "version": 1, "category": "program",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "one-work-item-per-job", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","work_item","job"], "output_object_kinds": ["work_item","job","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_work_execution_attach",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","execution"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"execution":{"type":"object"}}},
+      "output_schema": {"type":"object","required":["execution","program_version","created"]}
+    },
+    {
       "id": "program.evidence.attach", "version": 1, "category": "program",
       "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
       "idempotency_policy": "request-id-and-evidence-edge", "job_policy": "forbidden", "provenance_policy": "required",
-      "input_object_kinds": ["program","objective","hypothesis","decision","milestone","stage_gate","work_package","evidence","measurement","dataset","artifact"],
+      "input_object_kinds": ["program","objective","hypothesis","decision","milestone","stage_gate","work_item","work_package","evidence","measurement","dataset","artifact"],
       "output_object_kinds": ["evidence","artifact"],
       "errors": ["INVALID_PARAMETERS", "DB_UNAVAILABLE", "NOT_FOUND", "INTERNAL"], "handler": "handlers:program_evidence_attach",
       "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","binding"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"binding":{"type":"object"}}},

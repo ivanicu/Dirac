@@ -32,7 +32,7 @@ def _program_health(program: dict[str, Any]) -> dict[str, Any]:
                             if item.get("status") not in {"superseded", "retired", "cancelled"}]
     objectives = current("objectives"); hypotheses = current("hypotheses")
     members = current("members"); gates = current("stage_gates")
-    work = current("work_packages"); evidence = current("evidence_bindings")
+    work = current("work_items") or current("work_packages"); evidence = current("evidence_bindings")
     checks = [
         ("target", bool(program.get("target_ref")), "Assign the canonical target."),
         ("portfolio", bool(program.get("portfolio_ref")), "Place the Program in a Portfolio."),
@@ -93,7 +93,8 @@ class MemoryProgramRepository:
             "created_at": now, "updated_at": now, "updated_by": who,
             "objectives": [], "hypotheses": [], "decisions": [],
             "milestones": [], "links": [], "members": [], "stage_gates": [],
-            "work_packages": [], "evidence_bindings": [], "lineage": [],
+            "work_items": [], "work_packages": [], "work_transitions": [],
+            "work_executions": [], "evidence_bindings": [], "lineage": [],
         }
         self.programs[identifier] = row; self.by_code[spec["code"]] = identifier
         self.events[identifier] = []
@@ -183,8 +184,82 @@ class MemoryProgramRepository:
 
     def record_work_package(self, program_ref: dict, expected_version: int, value: dict,
                             actor: dict, request_id: str | None = None) -> dict:
-        return self._record_revision(program_ref, expected_version, "work_package", D.work_package(value),
-                                     actor, request_id, "work_packages")
+        identifier = self._id(program_ref); who = D.actor(actor); item = D.work_package(value)
+        duplicate = self._duplicate(identifier, request_id)
+        if duplicate is not None: return duplicate
+        row = self.programs[identifier]; self._expect(row, expected_version)
+        work_item = next((entry for entry in row["work_items"]
+                          if entry["key"].lower() == item["key"].lower()), None)
+        created = work_item is None
+        if work_item is None:
+            work_item = {"ref": _ref("work_item", uuid.uuid4()), "key": item["key"],
+                         "title": item["title"], "lane": item["lane"],
+                         "created_by": who, "created_at": datetime.now(timezone.utc).isoformat(),
+                         "transitions": [], "executions": []}
+            row["work_items"].append(work_item)
+            transition = {"ref": _ref("artifact", uuid.uuid4()), "work_item_ref": work_item["ref"],
+                          "from_lane": None, "to_lane": item["lane"],
+                          "reason": "Created in this workflow lane", "transitioned_by": who,
+                          "transitioned_at": datetime.now(timezone.utc).isoformat()}
+            work_item["transitions"].append(transition); row["work_transitions"].append(transition)
+        current = next((package for package in reversed(row["work_packages"])
+                        if package["work_item_ref"] == work_item["ref"]
+                        and package.get("status") != "superseded"), None)
+        if current: current["status"] = "superseded"
+        package = {"ref": _ref("work_package", uuid.uuid4()), "work_item_ref": work_item["ref"],
+                   **copy.deepcopy(item), "lane": work_item["lane"],
+                   "revision": current["revision"] + 1 if current else 1,
+                   "supersedes_ref": current["ref"] if current else None,
+                   "created_by": who, "created_at": datetime.now(timezone.utc).isoformat()}
+        row["work_packages"].append(package); work_item["title"] = package["title"]
+        work_item["current_package"] = copy.deepcopy(package); work_item["status"] = package["status"]
+        row["version"] += 1
+        result = {"work_item": copy.deepcopy(work_item), "work_package": copy.deepcopy(package),
+                  "program_version": row["version"], "created": created}
+        return self._record(identifier, "work_package.recorded", work_item["ref"], result, who, request_id)
+
+    def transition_work_item(self, program_ref: dict, expected_version: int, value: dict,
+                             actor: dict, request_id: str | None = None) -> dict:
+        identifier = self._id(program_ref); who = D.actor(actor); transition = D.work_transition(value)
+        duplicate = self._duplicate(identifier, request_id)
+        if duplicate is not None: return duplicate
+        row = self.programs[identifier]; self._expect(row, expected_version)
+        work_item = next((entry for entry in row["work_items"]
+                          if entry["ref"] == transition["work_item_ref"]), None)
+        if work_item is None: raise failures.DiracNotFound("Program Work Item does not exist")
+        if work_item["lane"] == transition["to_lane"]:
+            raise failures.DiracInvalidParameters("Work Item is already in that workflow lane")
+        record = {"ref": _ref("artifact", uuid.uuid4()), **transition,
+                  "from_lane": work_item["lane"], "transitioned_by": who,
+                  "transitioned_at": datetime.now(timezone.utc).isoformat()}
+        work_item["lane"] = transition["to_lane"]
+        work_item["transitions"].append(record); row["work_transitions"].append(record)
+        row["version"] += 1
+        result = {"work_item": copy.deepcopy(work_item), "transition": copy.deepcopy(record),
+                  "program_version": row["version"]}
+        return self._record(identifier, "work_item.transitioned", work_item["ref"], result, who, request_id)
+
+    def attach_work_execution(self, program_ref: dict, expected_version: int, value: dict,
+                              actor: dict, request_id: str | None = None) -> dict:
+        identifier = self._id(program_ref); who = D.actor(actor); binding = D.work_execution(value)
+        duplicate = self._duplicate(identifier, request_id)
+        if duplicate is not None: return duplicate
+        row = self.programs[identifier]; self._expect(row, expected_version)
+        work_item = next((entry for entry in row["work_items"]
+                          if entry["ref"] == binding["work_item_ref"]), None)
+        if work_item is None: raise failures.DiracNotFound("Program Work Item does not exist")
+        existing = next((entry for entry in row["work_executions"]
+                         if entry["job_ref"] == binding["job_ref"]), None)
+        if existing:
+            if existing["work_item_ref"] != binding["work_item_ref"]:
+                raise failures.DiracInvalidParameters("runtime Job already belongs to another Work Item")
+            return {"execution": copy.deepcopy(existing), "program_version": row["version"], "created": False}
+        execution = {"ref": _ref("artifact", uuid.uuid4()), **binding, "linked_by": who,
+                     "linked_at": datetime.now(timezone.utc).isoformat()}
+        row["work_executions"].append(execution); work_item["executions"].append(execution)
+        row["version"] += 1
+        result = {"execution": copy.deepcopy(execution), "program_version": row["version"], "created": True}
+        return self._record(identifier, "work_execution.linked", work_item["ref"], result, who, request_id)
 
     def attach_evidence(self, program_ref: dict, expected_version: int, value: dict,
                         actor: dict, request_id: str | None = None) -> dict:
@@ -340,13 +415,16 @@ class MemoryProgramRepository:
         row = self.programs[identifier]
         base = {k: copy.deepcopy(v) for k, v in row.items()
                 if k not in {"id", "objectives", "hypotheses", "decisions", "milestones", "links",
-                             "members", "stage_gates", "work_packages", "evidence_bindings", "lineage"}}
+                             "members", "stage_gates", "work_items", "work_packages", "work_transitions",
+                             "work_executions", "evidence_bindings", "lineage"}}
         base.update({k: copy.deepcopy(row[k]) for k in
                      ("objectives", "hypotheses", "decisions", "milestones", "links", "members",
-                      "stage_gates", "work_packages", "evidence_bindings", "lineage")})
+                      "stage_gates", "work_items", "work_packages", "work_transitions",
+                      "work_executions", "evidence_bindings", "lineage")})
         base["counts"] = {k: len(row[k]) for k in
                           ("objectives", "hypotheses", "decisions", "milestones", "links", "members",
-                           "stage_gates", "work_packages", "evidence_bindings", "lineage")}
+                           "stage_gates", "work_items", "work_packages", "work_transitions",
+                           "work_executions", "evidence_bindings", "lineage")}
         base["health"] = _program_health(base)
         base["events"] = copy.deepcopy(self.events.get(identifier, [])[-30:][::-1])
         return base
@@ -525,19 +603,100 @@ class PostgresProgramRepository:
         with self._mutation(program_ref, expected_version, request_id) as state:
             cur, identifier, _row, duplicate = state
             if duplicate is not None: return duplicate
-            cur.execute("SELECT id,revision FROM design.program_work_package WHERE program_id=%s AND work_key=%s ORDER BY revision DESC LIMIT 1 FOR UPDATE", (identifier, item["key"]))
-            old = cur.fetchone(); revision = old["revision"] + 1 if old else 1
+            cur.execute("SELECT id,current_lane::text,current_package_id,created_at,created_by_kind::text,created_by_id FROM design.program_work_item WHERE program_id=%s AND work_key=%s FOR UPDATE", (identifier, item["key"]))
+            work_row = cur.fetchone(); created = work_row is None
+            if work_row is None:
+                cur.execute("INSERT INTO design.program_work_item(program_id,work_key,title,current_lane,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id,current_lane::text,current_package_id,created_at,created_by_kind::text,created_by_id",
+                            (identifier, item["key"], item["title"], item["lane"], who["kind"], who["id"]))
+                work_row = cur.fetchone()
+                cur.execute("INSERT INTO design.program_work_transition(work_item_id,from_lane,to_lane,reason,transitioned_by_kind,transitioned_by_id) VALUES (%s,NULL,%s,%s,%s,%s)",
+                            (work_row["id"], item["lane"], "Created in this workflow lane", who["kind"], who["id"]))
+            elif work_row["current_lane"] != item["lane"]:
+                raise failures.DiracInvalidParameters(
+                    "Work Item lane changes require program.work_item.transition",
+                    details={"work_item_ref": _ref("work_item", work_row["id"]),
+                             "current_lane": work_row["current_lane"], "requested_lane": item["lane"]})
+            old = None
+            if work_row["current_package_id"]:
+                cur.execute("SELECT id,revision FROM design.program_work_package WHERE id=%s FOR UPDATE",
+                            (work_row["current_package_id"],)); old = cur.fetchone()
+            revision = old["revision"] + 1 if old else 1
             if old: cur.execute("UPDATE design.program_work_package SET status='superseded' WHERE id=%s", (old["id"],))
             owner = item["owner"]
-            cur.execute("INSERT INTO design.program_work_package(program_id,work_key,revision,title,description,status,priority,owner_kind,owner_id,due_on,deliverable_refs,supersedes_id,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at",
-                        (identifier, item["key"], revision, item["title"], item["description"], item["status"], item["priority"], owner["kind"] if owner else None, owner["id"] if owner else None, item["due_on"], self._json(item["deliverable_refs"]), old["id"] if old else None, who["kind"], who["id"]))
+            cur.execute("INSERT INTO design.program_work_package(program_id,work_item_id,work_key,revision,title,description,status,priority,owner_kind,owner_id,due_on,deliverable_refs,supersedes_id,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at",
+                        (identifier, work_row["id"], item["key"], revision, item["title"], item["description"], item["status"], item["priority"], owner["kind"] if owner else None, owner["id"] if owner else None, item["due_on"], self._json(item["deliverable_refs"]), old["id"] if old else None, who["kind"], who["id"]))
             inserted = cur.fetchone()
             for dependency in item["depends_on_refs"]:
-                cur.execute("INSERT INTO design.program_work_dependency(work_package_id,depends_on_id) VALUES (%s,%s)", (inserted["id"], dependency["id"]))
-            package = {"ref": _ref("work_package", inserted["id"]), **item, "revision": revision,
+                cur.execute("SELECT program_id FROM design.program_work_item WHERE id=%s", (dependency["id"],))
+                dependency_row = cur.fetchone()
+                if dependency_row is None or str(dependency_row["program_id"]) != str(identifier):
+                    raise failures.DiracInvalidParameters("Work Item dependencies must belong to the same Program")
+                cur.execute("INSERT INTO design.program_work_item_dependency(work_item_id,depends_on_work_item_id) VALUES (%s,%s) ON CONFLICT DO NOTHING",
+                            (work_row["id"], dependency["id"]))
+            cur.execute("UPDATE design.program_work_item SET title=%s,current_package_id=%s WHERE id=%s",
+                        (item["title"], inserted["id"], work_row["id"]))
+            work_ref = _ref("work_item", work_row["id"])
+            package = {"ref": _ref("work_package", inserted["id"]), "work_item_ref": work_ref,
+                **item, "lane": work_row["current_lane"], "revision": revision,
                 "supersedes_ref": _ref("work_package", old["id"]) if old else None, "created_by": who, "created_at": inserted["created_at"]}
-            version = self._advance(cur, identifier, who); result = {"work_package": package, "program_version": version}
-            return self._finish(cur, identifier, version, "work_package.recorded", package["ref"], result, who, request_id)
+            work_item = {"ref": work_ref, "key": item["key"], "title": item["title"],
+                         "lane": work_row["current_lane"], "status": item["status"],
+                         "current_package": package, "created_at": work_row["created_at"],
+                         "created_by": {"kind": work_row["created_by_kind"], "id": work_row["created_by_id"]}}
+            version = self._advance(cur, identifier, who)
+            result = {"work_item": work_item, "work_package": package,
+                      "program_version": version, "created": created}
+            return self._finish(cur, identifier, version, "work_package.recorded", work_ref, result, who, request_id)
+
+    def transition_work_item(self, program_ref: dict, expected_version: int, value: dict,
+                             actor: dict, request_id: str | None = None) -> dict:
+        item = D.work_transition(value); who = D.actor(actor)
+        with self._mutation(program_ref, expected_version, request_id) as state:
+            cur, identifier, _row, duplicate = state
+            if duplicate is not None: return duplicate
+            cur.execute("SELECT id,work_key::text AS key,title,current_lane::text,current_package_id,created_at,created_by_kind::text,created_by_id FROM design.program_work_item WHERE id=%s AND program_id=%s FOR UPDATE",
+                        (item["work_item_ref"]["id"], identifier))
+            row = cur.fetchone()
+            if row is None: raise failures.DiracNotFound("Program Work Item does not exist")
+            if row["current_lane"] == item["to_lane"]:
+                raise failures.DiracInvalidParameters("Work Item is already in that workflow lane")
+            cur.execute("INSERT INTO design.program_work_transition(work_item_id,from_lane,to_lane,reason,transitioned_by_kind,transitioned_by_id) VALUES (%s,%s,%s,%s,%s,%s) RETURNING id,transitioned_at",
+                        (row["id"], row["current_lane"], item["to_lane"], item["reason"], who["kind"], who["id"]))
+            moved = cur.fetchone()
+            cur.execute("UPDATE design.program_work_item SET current_lane=%s WHERE id=%s", (item["to_lane"], row["id"]))
+            transition = {"ref": _ref("artifact", moved["id"]), "work_item_ref": item["work_item_ref"],
+                          "from_lane": row["current_lane"], "to_lane": item["to_lane"],
+                          "reason": item["reason"], "transitioned_at": moved["transitioned_at"],
+                          "transitioned_by": who}
+            work_item = {"ref": item["work_item_ref"], "key": row["key"], "title": row["title"],
+                         "lane": item["to_lane"]}
+            version = self._advance(cur, identifier, who)
+            result = {"work_item": work_item, "transition": transition, "program_version": version}
+            return self._finish(cur, identifier, version, "work_item.transitioned", item["work_item_ref"], result, who, request_id)
+
+    def attach_work_execution(self, program_ref: dict, expected_version: int, value: dict,
+                              actor: dict, request_id: str | None = None) -> dict:
+        item = D.work_execution(value); who = D.actor(actor)
+        with self._mutation(program_ref, expected_version, request_id) as state:
+            cur, identifier, row, duplicate = state
+            if duplicate is not None: return duplicate
+            cur.execute("SELECT id FROM design.program_work_item WHERE id=%s AND program_id=%s",
+                        (item["work_item_ref"]["id"], identifier))
+            if cur.fetchone() is None: raise failures.DiracNotFound("Program Work Item does not exist")
+            cur.execute("SELECT id,work_item_id,purpose,linked_at,linked_by_kind::text,linked_by_id FROM design.program_work_execution WHERE job_id=%s",
+                        (item["job_ref"]["id"],))
+            existing = cur.fetchone()
+            if existing:
+                if str(existing["work_item_id"]) != item["work_item_ref"]["id"]:
+                    raise failures.DiracInvalidParameters("runtime Job already belongs to another Work Item")
+                execution = self._work_execution(existing, item["job_ref"])
+                return {"execution": execution, "program_version": row["version"], "created": False}
+            cur.execute("INSERT INTO design.program_work_execution(work_item_id,job_id,purpose,linked_by_kind,linked_by_id) VALUES (%s,%s,%s,%s,%s) RETURNING id,work_item_id,purpose,linked_at,linked_by_kind::text,linked_by_id",
+                        (item["work_item_ref"]["id"], item["job_ref"]["id"], item["purpose"], who["kind"], who["id"]))
+            execution = self._work_execution(cur.fetchone(), item["job_ref"])
+            version = self._advance(cur, identifier, who)
+            result = {"execution": execution, "program_version": version, "created": True}
+            return self._finish(cur, identifier, version, "work_execution.linked", item["work_item_ref"], result, who, request_id)
 
     def attach_evidence(self, program_ref: dict, expected_version: int, value: dict,
                         actor: dict, request_id: str | None = None) -> dict:
@@ -756,7 +915,7 @@ class PostgresProgramRepository:
         out["members"] = [self._member(r, _ref(r["principal_kind"], r["principal_id"]), r["role"]) for r in cur.fetchall()]
         cur.execute("SELECT id,gate_key::text AS key,revision,stage::text,title,criteria,status,evidence_summary,decision_id,target_date,assessed_at,supersedes_id,created_at,created_by_kind::text AS actor_kind,created_by_id AS actor_id FROM design.program_stage_gate WHERE program_id=%s ORDER BY created_at DESC", (identifier,))
         out["stage_gates"] = [self._stage_gate(r) for r in cur.fetchall()]
-        cur.execute("SELECT id,work_key::text AS key,revision,title,description,status,priority,owner_kind::text,owner_id,due_on,deliverable_refs,supersedes_id,created_at,created_by_kind::text AS actor_kind,created_by_id AS actor_id FROM design.program_work_package WHERE program_id=%s ORDER BY created_at DESC", (identifier,))
+        cur.execute("SELECT id,work_item_id,work_key::text AS key,revision,title,description,status,priority,owner_kind::text,owner_id,due_on,deliverable_refs,supersedes_id,created_at,created_by_kind::text AS actor_kind,created_by_id AS actor_id FROM design.program_work_package WHERE program_id=%s ORDER BY created_at DESC", (identifier,))
         packages = cur.fetchall(); package_ids = [r["id"] for r in packages]
         dependencies: dict[str, list[dict]] = {str(item): [] for item in package_ids}
         if package_ids:
@@ -764,6 +923,30 @@ class PostgresProgramRepository:
             for dependency in cur.fetchall():
                 dependencies[str(dependency["work_package_id"])].append(_ref("work_package", dependency["depends_on_id"]))
         out["work_packages"] = [self._work_package(r, dependencies[str(r["id"])]) for r in packages]
+        cur.execute("SELECT item.id,item.work_key::text AS key,item.title,item.current_lane::text AS lane,item.current_package_id,item.created_at,item.created_by_kind::text AS actor_kind,item.created_by_id AS actor_id,package.status,package.priority,package.owner_kind::text,package.owner_id,package.due_on FROM design.program_work_item item LEFT JOIN design.program_work_package package ON package.id=item.current_package_id WHERE item.program_id=%s ORDER BY item.created_at,item.work_key", (identifier,))
+        work_rows = cur.fetchall(); work_ids = [row["id"] for row in work_rows]
+        work_dependencies: dict[str, list[dict]] = {str(item): [] for item in work_ids}
+        work_transitions: dict[str, list[dict]] = {str(item): [] for item in work_ids}
+        work_executions: dict[str, list[dict]] = {str(item): [] for item in work_ids}
+        if work_ids:
+            cur.execute("SELECT work_item_id,depends_on_work_item_id FROM design.program_work_item_dependency WHERE work_item_id=ANY(%s)", (work_ids,))
+            for dependency in cur.fetchall():
+                work_dependencies[str(dependency["work_item_id"])].append(_ref("work_item", dependency["depends_on_work_item_id"]))
+            cur.execute("SELECT id,work_item_id,from_lane::text,to_lane::text,reason,transitioned_at,transitioned_by_kind::text,transitioned_by_id FROM design.program_work_transition WHERE work_item_id=ANY(%s) ORDER BY transitioned_at DESC", (work_ids,))
+            for transition in cur.fetchall():
+                work_transitions[str(transition["work_item_id"])].append(self._work_transition(transition))
+            cur.execute("SELECT execution.id,execution.work_item_id,execution.job_id,execution.purpose,execution.linked_at,execution.linked_by_kind::text,execution.linked_by_id,job.state::text AS job_state FROM design.program_work_execution execution JOIN app.job job ON job.id=execution.job_id WHERE execution.work_item_id=ANY(%s) ORDER BY execution.linked_at DESC", (work_ids,))
+            for execution in cur.fetchall():
+                work_executions[str(execution["work_item_id"])].append(
+                    {**self._work_execution(execution, _ref("job", execution["job_id"])),
+                     "job_state": execution["job_state"]})
+        packages_by_id = {package["ref"]["id"]: package for package in out["work_packages"]}
+        out["work_items"] = [self._work_item(row,
+            packages_by_id.get(str(row["current_package_id"])),
+            work_dependencies[str(row["id"])], work_transitions[str(row["id"])],
+            work_executions[str(row["id"])]) for row in work_rows]
+        out["work_transitions"] = [item for work_item in out["work_items"] for item in work_item["transitions"]]
+        out["work_executions"] = [item for work_item in out["work_items"] for item in work_item["executions"]]
         cur.execute("SELECT id,subject_kind::text,subject_id,relation::text,evidence_kind::text,evidence_id,claim,strength,attached_at,attached_by_kind::text,attached_by_id FROM design.program_evidence_binding WHERE program_id=%s ORDER BY attached_at DESC", (identifier,))
         out["evidence_bindings"] = [self._evidence(r, {"subject_ref": _ref(r["subject_kind"], r["subject_id"]),
             "evidence_ref": _ref(r["evidence_kind"], r["evidence_id"]), "relation": r["relation"]}) for r in cur.fetchall()]
@@ -785,7 +968,8 @@ class PostgresProgramRepository:
                           "atom_ref": _ref(r["atom_kind"], r["atom_id"]) if r["atom_kind"] else None,
                           "occurred_at": r["occurred_at"], "actor": {"kind": r["actor_kind"], "id": r["actor_id"]}} for r in cur.fetchall()]
         out["counts"] = {name: len(out[name]) for name in ("objectives","hypotheses","decisions","milestones","links",
-            "members","stage_gates","work_packages","evidence_bindings","lineage")}
+            "members","stage_gates","work_items","work_packages","work_transitions","work_executions",
+            "evidence_bindings","lineage")}
         out["health"] = _program_health(out)
         return D.jsonable(out)
 
@@ -845,13 +1029,41 @@ class PostgresProgramRepository:
     @staticmethod
     def _work_package(row, dependencies):
         data = dict(row); identifier = data.pop("id"); supersedes = data.pop("supersedes_id", None)
+        work_item_id = data.pop("work_item_id", None)
         actor_kind = data.pop("actor_kind"); actor_id = data.pop("actor_id")
         owner_kind = data.pop("owner_kind", None); owner_id = data.pop("owner_id", None)
-        return D.jsonable({"ref": _ref("work_package", identifier), **data,
+        return D.jsonable({"ref": _ref("work_package", identifier),
+            "work_item_ref": _ref("work_item", work_item_id) if work_item_id else None, **data,
             "owner": {"kind": owner_kind, "id": owner_id} if owner_kind else None,
             "depends_on_refs": dependencies,
             "supersedes_ref": _ref("work_package", supersedes) if supersedes else None,
             "created_by": {"kind": actor_kind, "id": actor_id}})
+
+    @staticmethod
+    def _work_item(row, package, dependencies, transitions, executions):
+        return D.jsonable({"ref": _ref("work_item", row["id"]), "key": row["key"],
+            "title": row["title"], "lane": row["lane"], "status": row.get("status") or "backlog",
+            "priority": row.get("priority"),
+            "owner": _ref(row["owner_kind"], row["owner_id"]) if row.get("owner_kind") else None,
+            "due_on": row.get("due_on"), "current_package": package,
+            "depends_on_refs": dependencies, "transitions": transitions, "executions": executions,
+            "created_at": row["created_at"],
+            "created_by": {"kind": row["actor_kind"], "id": row["actor_id"]}})
+
+    @staticmethod
+    def _work_transition(row):
+        return D.jsonable({"ref": _ref("artifact", row["id"]),
+            "work_item_ref": _ref("work_item", row["work_item_id"]),
+            "from_lane": row["from_lane"], "to_lane": row["to_lane"], "reason": row["reason"],
+            "transitioned_at": row["transitioned_at"],
+            "transitioned_by": {"kind": row["transitioned_by_kind"], "id": row["transitioned_by_id"]}})
+
+    @staticmethod
+    def _work_execution(row, job_ref):
+        return D.jsonable({"ref": _ref("artifact", row["id"]),
+            "work_item_ref": _ref("work_item", row["work_item_id"]), "job_ref": job_ref,
+            "purpose": row.get("purpose"), "linked_at": row["linked_at"],
+            "linked_by": {"kind": row["linked_by_kind"], "id": row["linked_by_id"]}})
 
     @staticmethod
     def _evidence(row, item):
