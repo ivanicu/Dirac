@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# This is deliberately a gate, not a blind patch. A positive Kueue quota on a
+# node that advertises zero GPUs admits work that Kubernetes can never place.
+nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader >/dev/null
+
+operator_state="$(kubectl get clusterpolicy cluster-policy -o jsonpath='{.status.state}')"
+if [[ "$operator_state" != "ready" ]]; then
+  echo "GPU Operator is not ready: $operator_state" >&2
+  exit 1
+fi
+
+allocatable="$(kubectl get node icu -o jsonpath='{.status.allocatable.nvidia\.com/gpu}')"
+if [[ "$allocatable" != "1" ]]; then
+  echo "node icu does not advertise exactly one GPU: ${allocatable:-none}" >&2
+  exit 1
+fi
+
+resource_name="$(kubectl get clusterqueue motif -o jsonpath='{.spec.resourceGroups[0].flavors[0].resources[3].name}')"
+if [[ "$resource_name" != "nvidia.com/gpu" ]]; then
+  echo "refusing fragile quota patch: resource index 3 is $resource_name" >&2
+  exit 1
+fi
+
+kubectl patch clusterqueue motif --type=json \
+  --patch='[{"op":"replace","path":"/spec/resourceGroups/0/flavors/0/resources/3/nominalQuota","value":"1"}]'
+echo "Motif GPU quota activated: 1"

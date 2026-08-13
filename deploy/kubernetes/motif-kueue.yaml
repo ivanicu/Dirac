@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dirac-motif
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dirac-motif-worker
+  namespace: dirac-motif
+automountServiceAccountToken: false
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: dirac-motif
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ResourceFlavor
+metadata:
+  name: dirac-default
+spec: {}
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata:
+  name: motif
+spec:
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: dirac-motif
+  queueingStrategy: BestEffortFIFO
+  preemption:
+    reclaimWithinCohort: Any
+    withinClusterQueue: LowerPriority
+  resourceGroups:
+    - coveredResources: [cpu, memory, ephemeral-storage, nvidia.com/gpu]
+      flavors:
+        - name: dirac-default
+          resources:
+            - name: cpu
+              nominalQuota: "48"
+            - name: memory
+              nominalQuota: 48Gi
+            - name: ephemeral-storage
+              nominalQuota: 300Gi
+            - name: nvidia.com/gpu
+              # Fail closed until GPU Operator, NVML and node allocatable are all proven.
+              # deploy/kubernetes/activate-motif-gpu-quota performs that gate.
+              nominalQuota: "0"
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata:
+  name: motif
+  namespace: dirac-motif
+spec:
+  clusterQueue: motif
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata:
+  name: motif-interactive
+value: 1000
+description: Interactive Dirac Motif inference and review work
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata:
+  name: motif-standard
+value: 100
+description: Standard Dirac Motif screening and training work
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: WorkloadPriorityClass
+metadata:
+  name: motif-long
+value: 10
+description: Long-running checkpointable Dirac Motif work

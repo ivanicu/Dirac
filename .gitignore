@@ -3,6 +3,7 @@ build/
 # unit files that must ship (a supervision story nobody can read is no story).
 deploy/*
 !deploy/systemd/
+!deploy/kubernetes/
 !deploy/README.md
 !deploy/Caddyfile.remote.example
 !deploy/dirac-tokens.example.json
