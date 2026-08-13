@@ -267,6 +267,7 @@ class KubernetesKueueAdapter:
                         "dirac.io/attempt-id": request["attempt_id"],
                     }},
                     "spec": {
+                        **({"runtimeClassName": "nvidia"} if resources["gpus"] else {}),
                         "restartPolicy": "Never",
                         "serviceAccountName": self.config.service_account,
                         "automountServiceAccountToken": False,

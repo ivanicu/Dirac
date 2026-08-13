@@ -85,6 +85,22 @@ class KubernetesKueueAdapterTests(unittest.TestCase):
         reserved["environment"] = {"DIRAC_EXECUTION_REQUEST": "/tmp/escape"}
         self.assertEqual(self.adapter.admit(reserved).code, "RESERVED_ENVIRONMENT")
 
+    def test_gpu_job_uses_nvidia_runtime_class_and_extended_resource(self):
+        request = copy.deepcopy(self.request)
+        request["resource_request"].update({
+            "gpus": 1,
+            "gpu_arch": ["blackwell"],
+            "gpu_memory_bytes_min": 1,
+        })
+        self.adapter.submit(request)
+        manifests = [json.loads(body) for command, body in self.runner.calls
+                     if command[1:3] == ("apply", "--server-side")]
+        pod_spec = manifests[1]["spec"]["template"]["spec"]
+        self.assertEqual(pod_spec["runtimeClassName"], "nvidia")
+        resources = pod_spec["containers"][0]["resources"]
+        self.assertEqual(resources["requests"]["nvidia.com/gpu"], "1")
+        self.assertEqual(resources["limits"]["nvidia.com/gpu"], "1")
+
     def test_state_mapping_cancel_and_events(self):
         allocation = "dirac-motif/dirac-00000000000040008000000000000004"
         self.runner.job["spec"]["suspend"] = False
