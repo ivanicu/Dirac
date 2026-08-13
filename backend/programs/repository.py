@@ -232,6 +232,7 @@ class MemoryProgramRepository:
         row["work_packages"].append(package); work_item["title"] = package["title"]
         work_item["current_package"] = copy.deepcopy(package); work_item["status"] = package["status"]
         work_item["priority"] = package["priority"]; work_item["owner"] = copy.deepcopy(package["owner"])
+        work_item["progress_percent"] = package["progress_percent"]
         work_item["start_on"] = package["start_on"]; work_item["due_on"] = package["due_on"]
         work_item["depends_on_refs"] = dependency_refs
         row["version"] += 1
@@ -744,8 +745,8 @@ class PostgresProgramRepository:
             revision = old["revision"] + 1 if old else 1
             if old: cur.execute("UPDATE design.program_work_package SET status='superseded' WHERE id=%s", (old["id"],))
             owner = item["owner"]
-            cur.execute("INSERT INTO design.program_work_package(program_id,work_item_id,work_key,revision,title,description,status,priority,owner_kind,owner_id,start_on,due_on,deliverable_refs,supersedes_id,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at",
-                        (identifier, work_row["id"], item["key"], revision, item["title"], item["description"], item["status"], item["priority"], owner["kind"] if owner else None, owner["id"] if owner else None, item["start_on"], item["due_on"], self._json(item["deliverable_refs"]), old["id"] if old else None, who["kind"], who["id"]))
+            cur.execute("INSERT INTO design.program_work_package(program_id,work_item_id,work_key,revision,title,description,status,priority,progress_percent,owner_kind,owner_id,start_on,due_on,deliverable_refs,supersedes_id,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at",
+                        (identifier, work_row["id"], item["key"], revision, item["title"], item["description"], item["status"], item["priority"], item["progress_percent"], owner["kind"] if owner else None, owner["id"] if owner else None, item["start_on"], item["due_on"], self._json(item["deliverable_refs"]), old["id"] if old else None, who["kind"], who["id"]))
             inserted = cur.fetchone()
             dependency_ids = [dependency["id"] for dependency in item["depends_on_refs"]]
             for dependency in item["depends_on_refs"]:
@@ -771,6 +772,7 @@ class PostgresProgramRepository:
                 "supersedes_ref": _ref("work_package", old["id"]) if old else None, "created_by": who, "created_at": inserted["created_at"]}
             work_item = {"ref": work_ref, "key": item["key"], "title": item["title"],
                          "lane": work_row["current_lane"], "status": item["status"],
+                         "progress_percent": item["progress_percent"],
                          "current_package": package, "created_at": work_row["created_at"],
                          "created_by": {"kind": work_row["created_by_kind"], "id": work_row["created_by_id"]}}
             version = self._advance(cur, identifier, who)
@@ -1539,7 +1541,7 @@ class PostgresProgramRepository:
         out["members"] = [self._member(r, _ref(r["principal_kind"], r["principal_id"]), r["role"]) for r in cur.fetchall()]
         cur.execute("SELECT id,gate_key::text AS key,revision,stage::text,title,criteria,status,evidence_summary,decision_id,target_date,assessed_at,supersedes_id,created_at,created_by_kind::text AS actor_kind,created_by_id AS actor_id FROM design.program_stage_gate WHERE program_id=%s ORDER BY created_at DESC", (identifier,))
         out["stage_gates"] = [self._stage_gate(r) for r in cur.fetchall()]
-        cur.execute("SELECT id,work_item_id,work_key::text AS key,revision,title,description,status,priority,owner_kind::text,owner_id,start_on,due_on,deliverable_refs,supersedes_id,created_at,created_by_kind::text AS actor_kind,created_by_id AS actor_id FROM design.program_work_package WHERE program_id=%s ORDER BY created_at DESC", (identifier,))
+        cur.execute("SELECT id,work_item_id,work_key::text AS key,revision,title,description,status,priority,progress_percent,owner_kind::text,owner_id,start_on,due_on,deliverable_refs,supersedes_id,created_at,created_by_kind::text AS actor_kind,created_by_id AS actor_id FROM design.program_work_package WHERE program_id=%s ORDER BY created_at DESC", (identifier,))
         packages = cur.fetchall(); package_ids = [r["id"] for r in packages]
         dependencies: dict[str, list[dict]] = {str(item): [] for item in package_ids}
         if package_ids:
@@ -1547,7 +1549,7 @@ class PostgresProgramRepository:
             for dependency in cur.fetchall():
                 dependencies[str(dependency["work_package_id"])].append(_ref("work_package", dependency["depends_on_id"]))
         out["work_packages"] = [self._work_package(r, dependencies[str(r["id"])]) for r in packages]
-        cur.execute("SELECT item.id,item.work_key::text AS key,item.title,item.current_lane::text AS lane,item.current_package_id,item.created_at,item.created_by_kind::text AS actor_kind,item.created_by_id AS actor_id,package.status,package.priority,package.owner_kind::text,package.owner_id,package.start_on,package.due_on FROM design.program_work_item item LEFT JOIN design.program_work_package package ON package.id=item.current_package_id WHERE item.program_id=%s ORDER BY item.created_at,item.work_key", (identifier,))
+        cur.execute("SELECT item.id,item.work_key::text AS key,item.title,item.current_lane::text AS lane,item.current_package_id,item.created_at,item.created_by_kind::text AS actor_kind,item.created_by_id AS actor_id,package.status,package.priority,package.progress_percent,package.owner_kind::text,package.owner_id,package.start_on,package.due_on FROM design.program_work_item item LEFT JOIN design.program_work_package package ON package.id=item.current_package_id WHERE item.program_id=%s ORDER BY item.created_at,item.work_key", (identifier,))
         work_rows = cur.fetchall(); work_ids = [row["id"] for row in work_rows]
         work_dependencies: dict[str, list[dict]] = {str(item): [] for item in work_ids}
         work_transitions: dict[str, list[dict]] = {str(item): [] for item in work_ids}
@@ -1672,6 +1674,7 @@ class PostgresProgramRepository:
         return D.jsonable({"ref": _ref("work_item", row["id"]), "key": row["key"],
             "title": row["title"], "lane": row["lane"], "status": row.get("status") or "backlog",
             "priority": row.get("priority"),
+            "progress_percent": row.get("progress_percent") or 0,
             "owner": _ref(row["owner_kind"], row["owner_id"]) if row.get("owner_kind") else None,
             "start_on": row.get("start_on"), "due_on": row.get("due_on"), "current_package": package,
             "depends_on_refs": dependencies, "transitions": transitions, "executions": executions,

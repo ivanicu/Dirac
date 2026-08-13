@@ -178,12 +178,14 @@ class ProgramAggregateTest(unittest.TestCase):
         second = self.repo.record_work_package(self.program_ref, 2, {
             "key": "design-series", "title": "Design series", "description": "Propose compounds",
             "lane": "design", "status": "active", "start_on": "2026-08-19",
-            "due_on": "2026-08-28", "depends_on_refs": [first["work_item"]["ref"]],
+            "due_on": "2026-08-28", "progress_percent": 45,
+            "depends_on_refs": [first["work_item"]["ref"]],
         }, ACTOR, "schedule-second")
         overview = self.repo.get(self.program_ref)["program"]
         current = next(item for item in overview["work_items"] if item["key"] == "design-series")
         self.assertEqual(current["start_on"], "2026-08-19")
         self.assertEqual(current["due_on"], "2026-08-28")
+        self.assertEqual(current["progress_percent"], 45)
         self.assertEqual(current["depends_on_refs"], [first["work_item"]["ref"]])
         with self.assertRaises(failures.DiracInvalidParameters):
             self.repo.record_work_package(self.program_ref, 3, {
@@ -197,6 +199,11 @@ class ProgramAggregateTest(unittest.TestCase):
                 "key": "time-travel", "title": "Time travel", "description": "Impossible plan",
                 "start_on": "2026-08-20", "due_on": "2026-08-19",
             }, ACTOR, "bad-schedule")
+        with self.assertRaises(failures.DiracInvalidParameters):
+            self.repo.record_work_package(self.program_ref, 1, {
+                "key": "over-complete", "title": "Over complete", "description": "Invalid progress",
+                "progress_percent": 101,
+            }, ACTOR, "bad-progress")
 
     def test_runtime_job_can_belong_to_only_one_work_item(self) -> None:
         first = self.repo.record_work_package(self.program_ref, 1, {

@@ -36,12 +36,14 @@ class PostgresProgramWorkScheduleTests(unittest.TestCase):
         second = self.repo.record_work_package(self.program_ref, 2, {
             "key": "design", "title": "Design", "description": "Create proposals",
             "lane": "design", "start_on": "2026-08-17", "due_on": "2026-08-25",
+            "progress_percent": 35,
             "depends_on_refs": [first["work_item"]["ref"]],
         }, self.actor, "work-design")
         overview = self.repo.get(self.program_ref)["program"]
         design = next(item for item in overview["work_items"] if item["key"] == "design")
         self.assertEqual((design["start_on"], design["due_on"]),
                          ("2026-08-17", "2026-08-25"))
+        self.assertEqual(design["progress_percent"], 35)
         self.assertEqual(design["depends_on_refs"], [first["work_item"]["ref"]])
         with self.assertRaises(DiracInvalidParameters):
             self.repo.record_work_package(self.program_ref, 3, {

@@ -352,13 +352,16 @@ export class WorkspaceCanvas {
         const model = programRelationGraph(program, workspace);
         renderScientificGraph(graphHost, model, {
             ariaLabel: `${workspace} canonical object and provenance graph`, preset: false,
+            storageKey: `${program.ref?.id || program.code}:${workspace}`,
             onSelect: node => {
                 if (!node.ref) return;
                 scientificContext.focus(node.ref);
                 scientificContext.select([node.ref]);
             },
         });
-        renderKindDistribution(distributionPanel.lastElementChild as HTMLElement, model);
+        renderKindDistribution(distributionPanel.lastElementChild as HTMLElement, model,
+            `${program.ref?.id || program.code}:${workspace}`,
+            kind => graphHost.dispatchEvent(new CustomEvent('dirac:graph-filter', { detail: { kind } })));
     }
 
     private renderConnectedCanvas(definition: ViewDefinition, programId?: string): void {

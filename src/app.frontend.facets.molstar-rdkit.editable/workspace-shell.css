@@ -1251,7 +1251,15 @@
 .program-insight-panel header p { margin: 4px 0 0; color: var(--ink-2); font: 500 9px/1.4 var(--sans); }
 .program-insight-panel--graph > div { height: 310px; }
 .program-insight-panel--chart > div { height: 310px; }
-.scientific-graph-canvas { width: 100%; height: calc(100% - 30px); min-height: 220px; background-color: var(--paper); background-image: radial-gradient(var(--line-dot) .7px, transparent .7px); background-size: 10px 10px; }
+.scientific-visual-controls { display: flex; min-height: 35px; padding: 4px 6px; align-items: center; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--line); background: var(--surface); }
+.scientific-visual-controls input, .scientific-visual-controls select,
+.scientific-visual-controls button { flex: none; min-height: 25px; max-width: 150px; padding: 0 7px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font: 600 8px/1 var(--mono); }
+.scientific-visual-controls input { min-width: 120px; }
+.scientific-visual-controls button { cursor: pointer; }
+.scientific-visual-controls button:hover, .scientific-visual-controls button:focus-visible { border-color: var(--ink); }
+.scientific-control-status { min-width: max-content; margin-left: auto; color: var(--ink-2); font: 500 8px/1.3 var(--mono); }
+.scientific-graph-canvas { width: 100%; height: calc(100% - 65px); min-height: 200px; background-color: var(--paper); background-image: radial-gradient(var(--line-dot) .7px, transparent .7px); background-size: 10px 10px; }
+.scientific-chart-canvas { width: 100%; height: calc(100% - 35px); min-height: 220px; }
 .scientific-visual-empty { display: grid; min-height: 210px; margin: 0; padding: 24px; place-items: center; color: var(--ink-2); font: 500 10px/1.5 var(--sans); text-align: center; }
 .scientific-visual-fallback { min-height: 30px; border-top: 1px dotted var(--line); background: var(--surface); color: var(--ink-2); font: 500 8px/1.35 var(--mono); }
 .scientific-visual-fallback summary { min-height: 30px; padding: 10px 13px; cursor: pointer; text-transform: uppercase; }
@@ -1293,7 +1301,11 @@
 .program-gantt-body { overflow-x: auto; }
 .program-frappe-gantt { min-width: 760px; padding-bottom: 8px; color: var(--ink); font-family: var(--sans); }
 .program-frappe-gantt .gantt-container { background: var(--paper); }
-.program-frappe-gantt .grid-background { fill: var(--paper); }
+.program-frappe-gantt .grid-background { fill: var(--paper); pointer-events: none; }
+.program-frappe-gantt .bar-wrapper { pointer-events: bounding-box; }
+.program-frappe-gantt .bar-wrapper .bar-group { pointer-events: none; }
+.program-frappe-gantt .bar-wrapper .handle-group { pointer-events: none; }
+.program-frappe-gantt .bar-wrapper .handle { pointer-events: auto; }
 .program-frappe-gantt .grid-header { fill: var(--surface); stroke: var(--line); }
 .program-frappe-gantt .grid-row { fill: var(--paper); }
 .program-frappe-gantt .row-line, .program-frappe-gantt .tick { stroke: var(--line); }
@@ -1303,9 +1315,16 @@
 .program-frappe-gantt .arrow { stroke: var(--ink-2); }
 .program-frappe-gantt .dirac-gantt-blocked .bar { fill: #8f1f25; }
 .program-frappe-gantt .dirac-gantt-done .bar { fill: #36724b; }
+.program-frappe-gantt .dirac-gantt-critical .bar { stroke: var(--red); stroke-width: 4px; }
+.program-frappe-gantt .dirac-gantt-conflict .bar { stroke: #cc8b24; stroke-width: 4px; stroke-dasharray: 4 2; }
 .program-frappe-gantt .bar-label, .program-frappe-gantt .lower-text,
 .program-frappe-gantt .upper-text { fill: var(--ink-2); font-family: var(--mono); font-size: 9px; }
 .program-frappe-gantt .bar-label { fill: var(--paper); }
+.program-gantt-analysis { display: flex; align-items: flex-start; gap: 14px; padding: 10px 13px; border-top: 1px solid var(--line); background: var(--surface); }
+.program-gantt-analysis[hidden] { display: none; }
+.program-gantt-analysis > strong { flex: none; padding-top: 7px; font: 650 8px/1.2 var(--mono); text-transform: uppercase; }
+.program-gantt-analysis > div { display: flex; flex-wrap: wrap; gap: 5px; color: var(--ink-2); font: 500 9px/1.35 var(--sans); }
+.program-gantt-analysis button { min-height: 27px; padding: 0 7px; border: 1px solid var(--line); background: var(--paper); font: 600 8px/1 var(--mono); cursor: pointer; }
 .program-gantt-grid { display: grid; grid-template-columns: minmax(170px, 22%) minmax(620px, 1fr) minmax(120px, 18%); min-width: 950px; }
 .program-gantt-grid > * { min-height: 48px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .program-gantt-grid > :nth-child(3n) { border-right: 0; }

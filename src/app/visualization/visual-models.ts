@@ -13,6 +13,9 @@ export interface WorkVisualItem {
     readonly owner: string;
     readonly start?: string;
     readonly end?: string;
+    readonly baselineStart?: string;
+    readonly baselineEnd?: string;
+    readonly progress: number;
     readonly dependencyIds: readonly string[];
 }
 
@@ -41,9 +44,12 @@ export interface ScientificGraphModel {
 const nodeKey = (ref: ObjectRef): string => `${ref.kind}:${ref.id}`;
 const humanize = (value: string): string => value.replace(/_/g, ' ');
 
-export function toWorkVisualItems(items: readonly Record<string, any>[]): WorkVisualItem[] {
+export function toWorkVisualItems(items: readonly Record<string, any>[],
+    packages: readonly Record<string, any>[] = []): WorkVisualItem[] {
+    const packagesById = new Map(packages.map(item => [item.ref?.id, item]));
     return items.flatMap(item => {
         if (!item.ref?.id || !WORK_LANES.includes(item.lane)) return [];
+        const baseline = packagesById.get(item.current_package?.supersedes_ref?.id);
         return [{
             id: String(item.ref.id), key: String(item.key || item.ref.id),
             title: String(item.title || item.key || item.ref.id), lane: item.lane,
@@ -51,10 +57,53 @@ export function toWorkVisualItems(items: readonly Record<string, any>[]): WorkVi
             owner: String(item.owner?.id || 'Unassigned'),
             start: item.start_on ? String(item.start_on) : undefined,
             end: item.due_on ? String(item.due_on) : undefined,
+            baselineStart: baseline?.start_on ? String(baseline.start_on) : undefined,
+            baselineEnd: baseline?.due_on ? String(baseline.due_on) : undefined,
+            progress: Number.isFinite(Number(item.progress_percent)) ? Number(item.progress_percent)
+                : item.status === 'done' ? 100 : item.status === 'active' ? 50 : 0,
             dependencyIds: ((item.depends_on_refs || []) as Array<{ id?: string }>)
                 .flatMap(ref => ref.id ? [String(ref.id)] : []),
         }];
     });
+}
+
+const durationDays = (item: WorkVisualItem): number => {
+    if (!item.start || !item.end) return 0;
+    return Math.max(1, Math.round((Date.parse(`${item.end}T00:00:00Z`)
+        - Date.parse(`${item.start}T00:00:00Z`)) / 86_400_000) + 1);
+};
+
+/** Longest dated dependency chain; a deterministic schedule risk signal, not an invented forecast. */
+export function criticalPathIds(items: readonly WorkVisualItem[]): readonly string[] {
+    const byId = new Map(items.map(item => [item.id, item]));
+    const memo = new Map<string, { duration: number; path: string[] }>();
+    const visit = (id: string, visiting = new Set<string>()): { duration: number; path: string[] } => {
+        if (memo.has(id)) return memo.get(id)!;
+        if (visiting.has(id)) return { duration: 0, path: [] };
+        const item = byId.get(id); if (!item) return { duration: 0, path: [] };
+        const next = new Set(visiting); next.add(id);
+        const bestParent = item.dependencyIds.map(parent => visit(parent, next))
+            .sort((a, b) => b.duration - a.duration || a.path.join().localeCompare(b.path.join()))[0]
+            || { duration: 0, path: [] };
+        const result = { duration: bestParent.duration + durationDays(item), path: [...bestParent.path, id] };
+        memo.set(id, result); return result;
+    };
+    return [...byId.keys()].map(id => visit(id))
+        .sort((a, b) => b.duration - a.duration || a.path.join().localeCompare(b.path.join()))[0]?.path || [];
+}
+
+export interface ScheduleConflict { readonly first: string; readonly second: string; readonly owner: string; }
+
+export function scheduleConflicts(items: readonly WorkVisualItem[]): readonly ScheduleConflict[] {
+    const dated = items.filter(item => item.start && item.end && item.owner !== 'Unassigned');
+    const conflicts: ScheduleConflict[] = [];
+    for (let left = 0; left < dated.length; left++) for (let right = left + 1; right < dated.length; right++) {
+        const a = dated[left]; const b = dated[right];
+        if (a.owner === b.owner && a.start! <= b.end! && b.start! <= a.end!) {
+            conflicts.push({ first: a.id, second: b.id, owner: a.owner });
+        }
+    }
+    return conflicts;
 }
 
 export function workGraphModel(items: readonly WorkVisualItem[]): ScientificGraphModel {

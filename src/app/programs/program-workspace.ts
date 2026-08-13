@@ -37,6 +37,7 @@ const REFERENCE_FAMILIES: Record<string, readonly string[]> = {
 export class ProgramWorkspaceController {
     private current?: Program;
     private installed = false;
+    private ganttWrites: Promise<void> = Promise.resolve();
 
     constructor(private readonly client: DiracClient,
         private readonly selectProgram: (programId: string) => void) {}
@@ -348,21 +349,53 @@ export class ProgramWorkspaceController {
             }
             if (!laneItems.length) list.append(text('p', 'No work in this stage.', 'program-workflow-empty'));
         }
-        const visualItems = toWorkVisualItems(items);
+        const visualItems = toWorkVisualItems(items, (program.work_packages || []) as Array<Record<string, any>>);
         const graph = document.querySelector<HTMLElement>('[data-program-work-graph]');
         if (graph) renderScientificGraph(graph, workGraphModel(visualItems), {
             ariaLabel: 'Program work dependency graph, arranged by discovery stage',
             onSelect: node => this.selectWorkItem(node.id),
+            storageKey: `${program.ref.id}:work`,
         });
         const chart = document.querySelector<HTMLElement>('[data-program-work-chart]');
-        if (chart) renderLaneLoadChart(chart, visualItems, lane => this.scrollToLane(lane));
+        if (chart) renderLaneLoadChart(chart, visualItems, lane => {
+            this.scrollToLane(lane);
+            graph?.dispatchEvent(new CustomEvent('dirac:graph-filter', { detail: { kind: lane } }));
+        }, `${program.ref.id}:work`);
         this.renderGantt(visualItems);
     }
 
     private renderGantt(items: readonly WorkVisualItem[]): void {
         const root = document.querySelector<HTMLElement>('[data-program-gantt]');
         if (!root) return;
-        renderProgramGantt(root, items, id => this.selectWorkItem(id));
+        renderProgramGantt(root, items, {
+            onSelect: id => this.selectWorkItem(id), onEdit: id => this.workPackage(id),
+            onScheduleChange: (id, start, end) => this.queueGanttWrite(id, { start_on: start, due_on: end }),
+            onProgressChange: (id, progress) => this.queueGanttWrite(id, { progress_percent: progress }),
+            storageKey: this.current?.ref.id,
+        });
+    }
+
+    private queueGanttWrite(id: string, patch: Record<string, unknown>): void {
+        this.ganttWrites = this.ganttWrites.then(async () => {
+            const item = (this.current?.work_items || []).find((candidate: any) => candidate.ref.id === id);
+            if (!item || !this.current) throw new Error('The selected Program Work Item is no longer current.');
+            const spec = item.current_package || item;
+            this.status('Saving the direct schedule edit…', 'loading');
+            await this.execute('program.work_package.record', {
+                program_ref: this.current.ref, expected_version: this.current.version,
+                work_package: {
+                    key: item.key, title: item.title, description: spec.description,
+                    lane: item.lane, status: item.status, priority: item.priority,
+                    owner: item.owner, start_on: item.start_on, due_on: item.due_on,
+                    progress_percent: item.progress_percent || 0,
+                    depends_on_refs: item.depends_on_refs || [], deliverable_refs: spec.deliverable_refs || [],
+                    ...patch,
+                },
+            }, 'Schedule edit saved as a new Program Work Package revision.');
+        }).catch(async error => {
+            this.status(error instanceof Error ? error.message : String(error), 'error');
+            await this.refresh();
+        });
     }
 
     private selectWorkItem(id: string): void {
@@ -557,6 +590,8 @@ export class ProgramWorkspaceController {
             { name: 'status', label: 'Work status', options: ['backlog', 'ready', 'active', 'blocked', 'done', 'cancelled'],
                 value: item?.status || 'backlog' },
             { name: 'priority', label: 'Priority', type: 'number', value: String(item?.priority || 3), required: true },
+            { name: 'progress_percent', label: 'Completion (%)', type: 'number',
+                value: String(item?.progress_percent || 0), required: true },
             { name: 'owner_id', label: 'Owner', value: item?.owner?.id || '', placeholder: 'person or agent ID' },
             { name: 'start_on', label: 'Planned start', type: 'date', value: item?.start_on || '' },
             { name: 'due_on', label: 'Planned finish', type: 'date', value: item?.due_on || '' },
@@ -571,6 +606,7 @@ export class ProgramWorkspaceController {
                 program_ref: this.current!.ref, expected_version: this.current!.version,
                 work_package: { key, title: values.title, description: values.description,
                     lane: values.lane, status: values.status, priority: Number(values.priority),
+                    progress_percent: Math.max(0, Math.min(100, Number(values.progress_percent))),
                     start_on: values.start_on || undefined, due_on: values.due_on || undefined,
                     depends_on_refs: this.lines(values.depends_on || '').map(id => ({ kind: 'work_item', id })),
                     owner: values.owner_id ? { kind: 'human', id: values.owner_id } : undefined },

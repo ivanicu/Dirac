@@ -262,6 +262,11 @@ def work_package(value: dict[str, Any]) -> dict[str, Any]:
     priority = value.get("priority", 3)
     if not isinstance(priority, int) or isinstance(priority, bool) or not 1 <= priority <= 5:
         raise failures.DiracInvalidParameters("work_package.priority must be an integer from 1 to 5")
+    progress_percent = value.get("progress_percent", 100 if status == "done" else 0)
+    if (not isinstance(progress_percent, int) or isinstance(progress_percent, bool)
+            or not 0 <= progress_percent <= 100):
+        raise failures.DiracInvalidParameters(
+            "work_package.progress_percent must be an integer from 0 to 100")
     owner = value.get("owner")
     deliverables = copy.deepcopy(value.get("deliverable_refs", []))
     dependencies = copy.deepcopy(value.get("depends_on_refs", []))
@@ -276,6 +281,7 @@ def work_package(value: dict[str, Any]) -> dict[str, Any]:
             "title": nonempty(value.get("title"), "work_package.title", maximum=256),
             "description": nonempty(value.get("description"), "work_package.description"),
             "lane": lane, "status": status, "priority": priority,
+            "progress_percent": progress_percent,
             "owner": actor(owner) if owner is not None else None,
             "start_on": start_on, "due_on": due_on,
             "deliverable_refs": [ref(item) for item in deliverables],

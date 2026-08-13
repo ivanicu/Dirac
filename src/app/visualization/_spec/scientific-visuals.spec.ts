@@ -1,4 +1,4 @@
-import { graphKindSeries, laneLoadSeries, programRelationGraph,
+import { criticalPathIds, graphKindSeries, laneLoadSeries, programRelationGraph, scheduleConflicts,
     toWorkVisualItems, workGraphModel } from '../visual-models';
 
 describe('scientific visualization adapters', () => {
@@ -23,6 +23,18 @@ describe('scientific visualization adapters', () => {
         expect(series.values.active[1]).toBe(1);
         expect(series.statuses).toEqual(['active', 'done']);
         expect(Object.values(series.values).flat().reduce((a, b) => a + b, 0)).toBe(2);
+    });
+
+    it('derives critical paths and resource collisions from declared schedule facts', () => {
+        const scheduled = toWorkVisualItems([
+            { ref: { kind: 'work_item', id: 'a' }, key: 'A', title: 'A', lane: 'understand',
+                status: 'active', owner: { id: 'scientist' }, start_on: '2026-08-01', due_on: '2026-08-05' },
+            { ref: { kind: 'work_item', id: 'b' }, key: 'B', title: 'B', lane: 'design',
+                status: 'ready', owner: { id: 'scientist' }, start_on: '2026-08-04', due_on: '2026-08-08',
+                depends_on_refs: [{ id: 'a' }] },
+        ]);
+        expect(criticalPathIds(scheduled)).toEqual(['a', 'b']);
+        expect(scheduleConflicts(scheduled)).toEqual([{ first: 'a', second: 'b', owner: 'scientist' }]);
     });
 
     it('builds one canonical cross-workspace graph and filters projections', () => {
