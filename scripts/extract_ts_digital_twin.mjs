@@ -159,7 +159,9 @@ function unwrap(node) {
     return node;
 }
 
-function literal(node) {
+const constantInitializers = new Map();
+
+function literal(node, resolving = new Set()) {
     node = unwrap(node);
     if (!node) return undefined;
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
@@ -167,12 +169,37 @@ function literal(node) {
     if (node.kind === ts.SyntaxKind.TrueKeyword) return true;
     if (node.kind === ts.SyntaxKind.FalseKeyword) return false;
     if (node.kind === ts.SyntaxKind.NullKeyword) return null;
-    if (ts.isArrayLiteralExpression(node)) return node.elements.map(literal);
+    if (ts.isIdentifier(node)) {
+        const name = node.text;
+        if (resolving.has(name) || !constantInitializers.has(name)) return undefined;
+        const nested = new Set(resolving); nested.add(name);
+        return literal(constantInitializers.get(name), nested);
+    }
+    if (ts.isArrayLiteralExpression(node)) {
+        const out = [];
+        for (const element of node.elements) {
+            if (ts.isSpreadElement(element)) {
+                const spread = literal(element.expression, resolving);
+                if (!Array.isArray(spread)) return undefined;
+                out.push(...spread);
+            } else {
+                out.push(literal(element, resolving));
+            }
+        }
+        return out;
+    }
     if (ts.isObjectLiteralExpression(node)) {
         const out = {};
         for (const p of node.properties) {
-            if (!ts.isPropertyAssignment(p)) continue;
-            out[p.name.getText().replace(/^['"]|['"]$/g, '')] = literal(p.initializer);
+            if (ts.isSpreadAssignment(p)) {
+                const spread = literal(p.expression, resolving);
+                if (!spread || Array.isArray(spread) || typeof spread !== 'object') return undefined;
+                Object.assign(out, spread);
+            } else if (ts.isPropertyAssignment(p)) {
+                out[p.name.getText().replace(/^['"]|['"]$/g, '')] = literal(p.initializer, resolving);
+            } else if (ts.isShorthandPropertyAssignment(p)) {
+                out[p.name.text] = literal(p.name, resolving);
+            }
         }
         return out;
     }
@@ -185,6 +212,14 @@ if (registryFile) {
     for (const statement of registryFile.statements) {
         if (!ts.isVariableStatement(statement)) continue;
         for (const declaration of statement.declarationList.declarations) {
+            if (ts.isIdentifier(declaration.name) && declaration.initializer) {
+                constantInitializers.set(declaration.name.text, declaration.initializer);
+            }
+        }
+    }
+    for (const statement of registryFile.statements) {
+        if (!ts.isVariableStatement(statement)) continue;
+        for (const declaration of statement.declarationList.declarations) {
             const name = declaration.name.getText();
             const init = unwrap(declaration.initializer);
             if (name === 'WORKSPACES') registries.workspaces = literal(init) || [];
@@ -193,7 +228,7 @@ if (registryFile) {
                 registries.views = init.elements.map(element => {
                     element = unwrap(element);
                     if (!ts.isCallExpression(element) || element.expression.getText() !== 'view') return literal(element);
-                    const a = element.arguments.map(literal);
+                    const a = element.arguments.map(argument => literal(argument));
                     const primary = a[6] || [];
                     return { id: a[0], workspace: a[1], label: a[2], route: a[3],
                         implemented: a[4] ?? false, shellReady: true,

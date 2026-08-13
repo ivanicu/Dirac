@@ -995,6 +995,22 @@ def validate(twin: Twin, ts_data: dict) -> dict:
         errors.append('AppShell must contain exactly 30 views')
     if len(ts_data['registries']['modules']) < 10:
         errors.append('AppShell must contain at least the 10 substrate modules')
+    command_names = {
+        item['id'] for item in json.loads(
+            (ROOT / 'contracts/commands/registry.json').read_text())['commands']
+    }
+    for view in ts_data['registries']['views']:
+        actions = view.get('actions', [])
+        invalid = [action for action in actions
+                   if not isinstance(action, str) or action not in command_names]
+        if invalid:
+            errors.append(f'View {view.get("id")} has unresolved or unknown actions: {invalid}')
+    for module in ts_data['registries']['modules']:
+        commands = module.get('providesCommands', [])
+        invalid = [command for command in commands
+                   if not isinstance(command, str) or command not in command_names]
+        if invalid:
+            errors.append(f'Module {module.get("id")} has unresolved or unknown commands: {invalid}')
     expected = {
         'command': len(json.loads((ROOT / 'contracts/commands/registry.json').read_text())['commands']),
         'object-kind': len(json.loads((ROOT / 'contracts/domain/object-kinds.json').read_text())['kinds']),
