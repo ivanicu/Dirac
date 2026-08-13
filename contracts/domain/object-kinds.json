@@ -10,12 +10,12 @@
     }
   },
   "kinds": [
-    "portfolio", "program", "target", "molecule", "compound", "compound_form", "series",
+    "portfolio", "program", "target", "disease", "molecule", "compound", "compound_form", "substance_registration", "series",
     "protein", "protein_structure", "complex", "pose", "conformer",
     "field", "prediction", "campaign", "synthesis_route", "reaction",
     "building_block", "batch", "sample", "formulation", "quality_release",
-    "assay", "protocol", "experiment", "measurement", "objective", "hypothesis",
-    "claim", "evidence", "decision", "milestone", "stage_gate", "work_item", "work_package", "program_snapshot", "dataset", "model", "artifact",
+    "assay", "protocol", "protocol_version", "experiment", "measurement", "objective", "hypothesis",
+    "claim", "evidence", "external_evidence_release", "external_evidence_record", "decision", "milestone", "stage_gate", "work_item", "work_package", "program_snapshot", "dataset", "dataset_version", "structure_observation", "analysis_snapshot", "annotation", "review", "model", "artifact",
     "mission", "run", "job", "literature_reference"
   ]
 }

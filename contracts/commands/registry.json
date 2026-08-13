@@ -650,6 +650,150 @@
       "output_schema": {"type":"object","required":["health"]}
     },
     {
+      "id": "program.target_disease.link", "version": 1, "category": "program",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-and-expected-version", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","target","disease"], "output_object_kinds": ["disease","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["disease_key","name","target_ref","rationale"],"properties":{"disease_key":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"description":{"type":"string"},"ontology":{"type":"object"},"target_ref":{"$ref":"object-ref"},"role":{"enum":["primary","secondary","safety","biomarker","exploratory"]},"rationale":{"type":"string","minLength":1}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
+      "id": "identity.substance_registration.record", "version": 1, "category": "identity",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-and-expected-version", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","compound"], "output_object_kinds": ["substance_registration","compound","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["compound_ref","status","definition"],"properties":{"compound_ref":{"$ref":"object-ref"},"status":{"enum":["draft","candidate_match","conflict","validated","approved","rejected"]},"definition":{"type":"object"},"validation":{"type":"object"},"decision":{"type":"string"}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
+      "id": "sample.create", "version": 1, "category": "sample",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-or-sample-code", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","batch","sample"], "output_object_kinds": ["sample","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["sample_code","batch_ref","amount_value","amount_unit"],"properties":{"sample_code":{"type":"string","minLength":1},"batch_ref":{"$ref":"object-ref"},"parent_sample_ref":{"$ref":"object-ref"},"amount_value":{"type":"number","minimum":0},"amount_unit":{"enum":["g","mg","ug","mol","mmol","umol"]},"container":{"type":"string"},"location":{"type":"string"}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
+      "id": "sample.transfer", "version": 1, "category": "sample",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","sample"], "output_object_kinds": ["sample","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["sample_ref","to_location","reason"],"properties":{"sample_ref":{"$ref":"object-ref"},"to_location":{"type":"string","minLength":1},"reason":{"type":"string","minLength":1}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
+      "id": "program.work_comment.record", "version": 1, "category": "program",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","work_item"], "output_object_kinds": ["work_item","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["work_item_ref","body"],"properties":{"work_item_ref":{"$ref":"object-ref"},"body":{"type":"string","minLength":1,"maxLength":20000}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
+      "id": "program.work_attachment.record", "version": 1, "category": "program",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-and-artifact", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","work_item","artifact"], "output_object_kinds": ["work_item","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["work_item_ref","artifact_ref","role"],"properties":{"work_item_ref":{"$ref":"object-ref"},"artifact_ref":{"$ref":"object-ref"},"role":{"type":"string","minLength":1}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
+      "id": "program.gate_criterion.assess", "version": 1, "category": "program",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-and-criterion", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","stage_gate","evidence","measurement","dataset_version","artifact"], "output_object_kinds": ["stage_gate","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["stage_gate_ref","criterion_key","status","explanation"],"properties":{"stage_gate_ref":{"$ref":"object-ref"},"criterion_key":{"type":"string","minLength":1},"status":{"enum":["met","not_met","waived","unknown"]},"evidence_ref":{"$ref":"object-ref"},"explanation":{"type":"string","minLength":1}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
+      "id": "protocol.version.record", "version": 1, "category": "experiment",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-and-digest", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","assay"], "output_object_kinds": ["protocol_version","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["protocol_key","title","specification"],"properties":{"protocol_key":{"type":"string","minLength":1},"title":{"type":"string","minLength":1},"assay_ref":{"$ref":"object-ref"},"specification":{"type":"object"}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
+      "id": "experiment.record", "version": 1, "category": "experiment",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-or-experiment-key", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","work_item","protocol_version","sample"], "output_object_kinds": ["experiment","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["experiment_key","work_item_ref","protocol_version_ref","title"],"properties":{"experiment_key":{"type":"string","minLength":1},"work_item_ref":{"$ref":"object-ref"},"protocol_version_ref":{"$ref":"object-ref"},"title":{"type":"string","minLength":1},"status":{"enum":["planned","running","completed","failed","cancelled"]},"started_at":{"type":"string","format":"date-time"},"completed_at":{"type":"string","format":"date-time"},"samples":{"type":"array","items":{"type":"object"}}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
+      "id": "dataset.version.commit", "version": 1, "category": "dataset",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-and-digest", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","experiment","dataset_version","job","artifact"], "output_object_kinds": ["dataset_version","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["dataset_key","manifest_artifact_ref","manifest","schema_version"],"properties":{"dataset_key":{"type":"string","minLength":1},"manifest_artifact_ref":{"$ref":"object-ref"},"manifest":{"type":"object"},"schema_version":{"type":"string","minLength":1},"access_scope":{"enum":["public","program","internal","partner_confidential","restricted","regulated"]},"experiment_ref":{"$ref":"object-ref"},"parent_refs":{"type":"array","items":{"$ref":"object-ref"}},"producer_job_ref":{"$ref":"object-ref"},"derivation":{"type":"string"}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
+      "id": "structure.observation.register", "version": 1, "category": "structure",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-or-observation-key", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","protein_structure","compound","experiment","dataset_version"], "output_object_kinds": ["structure_observation","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["observation_key","structure_ref","dataset_version_ref"],"properties":{"observation_key":{"type":"string","minLength":1},"structure_ref":{"$ref":"object-ref"},"compound_ref":{"$ref":"object-ref"},"experiment_ref":{"$ref":"object-ref"},"dataset_version_ref":{"$ref":"object-ref"},"canonical_site":{"type":"string"}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
+      "id": "structure.annotation.record", "version": 1, "category": "structure",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","structure_observation","pose","compound"], "output_object_kinds": ["annotation","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["subject_ref","annotation_kind","label","value"],"properties":{"subject_ref":{"$ref":"object-ref"},"annotation_kind":{"enum":["tag","site","merge_hypothesis","note","quality"]},"label":{"type":"string","minLength":1},"value":{"type":"object"}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
+      "id": "structure.review.record", "version": 1, "category": "structure",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","structure_observation","pose","compound"], "output_object_kinds": ["review","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["subject_ref","review_role","status","comment"],"properties":{"subject_ref":{"$ref":"object-ref"},"review_role":{"enum":["main","peer"]},"status":{"enum":["accepted","questionable","rejected"]},"comment":{"type":"string","minLength":1}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
+      "id": "structure.analysis_snapshot.create", "version": 1, "category": "structure",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "request-id-and-digest", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","work_item","dataset_version","structure_observation"], "output_object_kinds": ["analysis_snapshot","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["title","snapshot_mode","dataset_version_refs","state"],"properties":{"work_item_ref":{"$ref":"object-ref"},"title":{"type":"string","minLength":1},"snapshot_mode":{"enum":["live","preserved"]},"release_channel":{"type":"string"},"dataset_version_refs":{"type":"array","items":{"$ref":"object-ref"}},"state":{"type":"object"}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
+      "id": "evidence.release.import", "version": 1, "category": "evidence",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "source-and-release", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","artifact"], "output_object_kinds": ["external_evidence_release","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["source_name","release_name","retrieved_at","payload_artifact_ref"],"properties":{"source_name":{"type":"string","minLength":1},"release_name":{"type":"string","minLength":1},"source_url":{"type":"string","format":"uri"},"retrieved_at":{"type":"string","format":"date-time"},"payload_artifact_ref":{"$ref":"object-ref"}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
+      "id": "evidence.external.record", "version": 1, "category": "evidence",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "release-and-source-record", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","external_evidence_release","target","disease"], "output_object_kinds": ["external_evidence_record","artifact"],
+      "errors": ["INVALID_PARAMETERS","DB_UNAVAILABLE","NOT_FOUND","INTERNAL"], "handler": "handlers:program_reference_job_record",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["program_ref","expected_version","record"],"properties":{"program_ref":{"$ref":"object-ref"},"expected_version":{"type":"integer","minimum":1},"record":{"type":"object","additionalProperties":false,"required":["release_ref","source_record_id","target_ref","disease_ref","data_type","evidence_source","payload"],"properties":{"release_ref":{"$ref":"object-ref"},"source_record_id":{"type":"string","minLength":1},"target_ref":{"$ref":"object-ref"},"disease_ref":{"$ref":"object-ref"},"data_type":{"type":"string","minLength":1},"evidence_source":{"type":"string","minLength":1},"score":{"type":"number","minimum":0,"maximum":1},"is_direct":{"type":"boolean"},"payload":{"type":"object"}}}}},
+      "output_schema": {"type":"object","required":["record","program_version","event_ref"]}
+    },
+    {
       "id": "structure.field.compute", "version": 1, "category": "structure",
       "mutability": "compute", "execution_class": "long", "executors": ["service"],
       "idempotency_policy": "request-digest", "job_policy": "required", "provenance_policy": "required",

@@ -159,6 +159,58 @@ class ProgramAggregateTest(unittest.TestCase):
                 "relation": "sampled_from", "target_ref": {"kind": "sample", "id": "sample-1"},
             }, ACTOR, "bad-lineage")
 
+    def test_reference_jobs_preserve_identity_and_independent_versions(self) -> None:
+        disease = self.repo.record_reference_job(self.program_ref, 1, "target_disease", {
+            "disease_key": "EFO:0000305", "name": "Breast carcinoma",
+            "ontology": {"namespace": "EFO", "id": "0000305"},
+            "target_ref": {"kind": "target", "id": "ESR1"},
+            "role": "primary", "rationale": "Program indication",
+        }, ACTOR, "target-disease")
+        sample = self.repo.record_reference_job(self.program_ref, 2, "sample", {
+            "sample_code": "MOR-001-A", "batch_ref": {"kind": "batch", "id": "batch-1"},
+            "amount_value": 2.5, "amount_unit": "mg", "location": "Freezer A",
+        }, ACTOR, "sample-create")
+        self.assertEqual(disease["record"]["ref"]["kind"], "disease")
+        self.assertEqual(sample["record"]["ref"]["kind"], "sample")
+        moved = self.repo.record_reference_job(self.program_ref, 3, "sample_transfer", {
+            "sample_ref": sample["record"]["ref"], "to_location": "Assay lab",
+            "reason": "Allocated for potency experiment",
+        }, ACTOR, "sample-move")
+        self.assertEqual(moved["record"]["ref"], sample["record"]["ref"])
+        overview = self.repo.get(self.program_ref)["program"]
+        self.assertEqual(overview["counts"]["reference_jobs"], 3)
+
+    def test_reference_job_semantics_fail_closed(self) -> None:
+        with self.assertRaises(failures.DiracInvalidParameters):
+            self.repo.record_reference_job(self.program_ref, 1, "substance_registration", {
+                "compound_ref": {"kind": "compound", "id": "compound-1"},
+                "status": "approved", "definition": {}, "validation": {},
+            }, ACTOR, "bad-approval")
+        with self.assertRaises(failures.DiracInvalidParameters):
+            self.repo.record_reference_job(self.program_ref, 1, "analysis_snapshot", {
+                "title": "Unpinned review", "snapshot_mode": "preserved",
+                "dataset_version_refs": [], "state": {},
+            }, ACTOR, "bad-snapshot")
+        with self.assertRaises(failures.DiracInvalidParameters):
+            self.repo.record_reference_job(self.program_ref, 1, "gate_criterion", {
+                "stage_gate_ref": {"kind": "stage_gate", "id": "gate-1"},
+                "criterion_key": "potency", "status": "met", "explanation": "Looks good",
+            }, ACTOR, "bad-gate")
+
+    def test_reference_job_command_is_public_and_dispatchable(self) -> None:
+        dispatcher = CommandDispatcher(SimpleNamespace(
+            program_repository=self.repo, command_traces=None))
+        response = dispatcher.execute("program.target_disease.link", {
+            "program_ref": self.program_ref, "expected_version": 1, "record": {
+                "disease_key": "MONDO:0004992", "name": "Cancer",
+                "ontology": {"namespace": "MONDO", "id": "0004992"},
+                "target_ref": {"kind": "target", "id": "T-1"},
+                "rationale": "Primary disease context",
+            },
+        }, actor=ACTOR, request_id="disease-command")
+        self.assertTrue(response["ok"], response)
+        self.assertEqual(response["data"]["record"]["ref"]["kind"], "disease")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -46,6 +46,12 @@ LINEAGE_SHAPES = frozenset({
     ("sample", "assayed_under", "protocol"),
     ("sample", "has_measurement", "measurement"),
 })
+REFERENCE_JOB_KINDS = frozenset({
+    "target_disease", "substance_registration", "sample", "sample_transfer",
+    "work_comment", "work_attachment", "gate_criterion", "protocol_version",
+    "dataset_version", "experiment", "structure_observation", "annotation",
+    "review", "analysis_snapshot", "evidence_release", "external_evidence",
+})
 
 _LIFECYCLE_TRANSITIONS = {
     "draft": {"draft", "active", "archived"},
@@ -296,6 +302,155 @@ def lineage(value: dict[str, Any]) -> dict[str, Any]:
     return {"source_ref": source, "relation": relation, "target_ref": target}
 
 
+def reference_job(kind: str, value: dict[str, Any]) -> dict[str, Any]:
+    """Validate one native reference-system job without weakening its semantics."""
+    if kind not in REFERENCE_JOB_KINDS or not isinstance(value, dict):
+        raise failures.DiracInvalidParameters("unknown or invalid reference job")
+    if kind == "target_disease":
+        ontology = value.get("ontology")
+        if ontology is not None and (not isinstance(ontology, dict)
+                                     or not ontology.get("namespace") or not ontology.get("id")):
+            raise failures.DiracInvalidParameters("disease ontology requires namespace and id")
+        role = value.get("role", "primary")
+        if role not in {"primary", "secondary", "safety", "biomarker", "exploratory"}:
+            raise failures.DiracInvalidParameters("unknown target-disease role")
+        return {"disease_key": key(value.get("disease_key"), "disease_key"),
+                "name": nonempty(value.get("name"), "disease.name", maximum=256),
+                "description": _optional_text(value.get("description"), 4000),
+                "ontology": copy.deepcopy(ontology), "target_ref": ref(value.get("target_ref"), "target"),
+                "role": role, "rationale": nonempty(value.get("rationale"), "rationale")}
+    if kind == "substance_registration":
+        status = value.get("status", "draft")
+        if status not in {"draft", "candidate_match", "conflict", "validated", "approved", "rejected"}:
+            raise failures.DiracInvalidParameters("unknown registration status")
+        decision = _optional_text(value.get("decision"), 4000)
+        if status == "approved" and decision is None:
+            raise failures.DiracInvalidParameters("approved registration requires a decision")
+        return {"compound_ref": ref(value.get("compound_ref"), "compound"), "status": status,
+                "definition": _object(value.get("definition"), "definition"),
+                "validation": _object(value.get("validation", {}), "validation"), "decision": decision}
+    if kind == "sample":
+        amount = _positive_number(value.get("amount_value"), "amount_value", allow_zero=True)
+        unit = str(value.get("amount_unit", ""))
+        if unit not in {"g", "mg", "ug", "mol", "mmol", "umol"}:
+            raise failures.DiracInvalidParameters("sample amount_unit must be a mass or amount unit")
+        parent = value.get("parent_sample_ref")
+        return {"sample_code": key(value.get("sample_code"), "sample_code").upper(),
+                "batch_ref": ref(value.get("batch_ref"), "batch"),
+                "parent_sample_ref": ref(parent, "sample") if parent else None,
+                "amount_value": amount, "amount_unit": unit,
+                "container": _optional_text(value.get("container"), 256),
+                "location": _optional_text(value.get("location"), 512)}
+    if kind == "sample_transfer":
+        return {"sample_ref": ref(value.get("sample_ref"), "sample"),
+                "to_location": nonempty(value.get("to_location"), "to_location", maximum=512),
+                "reason": nonempty(value.get("reason"), "reason", maximum=2000)}
+    if kind == "work_comment":
+        return {"work_item_ref": ref(value.get("work_item_ref"), "work_item"),
+                "body": nonempty(value.get("body"), "comment.body", maximum=20000)}
+    if kind == "work_attachment":
+        return {"work_item_ref": ref(value.get("work_item_ref"), "work_item"),
+                "artifact_ref": ref(value.get("artifact_ref"), "artifact"),
+                "role": key(value.get("role"), "attachment.role")}
+    if kind == "gate_criterion":
+        status = value.get("status")
+        if status not in {"met", "not_met", "waived", "unknown"}:
+            raise failures.DiracInvalidParameters("unknown criterion assessment status")
+        evidence = value.get("evidence_ref")
+        if status == "met" and evidence is None:
+            raise failures.DiracInvalidParameters("met criterion requires evidence_ref")
+        explanation = nonempty(value.get("explanation"), "assessment.explanation")
+        if status == "waived" and len(explanation) < 8:
+            raise failures.DiracInvalidParameters("waiver explanation is too short")
+        return {"stage_gate_ref": ref(value.get("stage_gate_ref"), "stage_gate"),
+                "criterion_key": key(value.get("criterion_key"), "criterion_key"),
+                "status": status, "evidence_ref": ref(evidence) if evidence else None,
+                "explanation": explanation}
+    if kind == "protocol_version":
+        return {"protocol_key": key(value.get("protocol_key"), "protocol_key"),
+                "title": nonempty(value.get("title"), "protocol.title", maximum=256),
+                "assay_ref": ref(value["assay_ref"], "assay") if value.get("assay_ref") else None,
+                "specification": _object(value.get("specification"), "specification")}
+    if kind == "dataset_version":
+        parents = _array(value.get("parent_refs", []), "parent_refs")
+        return {"dataset_key": key(value.get("dataset_key"), "dataset_key"),
+                "manifest_artifact_ref": ref(value.get("manifest_artifact_ref"), "artifact"),
+                "manifest": _object(value.get("manifest"), "manifest"),
+                "schema_version": nonempty(value.get("schema_version"), "schema_version", maximum=128),
+                "access_scope": _choice(value.get("access_scope", "internal"),
+                    {"public", "program", "internal", "partner_confidential", "restricted", "regulated"},
+                    "access_scope"),
+                "experiment_ref": ref(value["experiment_ref"], "experiment") if value.get("experiment_ref") else None,
+                "parent_refs": [ref(item, "dataset_version") for item in parents],
+                "producer_job_ref": ref(value["producer_job_ref"], "job") if value.get("producer_job_ref") else None,
+                "derivation": _optional_text(value.get("derivation"), 4000)}
+    if kind == "experiment":
+        status = _choice(value.get("status", "planned"),
+            {"planned", "running", "completed", "failed", "cancelled"}, "experiment.status")
+        started = _iso_datetime(value.get("started_at"), "started_at")
+        completed = _iso_datetime(value.get("completed_at"), "completed_at")
+        if status in {"completed", "failed", "cancelled"} and completed is None:
+            raise failures.DiracInvalidParameters("terminal experiment requires completed_at")
+        samples = _array(value.get("samples", []), "samples")
+        normalized_samples = []
+        for item in samples:
+            if not isinstance(item, dict):
+                raise failures.DiracInvalidParameters("experiment samples must be objects")
+            normalized_samples.append({"sample_ref": ref(item.get("sample_ref"), "sample"),
+                "role": _choice(item.get("role", "test"), {"test", "control", "reference", "matrix", "reagent"}, "sample.role")})
+        return {"experiment_key": key(value.get("experiment_key"), "experiment_key"),
+                "work_item_ref": ref(value.get("work_item_ref"), "work_item"),
+                "protocol_version_ref": ref(value.get("protocol_version_ref"), "protocol_version"),
+                "title": nonempty(value.get("title"), "experiment.title", maximum=256),
+                "status": status, "started_at": started, "completed_at": completed,
+                "samples": normalized_samples}
+    if kind == "structure_observation":
+        return {"observation_key": key(value.get("observation_key"), "observation_key"),
+                "structure_ref": ref(value.get("structure_ref"), "protein_structure"),
+                "compound_ref": ref(value["compound_ref"], "compound") if value.get("compound_ref") else None,
+                "experiment_ref": ref(value["experiment_ref"], "experiment") if value.get("experiment_ref") else None,
+                "dataset_version_ref": ref(value.get("dataset_version_ref"), "dataset_version"),
+                "canonical_site": _optional_text(value.get("canonical_site"), 256)}
+    if kind == "annotation":
+        return {"subject_ref": ref(value.get("subject_ref")),
+                "annotation_kind": _choice(value.get("annotation_kind"), {"tag", "site", "merge_hypothesis", "note", "quality"}, "annotation_kind"),
+                "label": nonempty(value.get("label"), "annotation.label", maximum=256),
+                "value": _object(value.get("value", {}), "annotation.value")}
+    if kind == "review":
+        return {"subject_ref": ref(value.get("subject_ref")),
+                "review_role": _choice(value.get("review_role", "peer"), {"main", "peer"}, "review_role"),
+                "status": _choice(value.get("status"), {"accepted", "questionable", "rejected"}, "review.status"),
+                "comment": nonempty(value.get("comment"), "review.comment", maximum=4000)}
+    if kind == "analysis_snapshot":
+        mode = _choice(value.get("snapshot_mode", "preserved"), {"live", "preserved"}, "snapshot_mode")
+        datasets = [ref(item, "dataset_version") for item in _array(value.get("dataset_version_refs", []), "dataset_version_refs")]
+        channel = _optional_text(value.get("release_channel"), 256)
+        if mode == "live" and channel is None:
+            raise failures.DiracInvalidParameters("live snapshot requires release_channel")
+        if mode == "preserved" and not datasets:
+            raise failures.DiracInvalidParameters("preserved snapshot requires dataset versions")
+        return {"work_item_ref": ref(value["work_item_ref"], "work_item") if value.get("work_item_ref") else None,
+                "title": nonempty(value.get("title"), "snapshot.title", maximum=256),
+                "snapshot_mode": mode, "release_channel": channel,
+                "dataset_version_refs": datasets, "state": _object(value.get("state"), "snapshot.state")}
+    if kind == "evidence_release":
+        return {"source_name": nonempty(value.get("source_name"), "source_name", maximum=128),
+                "release_name": nonempty(value.get("release_name"), "release_name", maximum=128),
+                "source_url": _optional_text(value.get("source_url"), 2000),
+                "retrieved_at": _iso_datetime(value.get("retrieved_at"), "retrieved_at", required=True),
+                "payload_artifact_ref": ref(value.get("payload_artifact_ref"), "artifact")}
+    release = ref(value.get("release_ref"), "external_evidence_release")
+    score = value.get("score")
+    if score is not None and (not isinstance(score, (int, float)) or isinstance(score, bool) or not 0 <= score <= 1):
+        raise failures.DiracInvalidParameters("evidence score must be between 0 and 1")
+    return {"release_ref": release, "source_record_id": nonempty(value.get("source_record_id"), "source_record_id", maximum=512),
+            "target_ref": ref(value.get("target_ref"), "target"), "disease_ref": ref(value.get("disease_ref"), "disease"),
+            "data_type": key(value.get("data_type"), "data_type"),
+            "evidence_source": key(value.get("evidence_source"), "evidence_source"),
+            "score": float(score) if score is not None else None, "is_direct": bool(value.get("is_direct", True)),
+            "payload": _object(value.get("payload"), "payload")}
+
+
 def objective(value: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise failures.DiracInvalidParameters("objective must be an object")
@@ -411,6 +566,44 @@ def _iso_date(value: Any, field: str) -> str | None:
         return date.fromisoformat(str(value)).isoformat()
     except ValueError as exc:
         raise failures.DiracInvalidParameters(f"{field} must be YYYY-MM-DD") from exc
+
+
+def _iso_datetime(value: Any, field: str, *, required: bool = False) -> str | None:
+    if value in (None, ""):
+        if required:
+            raise failures.DiracInvalidParameters(f"{field} is required")
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).isoformat()
+    except ValueError as exc:
+        raise failures.DiracInvalidParameters(f"{field} must be an ISO-8601 timestamp") from exc
+
+
+def _object(value: Any, field: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise failures.DiracInvalidParameters(f"{field} must be an object")
+    return copy.deepcopy(value)
+
+
+def _array(value: Any, field: str) -> list[Any]:
+    if not isinstance(value, list):
+        raise failures.DiracInvalidParameters(f"{field} must be an array")
+    return copy.deepcopy(value)
+
+
+def _choice(value: Any, choices: set[str], field: str) -> str:
+    if value not in choices:
+        raise failures.DiracInvalidParameters(f"unknown {field}")
+    return str(value)
+
+
+def _positive_number(value: Any, field: str, *, allow_zero: bool = False) -> float:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise failures.DiracInvalidParameters(f"{field} must be numeric")
+    number = float(value)
+    if number < 0 or (number == 0 and not allow_zero):
+        raise failures.DiracInvalidParameters(f"{field} must be positive")
+    return number
 
 
 def _json_default(value: Any) -> str:

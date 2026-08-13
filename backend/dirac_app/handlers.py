@@ -354,6 +354,35 @@ def program_snapshot_create(input: dict, ctx) -> dict:
         input["program_ref"], input["expected_version"], ctx.actor, ctx.request_id)
 
 
+_REFERENCE_JOB_BY_COMMAND = {
+    "program.target_disease.link": "target_disease",
+    "identity.substance_registration.record": "substance_registration",
+    "sample.create": "sample",
+    "sample.transfer": "sample_transfer",
+    "program.work_comment.record": "work_comment",
+    "program.work_attachment.record": "work_attachment",
+    "program.gate_criterion.assess": "gate_criterion",
+    "protocol.version.record": "protocol_version",
+    "dataset.version.commit": "dataset_version",
+    "experiment.record": "experiment",
+    "structure.observation.register": "structure_observation",
+    "structure.annotation.record": "annotation",
+    "structure.review.record": "review",
+    "structure.analysis_snapshot.create": "analysis_snapshot",
+    "evidence.release.import": "evidence_release",
+    "evidence.external.record": "external_evidence",
+}
+
+
+def program_reference_job_record(input: dict, ctx) -> dict:
+    kind = _REFERENCE_JOB_BY_COMMAND.get(ctx.command_id)
+    if kind is None:
+        raise failures.DiracInvalidParameters("unknown Program reference-job command")
+    return _programs(ctx).record_reference_job(
+        input["program_ref"], input["expected_version"], kind, input["record"],
+        ctx.actor, ctx.request_id)
+
+
 def structure_field_compute(input: dict, ctx) -> dict:
     kind = input['field_kind']
     method_id = (f'fields.{kind}' if kind in ('mep', 'mlp')

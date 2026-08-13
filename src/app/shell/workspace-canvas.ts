@@ -332,6 +332,48 @@ export class WorkspaceCanvas {
 
         const metrics = element('dl', 'program-metrics'); metrics.dataset.programMetrics = '';
         const health = element('section', 'program-health'); health.dataset.programHealth = '';
+        const referenceJobs = element('section', 'program-reference-jobs');
+        const referenceHeader = element('header');
+        const referenceCopy = element('div');
+        referenceCopy.append(element('span', 'workspace-section-kicker', 'Native reference jobs'),
+            element('h3', '', 'One Program · one identity chain · one delivery spine'),
+            element('p', '', 'Each operation writes a canonical object, provenance-bearing event, or governed relationship. Records remain the same objects in every workspace.'));
+        const referenceCount = element('strong', 'program-reference-count', '0 records');
+        referenceCount.dataset.programReferenceCount = '';
+        referenceHeader.append(referenceCopy, referenceCount);
+        const referenceGrid = element('div', 'program-reference-grid');
+        const referenceFamily = (id: string, label: string, purpose: string,
+            actions: Array<[string, string]>) => {
+            const section = element('article', 'program-reference-family');
+            section.dataset.referenceFamily = id;
+            const heading = element('header');
+            const copy = element('div'); copy.append(element('h4', '', label), element('p', '', purpose));
+            const controls = element('div', 'program-reference-actions');
+            for (const [action, actionLabel] of actions) controls.append(button(actionLabel, `reference:${action}`, true));
+            heading.append(copy, controls);
+            const list = element('div', 'program-reference-list'); list.dataset.referenceList = id;
+            section.append(heading, list); return section;
+        };
+        referenceGrid.append(
+            referenceFamily('identity', '1 · Scope & identity', 'Target–disease scope, reviewed substance identity, batch-derived samples, and custody.', [
+                ['target-disease', 'Link disease'], ['substance', 'Register substance'],
+                ['sample', 'Create sample'], ['sample-transfer', 'Transfer sample'],
+            ]),
+            referenceFamily('delivery', '2 · Team delivery', 'The same Work Item carries discussion, files, execution, and criterion-level readiness.', [
+                ['work-comment', 'Add comment'], ['work-attachment', 'Attach file'], ['gate-criterion', 'Assess criterion'],
+            ]),
+            referenceFamily('data', '3 · Experimental data', 'Immutable protocols, physical samples, experiments, and lineage-bearing dataset versions.', [
+                ['protocol', 'Version protocol'], ['experiment', 'Record experiment'], ['dataset', 'Commit dataset'],
+            ]),
+            referenceFamily('structure', '4 · Structure collaboration', 'Experimental observations, annotations, review authority, and preserved analysis state.', [
+                ['observation', 'Register observation'], ['annotation', 'Annotate'],
+                ['review', 'Review'], ['analysis-snapshot', 'Preserve analysis'],
+            ]),
+            referenceFamily('evidence', '5 · External evidence', 'Release-pinned imports and explainable target–disease evidence records.', [
+                ['evidence-release', 'Import release'], ['external-evidence', 'Record evidence'],
+            ]),
+        );
+        referenceJobs.append(referenceHeader, referenceGrid);
         const grid = element('div', 'program-atom-grid');
         const panel = (kind: string, label: string, singular: string, collection: string, help: string) => {
             const section = element('section', 'program-atom-panel');
@@ -358,7 +400,7 @@ export class WorkspaceCanvas {
             element('p', '', 'Ordered aggregate events; newest first.'));
         const events = element('ol'); events.dataset.programEvents = '';
         timeline.append(timelineHeader, events);
-        dashboard.append(identity, health, metrics, operating, grid, timeline);
+        dashboard.append(identity, health, metrics, referenceJobs, operating, grid, timeline);
         workbench.append(toolbar, status, empty, dashboard);
         page.append(header, question, workbench);
         this.host.replaceChildren(page);

@@ -95,6 +95,7 @@ class MemoryProgramRepository:
             "milestones": [], "links": [], "members": [], "stage_gates": [],
             "work_items": [], "work_packages": [], "work_transitions": [],
             "work_executions": [], "evidence_bindings": [], "lineage": [],
+            "reference_jobs": [],
         }
         self.programs[identifier] = row; self.by_code[spec["code"]] = identifier
         self.events[identifier] = []
@@ -274,6 +275,39 @@ class MemoryProgramRepository:
                                    request_id, lambda item: (item["source_ref"], item["relation"], item["target_ref"]),
                                    "lineage.recorded")
 
+    def record_reference_job(self, program_ref: dict, expected_version: int, kind: str,
+                             value: dict, actor: dict, request_id: str | None = None) -> dict:
+        identifier = self._id(program_ref); who = D.actor(actor); item = D.reference_job(kind, value)
+        duplicate = self._duplicate(identifier, request_id)
+        if duplicate is not None: return duplicate
+        row = self.programs[identifier]; self._expect(row, expected_version)
+        object_kind = {
+            "target_disease": "disease", "substance_registration": "substance_registration",
+            "sample": "sample", "sample_transfer": "sample", "work_comment": "artifact",
+            "work_attachment": "artifact", "gate_criterion": "artifact",
+            "protocol_version": "protocol_version", "dataset_version": "dataset_version",
+            "experiment": "experiment", "structure_observation": "structure_observation",
+            "annotation": "annotation", "review": "review", "analysis_snapshot": "analysis_snapshot",
+            "evidence_release": "external_evidence_release", "external_evidence": "external_evidence_record",
+        }[kind]
+        atom_ref = (item.get("sample_ref") if kind == "sample_transfer" else None)
+        if atom_ref is None: atom_ref = _ref(object_kind, uuid.uuid4())
+        record = {"ref": copy.deepcopy(atom_ref), "job_kind": kind, **copy.deepcopy(item),
+                  "recorded_at": datetime.now(timezone.utc).isoformat(), "recorded_by": who}
+        row["reference_jobs"].append(record); row["version"] += 1
+        event_kind = {
+            "target_disease": "target_disease.linked", "substance_registration": "substance_registration.recorded",
+            "sample": "sample.created", "sample_transfer": "sample.transferred",
+            "work_comment": "work_comment.recorded", "work_attachment": "work_attachment.recorded",
+            "gate_criterion": "gate_criterion.assessed", "protocol_version": "protocol.recorded",
+            "dataset_version": "dataset_version.committed", "experiment": "experiment.recorded",
+            "structure_observation": "structure_observation.recorded", "annotation": "annotation.recorded",
+            "review": "review.recorded", "analysis_snapshot": "analysis_snapshot.created",
+            "evidence_release": "external_evidence_release.imported", "external_evidence": "external_evidence.recorded",
+        }[kind]
+        result = {"record": copy.deepcopy(record), "program_version": row["version"]}
+        return self._record(identifier, event_kind, atom_ref, result, who, request_id)
+
     def health(self, program_ref: dict) -> dict:
         program = self._overview(self._id(program_ref))
         return {"health": _program_health(program)}
@@ -416,15 +450,15 @@ class MemoryProgramRepository:
         base = {k: copy.deepcopy(v) for k, v in row.items()
                 if k not in {"id", "objectives", "hypotheses", "decisions", "milestones", "links",
                              "members", "stage_gates", "work_items", "work_packages", "work_transitions",
-                             "work_executions", "evidence_bindings", "lineage"}}
+                             "work_executions", "evidence_bindings", "lineage", "reference_jobs"}}
         base.update({k: copy.deepcopy(row[k]) for k in
                      ("objectives", "hypotheses", "decisions", "milestones", "links", "members",
                       "stage_gates", "work_items", "work_packages", "work_transitions",
-                      "work_executions", "evidence_bindings", "lineage")})
+                      "work_executions", "evidence_bindings", "lineage", "reference_jobs")})
         base["counts"] = {k: len(row[k]) for k in
                           ("objectives", "hypotheses", "decisions", "milestones", "links", "members",
                            "stage_gates", "work_items", "work_packages", "work_transitions",
-                           "work_executions", "evidence_bindings", "lineage")}
+                           "work_executions", "evidence_bindings", "lineage", "reference_jobs")}
         base["health"] = _program_health(base)
         base["events"] = copy.deepcopy(self.events.get(identifier, [])[-30:][::-1])
         return base
@@ -738,6 +772,280 @@ class PostgresProgramRepository:
             version = self._advance(cur, identifier, who); result = {"lineage": edge, "program_version": version, "created": True}
             return self._finish(cur, identifier, version, "lineage.recorded", None, result, who, request_id)
 
+    def record_reference_job(self, program_ref: dict, expected_version: int, kind: str,
+                             value: dict, actor: dict, request_id: str | None = None) -> dict:
+        item = D.reference_job(kind, value); who = D.actor(actor)
+        event_kind = {
+            "target_disease": "target_disease.linked", "substance_registration": "substance_registration.recorded",
+            "sample": "sample.created", "sample_transfer": "sample.transferred",
+            "work_comment": "work_comment.recorded", "work_attachment": "work_attachment.recorded",
+            "gate_criterion": "gate_criterion.assessed", "protocol_version": "protocol.recorded",
+            "dataset_version": "dataset_version.committed", "experiment": "experiment.recorded",
+            "structure_observation": "structure_observation.recorded", "annotation": "annotation.recorded",
+            "review": "review.recorded", "analysis_snapshot": "analysis_snapshot.created",
+            "evidence_release": "external_evidence_release.imported", "external_evidence": "external_evidence.recorded",
+        }[kind]
+        with self._mutation(program_ref, expected_version, request_id) as state:
+            cur, identifier, _program, duplicate = state
+            if duplicate is not None: return duplicate
+            semantic_duplicate = self._reference_duplicate(cur, identifier, event_kind, kind, item)
+            if semantic_duplicate is not None:
+                return semantic_duplicate
+            record, atom_ref = self._insert_reference_job(cur, identifier, kind, item, who)
+            record = {"job_kind": kind, **record}
+            version = self._advance(cur, identifier, who)
+            result = {"record": D.jsonable(record), "program_version": version}
+            return self._finish(cur, identifier, version, event_kind, atom_ref,
+                                result, who, request_id)
+
+    def _reference_duplicate(self, cur, program_id, event_kind, kind, item):
+        """Honor declared natural-key idempotency before touching domain tables."""
+        if kind not in {"target_disease", "sample", "work_attachment", "protocol_version",
+                        "experiment", "dataset_version", "structure_observation",
+                        "evidence_release", "external_evidence"}:
+            return None
+        cur.execute("SELECT payload->'result' AS result FROM design.program_event "
+                    "WHERE program_id=%s AND event_kind=%s ORDER BY aggregate_version DESC",
+                    (program_id, event_kind))
+        for row in cur.fetchall():
+            result = row["result"]
+            record = result.get("record", {}) if isinstance(result, dict) else {}
+            matches = False
+            if kind == "target_disease":
+                matches = (record.get("disease_key") == item["disease_key"]
+                           and record.get("target_ref") == item["target_ref"]
+                           and record.get("role") == item["role"])
+            elif kind == "sample":
+                matches = record.get("sample_code") == item["sample_code"]
+            elif kind == "work_attachment":
+                matches = all(record.get(key) == item[key]
+                              for key in ("work_item_ref", "artifact_ref", "role"))
+            elif kind == "protocol_version":
+                matches = (record.get("protocol_key") == item["protocol_key"]
+                           and record.get("digest") == D.digest(item["specification"]))
+            elif kind == "experiment":
+                matches = record.get("experiment_key") == item["experiment_key"]
+            elif kind == "dataset_version":
+                expected = D.digest({"manifest": item["manifest"], "schema_version": item["schema_version"]})
+                matches = record.get("dataset_key") == item["dataset_key"] and record.get("digest") == expected
+            elif kind == "structure_observation":
+                matches = record.get("observation_key") == item["observation_key"]
+            elif kind == "evidence_release":
+                matches = (record.get("source_name") == item["source_name"]
+                           and record.get("release_name") == item["release_name"])
+            elif kind == "external_evidence":
+                matches = (record.get("release_ref") == item["release_ref"]
+                           and record.get("source_record_id") == item["source_record_id"])
+            if not matches:
+                continue
+            comparable = {key: record.get(key) for key in item}
+            if kind == "protocol_version":
+                comparable = {key: comparable[key] for key in item if key != "title"}
+                expected_item = {key: item[key] for key in item if key != "title"}
+            else:
+                expected_item = item
+            if comparable != expected_item:
+                raise failures.DiracInvalidParameters(
+                    f"{kind} natural key already identifies a different record")
+            return D.jsonable(result)
+        return None
+
+    def _insert_reference_job(self, cur, program_id, kind, item, who):
+        digest_bytes = lambda value: bytes.fromhex(D.digest(value).removeprefix("sha256:"))
+        if kind == "target_disease":
+            self._require_entity(cur, item["target_ref"])
+            ontology = item["ontology"] or {}
+            cur.execute("SELECT id FROM bio.disease WHERE disease_key=%s", (item["disease_key"],))
+            row = cur.fetchone()
+            if row is None:
+                cur.execute("INSERT INTO bio.disease(disease_key,name,ontology_namespace,ontology_id,description,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at",
+                    (item["disease_key"], item["name"], ontology.get("namespace"), ontology.get("id"),
+                     item["description"], who["kind"], who["id"]))
+                row = cur.fetchone()
+            disease_ref = _ref("disease", row["id"])
+            cur.execute("INSERT INTO design.program_target_disease(program_id,target_id,disease_id,role,rationale,linked_by_kind,linked_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING RETURNING id,linked_at",
+                (program_id, item["target_ref"]["id"], row["id"], item["role"], item["rationale"], who["kind"], who["id"]))
+            link = cur.fetchone()
+            if link is None:
+                cur.execute("SELECT id,linked_at FROM design.program_target_disease WHERE program_id=%s AND target_id=%s AND disease_id=%s AND role=%s AND retired_at IS NULL",
+                    (program_id, item["target_ref"]["id"], row["id"], item["role"]))
+                link = cur.fetchone()
+            return ({"ref": disease_ref, **item, "disease_ref": disease_ref,
+                     "link_ref": _ref("artifact", link["id"]), "linked_at": link["linked_at"], "linked_by": who}, disease_ref)
+        if kind == "substance_registration":
+            self._require_entity(cur, item["compound_ref"])
+            cur.execute("SELECT id,revision FROM chem.substance_registration WHERE compound_id=%s AND status<>'superseded' FOR UPDATE",
+                        (item["compound_ref"]["id"],)); old = cur.fetchone()
+            revision = old["revision"] + 1 if old else 1
+            if old: cur.execute("UPDATE chem.substance_registration SET status='superseded' WHERE id=%s", (old["id"],))
+            assessed = datetime.now(timezone.utc) if item["status"] in {"approved", "rejected"} else None
+            cur.execute("INSERT INTO chem.substance_registration(compound_id,revision,status,definition,validation,decision,supersedes_id,created_by_kind,created_by_id,assessed_at,assessed_by_kind,assessed_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at",
+                (item["compound_ref"]["id"], revision, item["status"], self._json(item["definition"]),
+                 self._json(item["validation"]), item["decision"], old["id"] if old else None,
+                 who["kind"], who["id"], assessed, who["kind"] if assessed else None, who["id"] if assessed else None))
+            row = cur.fetchone(); atom = _ref("substance_registration", row["id"])
+            return ({"ref": atom, **item, "revision": revision,
+                     "supersedes_ref": _ref("substance_registration", old["id"]) if old else None,
+                     "created_at": row["created_at"], "created_by": who}, atom)
+        if kind == "sample":
+            self._require_entity(cur, item["batch_ref"])
+            if item["parent_sample_ref"]: self._require_entity(cur, item["parent_sample_ref"])
+            cur.execute("INSERT INTO chem.sample(batch_id,parent_sample_id,sample_code,amount_value,amount_unit,container,location,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at,status",
+                (item["batch_ref"]["id"], item["parent_sample_ref"]["id"] if item["parent_sample_ref"] else None,
+                 item["sample_code"], item["amount_value"], item["amount_unit"], item["container"], item["location"],
+                 who["kind"], who["id"]))
+            row = cur.fetchone(); atom = _ref("sample", row["id"])
+            cur.execute("INSERT INTO chem.sample_custody_event(sample_id,event_kind,to_location,reason,actor_kind,actor_id) VALUES (%s,'created',%s,'Canonical sample created',%s,%s)",
+                        (row["id"], item["location"], who["kind"], who["id"]))
+            return ({"ref": atom, **item, "status": row["status"], "created_at": row["created_at"], "created_by": who}, atom)
+        if kind == "sample_transfer":
+            self._require_entity(cur, item["sample_ref"])
+            cur.execute("SELECT location FROM chem.sample WHERE id=%s FOR UPDATE", (item["sample_ref"]["id"],)); old = cur.fetchone()
+            if old is None: raise failures.DiracNotFound("Sample does not exist")
+            cur.execute("UPDATE chem.sample SET location=%s WHERE id=%s", (item["to_location"], item["sample_ref"]["id"]))
+            cur.execute("INSERT INTO chem.sample_custody_event(sample_id,event_kind,from_location,to_location,reason,actor_kind,actor_id) VALUES (%s,'transferred',%s,%s,%s,%s,%s) RETURNING id,occurred_at",
+                (item["sample_ref"]["id"], old["location"], item["to_location"], item["reason"], who["kind"], who["id"]))
+            row = cur.fetchone()
+            return ({"ref": item["sample_ref"], **item, "from_location": old["location"],
+                     "custody_event_ref": _ref("artifact", row["id"]), "occurred_at": row["occurred_at"], "actor": who}, item["sample_ref"])
+        if kind in {"work_comment", "work_attachment"}:
+            cur.execute("SELECT 1 FROM design.program_work_item WHERE id=%s AND program_id=%s",
+                        (item["work_item_ref"]["id"], program_id))
+            if cur.fetchone() is None: raise failures.DiracNotFound("Program Work Item does not exist")
+            if kind == "work_comment":
+                cur.execute("INSERT INTO design.program_work_comment(work_item_id,body,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s) RETURNING id,created_at",
+                            (item["work_item_ref"]["id"], item["body"], who["kind"], who["id"]))
+            else:
+                self._require_entity(cur, item["artifact_ref"])
+                cur.execute("INSERT INTO design.program_work_attachment(work_item_id,artifact_id,role,attached_by_kind,attached_by_id) VALUES (%s,%s,%s,%s,%s) RETURNING id,attached_at AS created_at",
+                            (item["work_item_ref"]["id"], item["artifact_ref"]["id"], item["role"], who["kind"], who["id"]))
+            row = cur.fetchone(); atom = _ref("artifact", row["id"])
+            return ({"ref": atom, **item, "created_at": row["created_at"], "created_by": who}, atom)
+        if kind == "gate_criterion":
+            cur.execute("SELECT criteria FROM design.program_stage_gate WHERE id=%s AND program_id=%s",
+                        (item["stage_gate_ref"]["id"], program_id)); gate = cur.fetchone()
+            if gate is None: raise failures.DiracNotFound("Stage Gate does not exist")
+            labels = {str(c.get("key") or c.get("criterion")) for c in gate["criteria"] if isinstance(c, dict)}
+            if item["criterion_key"] not in labels:
+                raise failures.DiracInvalidParameters("criterion_key is not declared by this Stage Gate",
+                                                     details={"declared": sorted(labels)})
+            if item["evidence_ref"]: self._require_entity(cur, item["evidence_ref"])
+            cur.execute("INSERT INTO design.gate_criterion_assessment(stage_gate_id,criterion_key,status,evidence_kind,evidence_id,explanation,assessed_by_kind,assessed_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (stage_gate_id,criterion_key) DO UPDATE SET status=EXCLUDED.status,evidence_kind=EXCLUDED.evidence_kind,evidence_id=EXCLUDED.evidence_id,explanation=EXCLUDED.explanation,assessed_at=now(),assessed_by_kind=EXCLUDED.assessed_by_kind,assessed_by_id=EXCLUDED.assessed_by_id RETURNING id,assessed_at",
+                (item["stage_gate_ref"]["id"], item["criterion_key"], item["status"],
+                 item["evidence_ref"]["kind"] if item["evidence_ref"] else None,
+                 item["evidence_ref"]["id"] if item["evidence_ref"] else None,
+                 item["explanation"], who["kind"], who["id"]))
+            row = cur.fetchone(); atom = _ref("artifact", row["id"])
+            return ({"ref": atom, **item, "assessed_at": row["assessed_at"], "assessed_by": who}, atom)
+        if kind == "protocol_version":
+            if item["assay_ref"]: self._require_entity(cur, item["assay_ref"])
+            cur.execute("SELECT id,revision FROM bio.protocol_version WHERE protocol_key=%s AND status='active' FOR UPDATE",
+                        (item["protocol_key"],)); old = cur.fetchone(); revision = old["revision"] + 1 if old else 1
+            if old: cur.execute("UPDATE bio.protocol_version SET status='superseded' WHERE id=%s", (old["id"],))
+            cur.execute("INSERT INTO bio.protocol_version(protocol_key,revision,title,assay_id,specification,digest,supersedes_id,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at,status",
+                (item["protocol_key"], revision, item["title"], item["assay_ref"]["id"] if item["assay_ref"] else None,
+                 self._json(item["specification"]), digest_bytes(item["specification"]), old["id"] if old else None,
+                 who["kind"], who["id"]))
+            row = cur.fetchone(); atom = _ref("protocol_version", row["id"])
+            return ({"ref": atom, **item, "revision": revision, "status": row["status"],
+                     "supersedes_ref": _ref("protocol_version", old["id"]) if old else None,
+                     "digest": D.digest(item["specification"]), "created_at": row["created_at"], "created_by": who}, atom)
+        if kind == "experiment":
+            self._require_entity(cur, item["protocol_version_ref"])
+            cur.execute("SELECT 1 FROM design.program_work_item WHERE id=%s AND program_id=%s",
+                        (item["work_item_ref"]["id"], program_id))
+            if cur.fetchone() is None: raise failures.DiracNotFound("Program Work Item does not exist")
+            cur.execute("INSERT INTO bio.experiment(experiment_key,program_id,work_item_id,protocol_version_id,title,status,started_at,completed_at,recorded_by_kind,recorded_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,recorded_at",
+                (item["experiment_key"], program_id, item["work_item_ref"]["id"], item["protocol_version_ref"]["id"],
+                 item["title"], item["status"], item["started_at"], item["completed_at"], who["kind"], who["id"]))
+            row = cur.fetchone(); atom = _ref("experiment", row["id"])
+            for sample in item["samples"]:
+                self._require_entity(cur, sample["sample_ref"])
+                cur.execute("INSERT INTO bio.experiment_sample(experiment_id,sample_id,role) VALUES (%s,%s,%s)",
+                            (row["id"], sample["sample_ref"]["id"], sample["role"]))
+            return ({"ref": atom, **item, "recorded_at": row["recorded_at"], "recorded_by": who}, atom)
+        if kind == "dataset_version":
+            self._require_entity(cur, item["manifest_artifact_ref"])
+            if item["experiment_ref"]: self._require_entity(cur, item["experiment_ref"])
+            cur.execute("SELECT id,version FROM app.dataset_version WHERE dataset_key=%s AND status='committed' FOR UPDATE",
+                        (item["dataset_key"],)); old = cur.fetchone(); version = old["version"] + 1 if old else 1
+            if old: cur.execute("UPDATE app.dataset_version SET status='superseded' WHERE id=%s", (old["id"],))
+            manifest_digest = digest_bytes({"manifest": item["manifest"], "schema_version": item["schema_version"]})
+            cur.execute("INSERT INTO app.dataset_version(dataset_key,version,program_id,experiment_id,manifest_artifact_id,manifest,schema_version,access_scope,digest,supersedes_id,committed_by_kind,committed_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,committed_at",
+                (item["dataset_key"], version, program_id, item["experiment_ref"]["id"] if item["experiment_ref"] else None,
+                 item["manifest_artifact_ref"]["id"], self._json(item["manifest"]), item["schema_version"],
+                 item["access_scope"], manifest_digest, old["id"] if old else None, who["kind"], who["id"]))
+            row = cur.fetchone(); atom = _ref("dataset_version", row["id"])
+            for parent in item["parent_refs"]:
+                self._require_entity(cur, parent)
+                cur.execute("INSERT INTO app.dataset_version_parent(dataset_version_id,parent_dataset_version_id,producer_job_id,derivation) VALUES (%s,%s,%s,%s)",
+                    (row["id"], parent["id"], item["producer_job_ref"]["id"] if item["producer_job_ref"] else None,
+                     item["derivation"] or "Declared parent dataset"))
+            return ({"ref": atom, **item, "version": version,
+                     "supersedes_ref": _ref("dataset_version", old["id"]) if old else None,
+                     "digest": "sha256:" + manifest_digest.hex(), "committed_at": row["committed_at"], "committed_by": who}, atom)
+        if kind == "structure_observation":
+            for name in ("structure_ref", "dataset_version_ref"):
+                self._require_entity(cur, item[name])
+            if item["compound_ref"]: self._require_entity(cur, item["compound_ref"])
+            if item["experiment_ref"]: self._require_entity(cur, item["experiment_ref"])
+            cur.execute("INSERT INTO bio.structure_observation(observation_key,program_id,structure_id,compound_id,experiment_id,source_dataset_version_id,canonical_site,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,quality_status,created_at",
+                (item["observation_key"], program_id, item["structure_ref"]["id"],
+                 item["compound_ref"]["id"] if item["compound_ref"] else None,
+                 item["experiment_ref"]["id"] if item["experiment_ref"] else None,
+                 item["dataset_version_ref"]["id"], item["canonical_site"], who["kind"], who["id"]))
+            row = cur.fetchone(); atom = _ref("structure_observation", row["id"])
+            return ({"ref": atom, **item, "quality_status": row["quality_status"], "created_at": row["created_at"], "created_by": who}, atom)
+        if kind in {"annotation", "review"}:
+            self._require_entity(cur, item["subject_ref"])
+            if kind == "annotation":
+                cur.execute("INSERT INTO design.scientific_annotation(program_id,subject_kind,subject_id,annotation_kind,label,value,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at",
+                    (program_id, item["subject_ref"]["kind"], item["subject_ref"]["id"], item["annotation_kind"],
+                     item["label"], self._json(item["value"]), who["kind"], who["id"]))
+                object_kind = "annotation"
+            else:
+                cur.execute("INSERT INTO design.scientific_review(program_id,subject_kind,subject_id,review_role,status,comment,reviewed_by_kind,reviewed_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,reviewed_at AS created_at",
+                    (program_id, item["subject_ref"]["kind"], item["subject_ref"]["id"], item["review_role"],
+                     item["status"], item["comment"], who["kind"], who["id"]))
+                object_kind = "review"
+            row = cur.fetchone(); atom = _ref(object_kind, row["id"])
+            return ({"ref": atom, **item, "created_at": row["created_at"], "created_by": who}, atom)
+        if kind == "analysis_snapshot":
+            if item["work_item_ref"]:
+                cur.execute("SELECT 1 FROM design.program_work_item WHERE id=%s AND program_id=%s",
+                            (item["work_item_ref"]["id"], program_id))
+                if cur.fetchone() is None: raise failures.DiracNotFound("Program Work Item does not exist")
+            dataset_ids = [entry["id"] for entry in item["dataset_version_refs"]]
+            for entry in item["dataset_version_refs"]: self._require_entity(cur, entry)
+            snapshot_digest = digest_bytes({"mode": item["snapshot_mode"], "release_channel": item["release_channel"],
+                                            "datasets": dataset_ids, "state": item["state"]})
+            cur.execute("INSERT INTO design.analysis_snapshot(program_id,work_item_id,title,snapshot_mode,release_channel,dataset_version_ids,state,digest,created_by_kind,created_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id,created_at",
+                (program_id, item["work_item_ref"]["id"] if item["work_item_ref"] else None, item["title"],
+                 item["snapshot_mode"], item["release_channel"], dataset_ids, self._json(item["state"]), snapshot_digest,
+                 who["kind"], who["id"]))
+            row = cur.fetchone(); atom = _ref("analysis_snapshot", row["id"])
+            return ({"ref": atom, **item, "digest": "sha256:" + snapshot_digest.hex(),
+                     "created_at": row["created_at"], "created_by": who}, atom)
+        if kind == "evidence_release":
+            self._require_entity(cur, item["payload_artifact_ref"])
+            release_digest = digest_bytes(item)
+            cur.execute("INSERT INTO bio.external_evidence_release(source_name,release_name,source_url,retrieved_at,payload_artifact_id,digest,imported_by_kind,imported_by_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (source_name,release_name) DO UPDATE SET source_name=EXCLUDED.source_name RETURNING id,imported_at",
+                (item["source_name"], item["release_name"], item["source_url"], item["retrieved_at"],
+                 item["payload_artifact_ref"]["id"], release_digest, who["kind"], who["id"]))
+            row = cur.fetchone(); atom = _ref("external_evidence_release", row["id"])
+            return ({"ref": atom, **item, "digest": "sha256:" + release_digest.hex(),
+                     "imported_at": row["imported_at"], "imported_by": who}, atom)
+        if kind == "external_evidence":
+            for name in ("release_ref", "target_ref", "disease_ref"): self._require_entity(cur, item[name])
+            evidence_digest = digest_bytes(item["payload"])
+            cur.execute("INSERT INTO bio.external_evidence_record(release_id,source_record_id,target_id,disease_id,data_type,evidence_source,score,is_direct,payload,digest) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (release_id,source_record_id) DO UPDATE SET source_record_id=EXCLUDED.source_record_id RETURNING id,created_at",
+                (item["release_ref"]["id"], item["source_record_id"], item["target_ref"]["id"],
+                 item["disease_ref"]["id"], item["data_type"], item["evidence_source"], item["score"],
+                 item["is_direct"], self._json(item["payload"]), evidence_digest))
+            row = cur.fetchone(); atom = _ref("external_evidence_record", row["id"])
+            return ({"ref": atom, **item, "digest": "sha256:" + evidence_digest.hex(), "created_at": row["created_at"]}, atom)
+        raise failures.DiracInvalidParameters("unsupported reference job")
+
     def health(self, program_ref: dict) -> dict:
         identifier = D.ref(program_ref, "program")["id"]
         with self._connect() as conn, self._cursor(conn) as cur:
@@ -963,13 +1271,17 @@ class PostgresProgramRepository:
                 for r in cur.fetchall() if (r["source_kind"], r["relation"], r["target_kind"]) in D.LINEAGE_SHAPES]
         else:
             out["lineage"] = []
+        cur.execute("SELECT payload->'result'->'record' AS record FROM design.program_event "
+                    "WHERE program_id=%s AND payload->'result' ? 'record' "
+                    "ORDER BY aggregate_version DESC", (identifier,))
+        out["reference_jobs"] = [row["record"] for row in cur.fetchall()]
         cur.execute("SELECT id,event_kind,aggregate_version,atom_kind::text,atom_id,occurred_at,actor_kind::text,actor_id FROM design.program_event WHERE program_id=%s ORDER BY aggregate_version DESC LIMIT 30", (identifier,))
         out["events"] = [{"ref": _event_ref(r["id"]), "kind": r["event_kind"], "program_version": r["aggregate_version"],
                           "atom_ref": _ref(r["atom_kind"], r["atom_id"]) if r["atom_kind"] else None,
                           "occurred_at": r["occurred_at"], "actor": {"kind": r["actor_kind"], "id": r["actor_id"]}} for r in cur.fetchall()]
         out["counts"] = {name: len(out[name]) for name in ("objectives","hypotheses","decisions","milestones","links",
             "members","stage_gates","work_items","work_packages","work_transitions","work_executions",
-            "evidence_bindings","lineage")}
+            "evidence_bindings","lineage","reference_jobs")}
         out["health"] = _program_health(out)
         return D.jsonable(out)
 
