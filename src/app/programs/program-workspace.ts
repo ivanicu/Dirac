@@ -1,6 +1,9 @@
 import { OBJECT_KINDS, type ObjectRef } from '../generated/commands';
 import { scientificContext } from '../context/scientific-context-store';
 import { DiracClient } from '../services/dirac-client';
+import { renderLaneLoadChart, renderProgramGantt, renderScientificGraph,
+    toWorkVisualItems, workGraphModel, type WorkLane,
+    type WorkVisualItem } from '../visualization/scientific-visuals';
 
 type Program = Record<string, any> & { ref: ObjectRef<'program'>; version: number };
 type FieldOption = string | { value: string; label: string };
@@ -322,6 +325,7 @@ export class ProgramWorkspaceController {
             if (count) count.textContent = String(laneItems.length);
             for (const item of laneItems) {
                 const card = document.createElement('article'); card.className = 'program-task-card';
+                card.dataset.workItemId = item.ref.id;
                 card.dataset.status = item.status; if (isOverdue(item)) card.dataset.overdue = 'true';
                 const top = document.createElement('div'); top.className = 'program-task-card-top';
                 top.append(text('span', item.key, 'program-task-key'), text('span', `P${item.priority || 3}`, 'program-task-priority'));
@@ -344,78 +348,35 @@ export class ProgramWorkspaceController {
             }
             if (!laneItems.length) list.append(text('p', 'No work in this stage.', 'program-workflow-empty'));
         }
-        this.renderGantt(items, keyById, today);
+        const visualItems = toWorkVisualItems(items);
+        const graph = document.querySelector<HTMLElement>('[data-program-work-graph]');
+        if (graph) renderScientificGraph(graph, workGraphModel(visualItems), {
+            ariaLabel: 'Program work dependency graph, arranged by discovery stage',
+            onSelect: node => this.selectWorkItem(node.id),
+        });
+        const chart = document.querySelector<HTMLElement>('[data-program-work-chart]');
+        if (chart) renderLaneLoadChart(chart, visualItems, lane => this.scrollToLane(lane));
+        this.renderGantt(visualItems);
     }
 
-    private renderGantt(items: Array<Record<string, any>>, keyById: Map<string, string>, today: Date): void {
+    private renderGantt(items: readonly WorkVisualItem[]): void {
         const root = document.querySelector<HTMLElement>('[data-program-gantt]');
         if (!root) return;
-        root.replaceChildren();
-        if (!items.length) {
-            root.append(text('p', 'Plan the first task to create the Program schedule.', 'program-gantt-empty'));
-            return;
+        renderProgramGantt(root, items, id => this.selectWorkItem(id));
+    }
+
+    private selectWorkItem(id: string): void {
+        scientificContext.patch({ workItemRef: { kind: 'work_item', id }, origin: 'selection' });
+        for (const card of document.querySelectorAll<HTMLElement>('[data-work-item-id]')) {
+            card.toggleAttribute('data-selected', card.dataset.workItemId === id);
         }
-        const scheduled = items.filter(item => item.start_on && item.due_on);
-        const unscheduled = items.filter(item => !item.start_on || !item.due_on);
-        if (!scheduled.length) {
-            root.append(text('p', 'No invented bars: add a planned start and finish to place work on the Gantt.', 'program-gantt-empty'));
-        } else {
-            const day = 86_400_000;
-            const toDate = (value: string) => new Date(`${value}T00:00:00Z`);
-            let start = new Date(Math.min(...scheduled.map(item => toDate(item.start_on).getTime())));
-            let end = new Date(Math.max(...scheduled.map(item => toDate(item.due_on).getTime())));
-            start = new Date(start.getTime() - 2 * day); end = new Date(Math.max(end.getTime() + 2 * day, start.getTime() + 27 * day));
-            const duration = Math.max(1, (end.getTime() - start.getTime()) / day);
-            const position = (date: Date) => 100 * (date.getTime() - start.getTime()) / (duration * day);
-            const laneOrder = new Map(WORKFLOW_LANES.map(([lane], index) => [lane, index]));
-            scheduled.sort((a, b) => (laneOrder.get(a.lane) ?? 99) - (laneOrder.get(b.lane) ?? 99)
-                || String(a.start_on).localeCompare(String(b.start_on)));
-            const grid = document.createElement('div'); grid.className = 'program-gantt-grid';
-            const corner = text('div', 'Task / owner', 'program-gantt-corner');
-            const axis = document.createElement('div'); axis.className = 'program-gantt-track program-gantt-axis';
-            const depsHeader = text('div', 'Depends on', 'program-gantt-deps-header');
-            const tickCount = 6;
-            for (let index = 0; index < tickCount; index++) {
-                const at = new Date(start.getTime() + duration * day * index / (tickCount - 1));
-                const tick = text('span', at.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }));
-                tick.style.left = `${index * 100 / (tickCount - 1)}%`; axis.append(tick);
-            }
-            grid.append(corner, axis, depsHeader);
-            for (const item of scheduled) {
-                const label = document.createElement('div'); label.className = 'program-gantt-label';
-                label.append(text('strong', item.title), text('span', `${item.owner?.id || 'Unassigned'} · ${humanize(item.lane)}`));
-                const track = document.createElement('div'); track.className = 'program-gantt-track';
-                const bar = document.createElement('button'); bar.type = 'button'; bar.className = 'program-gantt-bar';
-                bar.dataset.status = item.status; bar.dataset.programAction = `edit-work:${item.ref.id}`;
-                const left = Math.max(0, position(toDate(item.start_on)));
-                const width = Math.max(2, 100 * ((toDate(item.due_on).getTime() - toDate(item.start_on).getTime()) / day + 1) / duration);
-                bar.style.left = `${left}%`; bar.style.width = `${Math.min(100 - left, width)}%`;
-                bar.title = `${item.title}: ${item.start_on} to ${item.due_on}`;
-                bar.append(text('span', item.key), text('small', humanize(item.status)));
-                track.append(bar);
-                const todayUtc = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-                const todayPosition = position(todayUtc);
-                if (todayPosition >= 0 && todayPosition <= 100) {
-                    const marker = document.createElement('i'); marker.className = 'program-gantt-today';
-                    marker.style.left = `${todayPosition}%`; marker.title = 'Today'; track.append(marker);
-                }
-                const dependencies = (item.depends_on_refs || []) as ObjectRef[];
-                const deps = text('div', dependencies.length
-                    ? dependencies.map(ref => keyById.get(ref.id) || ref.id).join(', ') : '—', 'program-gantt-deps');
-                grid.append(label, track, deps);
-            }
-            root.append(grid);
-        }
-        if (unscheduled.length) {
-            const queue = document.createElement('section'); queue.className = 'program-unscheduled';
-            queue.append(text('strong', `Unscheduled · ${unscheduled.length}`));
-            const list = document.createElement('div');
-            for (const item of unscheduled) {
-                const edit = text('button', `${item.key} · ${item.title}`) as HTMLButtonElement;
-                edit.type = 'button'; edit.dataset.programAction = `edit-work:${item.ref.id}`; list.append(edit);
-            }
-            queue.append(list); root.append(queue);
-        }
+        document.querySelector<HTMLElement>(`[data-work-item-id="${CSS.escape(id)}"]`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    }
+
+    private scrollToLane(lane: WorkLane): void {
+        document.querySelector<HTMLElement>(`.program-workflow-lane[data-lane="${lane}"]`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
 
     private async action(action: string): Promise<void> {

@@ -6,6 +6,8 @@ import { OBJECT_KINDS, type ObjectKind, type ObjectRef } from '../generated/comm
 import { scientificContext } from '../context/scientific-context-store';
 import { VIEW_PLANS } from './workspace-plans';
 import { deriveViewState } from './view-state';
+import { programRelationGraph, renderKindDistribution,
+    renderScientificGraph } from '../visualization/scientific-visuals';
 
 type Navigate = (route: ShellRoute) => void;
 
@@ -95,8 +97,7 @@ export class WorkspaceCanvas {
         }
         if (connected && (definition.workspace === 'programs' || definition.workspace === 'runs')) {
             this.renderConnectedCanvas(definition, route.programId);
-        }
-        else this.renderCanvas(definition, route.programId);
+        } else this.renderCanvas(definition, route.programId);
     }
 
     private renderCanvas(definition: ViewDefinition, programId?: string): void {
@@ -239,7 +240,8 @@ export class WorkspaceCanvas {
     }
 
     private programProjection(definition: ViewDefinition): HTMLElement | undefined {
-        const supported = new Set(['programs', 'campaigns', 'synthesis', 'experiments', 'knowledge']);
+        const supported = new Set(['programs', 'design', 'structures', 'campaigns',
+            'synthesis', 'experiments', 'knowledge', 'runs']);
         if (!supported.has(definition.workspace)) return undefined;
         const section = element('section', 'workspace-program-projection');
         section.dataset.programProjection = definition.workspace;
@@ -269,6 +271,14 @@ export class WorkspaceCanvas {
                 ...(program.objectives || []), ...(program.hypotheses || []),
                 ...(program.decisions || []), ...(program.milestones || []),
             ],
+            design: [
+                ...(program.objectives || []), ...(program.hypotheses || []),
+                ...links.filter(item => ['molecule', 'compound', 'compound_form', 'series'].includes(item.object_ref?.kind)),
+            ],
+            structures: [
+                ...links.filter(item => ['complex', 'protein_structure', 'molecule', 'compound', 'sample'].includes(item.object_ref?.kind)),
+                ...references.filter(item => ['structure_observation', 'annotation', 'review', 'analysis_snapshot'].includes(item.job_kind)),
+            ],
             campaigns: [
                 ...links.filter(item => ['compound', 'series', 'campaign'].includes(item.object_ref?.kind)),
                 ...references.filter(item => item.job_kind === 'substance_registration'),
@@ -285,10 +295,14 @@ export class WorkspaceCanvas {
                     'structure_observation', 'annotation', 'review', 'analysis_snapshot'].includes(item.job_kind)),
                 ...evidence, ...links,
             ],
+            runs: [...(program.work_items || [])],
         };
         const actions: Record<string, Array<[string, string]>> = {
             programs: [['objective', 'Record objective'], ['hypothesis', 'Record hypothesis'],
                 ['decision', 'Record decision']],
+            design: [['objective', 'Record design objective'], ['link', 'Link candidate object']],
+            structures: [['reference:observation', 'Register observation'],
+                ['reference:annotation', 'Annotate structure'], ['reference:analysis-snapshot', 'Preserve analysis']],
             campaigns: [['reference:substance', 'Review compound identity'], ['link', 'Link existing object']],
             synthesis: [['reference:batch', 'Register batch'], ['reference:sample', 'Create sample'], ['reference:sample-transfer', 'Transfer sample'],
                 ['lineage', 'Record identity lineage']],
@@ -296,6 +310,7 @@ export class WorkspaceCanvas {
                 ['reference:dataset', 'Commit dataset']],
             knowledge: [['reference:evidence-release', 'Import evidence release'],
                 ['reference:external-evidence', 'Record external evidence'], ['evidence', 'Attach evidence']],
+            runs: [['work', 'Plan a task']],
         };
         const controls = element('div', 'workspace-program-projection-actions');
         for (const [action, label] of actions[workspace] || []) {
@@ -320,7 +335,30 @@ export class WorkspaceCanvas {
         }
         if (!records.length) grid.append(element('p', 'program-atom-empty',
             'No records in this part of the shared Program yet. Use the actions above; the UI will not invent rows.'));
-        section.append(grid);
+        const visualGrid = element('div', 'workspace-program-visual-grid');
+        const relationshipPanel = element('section', 'workspace-program-visual-panel');
+        relationshipPanel.append(element('header', '', ''), element('div', 'workspace-program-graph'));
+        relationshipPanel.firstElementChild!.append(element('span', 'workspace-section-kicker', 'Identity & provenance'),
+            element('h3', '', 'Shared object graph'),
+            element('p', '', 'Select a node to focus the same canonical object everywhere.'));
+        const graphHost = relationshipPanel.lastElementChild as HTMLElement;
+        const distributionPanel = element('section', 'workspace-program-visual-panel');
+        distributionPanel.append(element('header', '', ''), element('div', 'workspace-program-kind-chart'));
+        distributionPanel.firstElementChild!.append(element('span', 'workspace-section-kicker', 'Infographic'),
+            element('h3', '', 'Objects in this workspace'),
+            element('p', '', 'Counts come only from durable Program records.'));
+        visualGrid.append(relationshipPanel, distributionPanel);
+        section.append(visualGrid, grid);
+        const model = programRelationGraph(program, workspace);
+        renderScientificGraph(graphHost, model, {
+            ariaLabel: `${workspace} canonical object and provenance graph`, preset: false,
+            onSelect: node => {
+                if (!node.ref) return;
+                scientificContext.focus(node.ref);
+                scientificContext.select([node.ref]);
+            },
+        });
+        renderKindDistribution(distributionPanel.lastElementChild as HTMLElement, model);
     }
 
     private renderConnectedCanvas(definition: ViewDefinition, programId?: string): void {
@@ -363,9 +401,11 @@ export class WorkspaceCanvas {
         list.setAttribute('aria-live', 'polite');
         runs.append(runsHeading, status, list);
         const workflow = this.workflowContext(definition.workspace);
-        page.append(header, question, ...(workflow ? [workflow] : []), runs);
+        const projection = this.programProjection(definition);
+        page.append(header, question, ...(workflow ? [workflow] : []),
+            ...(projection ? [projection] : []), runs);
         this.host.replaceChildren(page);
-        if (workflow) queueMicrotask(() => document.dispatchEvent(new CustomEvent('dirac:refresh-program')));
+        if (workflow || projection) queueMicrotask(() => document.dispatchEvent(new CustomEvent('dirac:refresh-program')));
     }
 
     private renderProgramCanvas(definition: ViewDefinition, programId?: string): void {
@@ -439,6 +479,24 @@ export class WorkspaceCanvas {
             element('p', '', 'Plan once, then move the same canonical Work Item through Understand, Design, Decide, Make, and Test & Learn.'));
         deliveryHeader.append(deliveryCopy, button('Plan a task', 'work'));
         const workSummary = element('dl', 'program-work-summary'); workSummary.dataset.programWorkSummary = '';
+        const insights = element('div', 'program-insight-grid');
+        const insight = (kicker: string, title: string, description: string, className: string,
+            dataName: string) => {
+            const panel = element('section', `program-insight-panel ${className}`);
+            const head = element('header');
+            head.append(element('span', 'workspace-section-kicker', kicker), element('h4', '', title),
+                element('p', '', description));
+            const body = element('div'); body.dataset[dataName] = '';
+            panel.append(head, body); return panel;
+        };
+        insights.append(
+            insight('Dependency map', 'What unlocks what',
+                'Every arrow is a declared Work Item dependency; stage position is preserved.',
+                'program-insight-panel--graph', 'programWorkGraph'),
+            insight('Work distribution', 'Where attention is accumulating',
+                'Observed work by stage and status. Select a stage to jump to its board column.',
+                'program-insight-panel--chart', 'programWorkChart'),
+        );
         const workflowBoard = element('div', 'program-workflow-board'); workflowBoard.dataset.programWorkflowBoard = '';
         for (const [lane, label, intent] of [
             ['understand', 'Understand', 'Target, evidence, structure'],
@@ -463,7 +521,7 @@ export class WorkspaceCanvas {
         ganttHeader.lastElementChild!.append(element('span', '', 'Active'), element('span', '', 'Blocked'), element('span', '', 'Done'));
         const ganttBody = element('div', 'program-gantt-body'); ganttBody.dataset.programGantt = '';
         gantt.append(ganttHeader, ganttBody);
-        delivery.append(deliveryHeader, workSummary, workflowBoard, gantt);
+        delivery.append(deliveryHeader, workSummary, insights, workflowBoard, gantt);
         const referenceJobs = element('section', 'program-reference-jobs');
         const referenceHeader = element('header');
         const referenceCopy = element('div');
