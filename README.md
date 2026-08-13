@@ -1,5 +1,7 @@
 # Dirac
 
+![Dirac — a scientific operating environment for molecular discovery](docs/screenshots/dirac-hero.png)
+
 > **Dirac is to Schrödinger's molecular-design platform what the Dirac equation is to
 > the Schrödinger equation: an open-source, browser-native upgrade.**
 
