@@ -113,49 +113,49 @@ describe('exactly-once preparation submission', () => {
         const pending = createStoredPreparationReceipt(store, snapshot, 'sealed', 'owner', nonce);
         const receipt = { ...pending, job_id: jobId, status: 'waiting' as const };
         const data = {
-            campaign_ref: { kind:'rbfe_campaign', id:'campaign-a', version:5, sha256:otherDigest },
-            campaign_version:5, campaign_state_digest:otherDigest,
-            campaign_scientific_ref:{ kind:'rbfe_campaign', id:'campaign-a', version:8, sha256:otherDigest },
-            campaign_scientific_generation:8, campaign_scientific_digest:otherDigest,
+            campaign_ref: { kind: 'rbfe_campaign', id: 'campaign-a', version: 5, sha256: otherDigest },
+            campaign_version: 5, campaign_state_digest: otherDigest,
+            campaign_scientific_ref: { kind: 'rbfe_campaign', id: 'campaign-a', version: 8, sha256: otherDigest },
+            campaign_scientific_generation: 8, campaign_scientific_digest: otherDigest,
         };
         expect(exactPreparationResultFrom(data,receipt)).toMatchObject({
-            auditVersion:5,scientificGeneration:8,jobId,
+            auditVersion: 5,scientificGeneration: 8,jobId,
         });
         expect(()=>exactPreparationResultFrom({
-            ...data,campaign_ref:{...data.campaign_ref,id:'campaign-b'},
+            ...data,campaign_ref: { ...data.campaign_ref,id: 'campaign-b' },
         },receipt)).toThrow('no exact audit revision');
         expect(()=>exactPreparationResultFrom({
-            ...data,campaign_ref:{...data.campaign_ref,kind:'artifact'},
+            ...data,campaign_ref: { ...data.campaign_ref,kind: 'artifact' },
         },receipt)).toThrow('no exact audit revision');
         expect(()=>exactPreparationResultFrom({
-            ...data,campaign_scientific_ref:{...data.campaign_scientific_ref,sha256:digest},
+            ...data,campaign_scientific_ref: { ...data.campaign_scientific_ref,sha256: digest },
         },receipt)).toThrow('no exact immutable scientific generation');
         expect(()=>exactPreparationResultFrom({
-            ...data,campaign_scientific_ref:{...data.campaign_scientific_ref,kind:'artifact'},
+            ...data,campaign_scientific_ref: { ...data.campaign_scientific_ref,kind: 'artifact' },
         },receipt)).toThrow('no exact immutable scientific generation');
         const exact=exactPreparationResultFrom(data,receipt);
         const system=preparedSystemFromPreparationResult({
-            ...data,prepared_receptor_state_ref:{kind:'prepared_receptor_state',id:'system',sha256:digest},
-            target_ref:{kind:'target',id:'target'},target_name:'Target',
-            protein_structure_ref:{kind:'protein_structure',id:'structure'},label:'Prepared target',
-            preparation_state:'review_pending',claim_boundary:'hypothesis only',poses:[
-                {pose_ref:{kind:'pose_hypothesis',id:'p1',sha256:digest},label:'Parent',canonical_smiles:'CC'},
-                {pose_ref:{kind:'pose_hypothesis',id:'p2',sha256:digest},label:'Proposal',canonical_smiles:'CN'},
+            ...data,prepared_receptor_state_ref: { kind: 'prepared_receptor_state',id: 'system',sha256: digest },
+            target_ref: { kind: 'target',id: 'target' },target_name: 'Target',
+            protein_structure_ref: { kind: 'protein_structure',id: 'structure' },label: 'Prepared target',
+            preparation_state: 'review_pending',claim_boundary: 'hypothesis only',poses: [
+                { pose_ref: { kind: 'pose_hypothesis',id: 'p1',sha256: digest },label: 'Parent',canonical_smiles: 'CC' },
+                { pose_ref: { kind: 'pose_hypothesis',id: 'p2',sha256: digest },label: 'Proposal',canonical_smiles: 'CN' },
             ],
         },exact);
-        expect(system).toMatchObject({campaign_version:5,poses:[{label:'Parent'},{label:'Proposal'}]});
-        expect(()=>preparedSystemFromPreparationResult({...system,poses:[]},exact)).toThrow('no complete prepared-system card');
+        expect(system).toMatchObject({ campaign_version: 5,poses: [{ label: 'Parent' },{ label: 'Proposal' }] });
+        expect(()=>preparedSystemFromPreparationResult({ ...system,poses: [] },exact)).toThrow('no complete prepared-system card');
 
-        const inputOpen={campaignId:'campaign-a',auditVersion:4,auditDigest:digest,
-            scientificGeneration:7,scientificDigest:digest,inputSignature:'sealed'};
+        const inputOpen={ campaignId: 'campaign-a',auditVersion: 4,auditDigest: digest,
+            scientificGeneration: 7,scientificDigest: digest,inputSignature: 'sealed' };
         expect(preparationResultMatchesOpenCampaign(receipt,exact,inputOpen)).toBe(true);
         expect(preparationResultMatchesOpenCampaign(receipt,exact,{
-            ...inputOpen,auditVersion:5,auditDigest:otherDigest,
-            scientificGeneration:8,scientificDigest:otherDigest,
+            ...inputOpen,auditVersion: 5,auditDigest: otherDigest,
+            scientificGeneration: 8,scientificDigest: otherDigest,
         })).toBe(true);
         expect(preparationResultMatchesOpenCampaign(receipt,exact,{
-            ...inputOpen,auditVersion:5,auditDigest:digest,
-            scientificGeneration:8,scientificDigest:otherDigest,
+            ...inputOpen,auditVersion: 5,auditDigest: digest,
+            scientificGeneration: 8,scientificDigest: otherDigest,
         })).toBe(false);
     });
 });

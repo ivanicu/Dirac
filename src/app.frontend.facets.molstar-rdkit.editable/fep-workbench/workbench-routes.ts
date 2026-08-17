@@ -1,4 +1,7 @@
+import { DISCOVERY_WORKSPACE_ROUTES } from '../discovery-navigation';
+
 export const WORKBENCH_ROUTES = Object.freeze({
-    allLabs: '/p/current/structures/complex',
-    fieldWorkbench: '/p/current/structures/site',
+    allLabs: '/',
+    fepWorkbench: DISCOVERY_WORKSPACE_ROUTES.fep,
+    fieldWorkbench: DISCOVERY_WORKSPACE_ROUTES.field,
 });

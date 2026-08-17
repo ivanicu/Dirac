@@ -21,6 +21,9 @@ nav{margin-left:auto;display:flex;align-items:center;gap:6px}
 nav a,nav button{height:27px;padding:0 10px;border:1px solid #1b3944;background:#061117;color:#718d96;text-decoration:none;font:7px DiracMono;display:grid;place-items:center;white-space:nowrap;cursor:pointer}
 nav button{border-color:#267a8d;color:#71e5f8;background:#071a22}
 nav button:disabled{opacity:.35;cursor:wait}
+.discovery-workspace-nav{display:flex;align-items:center;gap:0;margin:0}
+.discovery-workspace-link{min-width:54px}
+.discovery-workspace-link.active{color:#e8fbff;border-color:#2aa8c1;background:#0a2a34;box-shadow:inset 0 -2px var(--cyan)}
 .statusbar{padding:0 14px;gap:20px;font:7px DiracMono;color:#536e77;letter-spacing:.04em}
 .statusbar span{display:flex;align-items:center;gap:7px}
 .statusbar i{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
@@ -228,7 +231,7 @@ footer{font-size:9px}
 .fep-topbar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:14px;padding:0 20px;border-bottom:1px solid #1a4551;background:#030c12}
 .fep-topbar-left{min-width:0;display:flex;align-items:center;gap:18px;overflow:hidden}.fep-topbar-left .brand{flex:0 0 auto}.fep-topbar-left .context{min-width:0;overflow:hidden}
 .workspace-mode-tabs{justify-self:center;margin-left:0;display:flex;width:380px;height:38px;border:1px solid #244b56;background:#02090d}.workspace-mode-tabs button{flex:1;min-width:0;border:0;border-right:1px solid #244b56;background:transparent;color:#64808a;font:10px DiracMono;letter-spacing:.08em;cursor:pointer}.workspace-mode-tabs button:last-child{border-right:0}.workspace-mode-tabs button.active{background:#0a2630;color:#72e8fa;box-shadow:inset 0 -2px #58dff4}
-.fep-topbar-actions{justify-self:end;margin-left:0}.builder-topbar{box-shadow:0 8px 30px #0008}.builder-title{justify-self:start;min-width:0}.prototype-boundary{justify-self:end}
+.fep-topbar-actions{justify-self:end;margin-left:0;display:flex;align-items:center;gap:6px}.builder-topbar{box-shadow:0 8px 30px #0008}.builder-title{justify-self:start;min-width:0}.prototype-boundary{justify-self:end}
 @media(max-width:1450px){.fep-topbar{padding:0 12px}.workspace-mode-tabs{width:318px}.fep-topbar-left .context span:nth-child(1),.fep-topbar-left .context span:nth-child(2){display:none}.fep-topbar-actions a,.fep-topbar-actions button{padding:0 8px;font-size:9px}}
 @media(max-width:1180px){.workspace-mode-tabs{width:278px}.fep-topbar-actions a:nth-child(2){display:none}.fep-topbar-left .brand span{display:none}}
 .sketcher-shell>.editor-topbar .workspace-mode-tabs{display:flex!important;gap:0}.sketcher-shell>.editor-topbar .workspace-mode-tabs button{align-self:auto;border:0;border-right:1px solid #244b56;background:transparent;color:#64808a;font:10px DiracMono;letter-spacing:.08em}.sketcher-shell>.editor-topbar .workspace-mode-tabs button:last-child{border-right:0}.sketcher-shell>.editor-topbar .workspace-mode-tabs button.active{background:#0a2630;color:#72e8fa;box-shadow:inset 0 -2px #58dff4}.sketcher-shell>footer .primary:disabled{opacity:.35;filter:saturate(.2);cursor:not-allowed}

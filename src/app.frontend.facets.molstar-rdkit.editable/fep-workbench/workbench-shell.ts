@@ -1,4 +1,5 @@
 import { WORKBENCH_ROUTES } from './workbench-routes';
+import { discoveryWorkspaceNavigation } from '../discovery-navigation';
 
 /** Static workbench shell; controllers bind behavior after this mount. */
 export function workbenchShellMarkup(): string {
@@ -6,7 +7,7 @@ export function workbenchShellMarkup(): string {
   <header class="topbar fep-topbar">
     <div class="fep-topbar-left"><div class="brand"><i></i><b>DIRAC</b><span>FEP QUALIFICATION LAB</span></div><div class="context"><span><small>DATASET</small><b>T4L PREPARED BENCHMARK</b></span><span><small>PLANNER</small><b>OPENFE 1.11.1</b></span><span><small>EDGE RESULTS</small><b class="result-zero" id="result-count">0 · NONE</b></span><span><small>BACKEND</small><b class="live" id="engine-state">● CONNECTING</b></span></div></div>
     <nav class="workspace-mode-tabs" aria-label="FEP workspace mode"><button id="main-build" aria-pressed="false">BUILD</button><button id="main-review" class="active" aria-pressed="true">REVIEW NETWORK</button><button id="main-runs" aria-pressed="false">RUNS</button></nav>
-    <nav class="fep-topbar-actions"><a href="${WORKBENCH_ROUTES.allLabs}">ALL LABS</a><a href="${WORKBENCH_ROUTES.fieldWorkbench}">FIELD WORKBENCH</a><button id="replan" title="Re-run the currently displayed immutable network plan">REPLAN BENCHMARK</button></nav>
+    <div class="fep-topbar-actions">${discoveryWorkspaceNavigation('fep')}<a class="all-labs-link" href="${WORKBENCH_ROUTES.allLabs}">ALL LABS</a><button id="replan" title="Re-run the currently displayed immutable network plan">REPLAN BENCHMARK</button></div>
   </header>
   <div class="statusbar"><span><i></i>REAL OPENFE NETWORK PLAN</span><span class="dataset-scope">DATASET · T4 LYSOZYME TECHNICAL BENCHMARK</span><strong id="run-boundary">PLAN ONLY · 0 EDGE RESULTS</strong><em id="status" role="status" aria-live="polite">READING DURABLE JOB</em></div>
   <main class="workspace">
@@ -107,5 +108,5 @@ export function workbenchShellMarkup(): string {
   </dialog>
   <dialog id="molecule-sketcher" class="molecule-sketcher" aria-labelledby="sketcher-title" aria-hidden="true"></dialog>
   <dialog id="pose-reviewer" class="pose-reviewer" aria-labelledby="pose-review-title" aria-hidden="true"></dialog>
-  </div>`
+  </div>`;
 }

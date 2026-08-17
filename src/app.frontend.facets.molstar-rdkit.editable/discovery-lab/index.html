@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>DIRAC · Discovery Lab</title>
+  <link rel="stylesheet" href="./discovery-lab.css">
+</head>
+<body>
+  <main class="discovery-home">
+    <header>
+      <div class="brand-mark" aria-hidden="true"><i></i></div>
+      <div><small>DIRAC</small><h1>DISCOVERY LAB</h1></div>
+      <span id="backend-state" role="status">CHECKING BACKEND</span>
+    </header>
+    <section class="intro">
+      <p>One scientific workspace. Two connected instruments.</p>
+      <strong>FEP qualification and molecular-field comparison share the same backend and visual language.</strong>
+    </section>
+    <nav aria-label="Discovery Lab workspaces">
+      <a href="./fep-workbench.html">
+        <span>01</span><small>FREE ENERGY</small><h2>FEP</h2>
+        <p>Build campaigns, review receptor-aligned poses, inspect mappings, and qualify governed OpenFE runs.</p>
+        <b>OPEN FEP →</b>
+      </a>
+      <a href="./field-workbench.html">
+        <span>02</span><small>MOLECULAR FIELDS</small><h2>FIELD</h2>
+        <p>Compare parent and proposal in linked 2D, 3D, receptor-pocket, MEP, and MLP views.</p>
+        <b>OPEN FIELD →</b>
+      </a>
+    </nav>
+    <footer><span>BACKEND · <code id="backend-url">—</code></span><span>INITIAL WORKSPACES · 2</span></footer>
+  </main>
+  <script src="./discovery-lab.js"></script>
+</body>
+</html>

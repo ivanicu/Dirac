@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <base href="./">
+  <title>DIRAC · Atom Field Workbench</title>
+  <link rel="stylesheet" href="./field-workbench.css">
+  <style>
+    #workbench{height:100%}
+    #stage{z-index:4}
+    .workspace{z-index:auto}
+    .topbar,.statusbar{z-index:8}
+    .panel-head,.pocket-foot,.field-foot{position:relative;z-index:6}
+    .viewport{background:transparent}
+    .viewport-label,.view-hud,.loading{z-index:6}
+    .depiction-body svg rect{fill:#02090d!important}
+  </style>
+</head>
+<body>
+  <div id="workbench"></div>
+  <canvas id="stage"></canvas>
+  <script src="./field-workbench.js"></script>
+</body>
+</html>
