@@ -51,11 +51,12 @@ being developed.
 
 ### Motif Workbench · FEP
 
-![Motif Workbench FEP network review and governed execution workspace](docs/screenshots/06_motif_fep_workspace.png)
+![Motif Workbench reviewing all eight receptor-frame poses in a benzamidine RBFE campaign](docs/screenshots/08_motif_fep_8_ligand_pose_review.png)
 
-*A free-energy campaign workspace: ligand-network review, atom-mapping evidence, exact
-prepared-system selection and durable execution controls remain visible in one frame. A
-network plan is labelled as a plan, never as an FEP result.*
+*An eight-ligand 1H4W benzamidine campaign under same-camera pose review. Every compound
+remains visible; the P4OME 1.64 Å near-clash is preserved as red atom-pair evidence and
+locks acceptance instead of disappearing from the series. This is pose qualification,
+not an FEP result.*
 
 | Stage | What the frontend makes inspectable |
 |---|---|
