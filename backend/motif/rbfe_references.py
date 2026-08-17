@@ -1076,6 +1076,7 @@ class PostgresRbfeReferenceResolver:
                         "core_coverage": pose.get("pose_report", {}).get("minimum_bidirectional_coverage"),
                         "minimum_heavy_atom_distance_angstrom": pose.get("pose_report", {}).get("minimum_heavy_atom_distance_angstrom"),
                         "protein_contacts_within_6_angstrom": pose.get("pose_report", {}).get("protein_contacts_within_6_angstrom"),
+                        "pose_report": pose.get("pose_report"),
                         "coordinate_artifact_ref": pose.get("coordinate_artifact_ref"),
                         "review_state": pose_state,
                     })
@@ -1934,6 +1935,7 @@ class PostgresRbfeReferenceResolver:
                     "core_coverage": pose["report"]["minimum_bidirectional_coverage"],
                     "minimum_heavy_atom_distance_angstrom": pose["report"]["minimum_heavy_atom_distance_angstrom"],
                     "protein_contacts_within_6_angstrom": pose["report"]["protein_contacts_within_6_angstrom"],
+                    "pose_report": pose["report"],
                     "coordinate_artifact_ref": _artifact_ref(artifact),
                     "review_state": "pending",
                 })
@@ -2158,6 +2160,7 @@ class PostgresRbfeReferenceResolver:
                         "reviewed pose ref digest does not match the registered object")
                 report = pose.get("pose_report") or {}
                 if (report.get("geometry_gate") != "passed"
+                        or not isinstance(report.get("nearest_pair_witness"), dict)
                         or float(report.get("core_rmsd_angstrom", 999)) > 1.0
                         or float(report.get("minimum_bidirectional_coverage", 0)) < .5
                         or float(report.get(

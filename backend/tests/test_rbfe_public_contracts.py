@@ -282,6 +282,17 @@ def test_system_list_items_have_one_exact_scientific_scope_contract():
             "core_rmsd_angstrom": None, "core_coverage": None,
             "minimum_heavy_atom_distance_angstrom": None,
             "protein_contacts_within_6_angstrom": None,
+            "pose_report": {
+                "geometry_gate": "passed",
+                "nearest_pair_witness": {"distance_angstrom": 2.5},
+                "contact_cutoff_angstrom": 6.0,
+                "contact_pair_total": 1,
+                "contact_pair_witnesses": [{"distance_angstrom": 2.5}],
+                "hard_clash_cutoff_angstrom": 1.5,
+                "hard_clash_pair_total": 0,
+                "hard_clash_pair_witnesses": [],
+                "pair_witness_limit": 32,
+            },
             "coordinate_artifact_ref": None, "review_state": "pending",
         }],
     }
@@ -308,6 +319,13 @@ def test_system_list_items_have_one_exact_scientific_scope_contract():
     invalid_scope = json.loads(json.dumps(output))
     invalid_scope["systems"][0]["campaign_scope"] = "stale"
     assert list(validator_for(schema).iter_errors(invalid_scope))
+    missing_pose_evidence = json.loads(json.dumps(output))
+    del missing_pose_evidence["systems"][0]["poses"][0]["pose_report"]
+    assert list(validator_for(schema).iter_errors(missing_pose_evidence))
+    missing_nearest_pair = json.loads(json.dumps(output))
+    del missing_nearest_pair["systems"][0]["poses"][0]["pose_report"][
+        "nearest_pair_witness"]
+    assert list(validator_for(schema).iter_errors(missing_nearest_pair))
 
 
 def test_import_and_all_runset_outputs_require_scientific_currency_and_exact_execution_refs():

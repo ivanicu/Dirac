@@ -389,7 +389,7 @@
             "preparation_state": {"enum": ["server-attested", "import-required"]},
             "claim_boundary": {"type": "string", "minLength": 1},
             "poses": {"type": "array", "items": {"type": "object", "additionalProperties": false,
-              "required": ["pose_ref", "label", "canonical_smiles", "core_rmsd_angstrom", "core_coverage", "minimum_heavy_atom_distance_angstrom", "protein_contacts_within_6_angstrom", "coordinate_artifact_ref", "review_state"],
+              "required": ["pose_ref", "label", "canonical_smiles", "core_rmsd_angstrom", "core_coverage", "minimum_heavy_atom_distance_angstrom", "protein_contacts_within_6_angstrom", "pose_report", "coordinate_artifact_ref", "review_state"],
               "properties": {
                 "pose_ref": {"type": "object"}, "label": {"type": "string", "minLength": 1},
                 "canonical_smiles": {"type": "string", "minLength": 1},
@@ -397,6 +397,19 @@
                 "core_coverage": {"type": ["number", "null"]},
                 "minimum_heavy_atom_distance_angstrom": {"type": ["number", "null"]},
                 "protein_contacts_within_6_angstrom": {"type": ["integer", "null"], "minimum": 0},
+                "pose_report": {"type": "object", "additionalProperties": true,
+                  "required": ["geometry_gate", "nearest_pair_witness", "contact_cutoff_angstrom", "contact_pair_total", "contact_pair_witnesses", "hard_clash_cutoff_angstrom", "hard_clash_pair_total", "hard_clash_pair_witnesses", "pair_witness_limit"],
+                  "properties": {
+                    "geometry_gate": {"const": "passed"},
+                    "nearest_pair_witness": {"type": "object", "minProperties": 1},
+                    "contact_cutoff_angstrom": {"type": "number", "exclusiveMinimum": 0},
+                    "contact_pair_total": {"type": "integer", "minimum": 1},
+                    "contact_pair_witnesses": {"type": "array", "minItems": 1, "items": {"type": "object", "minProperties": 1}},
+                    "hard_clash_cutoff_angstrom": {"type": "number", "exclusiveMinimum": 0},
+                    "hard_clash_pair_total": {"const": 0},
+                    "hard_clash_pair_witnesses": {"type": "array", "maxItems": 0},
+                    "pair_witness_limit": {"type": "integer", "minimum": 1}
+                  }},
                 "coordinate_artifact_ref": {"type": ["object", "null"]},
                 "review_state": {"type": "string", "minLength": 1}
               }}
