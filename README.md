@@ -73,12 +73,12 @@ scientific result or override missing machine evidence.
 
 ### Motif Workbench · Field
 
-![Motif Workbench Field comparison with linked molecular views](docs/screenshots/07_motif_field_workspace.png)
+![A computed electrostatic field rendered in Dirac's shared molecular scene](docs/screenshots/02_fields_electrostatic_well.png)
 
-*The current development boundary is visible rather than hidden: parent/proposal 2D,
-receptor-pocket geometry and atom selection are linked; in this captured runtime the MEP
-and MLP panels refuse because no compatible field Artifact is available. FEP and Field are
-one click apart through the shared Motif Workbench navigation.*
+*A real electrostatic field Artifact rendered around the ligand and binding pocket. Motif
+Workbench is developing the focused parent/proposal comparison surface over this same
+Method and Artifact contract; an unavailable-field state is documented, but is not used as
+the product showcase.*
 
 ### Dirac Workspace
 
