@@ -167,11 +167,38 @@ interface RDKitModule {
 }
 
 let rdkitPromise: Promise<RDKitModule> | null = null;
+let rdkitScriptPromise: Promise<void> | null = null;
+
+function ensureRdkitScript(): Promise<void> {
+    const host = window as unknown as { initRDKitModule?: unknown };
+    if (typeof host.initRDKitModule === 'function') return Promise.resolve();
+    if (rdkitScriptPromise) return rdkitScriptPromise;
+    const load = new Promise<void>((resolve, reject) => {
+        const existing = document.querySelector<HTMLScriptElement>('script[data-dirac-rdkit]');
+        const script = existing ?? document.createElement('script');
+        const loaded = () => typeof host.initRDKitModule === 'function'
+            ? resolve() : reject(new Error('RDKit script loaded without initRDKitModule.'));
+        script.addEventListener('load', loaded, { once: true });
+        script.addEventListener('error', () => reject(new Error('RDKit script failed to load.')), { once: true });
+        if (!existing) {
+            script.src = new URL('assets/rdkit/RDKit_minimal.js', document.baseURI).href;
+            script.async = true;
+            script.dataset.diracRdkit = '';
+            document.head.append(script);
+        }
+    });
+    rdkitScriptPromise = load.catch(error => {
+        rdkitScriptPromise = null;
+        throw error;
+    });
+    return rdkitScriptPromise;
+}
 
 export async function getRDKit(): Promise<RDKitModule> {
     if (!rdkitPromise) {
+        await ensureRdkitScript();
         const factory = (window as unknown as { initRDKitModule?: (cfg?: { locateFile?: (f: string) => string }) => Promise<RDKitModule> }).initRDKitModule;
-        if (!factory) throw new Error('RDKit script not loaded (window.initRDKitModule missing). Ensure ./assets/rdkit/RDKit_minimal.js is included before index.js.');
+        if (!factory) throw new Error('RDKit script loaded without window.initRDKitModule.');
         rdkitPromise = factory({ locateFile: f => `./assets/rdkit/${f}` });
     }
     return rdkitPromise;

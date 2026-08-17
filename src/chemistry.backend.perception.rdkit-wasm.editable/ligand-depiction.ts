@@ -144,6 +144,9 @@ export class LigandDepiction {
      */
     static async depict(molfile: string, options: DepictOptions = {}): Promise<DepictionResult | null> {
         const RDKit = await getRDKit();
+        // Keep the V2000 atom-map field's explicit zero. RDKit treats a blank
+        // map field as an actual map value 0 and draws labels such as `C:0`;
+        // the spec-valid explicit zero means "not mapped" and stays invisible.
         const mol = RDKit.get_mol(molfile);
         if (!mol || !mol.is_valid()) return null;
 
@@ -181,7 +184,10 @@ export class LigandDepiction {
                 highlightBondColors,
                 addAtomIndices: options.showAtomIndices ?? false,
                 includeMetadata: true,
-                includeAtomTags: true,
+                // Atom tags turn the pipeline's internal map value into visible
+                // labels such as "C:0". Bond/atom CSS classes plus metadata are
+                // sufficient for click mapping, so keep the scientific diagram clean.
+                includeAtomTags: false,
                 continuousHighlight: true,
                 bondLineWidth: 2,
                 padding: 0.08,
