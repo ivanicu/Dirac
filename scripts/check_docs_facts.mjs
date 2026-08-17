@@ -380,8 +380,7 @@ for (const relFile of COMMAND_DOC_FILES) {
     const moduleBlock = registries.match(/export const MODULES[\s\S]*?\] as const;/)?.[0] ?? '';
     const workspaces = (workspaceBlock.match(/\{ id: '/g) ?? []).length;
     const views = (viewBlock.match(/^\s*view\(/gm) ?? []).length;
-    const viewEntries = viewBlock.split(/^\s*view\(/m).slice(1);
-    const connectedViews = viewEntries.filter(entry => entry.includes("'connected'")).length;
+    const connectedViews = (viewBlock.match(/^\s*view\([^\n]*\btrue,/gm) ?? []).length;
     const modules = (moduleBlock.match(/^\s*\{ id: '/gm) ?? []).length;
 
     const expected = [

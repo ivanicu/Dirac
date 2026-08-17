@@ -82,7 +82,7 @@ parts of one scientific decision system rather than separate tools.
 
 ## Construction status
 
-Dirac currently defines 8 stable Workspaces and 30 routable Views, of which 13 are
+Dirac currently defines 8 stable Workspaces and 30 routable Views, of which 12 are
 connected to working modules. The contract layer contains 92 versioned semantic Commands
 over 83 canonical ObjectKinds and 30 scientific Method manifests behind one invocation
 path. PostgreSQL owns Programs, Jobs, attempts, artifacts, relations, provenance and
@@ -148,11 +148,8 @@ npm run build:dirac
 node_modules/.bin/http-server build/dirac -p 1360 -g -c-1 -a 0.0.0.0 -P http://127.0.0.1:1360?
 ```
 
-Open <http://localhost:1360/>. Workspace, Knowledge, Runs and ML routes load the compact
-application shell only. Molecular scene routes load mol*; the RDKit JavaScript bootstrap
-and WASM binary are fetched only when a chemistry-dependent surface or semantic layer is
-opened. Program, ML, voice and scientific visual runtimes are split and loaded only by
-the route or visible surface that owns them.
+Open <http://localhost:1360/>. The first load fetches the vendored RDKit WASM bundle;
+after that the browser cache supplies it.
 
 On the canonical workstation, **do not run that server command**: `dirac-web.service`
 already owns the one allowed web port, 1360. Rebuild with `npm run build:dirac` and reload

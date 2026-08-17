@@ -15,7 +15,7 @@ validation. A green contract or transport gate does not validate a scientific mo
 | Scientific Methods | 30 Method manifests behind one InvocationService |
 | Durable schema | 49 forward-only migrations, `000` through `048` |
 | Product shell | 8 Workspaces and 30 routable Views |
-| Connected UI | 13 of 30 Views connected to 17 composable modules; the remaining 17 are explicit shells |
+| Connected UI | 12 of 30 Views connected to 15 composable modules; the remaining 18 are explicit shells |
 | Interfaces | HTTP v2, Python SDK, CLI and generated safe MCP projection share the command boundary |
 | Execution | durable JobStore plus inline, thread, process, local GPU and Kubernetes/Kueue adapters |
 | Results | content-addressed artifacts, method-current caches, provenance and command observations |
@@ -66,7 +66,7 @@ those present files and contracts; they should not be interpreted as a release t
 ## Scope verdict
 
 The command/method/job/artifact substrate and the complete navigation shell exist. The
-product remains partial: 13/30 Views are connected, application-grade HCI action semantics
+product remains partial: 12/30 Views are connected, application-grade HCI action semantics
 are still being migrated, and individual scientific Methods need method-specific validation
 before prospective claims can be made. Workflow completeness and scientific validity are
 separate acceptance gates.

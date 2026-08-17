@@ -237,11 +237,12 @@ if (registryFile) {
                     const a = element.arguments.map(argument => literal(argument));
                     const primary = a[6] || [];
                     return { id: a[0], workspace: a[1], label: a[2], route: a[3],
-                        delivery: a[4] || 'shell',
+                        implemented: a[4] ?? false, shellReady: true,
+                        delivery: a[4] ? 'connected' : 'shell',
                         requiresScene: ['design.builder', 'design.objectives', 'structures.complex',
                             'structures.site', 'structures.dynamics'].includes(a[0]),
                         modules: a[5] || [], primaryObjectKinds: primary,
-                        actions: a[7] || [] };
+                        actions: a[7] || [], acceptedContext: primary };
                 });
             }
         }

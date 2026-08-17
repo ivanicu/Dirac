@@ -108,10 +108,10 @@ def errors(document: dict, html: str) -> list[str]:
         findings.append('product reality must remain explicitly partial')
     if product.get('product_shell') != 'complete':
         findings.append('product shell verdict missing')
-    if product.get('views_connected', 0) + product.get('views_preview', 0) != product.get('views_total'):
-        findings.append('View delivery accounting does not cover every registered route')
-    if product.get('workspaces_connected', 0) > product.get('workspaces_total', 0):
-        findings.append('connected Workspace count exceeds the registry')
+    if product.get('workspaces_shell_ready') != product.get('workspaces_total'):
+        findings.append('not every Workspace has a navigable product shell')
+    if product.get('views_shell_ready') != product.get('views_total'):
+        findings.append('not every View has a navigable product shell')
     maturity = analysis.get('maturity', {})
     assessment = maturity.get('assessment', {})
     expected_level = ('L3' if assessment.get('source_watcher_observed_active')
