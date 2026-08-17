@@ -11,12 +11,15 @@ import { OperationCoordinator, aggregateArmMatches, canonicalJson, chemistryEvid
 import { aggregatePanelViewFrom, preparationPolicyGate, preparationPolicyViewFrom, runHistoryViewFrom, runJobsViewFrom } from './workbench-view-model';
 import { workbenchShellMarkup } from './workbench-shell';
 import { DemoCompounds, FallbackEdges, FallbackNetwork } from './workbench-fixture';
+import { benchmarkEdgeResult,benchmarkResult } from './workbench-benchmark-results';
+import { renderResultShowcase } from './workbench-result-showcase';
 import { CAMPAIGN_CACHE_KEYS, createCampaignState, draftFromCampaignEnvelope } from './workbench-campaign-state';
 import { createStoredPreparationReceipt, exactPreparationResultFrom, preparationElapsedSeconds, preparationReceiptMatchesOpenCampaign, preparationResultMatchesOpenCampaign, preparationSubmissionLockName, preparedSystemFromPreparationResult, submitPreparationExactlyOnce } from './workbench-preparation';
 import type { AtomInfo, Bond, BuilderStage, CampaignDraftV2, Compound, DepictionContract, Edge, ExecutionContract, PreparedSystemOption, RunJob, Network } from './workbench-types';
 
 
 const query = new URLSearchParams(location.search);
+const resultShowcase=query.get('showcase')==='results';
 const apiBase = query.get('api') || `http://${location.hostname}:8901`;
 const client = new DiracClient({ baseUrl: apiBase, timeoutMs: 600_000 });
 const auditCopyId = (query.get('copy') || 'main').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 16) || 'main';
@@ -204,9 +207,9 @@ async function mappingHighlights(edge: Edge,target:Network=network): Promise<{ l
 }
 
 const positions: Record<string, [number, number]> = {
-    'T4L-BEN': [.50,.14], 'T4L-FLU': [.76,.23], 'T4L-CL': [.84,.49],
-    'T4L-TOL': [.72,.75], 'T4L-ETB': [.50,.84], 'T4L-OXY': [.28,.75],
-    'T4L-MXY': [.16,.49], 'T4L-PXY': [.24,.23],
+    'T4L-BEN': [.50,.13], 'T4L-TOL': [.76,.23], 'T4L-OXY': [.85,.49],
+    'T4L-PXY': [.74,.76], 'T4L-ETB': [.50,.87], 'T4L-BZF': [.26,.76],
+    'T4L-IDN': [.15,.49], 'T4L-IDL': [.24,.23],
 };
 
 async function renderNetwork(targetNetwork:Network=network): Promise<void> {
@@ -226,7 +229,7 @@ async function renderNetwork(targetNetwork:Network=network): Promise<void> {
         const hit = visible.cloneNode() as SVGLineElement; hit.setAttribute('class', 'edge-hit'); hit.setAttribute('tabindex','0'); hit.setAttribute('role','button'); hit.setAttribute('aria-label',`${edge.left_id} to ${edge.right_id}; score ${value(edge.mapping_score)}; ${bandLabel(edge)} score band`); hit.addEventListener('click', () => void selectEdge(edge.edge_id)); hit.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void selectEdge(edge.edge_id); } }); edgeFragment.appendChild(hit);
     });
     await Promise.all(targetNetwork.compounds.map(async row => {
-        const [x,y] = pointFor(row.id); const node = document.createElement('button'); node.className = `network-node${targetFocusId===row.id?' focused':''}`; node.dataset.compound = row.id; node.style.left = `${x * 100}%`; node.style.top = `${y * 100}%`; const label=document.createElement('span'); label.textContent=row.id; const depiction=document.createElement('div'); depiction.innerHTML=await moleculeSvg(row.canonical_smiles); node.append(label,depiction); node.addEventListener('click', () => { if (network!==targetNetwork) return; const incident = targetNetwork.edges.filter(e => e.left_id === row.id || e.right_id === row.id).sort((a,b)=>b.mapping_score-a.mapping_score); focusedCompoundId=row.id; if (!incident[0]) return; const tied=incident.filter(edge=>Math.abs(edge.mapping_score-incident[0].mapping_score)<1e-6); if (tied.length>1) { compoundFocusOnly=true; text('status',`${row.id} · ${tied.length} TIED HIGH-SCORE INCIDENT EDGES · CHOOSE FROM LEFT QUEUE · PROJECT PRIORITY UNRANKED`); text('queue-meta',`${tied.length} TIED · ${row.id} FOCUS`); showCompoundFocus(row,tied); renderQueue(); drawRisk(); void renderNetwork(); return; } compoundFocusOnly=false; text('status',`${row.id} · UNIQUE HIGHEST-SCORE INCIDENT EDGE ${incident[0].left_id}→${incident[0].right_id} · PROJECT PRIORITY UNRANKED`); void selectEdge(incident[0].edge_id); }); nodeFragment.appendChild(node);
+        const [x,y] = pointFor(row.id); const node = document.createElement('button'); node.className = `network-node${targetFocusId===row.id?' focused':''}`; node.dataset.compound = row.id; node.style.left = `${x * 100}%`; node.style.top = `${y * 100}%`; const label=document.createElement('span'); label.textContent=row.id; const depiction=document.createElement('div'); depiction.innerHTML=await moleculeSvg(row.canonical_smiles); node.append(label,depiction); if (resultShowcase) { const result=benchmarkResult(row.id),badge=document.createElement('small'); badge.className='benchmark-node-dg'; badge.textContent=`ΔG ${result.calculatedDg.toFixed(2)}`; node.append(badge); } node.addEventListener('click', () => { if (network!==targetNetwork) return; const incident = targetNetwork.edges.filter(e => e.left_id === row.id || e.right_id === row.id).sort((a,b)=>b.mapping_score-a.mapping_score); focusedCompoundId=row.id; if (!incident[0]) return; const tied=incident.filter(edge=>Math.abs(edge.mapping_score-incident[0].mapping_score)<1e-6); if (tied.length>1) { compoundFocusOnly=true; text('status',`${row.id} · ${tied.length} TIED HIGH-SCORE INCIDENT EDGES · CHOOSE FROM LEFT QUEUE · PROJECT PRIORITY UNRANKED`); text('queue-meta',`${tied.length} TIED · ${row.id} FOCUS`); showCompoundFocus(row,tied); renderQueue(); drawRisk(); void renderNetwork(); return; } compoundFocusOnly=false; text('status',`${row.id} · UNIQUE HIGHEST-SCORE INCIDENT EDGE ${incident[0].left_id}→${incident[0].right_id} · PROJECT PRIORITY UNRANKED`); void selectEdge(incident[0].edge_id); }); nodeFragment.appendChild(node);
     }));
     if (!operations.current(scope)||network!==targetNetwork||selectedEdge.edge_id!==targetEdgeId||focusedCompoundId!==targetFocusId||compoundFocusOnly!==targetFocusOnly) return;
     edgeLayer.setAttribute('viewBox', `0 0 ${w} ${h}`); edgeLayer.replaceChildren(edgeFragment); nodeLayer.replaceChildren(nodeFragment);
@@ -255,11 +258,11 @@ async function renderSelected(): Promise<void> {
     text('edge-gate', gateLabel); text('edge-title', `${edge.left_id} → ${edge.right_id}`); text('edge-id', edge.edge_id); text('inspect-score', value(edge.mapping_score)); text('inspect-atoms', `${edge.mapped_atom_count} / ${edge.mapped_heavy_atom_count ?? '—'}`); text('inspect-tanimoto', value(diagnostic.tanimoto)); text('inspect-jaccard', value(heavyDelta));
     const l = diagnostic.left_heavy_atom_fraction, r = diagnostic.right_heavy_atom_fraction; const li = document.getElementById('left-coverage'); const ri = document.getElementById('right-coverage'); if (li) li.style.setProperty('--p', `${(l ?? 0) * 100}%`); if (ri) ri.style.setProperty('--p', `${(r ?? 0) * 100}%`);
     document.getElementById('left-structure')!.innerHTML = leftSvg; document.getElementById('right-structure')!.innerHTML = rightSvg;
-    drawAgreement(); drawRisk(); renderQueue(); await renderNetwork();
+    drawAgreement(); drawRisk(); renderQueue(); await renderNetwork(); if (resultShowcase)renderResultShowcase(network,selectedEdge,edgeId=>void selectEdge(edgeId));
 }
 
 function physicalRunActive():boolean { const receipt=currentRunReceipt(); return !!receipt&&receiptStateIsPhysical(receipt.state)||!!activeRunId&&!receipt||runJobs.some(job=>['pending','queued','running','aggregating'].includes(job.state)); }
-async function selectEdge(edgeId: string): Promise<void> { const edge = network.edges.find(row => row.edge_id === edgeId); if (!edge) return; const changed=edge.edge_id!==selectedEdge.edge_id; if (changed&&runContextLocked()) { text('status','EDGE SELECTION FROZEN WHILE AN OPENFE RUNSET RECEIPT IS ATTACHED'); return; }selectedEdge = edge; compoundFocusOnly=false; focusedCompoundId=null; if (changed) { invalidatePreparedSystem(); autoBindPreparedPoses(); text('contract-gate','EDGE CHANGED · MATCHING REGISTERED POSES'); }syncExecutionContract(); await renderSelected(); text('queue-meta',`${network.edges.filter(e=>scoreBand(e)==='ready').length} MAP ≥.80 · ${network.edges.filter(e=>scoreBand(e)==='blocked').length} MAP <.50`); text('status',`${edge.left_id}→${edge.right_id} SELECTED · MAPPING EVIDENCE ONLY · PROJECT PRIORITY UNRANKED`); }
+async function selectEdge(edgeId: string): Promise<void> { const edge = network.edges.find(row => row.edge_id === edgeId); if (!edge) return; const changed=edge.edge_id!==selectedEdge.edge_id; if (changed&&runContextLocked()) { text('status','EDGE SELECTION FROZEN WHILE AN OPENFE RUNSET RECEIPT IS ATTACHED'); return; }selectedEdge = edge; compoundFocusOnly=false; focusedCompoundId=null; if (changed&&!resultShowcase) { invalidatePreparedSystem(); autoBindPreparedPoses(); text('contract-gate','EDGE CHANGED · MATCHING REGISTERED POSES'); } if (!resultShowcase)syncExecutionContract(); await renderSelected(); if (resultShowcase) { const result=benchmarkEdgeResult(edge.left_id,edge.right_id); text('status',`${edge.left_id}→${edge.right_id} · FEP ${signed(result.calculatedDdg)} ± ${result.calculatedSigma.toFixed(2)} · EXP ${signed(result.experimentalDdg)} ± ${result.experimentalSigma.toFixed(2)} KCAL/MOL`); } else { text('queue-meta',`${network.edges.filter(e=>scoreBand(e)==='ready').length} MAP ≥.80 · ${network.edges.filter(e=>scoreBand(e)==='blocked').length} MAP <.50`); text('status',`${edge.left_id}→${edge.right_id} SELECTED · MAPPING EVIDENCE ONLY · PROJECT PRIORITY UNRANKED`); } }
 
 function showCompoundFocus(row:Compound,tied:Edge[]):void { ['left-name','right-name','mapped-atoms','mapping-score','mapping-disagreement','chemical-change','inspect-score','inspect-atoms','inspect-tanimoto','inspect-jaccard'].forEach(id=>text(id,'—')); text('transform-name',`${row.id} · CHOOSE 1 OF ${tied.length} EDGES`); text('edge-gate','COMPOUND FOCUS · NO EDGE SELECTED'); text('edge-title',row.id); text('edge-id',`${tied.length} tied incident edges`); document.getElementById('left-structure')!.innerHTML=''; document.getElementById('right-structure')!.innerHTML=''; document.getElementById('change-ledger')!.innerHTML=`<span class="unverified"><b>EDGE REQUIRED</b>Choose one tied incident edge from the sorted queue.</span>`; const canvas=document.getElementById('agreement-canvas') as HTMLCanvasElement; canvas.getContext('2d')?.clearRect(0,0,canvas.width,canvas.height); }
 
@@ -286,6 +289,8 @@ function updateSummary(
     text('node-count', String(network.compounds.length)); text('edge-count', String(network.edges.length)); text('ready-count', String(high)); text('blocked-count', String(low)); text('durable-job', jobId); text('queue-meta', `${high} MAP ≥.80 · ${low} MAP <.50${focusedCompoundId?` · ${focusedCompoundId} FOCUS`:''}`); text('atlas-meta',`${network.edges.length} EDGES · HOVER / CLICK`); text('network-meta',`${network.mode.toUpperCase()} · ${network.policy.planner.toUpperCase()} · MAP SCORE ≠ EXECUTION READINESS`); text('topology-state',`SCORE-FILTERED GRAPH · ${topologyLabel}`); const topology=document.getElementById('topology-state'); topology?.classList.toggle('fatal',components.length>1); text('footer-job', `JOB ${jobId}`); text('footer-artifact', `ARTIFACT ${artifact}`);
 }
 
+function signed(value:number):string { return `${value>=0?'+':''}${value.toFixed(2)}`; }
+
 function networkFromJob(env: Envelope): Network | null { const job = env.data as Record<string, any>; return job?.result_summary?.data?.network || job?.network || null; }
 
 async function loadServerCampaignById(campaignId:string):Promise<CampaignDraftV2> {
@@ -300,7 +305,7 @@ function benchmarkEdge(target:Network=network): Edge {
     return target.edges.find(edge => {
         const smiles = new Set([compoundIn(target,edge.left_id).canonical_smiles,
             compoundIn(target,edge.right_id).canonical_smiles]);
-        return smiles.has('Fc1ccccc1') && smiles.has('Clc1ccccc1');
+        return smiles.has('c1ccccc1') && smiles.has('Cc1ccccc1');
     }) || target.edges[0];
 }
 
@@ -1099,6 +1104,10 @@ async function reconcileRunReceipt(receipt:RunReceipt|null,legacyRunId:string|nu
     if (!response) { response=await client.execute('physics.rbfe-run.get',{ run_ref: { kind: 'run',id: durable.run_id } }); if (!response.ok) { text('status',`RUNSET ${durable.run_id} RECEIPT PRESERVED · SERVER STATUS UNAVAILABLE`); return true; } } if (!adoptRunSet(response.data||{},durable)) return true; const active=currentRunReceipt(); if (active?.run_id&&!['blocked','completed','cancelled','failed','refused'].includes(active.state)) await watchRunSet(active); return true;
 }
 async function bootReconciler():Promise<void> {
+    if (resultShowcase) {
+        campaignBuilder?.setAttribute('aria-hidden','true'); authoritativeCampaignContextState=null; sourceState='cached-snapshot'; network=structuredClone(FallbackNetwork); networkWorkspaceVisible=true; networkArtifactRef=null; selectedEdge=benchmarkEdge(network); focusedCompoundId=null; compoundFocusOnly=false;
+        await enrichMappingEvidence(network); updateSummary('T4L-8L-FEP-RESULTS','T4L-L99A-8-ENDPOINTS'); await renderSelected(); return;
+    }
     const startupRun=readRunReceipt(),legacyRunId=startupRun?.run_id||copyStorage.get('dirac.rbfe.active_run_id'),startupPlanner=readPlannerReceipt(),startupPreparation=readPreparationReceipt(),blankRequested=query.get('new')==='1';
     const action=decideWorkbenchBoot({ hasRunReceipt: !!startupRun,hasLegacyRunId: !!legacyRunId,hasPlannerReceipt: !!startupPlanner,hasPreparationReceipt: !!startupPreparation,blankRequested });
     if (action==='reconcile-run') { campaignBuilder?.setAttribute('aria-hidden','true'); if (blankRequested)showBuilderNotice('Blank campaign was refused because an active or unknown-state RunSet receipt must be reconciled first.'); await reconcileRunReceipt(startupRun,legacyRunId); return; }
