@@ -20,7 +20,7 @@ Invocation kernel
         │                    │                │
         │                    │                └─ Inline / Thread / Process / Remote
         │                    └─ field cache + generic method-version result cache
-        └─ 28 executable scientific Methods
+        └─ 30 executable scientific Methods
                      │
           ┌──────────┼──────────┐
           ▼          ▼          ▼
@@ -90,7 +90,7 @@ PostgreSQL is the durable authority:
 - `app.command_trace` and `app.v_command_observation` retain semantic-command outcomes,
   latency, cache, actor and linked-Job evidence for the architecture twin.
 
-Migrations are forward-only and content-hash checked. Migrations 000–038 are the
+Migrations are forward-only and content-hash checked. Migrations 000–048 are the
 current schema history.
 
 ## Client application
@@ -101,11 +101,62 @@ the separate truth for connected scientific capability. `AppShell` owns routing 
 `ScientificContextStore` owns Program, focus, selection and the application's only
 staleness generation; `SceneService` owns one mol* instance that survives navigation.
 
-Twelve of thirty Views currently expose connected modules across Programs, Design,
+Thirteen of thirty Views currently expose connected modules across Programs, Design,
 Structures, Campaigns, Synthesis, Experiments, Knowledge and Runs. Existing chemistry
 facets are modules over the shared scene and context. Molecule embedding, fields,
 surface MEP and torsion strain enter through semantic commands; long results return by
 Job and content-addressed artifacts.
+
+The browser has two explicit runtime tiers built from one shared ESM graph. `shell.ts`
+boots routing, context, commands, theme and human-facing Workspace projections without
+importing mol* or RDKit. The first in-app navigation to a Scene route dynamically imports
+the molecular runtime without replacing the document; later Workspace and Scene changes
+reuse that module and the single `SceneService` instance. Program, ML, voice and
+scientific-chart code remain route- or visibility-owned chunks. Both the RDKit JavaScript
+bootstrap and WASM binary are fetched only when a chemistry-dependent surface is opened.
+The module registry projects real facet surfaces directly—there is no module-host or
+view-state adapter between the registry and the DOM. Production bundles also omit the
+generated-command integrity walk: that invariant is enforced by build and test gates.
+
+Desktop navigation owns one browser-local expanded/collapsed preference through the
+`RailController`; the responsive mobile rail deliberately ignores that desktop geometry.
+This is presentation state only and never enters Program, scientific-context or evidence
+records.
+
+Background work is visibility-aware and single-owner. The shell coalesces Program
+refreshes and publishes one state event to Workspace and Compute projections; hidden
+legacy surfaces are not populated. Off-screen graphs, charts and Gantt views defer both
+their runtime download and rendering. The ML control-room refresh loop suspends in hidden
+tabs, refreshes volatile Jobs and attention every 15 seconds, refreshes capability
+metadata on a five-minute/manual cadence, and fingerprints snapshots before replacing
+the DOM. Palette updates subscribe to scene state instead of polling. Chemistry results
+have one generation-aware cache that is invalidated on molecule, ligand-target and
+cutoff changes, preventing both repeated WASM work and stale cross-molecule facets.
+
+Three cross-cutting human layers deepen the existing Views without creating new product
+surface area. The Journey Rail projects one durable Program and Work Item across
+Question, Understand, Design, Decide, Make, Test and Learn; it delegates its visible
+"next" action to the existing governed handoff controller rather than bypassing command
+preconditions. The lazily loaded Evidence Inspector classifies a selected record as
+observed, computed, inferred, proposed or unresolved, then reports missing identity,
+observation time, method version, frozen inputs, provenance, artifacts, digest declaration
+and evidence boundary without upgrading presence into validation. Program disclosures and
+the comfortable/compact density preference are browser-local reading state, never durable
+scientific state.
+
+The shell also carries one five-level reading contract across every Workspace and the ML
+control room: **Signal (1) → Visual (2) → Structured (3) → Explanation (4) → Audit (5)**.
+This is explicit component metadata rather than an inferred font-size heuristic. `Scan`
+prioritizes state and visual flow, `Work` balances canonical records with explanation, and
+`Audit` opens provenance and raw records. The preference is browser-local. No mode deletes,
+hides, reclassifies, or mutates scientific evidence; high-difficulty material remains
+keyboard reachable through progressive disclosure.
+
+The all-route performance gate covers the thirty routable Views. The 2026-08-13 local
+matrix verified a roughly 943 KB cold payload for non-scene routes, four font files per
+route, no eager RDKit payload, no eager scientific-visual payload on ordinary Workspace
+routes, and no initial long task on the Program overview. Scene routes deliberately pay
+the mol* runtime cost; that boundary is kept separate from the compact application shell.
 
 ## Runtime topology
 
@@ -148,7 +199,7 @@ rebuilds. The model can therefore calibrate observed command latency and outcome
 addition to detecting drift, ranking static hotspots and estimating dependency radius.
 It still cannot predict unseen inputs or autonomously change the architecture; that is
 the L4 boundary. The platform substrate is complete against its approved DoD; the
-product capability is explicitly partial (currently 8/8 Workspaces represented and 12/30 Views connected)
+product capability is explicitly partial (currently 8/8 Workspaces represented and 13/30 Views connected)
 even though the navigable product shell is complete at 8/8 and 30/30.
 
 `scripts/digital_twin_scope.json` is the ownership boundary. The watcher recursively

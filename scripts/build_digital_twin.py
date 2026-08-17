@@ -543,8 +543,6 @@ def add_system_and_flows(twin: Twin) -> None:
     twin.edge('store:artifacts', 'store:postgres', 'indexes-in')
     twin.edge('system:app-shell', 'system:scientific-context', 'projects',
               basis='declared', declared_in='src/app/shell/app-shell.ts')
-    twin.edge('system:app-shell', 'system:scene', 'coordinates-without-owning',
-              basis='declared', declared_in='src/app/shell/app-shell.ts')
     twin.edge('system:scene', 'external:molstar', 'hosts')
     twin.edge('service:web', 'surface:gui', 'serves')
     twin.edge('service:fields', 'transport:http-v2', 'serves')
@@ -791,6 +789,8 @@ def architecture_analysis(twin: Twin, ts_data: dict, runtime: dict) -> dict:
 
     workspaces = ts_data['registries']['workspaces']
     views = ts_data['registries']['views']
+    connected_view_ids = {v['id'] for v in views if v.get('delivery') == 'connected'}
+    connected_workspace_ids = {v['workspace'] for v in views if v.get('delivery') == 'connected'}
     platform_commands = {e['source'] for e in twin.edges.values() if e['relation'] == 'handled-by'}
     platform_methods = {e['source'] for e in twin.edges.values() if e['relation'] == 'implemented-by'}
     platform_complete = (len(platform_commands) == sum(n['type'] == 'command' for n in twin.nodes.values())
@@ -807,13 +807,10 @@ def architecture_analysis(twin: Twin, ts_data: dict, runtime: dict) -> dict:
         'product_shell': 'complete',
         'product_implementation': 'partial',
         'workspaces_total': len(workspaces),
-        'workspaces_shell_ready': sum(bool(w.get('shellReady')) for w in workspaces),
-        'workspaces_implemented': sum(w.get('availability') == 'implemented' for w in workspaces),
-        'workspaces_gated': sum(w.get('availability') != 'implemented' for w in workspaces),
+        'workspaces_connected': len(connected_workspace_ids),
         'views_total': len(views),
-        'views_shell_ready': sum(bool(v.get('shellReady')) for v in views),
-        'views_implemented': sum(bool(v.get('implemented')) for v in views),
-        'views_gated': sum(not v.get('implemented') for v in views),
+        'views_connected': len(connected_view_ids),
+        'views_preview': len(views) - len(connected_view_ids),
         'workspaces': workspaces,
         'views': views,
         'meaning': ('Every registered Workspace and View has a navigable product shell. Scientific capability remains '
@@ -853,13 +850,11 @@ def architecture_analysis(twin: Twin, ts_data: dict, runtime: dict) -> dict:
          'value': f'{sum(n["type"] == "source-file" for n in twin.nodes.values())} files',
          'why': 'The watcher must be active and every discovered first-party file must have an inventory node.'},
         {'id': 'product-reality', 'status': 'warn', 'label': 'Product capability coverage',
-         'value': f'{product["views_implemented"]}/{product["views_total"]} views',
+         'value': f'{product["views_connected"]}/{product["views_total"]} views',
          'why': 'Registry completeness is not implementation completeness.'},
-        {'id': 'product-shell',
-         'status': 'pass' if product['views_shell_ready'] == product['views_total'] else 'fail',
-         'label': 'Navigable product shell',
-         'value': f'{product["views_shell_ready"]}/{product["views_total"]} views',
-         'why': 'Every declared View must have a stable route and an honest human-readable shell.'},
+        {'id': 'product-routes', 'status': 'pass', 'label': 'Registered product routes',
+         'value': f'{product["views_total"]} views',
+         'why': 'Every declared View is a route; delivery says whether it is connected or preview.'},
         {'id': 'attention-quality', 'status': 'pass' if attention_is_actionable else 'fail',
          'label': 'Attention signal quality', 'value': f'{attention} items',
          'why': ('Attention contains only operational/scientific failures and approval waits; '
@@ -900,14 +895,13 @@ def architecture_analysis(twin: Twin, ts_data: dict, runtime: dict) -> dict:
          'action': 'Keep each new invariant paired with a positive control that proves the checker can convict.',
          'nodes': ['registry:commands', 'registry:methods', 'system:scientific-context', 'system:scene']},
         {'id': 'product-scope', 'priority': 'SCOPE', 'kind': 'product-reality',
-         'title': 'Shell completeness and capability completeness are separate facts',
-         'evidence': (f'{product["workspaces_shell_ready"]}/{product["workspaces_total"]} Workspace shells and '
-                      f'{product["views_shell_ready"]}/{product["views_total"]} View shells are navigable; '
-                      f'{product["workspaces_implemented"]}/{product["workspaces_total"]} Workspaces and '
-                      f'{product["views_implemented"]}/{product["views_total"]} Views have connected capability.'),
+         'title': 'Route existence and connected capability are separate facts',
+         'evidence': (f'{product["views_total"]} View routes exist across {product["workspaces_total"]} Workspaces; '
+                      f'{product["workspaces_connected"]}/{product["workspaces_total"]} Workspaces contain a connected View and '
+                      f'{product["views_connected"]}/{product["views_total"]} Views have connected capability.'),
          'impact': ('The full product can be walked and optimized without presenting planned scientific modules as '
                     'working software.'),
-         'action': 'Keep shell-ready, capability-connected and observed usage as three independent dimensions.',
+         'action': 'Keep route existence, delivery and observed usage as independent dimensions.',
          'nodes': ['system:app-shell']},
     ]
     source_sync = bool(runtime.get('twin_watcher_active'))

@@ -210,7 +210,7 @@ class ExecutionIdentityTests(unittest.TestCase):
 
     def test_stateful_route_hook_is_called_once_per_admission(self):
         from catalog import MethodCatalog
-        from invocation import InvocationService
+        from invocation import HandlerResult, InvocationService
 
         class StatefulExecutor:
             kind = "remote"
@@ -229,7 +229,16 @@ class ExecutionIdentityTests(unittest.TestCase):
 
         executor = StatefulExecutor()
         service = InvocationService(MethodCatalog.load(), executor=executor)
-        result = service.invoke("molecule.embed", {"smiles": "CCO"})
+        handler_result = HandlerResult(result={
+            "molecule": {
+                "kind": "molfile",
+                "content": "stateful route test molfile content" + " " * 16,
+                "dimensionality": 3,
+            }
+        }, artifacts=[("molecule.molfile", b"stateful route test molfile")])
+        with mock.patch("catalog.MethodSpec.handler",
+                        return_value=lambda _payload, _ctx: handler_result):
+            result = service.invoke("molecule.embed", {"smiles": "CCO"})
         self.assertTrue(result["ok"])
         self.assertEqual(executor.calls, 1)
         self.assertEqual(result["meta"]["execution_identity"]["executor_adapter"],
