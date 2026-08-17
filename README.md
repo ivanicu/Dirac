@@ -53,9 +53,9 @@ being developed.
 
 ![Motif Workbench FEP network review and governed execution workspace](docs/screenshots/06_motif_fep_workspace.png)
 
-*A free-energy campaign workspace: ligand-network review, atom-mapping evidence, exact
-prepared-system selection and durable execution controls remain visible in one frame. A
-network plan is labelled as a plan, never as an FEP result.*
+*An eight-ligand T4 lysozyme FEP planning workspace: the complete transformation network,
+atom-mapping evidence, exact prepared-system selection and durable execution controls remain
+visible in one frame. The cached benchmark is labelled as a plan, never as an FEP result.*
 
 | Stage | What the frontend makes inspectable |
 |---|---|

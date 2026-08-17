@@ -204,7 +204,9 @@ async function mappingHighlights(edge: Edge,target:Network=network): Promise<{ l
 }
 
 const positions: Record<string, [number, number]> = {
-    'T4L-BEN': [.22,.28], 'T4L-FLU': [.78,.28], 'T4L-CL': [.50,.76],
+    'T4L-BEN': [.50,.14], 'T4L-FLU': [.76,.23], 'T4L-CL': [.84,.49],
+    'T4L-TOL': [.72,.75], 'T4L-ETB': [.50,.84], 'T4L-OXY': [.28,.75],
+    'T4L-MXY': [.16,.49], 'T4L-PXY': [.24,.23],
 };
 
 async function renderNetwork(targetNetwork:Network=network): Promise<void> {
@@ -275,7 +277,10 @@ function drawAgreement(): void {
     names.slice(0,2).forEach((name,row)=>{ const y=30+row*(rect.height-52); ctx.fillStyle='#78939b'; ctx.fillText(name.toUpperCase(),8,y-9); proposals[name].forEach(pair=>{ const x=70+(rect.width-86)*pair[0]/maxIndex, common=sets.every(set=>set.has(pair.join(':'))); ctx.fillStyle=common?'#62e6fa':'#dfaa4e'; ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#9bb0b6'; ctx.fillText(`${pair[0]}→${pair[1]}`,x-7,y+14); }); }); ctx.fillStyle='#78939b'; ctx.fillText('INDEX-EXACT · NOT AUTOMORPHISM-NORMALIZED',8,rect.height-3);
 }
 
-function updateSummary(jobId = currentNetworkJobId(), artifact = '8eeddd90c924…'): void {
+function updateSummary(
+    jobId = sourceState === 'cached-snapshot' ? 'CACHED-T4L-8-LIGAND-SNAPSHOT' : currentNetworkJobId(),
+    artifact = sourceState === 'cached-snapshot' ? FallbackNetwork.digest : '8eeddd90c924…',
+): void {
     const high = network.edges.filter(e=>scoreBand(e)==='ready').length, low=network.edges.filter(e=>scoreBand(e)==='blocked').length, qualified=network.edges.filter(e=>scoreBand(e)!=='blocked'), adjacency=new Map(network.compounds.map(row=>[row.id,new Set<string>()])); qualified.forEach(edge=>{ adjacency.get(edge.left_id)?.add(edge.right_id); adjacency.get(edge.right_id)?.add(edge.left_id); });
     const unseen=new Set(network.compounds.map(row=>row.id)),components:string[][]=[]; while (unseen.size) { const seed=unseen.values().next().value as string,stack=[seed],component:string[]=[]; unseen.delete(seed); while (stack.length) { const item=stack.pop()!; component.push(item); adjacency.get(item)?.forEach(next=>{ if (unseen.delete(next))stack.push(next); }); }components.push(component.sort()); } const isolated=components.filter(group=>group.length===1).flat(); const topologyLabel=components.length>1?`${components.length} COMPONENTS · ISOLATED ${isolated.join(',')||'NONE'}`:'CONNECTED';
     text('node-count', String(network.compounds.length)); text('edge-count', String(network.edges.length)); text('ready-count', String(high)); text('blocked-count', String(low)); text('durable-job', jobId); text('queue-meta', `${high} MAP ≥.80 · ${low} MAP <.50${focusedCompoundId?` · ${focusedCompoundId} FOCUS`:''}`); text('atlas-meta',`${network.edges.length} EDGES · HOVER / CLICK`); text('network-meta',`${network.mode.toUpperCase()} · ${network.policy.planner.toUpperCase()} · MAP SCORE ≠ EXECUTION READINESS`); text('topology-state',`SCORE-FILTERED GRAPH · ${topologyLabel}`); const topology=document.getElementById('topology-state'); topology?.classList.toggle('fatal',components.length>1); text('footer-job', `JOB ${jobId}`); text('footer-artifact', `ARTIFACT ${artifact}`);
