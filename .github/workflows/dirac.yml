@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # gate 9 audits the FULL history; the default depth-1 clone would let it
           # scan one commit and report clean.
@@ -173,7 +173,7 @@ jobs:
       PGPASSWORD: dirac
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: PostgreSQL client and Python
         run: |
           sudo apt-get update
