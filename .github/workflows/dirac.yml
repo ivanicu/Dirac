@@ -31,7 +31,7 @@ jobs:
       # resolved from the range: a range silently follows the newest release, so
       # a green CI could turn red without a single commit.
       - name: Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
@@ -40,7 +40,7 @@ jobs:
       # stdlib. There is deliberately no pip install step; adding one would be a
       # dependency this suite does not have.
       - name: Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
