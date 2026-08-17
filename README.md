@@ -75,9 +75,10 @@ scientific result or override missing machine evidence.
 
 ![Motif Workbench Field comparison with linked molecular views](docs/screenshots/07_motif_field_workspace.png)
 
-*Parent and proposal remain linked across 2D chemistry, receptor-pocket geometry, 3D
-selection, MEP, MLP and atom-level difference evidence. FEP and Field are one click apart
-through the shared Motif Workbench navigation.*
+*The current development boundary is visible rather than hidden: parent/proposal 2D,
+receptor-pocket geometry and atom selection are linked; in this captured runtime the MEP
+and MLP panels refuse because no compatible field Artifact is available. FEP and Field are
+one click apart through the shared Motif Workbench navigation.*
 
 ### Dirac Workspace
 
