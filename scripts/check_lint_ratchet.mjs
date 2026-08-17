@@ -14,10 +14,10 @@ import { ESLint } from 'eslint';
 
 const ROOT = process.cwd();
 const BASELINE = {
-    app: { errors: 8, warnings: 406 },
-    dirac: { errors: 187, warnings: 0 },
+    app: { errors: 8, warnings: 0 },
+    dirac: { errors: 186, warnings: 0 },
     chemistry: { errors: 92, warnings: 0 },
-    inherited: { errors: 547, warnings: 193 },
+    inherited: { errors: 546, warnings: 193 },
 };
 
 const protectedFiles = new Set([

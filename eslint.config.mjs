@@ -10,6 +10,8 @@ export default defineConfig([{
         "deploy/*",
         "docs/site/*",
         "lib/*",
+        "src/app/generated/**",
+        "src/app/services/error-codes.ts",
         "eslint.config.mjs",
         "build.mjs",
     ]
