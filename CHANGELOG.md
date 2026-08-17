@@ -8,8 +8,10 @@ repository inherited mol\* history and currently has no reliable release-tag ser
 
 ### Product surfaces
 
-- Added an independently built Discovery Lab that provides shared navigation between the
-  focused FEP and Field workbenches without replacing the full product shell.
+- Added the independently built **Motif Workbench**, with shared navigation between the
+  focused FEP and Field instruments without replacing **Dirac Workspace**.
+- Published product screenshots and an explicit development-surface boundary for Dirac
+  Workspace (`:1360`) and Motif Workbench (`:1370`).
 - Added recoverable FEP campaign preparation, exact pose/mapping review, scientific
   generation binding and governed OpenFE run qualification.
 - Added linked parent/proposal field comparison across 2D, 3D, receptor-pocket, MEP and
@@ -50,8 +52,9 @@ repository inherited mol\* history and currently has no reliable release-tag ser
 
 ### Operations and verification
 
-- Standardized the current local topology on web `:1360`, unified application service
-  `:8901`, and read-only operations `:1355`; the standalone `:8902` service is retired.
+- Standardized the current local topology on Dirac Workspace `:1360`, Motif Workbench
+  `:1370`, unified application service `:8901`, and read-only operations `:1355`; the
+  standalone `:8902` service is retired.
 - Added source-derived architecture-twin generation and drift checks.
 - Added gates for types, production builds, design invariants, documentation facts,
   contracts, migrations, portability, layering, physics protections, security and

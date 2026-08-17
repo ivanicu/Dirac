@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import { DISCOVERY_WORKSPACE_ROUTES, discoveryWorkspaceNavigation } from '../discovery-navigation';
 
-describe('Discovery Lab navigation', () => {
+describe('Motif Workbench navigation', () => {
     it('starts with exactly the FEP and Field workspaces', () => {
         expect(Object.keys(DISCOVERY_WORKSPACE_ROUTES)).toEqual(['fep', 'field']);
     });

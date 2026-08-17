@@ -58,7 +58,7 @@ const readCampaignCache=campaignState.readCache;
 const writeCampaignCache=campaignState.writeCache;
 const archiveCampaignCache=campaignState.archiveCache;
 function archiveDetachedRun(receiptOrId:RunReceipt|string,reason:string,runSnapshot?:Record<string,unknown>):void { const runId=typeof receiptOrId==='string'?receiptOrId:receiptOrId.run_id; if (!runId||!fullJobId(runId)) return; const context=activeCampaignContext(),receipt=typeof receiptOrId==='string'?null:receiptOrId; receiptStore.archiveRun({ ...(receipt||{}),run_id: runId,detached_at: new Date().toISOString(),reason,edge_id: receipt?.edge_id||selectedEdge?.edge_id||null,campaign_scientific_ref: receipt?.campaign_scientific_ref||(context?.campaign_id?{ kind: 'rbfe_campaign',id: context.campaign_id,version: context.campaign_scientific_generation,sha256: context.campaign_scientific_digest }:null),...(runSnapshot?{ run_snapshot: runSnapshot }: {}) }); }
-const workbenchLabel = () => auditCopyId === 'main' ? 'FEP LAB' : `FEP LAB · COPY ${auditCopyId.toUpperCase()}`;
+const workbenchLabel = () => auditCopyId === 'main' ? 'MOTIF WORKBENCH · FEP' : `MOTIF WORKBENCH · FEP · COPY ${auditCopyId.toUpperCase()}`;
 const DefaultNetworkJobId = 'b1a4ddf3-8663-4fa1-87d0-8c6a137702c5';
 function currentNetworkJobId():string { return copyStorage.get('dirac.rbfe.active_network_job_id')||DefaultNetworkJobId; }
 type CampaignContext = { network_job_id:string; name:string; receptor_label:string; ligand_count:number; prepared_system_id:string; campaign_id?:string; campaign_scientific_generation?:number; campaign_scientific_digest?:string };
@@ -91,7 +91,7 @@ function applyCampaignContext(context:CampaignContext|null):void {
 function sameCampaignScientificContext(left:CampaignContext|null,right:CampaignContext|null):boolean { return left===right||!!left&&!!right&&left.campaign_id===right.campaign_id&&left.campaign_scientific_generation===right.campaign_scientific_generation&&left.campaign_scientific_digest===right.campaign_scientific_digest&&left.prepared_system_id===right.prepared_system_id; }
 
 const app = document.getElementById('fep-lab');
-if (!app) throw new Error('FEP Lab mount point is missing');
+if (!app) throw new Error('Motif Workbench FEP mount point is missing');
 app.innerHTML=workbenchShellMarkup();
 if (auditCopyId!=='main') {
     document.title=`DIRAC · FEP Audit Copy ${auditCopyId.toUpperCase()}`;

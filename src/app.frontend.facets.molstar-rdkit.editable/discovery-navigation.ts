@@ -10,9 +10,9 @@ const WORKSPACES: ReadonlyArray<{ id: DiscoveryWorkspace; label: string }> = [
     { id: 'field', label: 'FIELD' },
 ];
 
-/** One navigation contract shared by the two initial Discovery Lab workspaces. */
+/** One navigation contract shared by the two initial Motif Workbench instruments. */
 export function discoveryWorkspaceNavigation(active: DiscoveryWorkspace): string {
-    return `<nav class="discovery-workspace-nav" aria-label="Discovery Lab workspaces">${WORKSPACES.map(workspace => {
+    return `<nav class="discovery-workspace-nav" aria-label="Motif Workbench instruments">${WORKSPACES.map(workspace => {
         const selected = workspace.id === active;
         return `<a class="discovery-workspace-link${selected ? ' active' : ''}" href="${DISCOVERY_WORKSPACE_ROUTES[workspace.id]}"${selected ? ' aria-current="page"' : ''}>${workspace.label}</a>`;
     }).join('')}</nav>`;

@@ -5,7 +5,7 @@ import { discoveryWorkspaceNavigation } from '../discovery-navigation';
 export function workbenchShellMarkup(): string {
     return `<div class="lab">
   <header class="topbar fep-topbar">
-    <div class="fep-topbar-left"><div class="brand"><i></i><b>DIRAC</b><span>FEP QUALIFICATION LAB</span></div><div class="context"><span><small>DATASET</small><b>T4L PREPARED BENCHMARK</b></span><span><small>PLANNER</small><b>OPENFE 1.11.1</b></span><span><small>EDGE RESULTS</small><b class="result-zero" id="result-count">0 · NONE</b></span><span><small>BACKEND</small><b class="live" id="engine-state">● CONNECTING</b></span></div></div>
+    <div class="fep-topbar-left"><div class="brand"><i></i><b>DIRAC</b><span>MOTIF WORKBENCH · FEP</span></div><div class="context"><span><small>DATASET</small><b>T4L PREPARED BENCHMARK</b></span><span><small>PLANNER</small><b>OPENFE 1.11.1</b></span><span><small>EDGE RESULTS</small><b class="result-zero" id="result-count">0 · NONE</b></span><span><small>BACKEND</small><b class="live" id="engine-state">● CONNECTING</b></span></div></div>
     <nav class="workspace-mode-tabs" aria-label="FEP workspace mode"><button id="main-build" aria-pressed="false">BUILD</button><button id="main-review" class="active" aria-pressed="true">REVIEW NETWORK</button><button id="main-runs" aria-pressed="false">RUNS</button></nav>
     <div class="fep-topbar-actions">${discoveryWorkspaceNavigation('fep')}<a class="all-labs-link" href="${WORKBENCH_ROUTES.allLabs}">ALL LABS</a><button id="replan" title="Re-run the currently displayed immutable network plan">REPLAN BENCHMARK</button></div>
   </header>

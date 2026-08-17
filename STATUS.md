@@ -39,20 +39,20 @@ structure Views, compound records, material/sample records, experiment records, 
 and active/history compute projections. The other Views are navigable contracts, not
 claims of shipped scientific capability.
 
-## Focused Discovery Lab
+## Motif Workbench
 
-The separately built Discovery Lab is not counted as another AppShell Workspace or View.
-It is a focused frontend over the same application/scientific backend:
+The separately built Motif Workbench is not counted as another AppShell Workspace or View.
+It is a focused development frontend over the same application/scientific backend:
 
 | Entry | State |
 |---|---|
-| `discovery-lab/` | connected navigation and backend-health landing page |
+| `discovery-lab/` | connected Motif Workbench navigation and backend-health landing page; directory name retained for build compatibility |
 | `fep-workbench/` | connected campaign, pose-review, mapping and governed-run qualification workflow |
 | `field-workbench/` | connected parent/proposal field-comparison workflow |
 
-FEP and Field share navigation, visual language and backend contracts. The Discovery Lab
-is deployed independently from the full product shell so neither frontend can silently
-replace the other.
+FEP and Field share navigation, visual language and backend contracts. Motif Workbench is
+deployed independently from Dirac Workspace while both interaction models are under active
+development, so neither frontend can silently replace the other.
 
 ## Verified local topology
 
@@ -60,8 +60,8 @@ Verified on 2026-08-17 with listening sockets and HTTP responses:
 
 | Component | State |
 |---|---|
-| `dirac-web.service` / `:1360` | `0.0.0.0`; HTTP 200; full Dirac product shell |
-| `dirac-discovery-lab.service` / `:1370` | `0.0.0.0`; HTTP 200; independent Discovery Lab with FEP and Field navigation |
+| `dirac-web.service` / `:1360` | `0.0.0.0`; HTTP 200; full Dirac Workspace |
+| `dirac-discovery-lab.service` / `:1370` | `0.0.0.0`; HTTP 200; Motif Workbench with FEP and Field navigation; legacy unit identifier retained |
 | `dirac-fields.service` / `:8901` | active; `0.0.0.0`; health HTTP 200; unified application/scientific control plane |
 | `dirac-ops.service` / `:1355` | active; `0.0.0.0`; HTTP 200; read-only operational projection |
 | `dirac-digital-twin.service` | active; watches first-party source and regenerates the twin |
@@ -81,7 +81,7 @@ registered Method has completed prospective scientific validation.
 
 ## Scope verdict
 
-The command/method/job/artifact substrate, full navigation shell and focused Discovery Lab
+The command/method/job/artifact substrate, Dirac Workspace and focused Motif Workbench
 exist. The product remains partial: 12/30 AppShell Views are connected, the remaining Views
 are explicit shells, and individual scientific Methods need method-specific validation
 before prospective claims can be made. Workflow completeness, execution correctness and

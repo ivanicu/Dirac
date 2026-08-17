@@ -109,17 +109,18 @@ facets are modules over the shared scene and context. Molecule embedding, fields
 surface MEP and torsion strain enter through semantic commands; long results return by
 Job and content-addressed artifacts.
 
-The focused Discovery Lab is a second browser build, not a second scientific system. Its
-landing page, FEP workbench and Field workbench share one navigation contract and the same
-application/scientific backend while remaining deployable independently from the full
-AppShell. It does not create another Command registry, Method catalog, Job state machine,
-artifact identity or campaign generation clock.
+The focused **Motif Workbench** is a second browser build, not a second scientific system.
+Its landing page, FEP instrument and Field instrument share one navigation contract and the
+same application/scientific backend while remaining deployable independently from the full
+**Dirac Workspace** AppShell during development. It does not create another Command registry,
+Method catalog, Job state machine, artifact identity or campaign generation clock.
 
 ## Runtime topology
 
 - `dirac-fields.service` on `:8901` is the one application/scientific control plane.
-- `dirac-web.service` on `:1360` serves the full product shell.
-- `dirac-discovery-lab.service` on `:1370` serves the independent Discovery Lab bundle.
+- `dirac-web.service` on `:1360` serves the full Dirac Workspace.
+- `dirac-discovery-lab.service` on `:1370` serves the Motif Workbench bundle (the service
+  identifier predates the public product name).
 - `dirac-ops.service` on `:1355` is a read-only operational projection.
 - PostgreSQL `dirac` owns durable state.
 - the legacy `dirac-physics.service` is disabled and no process listens on `:8902`.

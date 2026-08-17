@@ -44,4 +44,4 @@ await fs.cp(path.join(source, 'assets/rdkit'), path.join(output, 'assets/rdkit')
 await fs.copyFile(path.join(repo, 'examples/docking/receptor_1.pdb'), path.join(output, 'assets/receptor.pdb'));
 await fs.copyFile(path.join(repo, 'examples/docking/ligands_1.sdf'), path.join(output, 'assets/ligand.sdf'));
 
-console.log(`Discovery Lab built at ${output}`);
+console.log(`Motif Workbench built at ${output}`);

@@ -16,6 +16,7 @@ molecular ML, and traceable scientific workflows.**
 scientific runtime and rendered into the shared molecular scene.*
 
 [Product](#product) · [Workflows](#scientific-workflows) ·
+[Motif Workbench](#motif-workbench--fep) ·
 [Architecture](#architecture) · [Verification](#verification) ·
 [Run locally](#run-locally) · [Status](STATUS.md)
 
@@ -32,6 +33,53 @@ automation and programmatic clients therefore operate on the same objects and se
 instead of rebuilding the workflow behind each interface.
 
 ## In the workspace
+
+> [!NOTE]
+> **Dirac is under active development.** It currently has two deliberately separate
+> browser frontends so product architecture and scientific instruments can evolve without
+> silently replacing one another. Both use the same backend contracts, scientific
+> identities, Jobs and Artifacts.
+
+| Development frontend | Role | Local entry |
+|---|---|---|
+| **Dirac Workspace** | The broad product shell: structures, design, programs, campaigns, evidence and operations | `:1360` |
+| **Motif Workbench** | A focused scientific-instrument surface, initially joining **FEP** and **Field** | `:1370` |
+
+These are two development surfaces for one product—not two backends and not two competing
+scientific systems. Their separation is explicit while the interaction model is still
+being developed.
+
+### Motif Workbench · FEP
+
+![Motif Workbench FEP network review and governed execution workspace](docs/screenshots/06_motif_fep_workspace.png)
+
+*A free-energy campaign workspace: ligand-network review, atom-mapping evidence, exact
+prepared-system selection and durable execution controls remain visible in one frame. A
+network plan is labelled as a plan, never as an FEP result.*
+
+| Stage | What the frontend makes inspectable |
+|---|---|
+| **Define** | receptor source, bound reference, ligand identities, stereochemistry, charge and decision context |
+| **Prepare** | assembly, missing structure, protonation, waters, cofactors, metals and force-field policy witnesses |
+| **Review** | same-camera receptor-frame poses, shared-core coverage, atom-pair distances, contacts and clashes |
+| **Plan** | OpenFE network, complete compound IDs, mapping chemistry, direction and rejected-edge evidence |
+| **Qualify** | exact receptor/pose/network references, scientific generation and execution eligibility before START unlocks |
+| **Run** | durable RunSet receipt, per-leg state, cancellation/retry boundary and aggregation provenance |
+
+The frontend is intentionally strict: stale campaign generations, incomplete chemical
+identity, missing preparation witnesses, hard clashes and unverified mappings keep physical
+execution locked. Human review can accept a pose hypothesis; it cannot manufacture a
+scientific result or override missing machine evidence.
+
+### Motif Workbench · Field
+
+![Motif Workbench Field comparison with linked molecular views](docs/screenshots/07_motif_field_workspace.png)
+
+*Parent and proposal remain linked across 2D chemistry, receptor-pocket geometry, 3D
+selection, MEP, MLP and atom-level difference evidence. FEP and Field are one click apart
+through the shared Motif Workbench navigation.*
+
+### Dirac Workspace
 
 | Molecular context | Property analysis |
 |---|---|
@@ -58,9 +106,9 @@ not isolated applications. [Motif v3](docs/product/motif-v3/README.md) carries t
 molecular-ML lifecycle from observations through model release, prediction, simulation and
 the next decision.
 
-### Discovery Lab
+### Motif Workbench
 
-The focused Discovery Lab is a separate frontend for two initial instruments:
+The focused Motif Workbench is a separate development frontend for two initial instruments:
 
 - **FEP** builds campaigns, reviews receptor-aligned poses and mapping evidence, and
   qualifies governed OpenFE execution without presenting a plan as a result.
@@ -68,7 +116,7 @@ The focused Discovery Lab is a separate frontend for two initial instruments:
   MLP views.
 
 Both instruments share one navigation contract, backend boundary and visual language. The
-full Dirac product shell remains a separate application.
+broader Dirac Workspace remains separately deployable during development.
 
 ## Scientific runtime
 
@@ -165,19 +213,20 @@ live-runtime checks remain explicitly dependency-bound.
 
 Prerequisites: Node.js 22 or newer and npm.
 
-### Focused Discovery Lab
+### Motif Workbench
 
 ```bash
 git clone https://github.com/ivanicu/Dirac.git
 cd Dirac
 npm ci
-npm run build:discovery-lab
+npm run build:motif-workbench
 node_modules/.bin/http-server build/discovery-lab -p 1370 -g -c-1
 ```
 
-Open <http://localhost:1370/> and switch between FEP and Field from the shared navigation.
+Open <http://localhost:1370/> and switch between FEP and Field from the shared Motif
+Workbench navigation.
 
-### Full product shell
+### Dirac Workspace
 
 ```bash
 npm run build:dirac
@@ -258,7 +307,7 @@ request limits, durable quotas, Artifact authorization and redacted audit record
 | `backend/` | application handlers, scientific Methods, durable execution and persistence |
 | `python/` | Python SDK, CLI and safe agent adapter |
 | `src/app/` | product shell, scientific context, scene ownership and client modules |
-| `src/app.frontend.facets.molstar-rdkit.editable/` | full browser application plus Discovery Lab, FEP and Field frontends |
+| `src/app.frontend.facets.molstar-rdkit.editable/` | Dirac Workspace plus the Motif Workbench FEP and Field frontends |
 | `src/chemistry.backend.perception.rdkit-wasm.editable/` | shared RDKit-JS chemistry substrate |
 | `docs/` | product, architecture, design, security and verification documentation |
 | `deploy/` | runtime topology and service definitions |

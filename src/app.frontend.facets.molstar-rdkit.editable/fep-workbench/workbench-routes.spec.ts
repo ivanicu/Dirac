@@ -6,7 +6,7 @@ import { WORKBENCH_ROUTES } from './workbench-routes';
 import { workbenchShellMarkup } from './workbench-shell';
 
 describe('FEP navigation belongs to the deployable AppShell',()=>{
-    it('uses the two explicit Discovery Lab route modules',()=>{
+    it('uses the two explicit Motif Workbench route modules',()=>{
         expect(WORKBENCH_ROUTES.fepWorkbench).toBe(DISCOVERY_WORKSPACE_ROUTES.fep);
         expect(WORKBENCH_ROUTES.fieldWorkbench).toBe(DISCOVERY_WORKSPACE_ROUTES.field);
     });

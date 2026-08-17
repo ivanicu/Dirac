@@ -36,7 +36,7 @@ const stage = document.getElementById('stage') as HTMLCanvasElement | null;
 if (!app || !stage) throw new Error('Field workbench mount points are missing');
 
 app.innerHTML = `<div class="app">
-  <header class="topbar"><div class="brand"><i class="brand-mark"></i><b>DIRAC</b><span>DISCOVERY LAB · FIELD</span></div>
+  <header class="topbar"><div class="brand"><i class="brand-mark"></i><b>DIRAC</b><span>MOTIF WORKBENCH · FIELD</span></div>
     <div class="context"><span><small>DATASET</small><b>DOCKING REFERENCE SET · 3D</b></span><span><small>PAIR</small><b id="pair-name">LOADING</b></span><span><small>ENGINE</small><b>${apiBase}</b></span><span><small>STATE</small><b class="live">● LINKED</b></span></div>
     <div class="top-actions">${discoveryWorkspaceNavigation('field')}<button id="sync-camera" class="active">CAMERAS LINKED</button><button id="reset-camera">RESET VIEW</button></div>
   </header>

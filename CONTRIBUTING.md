@@ -24,10 +24,10 @@ git clone https://github.com/ivanicu/Dirac.git
 cd Dirac
 npm ci
 npm run build:dirac
-npm run build:discovery-lab
+npm run build:motif-workbench
 ```
 
-The full product shell and focused Discovery Lab have separate builds. See the
+Dirac Workspace and Motif Workbench have separate development builds. See the
 [README](README.md#run-locally) for local serving and backend setup.
 
 ## Make a change
@@ -49,7 +49,7 @@ python3 scripts/gen_commands.py --check
 python3 scripts/gen_contracts.py --check
 node_modules/.bin/tsc --noEmit --incremental false -p tsconfig.json
 npm run build:dirac
-npm run build:discovery-lab
+npm run build:motif-workbench
 ```
 
 Backend, migration and cross-surface changes should also run `bash scripts/gates.sh` with

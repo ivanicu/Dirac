@@ -22,8 +22,8 @@ Use the existing supervised services on the canonical workstation:
 
 | Port | Surface |
 |---:|---|
-| `1360` | full Dirac product shell (`build/dirac`) |
-| `1370` | focused Discovery Lab with FEP and Field (`build/discovery-lab`) |
+| `1360` | full Dirac Workspace (`build/dirac`) |
+| `1370` | focused Motif Workbench with FEP and Field (`build/discovery-lab`) |
 | `1355` | read-only operations view |
 | `8901` | application and scientific backend |
 
@@ -41,8 +41,8 @@ commands in `README.md` may be used to start one local instance.
 | `backend/execution_control/`, `backend/executors/` | durable execution, admission and placement |
 | `backend/db/` | PostgreSQL schema and forward-only migrations |
 | `python/` | Python SDK, CLI and safe agent adapter |
-| `src/app/` | product shell, context, scene ownership and clients |
-| `src/app.frontend.facets.molstar-rdkit.editable/` | full browser application and Discovery Lab frontends |
+| `src/app/` | Dirac Workspace shell, context, scene ownership and clients |
+| `src/app.frontend.facets.molstar-rdkit.editable/` | Dirac Workspace and Motif Workbench frontends |
 | `src/chemistry.backend.perception.rdkit-wasm.editable/` | shared RDKit-JS chemistry substrate |
 
 Vendored/upstream ownership is documented in `src/VENDORED.md`. Do not edit a vendored
@@ -68,9 +68,9 @@ there require product-wide verification, not only a facet test.
 - Scientific computation is a versioned Method; long work returns a durable Job.
 - Large outputs are content-addressed Artifacts linked to exact provenance.
 - PostgreSQL owns durable scientific and execution state.
-- The full product shell owns one `ScientificContextStore` and one persistent
+- Dirac Workspace owns one `ScientificContextStore` and one persistent
   `SceneService`.
-- The Discovery Lab may provide focused projections, but may not create a private Command
+- Motif Workbench may provide focused projections, but may not create a private Command
   registry, Job state machine, artifact identity or campaign-generation clock.
 - Planned, refused, stale, unverified and completed are distinct states. Never render one
   as another.
@@ -86,7 +86,7 @@ python3 scripts/gen_commands.py --check
 python3 scripts/gen_contracts.py --check
 node_modules/.bin/tsc --noEmit --incremental false -p tsconfig.json
 npm run build:dirac
-npm run build:discovery-lab
+npm run build:motif-workbench
 ```
 
 For broad backend, database or cross-surface work, run:
@@ -103,7 +103,7 @@ called delivered.
 
 ```bash
 npm run build:dirac
-npm run build:discovery-lab
+npm run build:motif-workbench
 ```
 
 Do not commit `build/`, `node_modules/`, browser profiles, credentials, generated local
