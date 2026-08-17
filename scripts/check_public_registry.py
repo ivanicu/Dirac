@@ -15,9 +15,19 @@ def main() -> int:
         (ROOT / "contracts" / "commands" / "registry.json").read_text(encoding="utf-8")
     )
     actual_commands = sorted(command["id"] for command in commands["commands"])
-    actual_methods = sorted(
-        json.loads(path.read_text(encoding="utf-8"))["method_id"]
+    descriptors = [
+        json.loads(path.read_text(encoding="utf-8"))
         for path in (ROOT / "contracts" / "methods").glob("*.method.json")
+    ]
+    # The golden protects the SDK-facing registry, not the internal method
+    # catalog.  Counting hidden descriptors made `exposure.sdk: false` cosmetic:
+    # an implementation-only method still appeared public and generators could
+    # retain it forever.  Public means the descriptor explicitly opts into SDK
+    # exposure; absent/false is fail-closed.
+    actual_methods = sorted(
+        descriptor["method_id"]
+        for descriptor in descriptors
+        if (descriptor.get("exposure") or {}).get("sdk") is True
     )
     failures: list[str] = []
     for label, actual in (("commands", actual_commands), ("methods", actual_methods)):

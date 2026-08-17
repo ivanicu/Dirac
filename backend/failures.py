@@ -110,6 +110,13 @@ class DiracInvalidParameters(DiracFailure):
         super().__init__('INVALID_PARAMETERS', message, **kw)
 
 
+class DiracIdempotencyConflict(DiracFailure):
+    """One client key cannot authorize two different durable operations."""
+
+    def __init__(self, message: str, **kw: Any) -> None:
+        super().__init__('IDEMPOTENCY_CONFLICT', message, **kw)
+
+
 class DiracUnsupported(DiracFailure):
     """The request is well-formed and outside what this method can do.
 

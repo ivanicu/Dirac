@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal, TypedDict
 
-MethodId = Literal["data.motif.snapshot", "design.motif.acquire", "design.motif.bayesian_acquire", "design.motif.local_edits", "design.motif.reaction_enumerate", "fields.mep", "fields.mlp", "fields.qm.density", "fields.qm.homo", "fields.qm.lumo", "fields.qm.mep_qm", "fields.region.mep", "fields.region.mlp", "ml.motif.calibrate", "ml.motif.mesh.predict", "ml.motif.mesh.train", "ml.motif.predict", "ml.motif.train", "molecule.embed", "physics.motif.openfe_edge", "physics.motif.openmm_md", "physics.motif.rbfe_aggregate", "physics.motif.rbfe_network", "structure.motif.conformers", "structure.motif.vina", "surface.mep", "surface.mep_at", "torsion.strain"]
+MethodId = Literal["data.motif.snapshot", "design.motif.acquire", "design.motif.bayesian_acquire", "design.motif.local_edits", "design.motif.reaction_enumerate", "fields.mep", "fields.mlp", "fields.qm.density", "fields.qm.homo", "fields.qm.lumo", "fields.qm.mep_qm", "fields.region.mep", "fields.region.mlp", "ml.motif.calibrate", "ml.motif.mesh.predict", "ml.motif.mesh.train", "ml.motif.predict", "ml.motif.train", "molecule.embed", "physics.motif.openfe_edge", "physics.motif.openmm_md", "physics.motif.rbfe_aggregate", "physics.motif.rbfe_campaign_prepare", "physics.motif.rbfe_network", "physics.motif.rbfe_system_prepare", "structure.motif.conformers", "structure.motif.vina", "surface.mep", "surface.mep_at", "torsion.strain"]
 
 # data.motif.snapshot — Freeze measurement-lineage rows, endpoint definitions, splits and leakage evidence into a content-addressed dataset snapshot.
 DATAMOTIFSNAPSHOT_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'bitwise', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['write:dataset'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'scale_profile': {'shardable': True, 'distributed': False, 'min_gpus': 0, 'max_gpus': 0}, 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
@@ -35,7 +35,7 @@ class FieldsMepParameters(TypedDict, total=False):
     spacing_angstrom: float
     pad_angstrom: float
 
-FIELDSMEP_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 'inline_threshold_seconds': 5.0, 'resource_class': 'cpu-classical', 'concurrency_class': 'classical', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
+FIELDSMEP_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 'inline_threshold_seconds': 5.0, 'resource_class': 'cpu-classical', 'supported_adapters': ['inline', 'local_cpu'], 'concurrency_class': 'classical', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
 FIELDSMEP_REFUSALS = ['UNPARAMETERIZED']
 FIELDSMEP_WARNINGS = ['CLASSICAL_MODEL_SCOPE', 'SIGMA_HOLE_NOT_REPRESENTABLE']
 
@@ -43,7 +43,7 @@ FIELDSMEP_WARNINGS = ['CLASSICAL_MODEL_SCOPE', 'SIGMA_HOLE_NOT_REPRESENTABLE']
 class FieldsMlpParameters(TypedDict, total=False):
     spacing_angstrom: float
 
-FIELDSMLP_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 'inline_threshold_seconds': 5.0, 'resource_class': 'cpu-classical', 'concurrency_class': 'classical', 'supports_cancellation': False, 'deterministic': True, 'cacheable': False, 'side_effects': 'none'}
+FIELDSMLP_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 'inline_threshold_seconds': 5.0, 'resource_class': 'cpu-classical', 'supported_adapters': ['inline', 'local_cpu'], 'concurrency_class': 'classical', 'supports_cancellation': False, 'deterministic': True, 'cacheable': False, 'side_effects': 'none'}
 FIELDSMLP_REFUSALS = ['UNPARAMETERIZED']
 FIELDSMLP_WARNINGS = []
 
@@ -52,7 +52,7 @@ class FieldsQmDensityParameters(TypedDict, total=False):
     basis: Literal["sto-3g", "6-31g", "6-31g*", "def2-svp"]
     spin: int | None
 
-FIELDSQMDENSITY_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'auto', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
+FIELDSQMDENSITY_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'auto', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'supported_adapters': ['inline', 'local_cpu'], 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
 FIELDSQMDENSITY_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
 FIELDSQMDENSITY_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
 
@@ -61,7 +61,7 @@ class FieldsQmHomoParameters(TypedDict, total=False):
     basis: Literal["sto-3g", "6-31g", "6-31g*", "def2-svp"]
     spin: int | None
 
-FIELDSQMHOMO_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'auto', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
+FIELDSQMHOMO_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'auto', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'supported_adapters': ['inline', 'local_cpu'], 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
 FIELDSQMHOMO_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
 FIELDSQMHOMO_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
 
@@ -70,7 +70,7 @@ class FieldsQmLumoParameters(TypedDict, total=False):
     basis: Literal["sto-3g", "6-31g", "6-31g*", "def2-svp"]
     spin: int | None
 
-FIELDSQMLUMO_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'auto', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
+FIELDSQMLUMO_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'auto', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'supported_adapters': ['inline', 'local_cpu'], 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
 FIELDSQMLUMO_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
 FIELDSQMLUMO_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
 
@@ -79,7 +79,7 @@ class FieldsQmMepQmParameters(TypedDict, total=False):
     basis: Literal["sto-3g", "6-31g", "6-31g*", "def2-svp"]
     spin: int | None
 
-FIELDSQMMEPQM_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'auto', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
+FIELDSQMMEPQM_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'auto', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'supported_adapters': ['inline', 'local_cpu'], 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
 FIELDSQMMEPQM_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
 FIELDSQMMEPQM_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
 
@@ -87,7 +87,7 @@ FIELDSQMMEPQM_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
 class FieldsRegionMepParameters(TypedDict, total=False):
     dielectric: Literal["r-dependent", "vacuum", "uniform-4"]
 
-FIELDSREGIONMEP_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 'inline_threshold_seconds': 5.0, 'resource_class': 'cpu-classical', 'concurrency_class': 'classical', 'supports_cancellation': False, 'deterministic': True, 'cacheable': False, 'side_effects': 'none'}
+FIELDSREGIONMEP_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 'inline_threshold_seconds': 5.0, 'resource_class': 'cpu-classical', 'supported_adapters': ['inline', 'local_cpu'], 'concurrency_class': 'classical', 'supports_cancellation': False, 'deterministic': True, 'cacheable': False, 'side_effects': 'none'}
 FIELDSREGIONMEP_REFUSALS = ['UNPARAMETERIZED']
 FIELDSREGIONMEP_WARNINGS = ['CLASSICAL_MODEL_SCOPE', 'SIGMA_HOLE_NOT_REPRESENTABLE', 'SOURCES_EXCLUDED']
 
@@ -95,7 +95,7 @@ FIELDSREGIONMEP_WARNINGS = ['CLASSICAL_MODEL_SCOPE', 'SIGMA_HOLE_NOT_REPRESENTAB
 class FieldsRegionMlpParameters(TypedDict, total=False):
     dielectric: object
 
-FIELDSREGIONMLP_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 'inline_threshold_seconds': 5.0, 'resource_class': 'cpu-classical', 'concurrency_class': 'classical', 'supports_cancellation': False, 'deterministic': True, 'cacheable': False, 'side_effects': 'none'}
+FIELDSREGIONMLP_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 'inline_threshold_seconds': 5.0, 'resource_class': 'cpu-classical', 'supported_adapters': ['inline', 'local_cpu'], 'concurrency_class': 'classical', 'supports_cancellation': False, 'deterministic': True, 'cacheable': False, 'side_effects': 'none'}
 FIELDSREGIONMLP_REFUSALS = ['UNPARAMETERIZED']
 FIELDSREGIONMLP_WARNINGS = ['SOURCES_EXCLUDED']
 
@@ -129,7 +129,7 @@ class MoleculeEmbedParameters(TypedDict, total=False):
     seed: int
     optimize: bool
 
-MOLECULEEMBED_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 'inline_threshold_seconds': 5.0, 'resource_class': 'cpu-cheminformatics', 'concurrency_class': 'classical', 'supports_cancellation': False, 'deterministic': True, 'cacheable': False, 'side_effects': 'none'}
+MOLECULEEMBED_EXECUTION = {'supported_modes': ['sync'], 'default_mode': 'sync', 'inline_threshold_seconds': 5.0, 'resource_class': 'cpu-cheminformatics', 'supported_adapters': ['inline', 'local_cpu'], 'concurrency_class': 'classical', 'supports_cancellation': False, 'deterministic': True, 'cacheable': False, 'side_effects': 'none'}
 MOLECULEEMBED_REFUSALS = ['PARSE', 'UNPARAMETERIZED']
 MOLECULEEMBED_WARNINGS = []
 
@@ -143,15 +143,25 @@ PHYSICSMOTIFOPENMMMD_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'j
 PHYSICSMOTIFOPENMMMD_REFUSALS = ['INVALID_PARAMETERS']
 PHYSICSMOTIFOPENMMMD_WARNINGS = []
 
-# physics.motif.rbfe_aggregate — Aggregate completed and failed RBFE edges with uncertainty and closure diagnostics.
-PHYSICSMOTIFRBFEAGGREGATE_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'bitwise', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['read:rbfe', 'write:rbfe'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
-PHYSICSMOTIFRBFEAGGREGATE_REFUSALS = ['INVALID_PARAMETERS']
+# physics.motif.rbfe_aggregate — Resolve six physical OpenFE result/report pairs, apply a versioned convergence policy, normalize complex-solvent legs, combine three repeats, and aggregate the selected edge.
+PHYSICSMOTIFRBFEAGGREGATE_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'bitwise', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['read:rbfe', 'write:rbfe'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'cacheable': False, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
+PHYSICSMOTIFRBFEAGGREGATE_REFUSALS = ['INVALID_PARAMETERS', 'UNSUPPORTED']
 PHYSICSMOTIFRBFEAGGREGATE_WARNINGS = []
+
+# physics.motif.rbfe_campaign_prepare — Durably prepare one saved RBFE campaign into a registered receptor state and same-frame endpoint pose hypotheses without holding an HTTP request open.
+PHYSICSMOTIFRBFECAMPAIGNPREPARE_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'numeric_tolerant', 'checkpointable': False, 'cancellation': 'queued_only', 'artifact_access': ['write:rbfe'], 'supported_adapters': ['local_cpu'], 'scale_profile': {'shardable': False, 'distributed': False, 'min_gpus': 0, 'max_gpus': 0, 'cpu_cores': 2}, 'cacheable': False, 'deterministic': False, 'side_effects': 'immutable_artifacts'}
+PHYSICSMOTIFRBFECAMPAIGNPREPARE_REFUSALS = ['DB_UNAVAILABLE', 'INVALID_PARAMETERS', 'UNSUPPORTED']
+PHYSICSMOTIFRBFECAMPAIGNPREPARE_WARNINGS = []
 
 # physics.motif.rbfe_network — Plan an auditable RBFE network and optionally aggregate explicit edge observations.
 PHYSICSMOTIFRBFENETWORK_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'bitwise', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['read:rbfe', 'write:rbfe'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
-PHYSICSMOTIFRBFENETWORK_REFUSALS = ['INVALID_PARAMETERS']
+PHYSICSMOTIFRBFENETWORK_REFUSALS = ['INVALID_PARAMETERS', 'NOT_FOUND', 'UNSUPPORTED']
 PHYSICSMOTIFRBFENETWORK_WARNINGS = []
+
+# physics.motif.rbfe_system_prepare — Resolve an attested prepared receptor and two aligned endpoint poses, compile them into server-owned complex and solvent OpenFE Transformations, then freeze the selected six-run edge specification.
+PHYSICSMOTIFRBFESYSTEMPREPARE_EXECUTION = {'supported_modes': ['job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'bitwise', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['read:rbfe', 'write:rbfe'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'cacheable': False, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
+PHYSICSMOTIFRBFESYSTEMPREPARE_REFUSALS = ['INVALID_PARAMETERS', 'UNSUPPORTED']
+PHYSICSMOTIFRBFESYSTEMPREPARE_WARNINGS = []
 
 # structure.motif.conformers — Generate, minimize, energy-rank and cluster a deterministic ETKDGv3 conformer ensemble.
 STRUCTUREMOTIFCONFORMERS_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'resource_class': 'cpu', 'determinism': 'numeric_tolerant', 'checkpointable': False, 'cancellation': 'cooperative', 'artifact_access': ['write:conformer'], 'supported_adapters': ['local_cpu', 'slurm', 'kubernetes'], 'cacheable': True, 'deterministic': True, 'side_effects': 'immutable_artifacts'}
@@ -172,7 +182,7 @@ class SurfaceMepParameters(TypedDict, total=False):
     xc: str | None
     use_gpu: bool
 
-SURFACEMEP_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
+SURFACEMEP_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'supported_adapters': ['inline', 'local_cpu'], 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
 SURFACEMEP_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
 SURFACEMEP_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
 
@@ -181,7 +191,7 @@ class SurfaceMepAtParameters(TypedDict, total=False):
     basis: Literal["sto-3g", "6-31g", "6-31g*", "def2-svp", "def2-tzvp"]
     max_seconds: float
 
-SURFACEMEPAT_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
+SURFACEMEPAT_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu-qm', 'supported_adapters': ['inline', 'local_cpu'], 'concurrency_class': 'scf', 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
 SURFACEMEPAT_REFUSALS = ['BUDGET', 'OPEN_SHELL_SPIN_REQUIRED', 'TOO_LARGE', 'UNCONVERGED', 'UNSUPPORTED']
 SURFACEMEPAT_WARNINGS = ['MINIMAL_BASIS_FRONTIER_NOT_QUOTABLE']
 
@@ -192,8 +202,8 @@ class TorsionStrainParameters(TypedDict, total=False):
     max_torsions: int
     variant: Literal["MMFF94", "MMFF94s"]
 
-TORSIONSTRAIN_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu', 'concurrency_class': 'torsion', 'scale_profile': {'cpu_cores': 1, 'shardable': True, 'distributed': False, 'min_gpus': 0, 'max_gpus': 0}, 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
+TORSIONSTRAIN_EXECUTION = {'supported_modes': ['sync', 'job'], 'default_mode': 'job', 'inline_threshold_seconds': 2.0, 'resource_class': 'cpu', 'supported_adapters': ['inline', 'local_cpu'], 'concurrency_class': 'torsion', 'scale_profile': {'cpu_cores': 1, 'shardable': True, 'distributed': False, 'min_gpus': 0, 'max_gpus': 0}, 'supports_cancellation': False, 'deterministic': True, 'cacheable': True, 'side_effects': 'writes_cache'}
 TORSIONSTRAIN_REFUSALS = ['INVALID_PARAMETERS', 'UNCONVERGED', 'UNSUPPORTED']
 TORSIONSTRAIN_WARNINGS = ['ONE_DIMENSIONAL_TORSION_NOT_THERMODYNAMIC']
 
-METHOD_IDS = ['data.motif.snapshot', 'design.motif.acquire', 'design.motif.bayesian_acquire', 'design.motif.local_edits', 'design.motif.reaction_enumerate', 'fields.mep', 'fields.mlp', 'fields.qm.density', 'fields.qm.homo', 'fields.qm.lumo', 'fields.qm.mep_qm', 'fields.region.mep', 'fields.region.mlp', 'ml.motif.calibrate', 'ml.motif.mesh.predict', 'ml.motif.mesh.train', 'ml.motif.predict', 'ml.motif.train', 'molecule.embed', 'physics.motif.openfe_edge', 'physics.motif.openmm_md', 'physics.motif.rbfe_aggregate', 'physics.motif.rbfe_network', 'structure.motif.conformers', 'structure.motif.vina', 'surface.mep', 'surface.mep_at', 'torsion.strain']
+METHOD_IDS = ['data.motif.snapshot', 'design.motif.acquire', 'design.motif.bayesian_acquire', 'design.motif.local_edits', 'design.motif.reaction_enumerate', 'fields.mep', 'fields.mlp', 'fields.qm.density', 'fields.qm.homo', 'fields.qm.lumo', 'fields.qm.mep_qm', 'fields.region.mep', 'fields.region.mlp', 'ml.motif.calibrate', 'ml.motif.mesh.predict', 'ml.motif.mesh.train', 'ml.motif.predict', 'ml.motif.train', 'molecule.embed', 'physics.motif.openfe_edge', 'physics.motif.openmm_md', 'physics.motif.rbfe_aggregate', 'physics.motif.rbfe_campaign_prepare', 'physics.motif.rbfe_network', 'physics.motif.rbfe_system_prepare', 'structure.motif.conformers', 'structure.motif.vina', 'surface.mep', 'surface.mep_at', 'torsion.strain']

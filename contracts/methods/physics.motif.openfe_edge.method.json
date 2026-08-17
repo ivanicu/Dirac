@@ -3,12 +3,34 @@
   "schema_version": "2.0.0",
   "method_id": "physics.motif.openfe_edge",
   "summary": "Execute one serialized OpenFE alchemical Transformation on a governed GPU worker with resumable quickrun state.",
-  "implementation": {"module": "backend.motif.openfe_runner", "functions": ["_digest", "execute_openfe_edge"], "constants": ["OPENFE_VERSION", "OPENFE_INSTALLER_SHA256", "POSIX_SHELL_SHA256"]},
+  "implementation": {
+    "module": "backend.motif.openfe_runner",
+    "functions": [
+      "_canonical", "_digest", "_edge_spec", "_campaign_binding",
+      "attest_openfe_edge_admission", "_quantity", "_gufe_component_types",
+      "_extract_gufe_native_objects", "_terminate", "_prepare_runtime_environment",
+      "_configure_analysis_environment", "execute_openfe_edge",
+      "openfe_edge_handler", "openfe_edge_estimate",
+      "backend.motif.rbfe_binding:_digest",
+      "backend.motif.rbfe_binding:_uuid",
+      "backend.motif.rbfe_binding:_sha256",
+      "backend.motif.rbfe_binding:validate_campaign_binding"
+    ],
+    "constants": [
+      "OPENFE_VERSION", "OPENFE_INSTALLER_SHA256", "POSIX_SHELL_SHA256",
+      "_AMBER_WRAPPERS", "_ANALYSIS_OVERRIDE",
+      "backend.motif.rbfe_binding:SCHEMA_VERSION",
+      "backend.motif.rbfe_binding:VERDICT",
+      "backend.motif.rbfe_binding:BINDING_KEYS",
+      "backend.motif.rbfe_binding:_SHA256"
+    ]
+  },
   "input": {"schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object", "additionalProperties": false,
-    "required": ["edge_id", "leg", "transformation", "ligand_charge_digest", "charge_invariant"],
+    "required": ["edge_spec_ref", "edge_id", "leg", "transformation", "ligand_charge_digest", "charge_invariant", "target_ref", "protein_structure_ref", "thermodynamic_cycle_id", "repeat_index", "seed"],
     "properties": {
+      "edge_spec_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id", "sha256"], "properties": {"kind": {"const": "artifact"}, "id": {"type": "string", "minLength": 1}, "sha256": {"type": "string", "format": "sha256-digest"}}},
       "edge_id": {"type": "string", "minLength": 1, "maxLength": 256},
       "leg": {"enum": ["complex", "solvent", "vacuum"]},
       "transformation": {"oneOf": [
@@ -25,16 +47,11 @@
         "kind": {"const": "protein_structure"}, "id": {"type": "string", "minLength": 1}
       }},
       "thermodynamic_cycle_id": {"type": "string", "format": "uuid"},
-      "repeat_index": {"type": "integer", "minimum": 0},
+      "repeat_index": {"type": "integer", "minimum": 1, "maximum": 3},
+      "seed": {"type": "integer", "minimum": 1, "maximum": 4294967295},
       "analysis_bootstraps": {"type": "integer", "minimum": 0, "maximum": 10000, "default": 1000},
       "resume": {"type": "boolean"}
-    },
-    "allOf": [
-      {"if": {"properties": {"leg": {"enum": ["complex", "solvent"]}}, "required": ["leg"]},
-       "then": {"required": ["target_ref", "thermodynamic_cycle_id"]}},
-      {"if": {"properties": {"leg": {"const": "complex"}}, "required": ["leg"]},
-       "then": {"required": ["protein_structure_ref"]}}
-    ]
+    }
   }},
   "output": {"schema": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -69,6 +86,10 @@
   "invocation": {
     "handler": "motif.openfe_runner:openfe_edge_handler",
     "estimate": "motif.openfe_runner:openfe_edge_estimate",
+    "admission": {
+      "handler": "motif.openfe_runner:attest_openfe_edge_admission",
+      "attestation_key": "rbfe_campaign_generation"
+    },
     "artifacts": [
       {"role": "rbfe.openfe.result", "media_type": "application/json", "required": true},
       {"role": "rbfe.openfe.run_report", "media_type": "application/json", "required": true},

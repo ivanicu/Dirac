@@ -28,6 +28,7 @@ export const ERROR_CODES = {
     QUOTA_EXCEEDED: { user_copy: "The daily compute quota is exhausted.", retryable: true, points_at: null },
     TLS_REQUIRED: { user_copy: "HTTPS is required for remote access.", retryable: false, points_at: null },
     INVALID_PARAMETERS: { user_copy: "That request is not valid for this method.", retryable: false, points_at: null },
+    IDEMPOTENCY_CONFLICT: { user_copy: "That request key already belongs to a different operation.", retryable: false, points_at: null },
 } as const;
 
 /** The full, and only, error vocabulary — derived from the object above so

@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "2.0.0",
+  "method_id": "physics.motif.rbfe_system_prepare",
+  "summary": "Resolve an attested prepared receptor and two aligned endpoint poses, compile them into server-owned complex and solvent OpenFE Transformations, then freeze the selected six-run edge specification.",
+  "implementation": {
+    "module": "backend.motif.rbfe_pipeline",
+    "functions": [
+      "prepare_rbfe_system", "preflight_rbfe_edge", "_build_system",
+      "_campaign_binding", "_verified_network_digest",
+      "_mapping_attestation_digest", "_mapping_pairs",
+      "_seal_mapping_attestation", "_validate_mapping_attestation",
+      "_replicate_seed", "_artifact_ref", "_read_ref", "_read_json_ref",
+      "_probe", "_canonical",
+      "backend.motif.rbfe:_digest",
+      "backend.motif.rbfe_chemistry_evidence:_heavy",
+      "backend.motif.rbfe_chemistry_evidence:molecule_from_smiles",
+      "backend.motif.rbfe_chemistry_evidence:_stereo_contract",
+      "backend.motif.rbfe_chemistry_evidence:canonical_isomeric_identity",
+      "backend.motif.rbfe_chemistry_evidence:require_resolved_stereochemistry",
+      "backend.motif.rbfe_chemistry_evidence:input_pose_identity_witness",
+      "backend.motif.rbfe_chemistry_evidence:depiction_index_contract",
+      "backend.motif.rbfe_chemistry_evidence:_heavy_pairs",
+      "backend.motif.rbfe_chemistry_evidence:_dimension",
+      "backend.motif.rbfe_chemistry_evidence:_cycle_rank",
+      "backend.motif.rbfe_chemistry_evidence:_stereo_by_center",
+      "backend.motif.rbfe_chemistry_evidence:mapping_change_evidence",
+      "backend.motif.rbfe_chemistry_evidence:mapping_depiction_contract",
+      "backend.motif.rbfe_chemistry_evidence:_full_to_heavy",
+      "backend.motif.rbfe_chemistry_evidence:_jaccard",
+      "backend.motif.rbfe_chemistry_evidence:automorphism_mapping_comparison",
+      "backend.motif.rbfe_chemistry_evidence:mapping_direction_audit",
+      "backend.motif.rbfe_chemistry_evidence:pose_geometry_evidence",
+      "backend.motif.rbfe_binding:_digest",
+      "backend.motif.rbfe_binding:_uuid",
+      "backend.motif.rbfe_binding:_sha256",
+      "backend.motif.rbfe_binding:validate_campaign_binding",
+      "backend.motif.rbfe_binding:build_campaign_binding"
+    ],
+    "constants": [
+      "_RUNTIME", "_PROBE", "_PROBE_SHA256", "_SYSTEM_BUILDER",
+      "_SYSTEM_BUILDER_SHA256", "_MAPPING_ATTESTATION_FIELDS",
+      "_CHEMISTRY_LEDGER_DIMENSIONS",
+      "_CHEMISTRY_VERDICTS", "NAMESPACE_URL",
+      "backend.motif.openfe_runner:OPENFE_VERSION",
+      "backend.motif.openfe_runner:OPENFE_INSTALLER_SHA256",
+      "backend.motif.rbfe_chemistry_evidence:CONFIRMED",
+      "backend.motif.rbfe_chemistry_evidence:CHANGED",
+      "backend.motif.rbfe_chemistry_evidence:UNVERIFIED",
+      "backend.motif.rbfe_chemistry_evidence:VERDICTS",
+      "backend.motif.rbfe_binding:SCHEMA_VERSION",
+      "backend.motif.rbfe_binding:VERDICT",
+      "backend.motif.rbfe_binding:BINDING_KEYS",
+      "backend.motif.rbfe_binding:_SHA256"
+    ]
+  },
+  "input": {"schema": {
+    "type": "object", "additionalProperties": false,
+    "required": ["campaign_id", "campaign_scientific_generation", "campaign_scientific_digest", "network_ref", "edge_id", "prepared_receptor_state_ref", "parent_pose_ref", "proposal_pose_ref", "protocol_preset"],
+    "properties": {
+      "campaign_id": {"type": "string", "format": "uuid"},
+      "campaign_scientific_generation": {"type": "integer", "minimum": 1},
+      "campaign_scientific_digest": {"type": "string", "format": "sha256-digest"},
+      "network_ref": {"$ref": "#/$defs/artifact_ref"},
+      "edge_id": {"type": "string", "minLength": 1},
+      "prepared_receptor_state_ref": {"$ref": "#/$defs/prepared_receptor_ref"},
+      "parent_pose_ref": {"$ref": "#/$defs/pose_ref"},
+      "proposal_pose_ref": {"$ref": "#/$defs/pose_ref"},
+      "protocol_preset": {"const": "openfe-rfe-standard-v1"}
+    },
+    "$defs": {
+      "artifact_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id", "sha256"], "properties": {"kind": {"const": "artifact"}, "id": {"type": "string", "format": "uuid"}, "sha256": {"type": "string", "format": "sha256-digest"}}},
+      "prepared_receptor_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id", "sha256"], "properties": {"kind": {"const": "prepared_receptor_state"}, "id": {"type": "string", "format": "uuid"}, "sha256": {"type": "string", "format": "sha256-digest"}}},
+      "pose_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id", "sha256"], "properties": {"kind": {"const": "pose_hypothesis"}, "id": {"type": "string", "format": "uuid"}, "sha256": {"type": "string", "format": "sha256-digest"}}}
+    }
+  }},
+  "output": {"schema": {
+    "type": "object", "additionalProperties": false,
+    "required": ["spec_digest", "edge_network_digest", "edge_id", "left_id", "right_id", "complex_transformation_digest", "solvent_transformation_digest", "execution_matrix", "execution_count", "validation_status", "resolved_target", "campaign_binding", "system_build"],
+    "properties": {
+      "spec_digest": {"type": "string", "format": "sha256-digest"},
+      "edge_network_digest": {"type": "string", "format": "sha256-digest"},
+      "edge_id": {"type": "string"}, "left_id": {"type": "string"}, "right_id": {"type": "string"},
+      "complex_transformation_digest": {"type": "string", "format": "sha256-digest"},
+      "solvent_transformation_digest": {"type": "string", "format": "sha256-digest"},
+      "execution_matrix": {"type": "array", "minItems": 6, "maxItems": 6},
+      "execution_count": {"const": 6}, "validation_status": {"const": "server_preflight_passed"},
+      "resolved_target": {"type": "object"}, "campaign_binding": {"type": "object"}, "system_build": {"type": "object"}
+    }
+  }},
+  "refusals": [
+    {"code": "INVALID_PARAMETERS", "condition": "Prepared-system resolution, artifact digest, pose/receptor coordinate frame, endpoint charge, LoMap mapping, or generated GUFE validation fails"},
+    {"code": "UNSUPPORTED", "condition": "persistent artifact store, target resolver, or pinned OpenFE runtime unavailable"}
+  ],
+  "execution": {"supported_modes": ["job"], "default_mode": "job", "resource_class": "cpu", "determinism": "bitwise", "checkpointable": false, "cancellation": "cooperative", "artifact_access": ["read:rbfe", "write:rbfe"], "supported_adapters": ["local_cpu", "slurm", "kubernetes"], "cacheable": false, "deterministic": true, "side_effects": "immutable_artifacts"},
+  "exposure": {"sdk": true, "cli": true, "mcp": "hidden"},
+  "invocation": {"handler": "motif.structure_methods:rbfe_system_prepare_handler", "estimate": "motif.structure_methods:rbfe_estimate", "artifacts": [
+    {"role": "rbfe.edge_spec", "media_type": "application/json", "required": true},
+    {"role": "rbfe.edge_network", "media_type": "application/json", "required": true},
+    {"role": "rbfe.openfe.complex_transformation", "media_type": "application/json", "required": true},
+    {"role": "rbfe.openfe.solvent_transformation", "media_type": "application/json", "required": true},
+    {"role": "rbfe.system_build_report", "media_type": "application/json", "required": true}
+  ]}
+}

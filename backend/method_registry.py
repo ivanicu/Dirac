@@ -192,51 +192,28 @@ UNITS.update({
 # methods. Their contracts are loaded from the canonical descriptors so the DB
 # snapshot cannot drift into a second hand-maintained API definition.
 _CONTRACTS = pathlib.Path(__file__).resolve().parent.parent / 'contracts' / 'methods'
-_MOTIF_UNITS = {
-    'data.motif.snapshot': ('motif.datasets',
-                            ['create_snapshot', 'leakage_report', 'canonical_bytes']),
-    'design.motif.acquire': ('motif.acquisition',
-                             ['rank_portfolio', 'nondominated_ranks', '_dominates',
-                              '_constraint_failures', '_item']),
-    'design.motif.local_edits': ('motif.proposals',
-                                 ['local_edits', 'chemistry_gate', 'generator_metrics',
-                                  '_proposal', '_atom_mapping']),
-    'design.motif.reaction_enumerate': ('motif.proposals',
-                                        ['reaction_enumerate', 'chemistry_gate',
-                                         'generator_metrics', '_proposal', '_atom_mapping']),
-    'ml.motif.train': ('motif.models',
-                       ['train_baselines', 'fingerprint', 'tanimoto', 'predict',
-                        'validation_report', '_metrics', '_counts', '_digest']),
-    'ml.motif.predict': ('motif.models',
-                         ['predict', 'fingerprint', 'tanimoto', '_dense', '_digest']),
-    'ml.motif.calibrate': ('motif.models', ['calibrate', '_digest']),
-    'ml.motif.mesh.train': ('motif.mesh',
-                            ['train_predictor_mesh', 'predict_predictor_mesh', '_digest']),
-    'ml.motif.mesh.predict': ('motif.mesh',
-                              ['predict_predictor_mesh', '_digest']),
-    'design.motif.bayesian_acquire': ('motif.advanced_acquisition',
-                                      ['botorch_qehvi', 'information_value',
-                                       'greedy_diversity', 'selection_sensitivity', '_digest']),
-    'structure.motif.conformers': ('motif.structure',
-                                   ['generate_conformers', '_digest']),
-    'structure.motif.vina': ('motif.docking',
-                             ['dock_vina', '_ligand_pdbqt', '_digest']),
-    'physics.motif.openmm_md': ('motif.physics',
-                               ['run_openmm_md', '_sha', '_digest']),
-    'physics.motif.openfe_edge': ('motif.openfe_runner',
-                                  ['execute_openfe_edge', '_digest']),
-    'physics.motif.rbfe_network': ('motif.rbfe',
-                                  ['plan_rbfe_network', '_chemistry', '_digest']),
-    'physics.motif.rbfe_aggregate': ('motif.rbfe',
-                                    ['aggregate_rbfe_results', '_digest']),
-}
-for _method_id, (_module, _functions) in _MOTIF_UNITS.items():
-    _descriptor_path = _CONTRACTS / f'{_method_id}.method.json'
+for _descriptor_path in sorted(_CONTRACTS.glob('*.method.json')):
     _descriptor = json.loads(_descriptor_path.read_text(encoding='utf-8'))
+    _method_id = _descriptor['method_id']
+    _implementation = _descriptor.get('implementation') or {}
+    _declared_module = str(_implementation.get('module') or '')
+    # Motif descriptors are the one source of implementation identity.  The
+    # old _MOTIF_UNITS table repeated every functions list, so the descriptor
+    # could correctly name a new admission/helper function while runtime kept
+    # hashing the stale hard-coded subset.  Discover this family by its owned
+    # module and copy functions/constants directly from the descriptor.
+    if not _declared_module.startswith('backend.motif.'):
+        continue
+    _module = _declared_module.removeprefix('backend.')
+    _functions = list(_implementation.get('functions') or ())
+    if not _functions:
+        raise ValueError(
+            f'{_method_id} declares no implementation.functions; a Motif method '
+            'without a source identity cannot be registered')
     UNITS[_method_id] = {
         'module': _module,
         'fns': _functions,
-        'consts': list((_descriptor.get('implementation') or {}).get('constants', [])),
+        'consts': list(_implementation.get('constants') or ()),
         'descriptor_path': str(_descriptor_path),
         'exec_class': 'job',
         'in_schema': _descriptor['input']['schema'],
@@ -337,7 +314,35 @@ def _canonical_repr(value) -> str:
     if isinstance(value, (list, tuple)):
         inner = ', '.join(_canonical_repr(v) for v in value)
         return f'[{inner}]' if isinstance(value, list) else f'({inner})'
+    if isinstance(value, pathlib.Path):
+        # Source versions must not depend on where the same checkout lives.
+        # Preserve the path within this repository (which is material) while
+        # discarding the machine-specific absolute clone prefix.
+        repository = pathlib.Path(__file__).resolve().parent.parent
+        try:
+            portable = value.resolve().relative_to(repository)
+        except ValueError:
+            portable = pathlib.Path(value.name)
+        return f'Path({portable.as_posix()!r})'
     return repr(value)
+
+
+def _resolve_declared_member(default_module, declaration: str):
+    """Resolve ``name`` or ``backend.package.module:name`` declarations.
+
+    A compute path can call helpers imported from another source module.  An
+    unqualified ``getattr(default_module, name)`` finds the imported function,
+    but it cannot name that helper's own transitive dependencies or constants.
+    Qualified declarations make those dependencies explicit in the canonical
+    descriptor while keeping ordinary single-module methods concise.
+    """
+    if ':' not in declaration:
+        return default_module, declaration
+    module_name, member_name = declaration.rsplit(':', 1)
+    runtime_name = module_name.removeprefix('backend.')
+    if not runtime_name or not member_name:
+        raise LookupError(f'invalid qualified implementation member {declaration!r}')
+    return importlib.import_module(runtime_name), member_name
 
 
 def unit_version(module, fns: Iterable[str],
@@ -366,22 +371,24 @@ def unit_version(module, fns: Iterable[str],
     different values here and must produce different versions.
     """
     h = hashlib.sha256()
-    for name in sorted(fns):
-        fn = getattr(module, name, None)
+    for declaration in sorted(fns):
+        source_module, name = _resolve_declared_member(module, declaration)
+        fn = getattr(source_module, name, None)
         if fn is None:
             raise LookupError(
-                f'compute unit names {name!r}, which does not exist in '
-                f'{module.__name__} — the UNITS table has drifted from the code')
-        h.update(name.encode())
+                f'compute unit names {declaration!r}, which does not exist in '
+                f'{source_module.__name__} — the descriptor has drifted from the code')
+        h.update(declaration.encode())
         h.update(inspect.getsource(fn).encode())
-    for name in sorted(consts):
-        if not hasattr(module, name):
+    for declaration in sorted(consts):
+        source_module, name = _resolve_declared_member(module, declaration)
+        if not hasattr(source_module, name):
             raise LookupError(
-                f'compute unit names the constant {name!r}, which does not exist '
-                f'in {module.__name__} — a constant that vanished silently stops '
+                f'compute unit names the constant {declaration!r}, which does not exist '
+                f'in {source_module.__name__} — a constant that vanished silently stops '
                 f'being part of the version, which is how this hole was made')
-        h.update(name.encode())
-        h.update(_canonical_repr(getattr(module, name)).encode())
+        h.update(declaration.encode())
+        h.update(_canonical_repr(getattr(source_module, name)).encode())
     if descriptor_path is not None:
         h.update(b'descriptor\0')
         h.update(pathlib.Path(descriptor_path).read_bytes())

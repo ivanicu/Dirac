@@ -55,7 +55,9 @@ export type MethodId =
     | 'physics.motif.openfe_edge'
     | 'physics.motif.openmm_md'
     | 'physics.motif.rbfe_aggregate'
+    | 'physics.motif.rbfe_campaign_prepare'
     | 'physics.motif.rbfe_network'
+    | 'physics.motif.rbfe_system_prepare'
     | 'structure.motif.conformers'
     | 'structure.motif.vina'
     | 'surface.mep'
@@ -67,11 +69,11 @@ export type DataMotifSnapshotOutput = {
     manifest: Record<string, unknown>;
     dataset_snapshot?: {
         ref: {
-            kind: 'dataset';
+            kind: "dataset";
             id: string;
         };
         digest: string;
-        status: 'valid' | 'invalid';
+        status: "valid" | "invalid";
         created: boolean;
     };
 };
@@ -113,8 +115,8 @@ export type DesignMotifAcquireOutput = {
         rejected: Array<unknown>;
         refused: Array<unknown>;
     };
-    counts: Record<string, unknown>;
-    policy: 'deterministic_constrained_pareto_v1';
+    counts: Record<string, number>;
+    policy: "deterministic_constrained_pareto_v1";
 };
 
 /** design.motif.acquire — Produce an exhaustive selected/reserve/rejected/refused portfolio with exact hard constraints and deterministic Pareto ranks. */
@@ -262,8 +264,8 @@ export const DesignMotifReaction_enumerateExecution = {
 /** fields.mep output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type FieldsMepOutput = {
     field: {
-        kind: 'mep';
-        native_units: 'kcal/mol';
+        kind: "mep";
+        native_units: "kcal/mol";
         grid: {
             dimensions: Array<number>;
             spacing_angstrom?: number;
@@ -275,27 +277,27 @@ export type FieldsMepOutput = {
         /** How the SERVER chose the box, which is a decision a client must be able to read rather than infer. These were undeclared until now and the frontend consumed them anyway, out of a flat `meta` dict that no schema governed  */
         box?: {
             /** The isovalue actually drawn. */
-            iso_fixed?: number | null;
+            iso_fixed?: (number | null);
             /** The isovalue the box was GROWN to close. Separate from iso_fixed because they can disagree: a box sized to close a contour at one level is not evidence about another, and conflating them is how a clipped surface reads as */
-            iso_sized_for?: number | null;
+            iso_sized_for?: (number | null);
             /** Whether the drawn isosurface is closed inside the grid. False means the surface is CLIPPED by the box, and a clipped lobe looks exactly like a small one. */
-            contour_closes_in_box?: boolean | null;
-            pad_angstrom?: number | null;
+            contour_closes_in_box?: (boolean | null);
+            pad_angstrom?: (number | null);
             /** The grid hit its point ceiling and was coarsened. */
-            capped?: boolean | null;
+            capped?: (boolean | null);
             /** Wall time the grid evaluation took. */
-            wall_seconds?: number | null;
+            wall_seconds?: (number | null);
         };
         /** True when every value has the same sign, so no opposite-sign lobe exists. A renderer needs it to pick a one-sided colour ramp — a diverging ramp on a single-signed field spends half its range on values that cannot occur, */
-        single_signed?: boolean | null;
+        single_signed?: (boolean | null);
     };
     /** WHICH MODEL produced the numbers, in machine-readable form. A caveat in prose travels as a warning; the model IDENTITY travels here, because a client comparing two fields must be able to establish they came from the same */
     model?: {
-        charge_model?: string | null;
-        logp_model?: string | null;
-        net_charge?: number | null;
-        total_logp?: number | null;
-        sigma_hole_representable?: boolean | null;
+        charge_model?: (string | null);
+        logp_model?: (string | null);
+        net_charge?: (number | null);
+        total_logp?: (number | null);
+        sigma_hole_representable?: (boolean | null);
     };
 };
 
@@ -312,6 +314,10 @@ export const FieldsMepExecution = {
     "default_mode": "sync",
     "inline_threshold_seconds": 5.0,
     "resource_class": "cpu-classical",
+    "supported_adapters": [
+        "inline",
+        "local_cpu"
+    ],
     "concurrency_class": "classical",
     "supports_cancellation": false,
     "deterministic": true,
@@ -322,8 +328,8 @@ export const FieldsMepExecution = {
 /** fields.mlp output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type FieldsMlpOutput = {
     field: {
-        kind: 'mlp';
-        native_units: 'MLP (Crippen/Fauchere)';
+        kind: "mlp";
+        native_units: "MLP (Crippen/Fauchere)";
         grid: {
             dimensions: Array<number>;
             spacing_angstrom?: number;
@@ -335,29 +341,29 @@ export type FieldsMlpOutput = {
         /** How the SERVER chose the box, which is a decision a client must be able to read rather than infer. These were undeclared until now and the frontend consumed them anyway, out of a flat `meta` dict that no schema governed  */
         box?: {
             /** The isovalue actually drawn. */
-            iso_fixed?: number | null;
+            iso_fixed?: (number | null);
             /** The isovalue the box was GROWN to close. Separate from iso_fixed because they can disagree: a box sized to close a contour at one level is not evidence about another, and conflating them is how a clipped surface reads as */
-            iso_sized_for?: number | null;
+            iso_sized_for?: (number | null);
             /** Whether the drawn isosurface is closed inside the grid. False means the surface is CLIPPED by the box, and a clipped lobe looks exactly like a small one. */
-            contour_closes_in_box?: boolean | null;
-            pad_angstrom?: number | null;
+            contour_closes_in_box?: (boolean | null);
+            pad_angstrom?: (number | null);
             /** The grid hit its point ceiling and was coarsened. */
-            capped?: boolean | null;
+            capped?: (boolean | null);
             /** Wall time the grid evaluation took. */
-            wall_seconds?: number | null;
+            wall_seconds?: (number | null);
         };
         /** True when every value has the same sign, so no opposite-sign lobe exists. A renderer needs it to pick a one-sided colour ramp — a diverging ramp on a single-signed field spends half its range on values that cannot occur, */
-        single_signed?: boolean | null;
+        single_signed?: (boolean | null);
     };
-    total_logp?: number | null;
+    total_logp?: (number | null);
     single_signed?: boolean;
     /** WHICH MODEL produced the numbers, in machine-readable form. A caveat in prose travels as a warning; the model IDENTITY travels here, because a client comparing two fields must be able to establish they came from the same */
     model?: {
-        charge_model?: string | null;
-        logp_model?: string | null;
-        net_charge?: number | null;
-        total_logp?: number | null;
-        sigma_hole_representable?: boolean | null;
+        charge_model?: (string | null);
+        logp_model?: (string | null);
+        net_charge?: (number | null);
+        total_logp?: (number | null);
+        sigma_hole_representable?: (boolean | null);
     };
 };
 
@@ -373,6 +379,10 @@ export const FieldsMlpExecution = {
     "default_mode": "sync",
     "inline_threshold_seconds": 5.0,
     "resource_class": "cpu-classical",
+    "supported_adapters": [
+        "inline",
+        "local_cpu"
+    ],
     "concurrency_class": "classical",
     "supports_cancellation": false,
     "deterministic": true,
@@ -383,8 +393,8 @@ export const FieldsMlpExecution = {
 /** fields.qm.density output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type FieldsQmDensityOutput = {
     field: {
-        kind: 'density';
-        native_units: 'e/Bohr^3';
+        kind: "density";
+        native_units: "e/Bohr^3";
         grid: {
             dimensions: Array<number>;
             spacing_angstrom?: number;
@@ -396,19 +406,19 @@ export type FieldsQmDensityOutput = {
         /** How the SERVER chose the box, which is a decision a client must be able to read rather than infer. These were undeclared until now and the frontend consumed them anyway, out of a flat `meta` dict that no schema governed  */
         box?: {
             /** The isovalue actually drawn. */
-            iso_fixed?: number | null;
+            iso_fixed?: (number | null);
             /** The isovalue the box was GROWN to close. Separate from iso_fixed because they can disagree: a box sized to close a contour at one level is not evidence about another, and conflating them is how a clipped surface reads as */
-            iso_sized_for?: number | null;
+            iso_sized_for?: (number | null);
             /** Whether the drawn isosurface is closed inside the grid. False means the surface is CLIPPED by the box, and a clipped lobe looks exactly like a small one. */
-            contour_closes_in_box?: boolean | null;
-            pad_angstrom?: number | null;
+            contour_closes_in_box?: (boolean | null);
+            pad_angstrom?: (number | null);
             /** The grid hit its point ceiling and was coarsened. */
-            capped?: boolean | null;
+            capped?: (boolean | null);
             /** Wall time the grid evaluation took. */
-            wall_seconds?: number | null;
+            wall_seconds?: (number | null);
         };
         /** True when every value has the same sign, so no opposite-sign lobe exists. A renderer needs it to pick a one-sided colour ramp — a diverging ramp on a single-signed field spends half its range on values that cannot occur, */
-        single_signed?: boolean | null;
+        single_signed?: (boolean | null);
     };
     wavefunction?: {
         /** Only true is representable in a SUCCESS output. An unconverged SCF is a refusal, not a result with a flag — a caller who has to check a boolean will eventually not check it. */
@@ -416,19 +426,19 @@ export type FieldsQmDensityOutput = {
         method: string;
         basis: string;
         n_basis_functions: number;
-        scf_energy_hartree?: number | null;
-        homo_ev?: number | null;
-        lumo_ev?: number | null;
-        scf_cycles?: number | null;
+        scf_energy_hartree?: (number | null);
+        homo_ev?: (number | null);
+        lumo_ev?: (number | null);
+        scf_cycles?: (number | null);
         ecp_elements?: Array<string>;
     };
     /** WHICH MODEL produced the numbers, in machine-readable form. A caveat in prose travels as a warning; the model IDENTITY travels here, because a client comparing two fields must be able to establish they came from the same */
     model?: {
-        charge_model?: string | null;
-        logp_model?: string | null;
-        net_charge?: number | null;
-        total_logp?: number | null;
-        sigma_hole_representable?: boolean | null;
+        charge_model?: (string | null);
+        logp_model?: (string | null);
+        net_charge?: (number | null);
+        total_logp?: (number | null);
+        sigma_hole_representable?: (boolean | null);
     };
 };
 
@@ -446,6 +456,10 @@ export const FieldsQmDensityExecution = {
     "default_mode": "auto",
     "inline_threshold_seconds": 2.0,
     "resource_class": "cpu-qm",
+    "supported_adapters": [
+        "inline",
+        "local_cpu"
+    ],
     "concurrency_class": "scf",
     "supports_cancellation": false,
     "deterministic": true,
@@ -456,8 +470,8 @@ export const FieldsQmDensityExecution = {
 /** fields.qm.homo output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type FieldsQmHomoOutput = {
     field: {
-        kind: 'homo';
-        native_units: 'amplitude';
+        kind: "homo";
+        native_units: "amplitude";
         grid: {
             dimensions: Array<number>;
             spacing_angstrom?: number;
@@ -469,19 +483,19 @@ export type FieldsQmHomoOutput = {
         /** How the SERVER chose the box, which is a decision a client must be able to read rather than infer. These were undeclared until now and the frontend consumed them anyway, out of a flat `meta` dict that no schema governed  */
         box?: {
             /** The isovalue actually drawn. */
-            iso_fixed?: number | null;
+            iso_fixed?: (number | null);
             /** The isovalue the box was GROWN to close. Separate from iso_fixed because they can disagree: a box sized to close a contour at one level is not evidence about another, and conflating them is how a clipped surface reads as */
-            iso_sized_for?: number | null;
+            iso_sized_for?: (number | null);
             /** Whether the drawn isosurface is closed inside the grid. False means the surface is CLIPPED by the box, and a clipped lobe looks exactly like a small one. */
-            contour_closes_in_box?: boolean | null;
-            pad_angstrom?: number | null;
+            contour_closes_in_box?: (boolean | null);
+            pad_angstrom?: (number | null);
             /** The grid hit its point ceiling and was coarsened. */
-            capped?: boolean | null;
+            capped?: (boolean | null);
             /** Wall time the grid evaluation took. */
-            wall_seconds?: number | null;
+            wall_seconds?: (number | null);
         };
         /** True when every value has the same sign, so no opposite-sign lobe exists. A renderer needs it to pick a one-sided colour ramp — a diverging ramp on a single-signed field spends half its range on values that cannot occur, */
-        single_signed?: boolean | null;
+        single_signed?: (boolean | null);
     };
     wavefunction: {
         /** Only true is representable in a SUCCESS output. An unconverged SCF is a refusal, not a result with a flag — a caller that has to check a boolean will eventually not check it. */
@@ -489,19 +503,19 @@ export type FieldsQmHomoOutput = {
         method: string;
         basis: string;
         n_basis_functions: number;
-        scf_energy_hartree?: number | null;
-        homo_ev?: number | null;
-        lumo_ev?: number | null;
-        scf_cycles?: number | null;
+        scf_energy_hartree?: (number | null);
+        homo_ev?: (number | null);
+        lumo_ev?: (number | null);
+        scf_cycles?: (number | null);
         ecp_elements?: Array<string>;
     };
     /** WHICH MODEL produced the numbers, in machine-readable form. A caveat in prose travels as a warning; the model IDENTITY travels here, because a client comparing two fields must be able to establish they came from the same */
     model?: {
-        charge_model?: string | null;
-        logp_model?: string | null;
-        net_charge?: number | null;
-        total_logp?: number | null;
-        sigma_hole_representable?: boolean | null;
+        charge_model?: (string | null);
+        logp_model?: (string | null);
+        net_charge?: (number | null);
+        total_logp?: (number | null);
+        sigma_hole_representable?: (boolean | null);
     };
 };
 
@@ -519,6 +533,10 @@ export const FieldsQmHomoExecution = {
     "default_mode": "auto",
     "inline_threshold_seconds": 2.0,
     "resource_class": "cpu-qm",
+    "supported_adapters": [
+        "inline",
+        "local_cpu"
+    ],
     "concurrency_class": "scf",
     "supports_cancellation": false,
     "deterministic": true,
@@ -529,8 +547,8 @@ export const FieldsQmHomoExecution = {
 /** fields.qm.lumo output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type FieldsQmLumoOutput = {
     field: {
-        kind: 'lumo';
-        native_units: 'amplitude';
+        kind: "lumo";
+        native_units: "amplitude";
         grid: {
             dimensions: Array<number>;
             spacing_angstrom?: number;
@@ -542,19 +560,19 @@ export type FieldsQmLumoOutput = {
         /** How the SERVER chose the box, which is a decision a client must be able to read rather than infer. These were undeclared until now and the frontend consumed them anyway, out of a flat `meta` dict that no schema governed  */
         box?: {
             /** The isovalue actually drawn. */
-            iso_fixed?: number | null;
+            iso_fixed?: (number | null);
             /** The isovalue the box was GROWN to close. Separate from iso_fixed because they can disagree: a box sized to close a contour at one level is not evidence about another, and conflating them is how a clipped surface reads as */
-            iso_sized_for?: number | null;
+            iso_sized_for?: (number | null);
             /** Whether the drawn isosurface is closed inside the grid. False means the surface is CLIPPED by the box, and a clipped lobe looks exactly like a small one. */
-            contour_closes_in_box?: boolean | null;
-            pad_angstrom?: number | null;
+            contour_closes_in_box?: (boolean | null);
+            pad_angstrom?: (number | null);
             /** The grid hit its point ceiling and was coarsened. */
-            capped?: boolean | null;
+            capped?: (boolean | null);
             /** Wall time the grid evaluation took. */
-            wall_seconds?: number | null;
+            wall_seconds?: (number | null);
         };
         /** True when every value has the same sign, so no opposite-sign lobe exists. A renderer needs it to pick a one-sided colour ramp — a diverging ramp on a single-signed field spends half its range on values that cannot occur, */
-        single_signed?: boolean | null;
+        single_signed?: (boolean | null);
     };
     wavefunction?: {
         /** Only true is representable in a SUCCESS output. An unconverged SCF is a refusal, not a result with a flag — a caller who has to check a boolean will eventually not check it. */
@@ -562,19 +580,19 @@ export type FieldsQmLumoOutput = {
         method: string;
         basis: string;
         n_basis_functions: number;
-        scf_energy_hartree?: number | null;
-        homo_ev?: number | null;
-        lumo_ev?: number | null;
-        scf_cycles?: number | null;
+        scf_energy_hartree?: (number | null);
+        homo_ev?: (number | null);
+        lumo_ev?: (number | null);
+        scf_cycles?: (number | null);
         ecp_elements?: Array<string>;
     };
     /** WHICH MODEL produced the numbers, in machine-readable form. A caveat in prose travels as a warning; the model IDENTITY travels here, because a client comparing two fields must be able to establish they came from the same */
     model?: {
-        charge_model?: string | null;
-        logp_model?: string | null;
-        net_charge?: number | null;
-        total_logp?: number | null;
-        sigma_hole_representable?: boolean | null;
+        charge_model?: (string | null);
+        logp_model?: (string | null);
+        net_charge?: (number | null);
+        total_logp?: (number | null);
+        sigma_hole_representable?: (boolean | null);
     };
 };
 
@@ -592,6 +610,10 @@ export const FieldsQmLumoExecution = {
     "default_mode": "auto",
     "inline_threshold_seconds": 2.0,
     "resource_class": "cpu-qm",
+    "supported_adapters": [
+        "inline",
+        "local_cpu"
+    ],
     "concurrency_class": "scf",
     "supports_cancellation": false,
     "deterministic": true,
@@ -602,8 +624,8 @@ export const FieldsQmLumoExecution = {
 /** fields.qm.mep_qm output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type FieldsQmMep_qmOutput = {
     field: {
-        kind: 'mep_qm';
-        native_units: 'Ha/e';
+        kind: "mep_qm";
+        native_units: "Ha/e";
         grid: {
             dimensions: Array<number>;
             spacing_angstrom?: number;
@@ -615,19 +637,19 @@ export type FieldsQmMep_qmOutput = {
         /** How the SERVER chose the box, which is a decision a client must be able to read rather than infer. These were undeclared until now and the frontend consumed them anyway, out of a flat `meta` dict that no schema governed  */
         box?: {
             /** The isovalue actually drawn. */
-            iso_fixed?: number | null;
+            iso_fixed?: (number | null);
             /** The isovalue the box was GROWN to close. Separate from iso_fixed because they can disagree: a box sized to close a contour at one level is not evidence about another, and conflating them is how a clipped surface reads as */
-            iso_sized_for?: number | null;
+            iso_sized_for?: (number | null);
             /** Whether the drawn isosurface is closed inside the grid. False means the surface is CLIPPED by the box, and a clipped lobe looks exactly like a small one. */
-            contour_closes_in_box?: boolean | null;
-            pad_angstrom?: number | null;
+            contour_closes_in_box?: (boolean | null);
+            pad_angstrom?: (number | null);
             /** The grid hit its point ceiling and was coarsened. */
-            capped?: boolean | null;
+            capped?: (boolean | null);
             /** Wall time the grid evaluation took. */
-            wall_seconds?: number | null;
+            wall_seconds?: (number | null);
         };
         /** True when every value has the same sign, so no opposite-sign lobe exists. A renderer needs it to pick a one-sided colour ramp — a diverging ramp on a single-signed field spends half its range on values that cannot occur, */
-        single_signed?: boolean | null;
+        single_signed?: (boolean | null);
     };
     wavefunction?: {
         /** Only true is representable in a SUCCESS output. An unconverged SCF is a refusal, not a result with a flag — a caller who has to check a boolean will eventually not check it. */
@@ -635,19 +657,19 @@ export type FieldsQmMep_qmOutput = {
         method: string;
         basis: string;
         n_basis_functions: number;
-        scf_energy_hartree?: number | null;
-        homo_ev?: number | null;
-        lumo_ev?: number | null;
-        scf_cycles?: number | null;
+        scf_energy_hartree?: (number | null);
+        homo_ev?: (number | null);
+        lumo_ev?: (number | null);
+        scf_cycles?: (number | null);
         ecp_elements?: Array<string>;
     };
     /** WHICH MODEL produced the numbers, in machine-readable form. A caveat in prose travels as a warning; the model IDENTITY travels here, because a client comparing two fields must be able to establish they came from the same */
     model?: {
-        charge_model?: string | null;
-        logp_model?: string | null;
-        net_charge?: number | null;
-        total_logp?: number | null;
-        sigma_hole_representable?: boolean | null;
+        charge_model?: (string | null);
+        logp_model?: (string | null);
+        net_charge?: (number | null);
+        total_logp?: (number | null);
+        sigma_hole_representable?: (boolean | null);
     };
 };
 
@@ -665,6 +687,10 @@ export const FieldsQmMep_qmExecution = {
     "default_mode": "auto",
     "inline_threshold_seconds": 2.0,
     "resource_class": "cpu-qm",
+    "supported_adapters": [
+        "inline",
+        "local_cpu"
+    ],
     "concurrency_class": "scf",
     "supports_cancellation": false,
     "deterministic": true,
@@ -675,8 +701,8 @@ export const FieldsQmMep_qmExecution = {
 /** fields.region.mep output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type FieldsRegionMepOutput = {
     field: {
-        kind: 'mep_region';
-        native_units: 'kcal/mol';
+        kind: "mep_region";
+        native_units: "kcal/mol";
         grid: {
             dimensions: Array<number>;
             spacing_angstrom?: number;
@@ -688,34 +714,34 @@ export type FieldsRegionMepOutput = {
         /** How the SERVER chose the box, which is a decision a client must be able to read rather than infer. These were undeclared until now and the frontend consumed them anyway, out of a flat `meta` dict that no schema governed  */
         box?: {
             /** The isovalue actually drawn. */
-            iso_fixed?: number | null;
+            iso_fixed?: (number | null);
             /** Whether the drawn isosurface is closed inside the grid. False means the surface is CLIPPED by the box, and a clipped lobe looks exactly like a small one. */
-            contour_closes_in_box?: boolean | null;
+            contour_closes_in_box?: (boolean | null);
             /** Wall time the grid evaluation took. */
-            wall_seconds?: number | null;
+            wall_seconds?: (number | null);
         };
         /** True when every value has the same sign, so no opposite-sign lobe exists. A renderer needs it to pick a one-sided colour ramp — a diverging ramp on a single-signed field spends half its range on values that cannot occur, */
-        single_signed?: boolean | null;
+        single_signed?: (boolean | null);
     };
     /** WHICH MODEL produced the numbers, in machine-readable form. A caveat in prose travels as a warning; the model IDENTITY travels here, because a client comparing two fields must be able to establish they came from the same */
     model?: {
-        charge_model?: string | null;
-        logp_model?: string | null;
-        net_charge?: number | null;
-        total_logp?: number | null;
-        sigma_hole_representable?: boolean | null;
+        charge_model?: (string | null);
+        logp_model?: (string | null);
+        net_charge?: (number | null);
+        total_logp?: (number | null);
+        sigma_hole_representable?: (boolean | null);
     };
     /** What was actually SUMMED, and what was deliberately left out. A group field is additive but a charge model is not, so 'which atoms' and 'whose charges' are facts about the number, not decoration. */
     region?: {
         n_sources_sent?: number;
         /** Below n_sources_sent when atoms were cut by the distance cutoff or excluded as water. The gap is the part of the pocket the number does not contain. */
         n_sources_used?: number;
-        cutoff_angstrom?: number | null;
+        cutoff_angstrom?: (number | null);
         /** Crystallographic waters left OUT: their hydrogens were never resolved, and a bare oxygen would be a point negative where a real water has a dipole. */
         waters_excluded?: number;
         /** True always, and stated because it is a REFUSAL made legible: this method cannot grow the box to close a contour the way the ligand path does, so it reports a clipped surface instead of fixing it. */
-        frame_is_callers?: boolean | null;
-        dielectric?: string | null;
+        frame_is_callers?: (boolean | null);
+        dielectric?: (string | null);
     };
 };
 
@@ -731,6 +757,10 @@ export const FieldsRegionMepExecution = {
     "default_mode": "sync",
     "inline_threshold_seconds": 5.0,
     "resource_class": "cpu-classical",
+    "supported_adapters": [
+        "inline",
+        "local_cpu"
+    ],
     "concurrency_class": "classical",
     "supports_cancellation": false,
     "deterministic": true,
@@ -741,8 +771,8 @@ export const FieldsRegionMepExecution = {
 /** fields.region.mlp output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type FieldsRegionMlpOutput = {
     field: {
-        kind: 'mlp_region';
-        native_units: 'MLP (Crippen/Fauchere)';
+        kind: "mlp_region";
+        native_units: "MLP (Crippen/Fauchere)";
         grid: {
             dimensions: Array<number>;
             spacing_angstrom?: number;
@@ -754,36 +784,36 @@ export type FieldsRegionMlpOutput = {
         /** How the SERVER chose the box, which is a decision a client must be able to read rather than infer. These were undeclared until now and the frontend consumed them anyway, out of a flat `meta` dict that no schema governed  */
         box?: {
             /** The isovalue actually drawn. */
-            iso_fixed?: number | null;
+            iso_fixed?: (number | null);
             /** Whether the drawn isosurface is closed inside the grid. False means the surface is CLIPPED by the box, and a clipped lobe looks exactly like a small one. */
-            contour_closes_in_box?: boolean | null;
+            contour_closes_in_box?: (boolean | null);
             /** Wall time the grid evaluation took. */
-            wall_seconds?: number | null;
+            wall_seconds?: (number | null);
         };
         /** True when every value has the same sign, so no opposite-sign lobe exists. A renderer needs it to pick a one-sided colour ramp — a diverging ramp on a single-signed field spends half its range on values that cannot occur, */
-        single_signed?: boolean | null;
+        single_signed?: (boolean | null);
     };
-    total_logp?: number | null;
+    total_logp?: (number | null);
     single_signed?: boolean;
     /** WHICH MODEL produced the numbers, in machine-readable form. A caveat in prose travels as a warning; the model IDENTITY travels here, because a client comparing two fields must be able to establish they came from the same */
     model?: {
-        charge_model?: string | null;
-        logp_model?: string | null;
-        net_charge?: number | null;
-        total_logp?: number | null;
-        sigma_hole_representable?: boolean | null;
+        charge_model?: (string | null);
+        logp_model?: (string | null);
+        net_charge?: (number | null);
+        total_logp?: (number | null);
+        sigma_hole_representable?: (boolean | null);
     };
     /** What was actually SUMMED, and what was deliberately left out. A group field is additive but a charge model is not, so 'which atoms' and 'whose charges' are facts about the number, not decoration. */
     region?: {
         n_sources_sent?: number;
         /** Below n_sources_sent when atoms were cut by the distance cutoff or excluded as water. The gap is the part of the pocket the number does not contain. */
         n_sources_used?: number;
-        cutoff_angstrom?: number | null;
+        cutoff_angstrom?: (number | null);
         /** Crystallographic waters left OUT: their hydrogens were never resolved, and a bare oxygen would be a point negative where a real water has a dipole. */
         waters_excluded?: number;
         /** True always, and stated because it is a REFUSAL made legible: this method cannot grow the box to close a contour the way the ligand path does, so it reports a clipped surface instead of fixing it. */
-        frame_is_callers?: boolean | null;
-        dielectric?: string | null;
+        frame_is_callers?: (boolean | null);
+        dielectric?: (string | null);
     };
 };
 
@@ -799,6 +829,10 @@ export const FieldsRegionMlpExecution = {
     "default_mode": "sync",
     "inline_threshold_seconds": 5.0,
     "resource_class": "cpu-classical",
+    "supported_adapters": [
+        "inline",
+        "local_cpu"
+    ],
     "concurrency_class": "classical",
     "supports_cancellation": false,
     "deterministic": true,
@@ -808,7 +842,11 @@ export const FieldsRegionMlpExecution = {
 
 /** ml.motif.calibrate output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type MlMotifCalibrateOutput = {
-    calibration: Record<string, unknown>;
+    calibration: {
+        absolute_residual_quantile: unknown;
+        digest: unknown;
+        nominal_coverage: unknown;
+    };
 };
 
 /** ml.motif.calibrate — Fit a finite-sample split-conformal absolute-residual calibration release. */
@@ -885,17 +923,17 @@ export const MlMotifMeshPredictExecution = {
 export type MlMotifMeshTrainOutput = {
     checkpoint_digest: string;
     validation: Record<string, unknown>;
-    algorithm: 'motif_predictor_mesh';
+    algorithm: "motif_predictor_mesh";
     members: Array<string>;
     featurizer_digest: string;
     runtime_lock_digest: string;
     model_release?: {
         ref: {
-            kind: 'model';
+            kind: "model";
             id: string;
         };
         model_release_id: string;
-        lifecycle: 'technical_smoke' | 'candidate_unvalidated';
+        lifecycle: "technical_smoke" | "candidate_unvalidated";
         created: boolean;
     };
 };
@@ -973,16 +1011,16 @@ export const MlMotifPredictExecution = {
 export type MlMotifTrainOutput = {
     checkpoint_digest: string;
     validation: Record<string, unknown>;
-    algorithm: 'morgan_ridge_and_1nn';
+    algorithm: "morgan_ridge_and_1nn";
     featurizer_digest: string;
     runtime_lock_digest: string;
     model_release?: {
         ref: {
-            kind: 'model';
+            kind: "model";
             id: string;
         };
         model_release_id: string;
-        lifecycle: 'technical_smoke' | 'candidate_unvalidated';
+        lifecycle: "technical_smoke" | "candidate_unvalidated";
         created: boolean;
     };
 };
@@ -1020,21 +1058,21 @@ export const MlMotifTrainExecution = {
 /** molecule.embed output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type MoleculeEmbedOutput = {
     molecule: {
-        kind: 'molfile';
+        kind: "molfile";
         content: string;
-        format?: 'mdl-v2000' | 'mdl-v3000';
+        format?: "mdl-v2000" | "mdl-v3000";
         /** 3 ONLY. A 2D structure must not reach a 3D physics method; molecule.embed is the explicit step that produces 3D, and an implicit SMILES→3D would report one method having run when two did. */
         dimensionality: 3;
-        coordinate_space?: 'molecular' | 'scene';
-        coordinate_units?: 'angstrom';
+        coordinate_space?: "molecular" | "scene";
+        coordinate_units?: "angstrom";
         identity?: {
-            inchikey?: string | null;
-            compound_id?: string | null;
-            conformer_hash?: string | null;
+            inchikey?: (string | null);
+            compound_id?: (string | null);
+            conformer_hash?: (string | null);
         };
     };
     embedding?: {
-        method?: 'ETKDGv3';
+        method?: "ETKDGv3";
         mmff_optimized?: boolean;
         seed?: number;
         n_atoms_heavy?: number;
@@ -1054,6 +1092,10 @@ export const MoleculeEmbedExecution = {
     "default_mode": "sync",
     "inline_threshold_seconds": 5.0,
     "resource_class": "cpu-cheminformatics",
+    "supported_adapters": [
+        "inline",
+        "local_cpu"
+    ],
     "concurrency_class": "classical",
     "supports_cancellation": false,
     "deterministic": true,
@@ -1064,19 +1106,19 @@ export const MoleculeEmbedExecution = {
 /** physics.motif.openfe_edge output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type PhysicsMotifOpenfe_edgeOutput = {
     edge_id: string;
-    leg: 'complex' | 'solvent' | 'vacuum';
-    engine: 'OpenFE';
-    engine_version: '1.11.1';
+    leg: "complex" | "solvent" | "vacuum";
+    engine: "OpenFE";
+    engine_version: "1.11.1";
     transformation_digest: string;
     ligand_charge_digest: string;
-    target_ref?: Record<string, unknown> | null;
-    protein_structure_ref?: Record<string, unknown> | null;
-    thermodynamic_cycle_id?: string | null;
+    target_ref?: (Record<string, unknown> | null);
+    protein_structure_ref?: (Record<string, unknown> | null);
+    thermodynamic_cycle_id?: (string | null);
     repeat_index?: number;
-    estimate: number | null;
-    uncertainty: number | null;
-    unit: string | null;
-    scientific_status: 'completed_unvalidated';
+    estimate: (number | null);
+    uncertainty: (number | null);
+    unit: (string | null);
+    scientific_status: "completed_unvalidated";
     result_digest: string;
 };
 
@@ -1149,16 +1191,18 @@ export const PhysicsMotifOpenmm_mdExecution = {
 /** physics.motif.rbfe_aggregate output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type PhysicsMotifRbfe_aggregateOutput = {
     result_digest: string;
-    status: 'complete' | 'partial';
+    status: "computed_unattested" | "partial_unattested";
+    release_eligible: false;
     node_estimates: Array<unknown>;
     failed_edges: Array<unknown>;
     cycle_closure: Array<unknown>;
+    passed_leg_count: number;
+    convergence_verdicts: Array<unknown>;
 };
 
-/** physics.motif.rbfe_aggregate — Aggregate completed and failed RBFE edges with uncertainty and closure diagnostics. */
+/** physics.motif.rbfe_aggregate — Resolve six physical OpenFE result/report pairs, apply a versioned convergence policy, normalize complex-solvent legs, combine three repeats, and aggregate the selected edge. */
 export const PhysicsMotifRbfe_aggregateExecution = {
     "supported_modes": [
-        "sync",
         "job"
     ],
     "default_mode": "job",
@@ -1175,10 +1219,609 @@ export const PhysicsMotifRbfe_aggregateExecution = {
         "slurm",
         "kubernetes"
     ],
-    "cacheable": true,
+    "cacheable": false,
     "deterministic": true,
     "side_effects": "immutable_artifacts"
 } as const;
+
+/** physics.motif.rbfe_campaign_prepare output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type PhysicsMotifRbfe_campaign_prepareOutput = {
+    campaign_ref: Record<string, unknown>;
+    campaign_version: number;
+    campaign_state_digest: string;
+    campaign_scientific_ref: Record<string, unknown>;
+    campaign_scientific_generation: number;
+    campaign_scientific_digest: string;
+    prepared_receptor_state_ref: Record<string, unknown>;
+    target_ref: Record<string, unknown>;
+    protein_structure_ref: Record<string, unknown>;
+    preparation_state: string;
+    poses: Array<unknown>;
+    claim_boundary: string;
+};
+
+/** physics.motif.rbfe_campaign_prepare — Durably prepare one saved RBFE campaign into a registered receptor state and same-frame endpoint pose hypotheses without holding an HTTP request open. */
+export const PhysicsMotifRbfe_campaign_prepareExecution = {
+    "supported_modes": [
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "cpu",
+    "determinism": "numeric_tolerant",
+    "checkpointable": false,
+    "cancellation": "queued_only",
+    "artifact_access": [
+        "write:rbfe"
+    ],
+    "supported_adapters": [
+        "local_cpu"
+    ],
+    "scale_profile": {
+        "shardable": false,
+        "distributed": false,
+        "min_gpus": 0,
+        "max_gpus": 0,
+        "cpu_cores": 2
+    },
+    "cacheable": false,
+    "deterministic": false,
+    "side_effects": "immutable_artifacts"
+} as const;
+
+type PhysicsMotifRbfe_networkOutputDefDigest = string;
+
+type PhysicsMotifRbfe_networkOutputDefVerdict = "CONFIRMED" | "CHANGED" | "UNVERIFIED";
+
+type PhysicsMotifRbfe_networkOutputDefIndexPair = [number, number];
+
+type PhysicsMotifRbfe_networkOutputDefIndexPairs = Array<PhysicsMotifRbfe_networkOutputDefIndexPair>;
+
+type PhysicsMotifRbfe_networkOutputDefCampaignContext = {
+    campaign_id: string;
+    campaign_scientific_generation: number;
+    campaign_scientific_digest: PhysicsMotifRbfe_networkOutputDefDigest;
+    prepared_system_id: string;
+};
+
+type PhysicsMotifRbfe_networkOutputDefCampaignContract = (Record<string, never> | PhysicsMotifRbfe_networkOutputDefCampaignContext);
+
+type PhysicsMotifRbfe_networkOutputDefPreparedSystemRef = {
+    kind: "prepared_receptor_state";
+    id: string;
+    sha256: PhysicsMotifRbfe_networkOutputDefDigest;
+};
+
+type PhysicsMotifRbfe_networkOutputDefUnboundCampaignAdmission = {
+    schema_version: "rbfe-network-admission.v1";
+    verdict: "UNBOUND";
+    scope: "smoke_plan";
+    campaign_bound: false;
+};
+
+type PhysicsMotifRbfe_networkOutputDefBoundCampaignAdmission = {
+    schema_version: "rbfe-network-admission.v1";
+    verdict: "CONFIRMED";
+    scope: "campaign_bound_network";
+    campaign_bound: true;
+    campaign_id: string;
+    campaign_scientific_generation: number;
+    campaign_scientific_digest: PhysicsMotifRbfe_networkOutputDefDigest;
+    prepared_system_id: string;
+    prepared_system_ref: PhysicsMotifRbfe_networkOutputDefPreparedSystemRef;
+};
+
+type PhysicsMotifRbfe_networkOutputDefCampaignAdmission = (PhysicsMotifRbfe_networkOutputDefUnboundCampaignAdmission | PhysicsMotifRbfe_networkOutputDefBoundCampaignAdmission);
+
+type PhysicsMotifRbfe_networkOutputDefStereoWitness = {
+    kind: string;
+    specified: string;
+    descriptor: string;
+    center_atom_index?: number;
+    center_bond_index?: number;
+    begin_atom_index?: number;
+    end_atom_index?: number;
+    centered_on?: number;
+    element?: string;
+    cip?: (string | null);
+    ez?: (string | null);
+    controlling_atom_indices?: Array<number>;
+};
+
+type PhysicsMotifRbfe_networkOutputDefMicrostateIdentity = {
+    schema_version: "rbfe-microstate-identity.v1";
+    canonical_isomeric_smiles: string;
+    formal_charge: number;
+    total_hydrogen_count: number;
+    identity_digest: PhysicsMotifRbfe_networkOutputDefDigest;
+    representation_verdict: PhysicsMotifRbfe_networkOutputDefVerdict;
+    solution_population_verdict: PhysicsMotifRbfe_networkOutputDefVerdict;
+    reason: string;
+};
+
+type PhysicsMotifRbfe_networkOutputDefChemicalIdentity = {
+    schema_version: "rbfe-chemical-identity.v1";
+    label: string;
+    canonical_isomeric_smiles: string;
+    canonical_connectivity_smiles: string;
+    formula: string;
+    formal_charge: number;
+    total_hydrogen_count: number;
+    heavy_atom_count: number;
+    bond_count: number;
+    formal_charge_witnesses: Array<{
+        atom_index: number;
+        element: string;
+        formal_charge: number;
+    }>;
+    stereo: Array<PhysicsMotifRbfe_networkOutputDefStereoWitness>;
+    unspecified_stereo: Array<PhysicsMotifRbfe_networkOutputDefStereoWitness>;
+    stereo_policy_verdict: PhysicsMotifRbfe_networkOutputDefVerdict;
+    microstate: PhysicsMotifRbfe_networkOutputDefMicrostateIdentity;
+};
+
+type PhysicsMotifRbfe_networkOutputDefBondChangeWitness = ({
+    change: "ADDED" | "REMOVED" | "BOND_ORDER";
+    parent_atom_indices: Array<number>;
+    proposal_atom_indices: Array<number>;
+    parent_order?: string;
+    proposal_order?: string;
+    parent_aromatic?: boolean;
+    proposal_aromatic?: boolean;
+} & (({
+    change?: "ADDED";
+    parent_order?: never;
+    proposal_order: string;
+    parent_aromatic?: never;
+    proposal_aromatic?: never;
+} | {
+    change?: "REMOVED";
+    parent_order: string;
+    proposal_order?: never;
+    parent_aromatic?: never;
+    proposal_aromatic?: never;
+} | {
+    change?: "BOND_ORDER";
+    parent_order: string;
+    proposal_order: string;
+    parent_aromatic: boolean;
+    proposal_aromatic: boolean;
+})));
+
+type PhysicsMotifRbfe_networkOutputDefScopeWitness = {
+    mapped_heavy_atom_pairs: PhysicsMotifRbfe_networkOutputDefIndexPairs;
+    parent_heavy_atoms: number;
+    proposal_heavy_atoms: number;
+    full_coverage: boolean;
+};
+
+type PhysicsMotifRbfe_networkOutputDefElementWitness = {
+    parent_atom_index: number;
+    proposal_atom_index: number;
+    parent_element: string;
+    proposal_element: string;
+};
+
+type PhysicsMotifRbfe_networkOutputDefAtomChargeWitness = {
+    parent_atom_index: number;
+    proposal_atom_index: number;
+    parent_formal_charge: number;
+    proposal_formal_charge: number;
+};
+
+type PhysicsMotifRbfe_networkOutputDefTotalChargeWitness = {
+    scope: "TOTAL";
+    parent: number;
+    proposal: number;
+};
+
+type PhysicsMotifRbfe_networkOutputDefStereoChangeWitness = ({
+    change: "REMOVED_STEREOCENTER";
+    parent: PhysicsMotifRbfe_networkOutputDefStereoWitness;
+    proposal: null;
+} | {
+    change: "ADDED_STEREOCENTER";
+    parent: null;
+    proposal: PhysicsMotifRbfe_networkOutputDefStereoWitness;
+} | {
+    parent: PhysicsMotifRbfe_networkOutputDefStereoWitness;
+    proposal: PhysicsMotifRbfe_networkOutputDefStereoWitness;
+});
+
+type PhysicsMotifRbfe_networkOutputDefStereoSideWitness = {
+    side: "parent" | "proposal";
+    kind: string;
+    specified: string;
+    descriptor: string;
+    center_atom_index?: number;
+    center_bond_index?: number;
+    begin_atom_index?: number;
+    end_atom_index?: number;
+    centered_on?: number;
+    element?: string;
+    cip?: (string | null);
+    ez?: (string | null);
+    controlling_atom_indices?: Array<number>;
+};
+
+type PhysicsMotifRbfe_networkOutputDefStereoExpectationWitness = {
+    side: "proposal";
+    expected_from: PhysicsMotifRbfe_networkOutputDefStereoWitness;
+    observed: (null | PhysicsMotifRbfe_networkOutputDefStereoWitness);
+};
+
+type PhysicsMotifRbfe_networkOutputDefStereoObservedWitness = {
+    side: "proposal";
+    observed: PhysicsMotifRbfe_networkOutputDefStereoWitness;
+    reason: string;
+};
+
+type PhysicsMotifRbfe_networkOutputDefCycleRankWitness = {
+    parent_cycle_rank: number;
+    proposal_cycle_rank: number;
+};
+
+type PhysicsMotifRbfe_networkOutputDefUnmappedWitness = {
+    parent_atom_indices: Array<number>;
+    proposal_atom_indices: Array<number>;
+};
+
+type PhysicsMotifRbfe_networkOutputDefProtonationWitness = {
+    kind: "PROTONATION";
+    parent_total_hydrogen_count: number;
+    proposal_total_hydrogen_count: number;
+    parent_formal_charge: number;
+    proposal_formal_charge: number;
+};
+
+type PhysicsMotifRbfe_networkOutputDefHydrogenChargeWitness = {
+    kind: "HYDROGEN_CHARGE_DELTA_NOT_DIAGNOSTIC_OF_PROTONATION";
+    hydrogen_delta: number;
+    formal_charge_delta: number;
+};
+
+type PhysicsMotifRbfe_networkOutputDefTautomerWitness = {
+    kind: "TAUTOMER_OR_VALENCE_STATE";
+    bond_order_witnesses: Array<PhysicsMotifRbfe_networkOutputDefBondChangeWitness>;
+};
+
+type PhysicsMotifRbfe_networkOutputDefIncomparableEndpointWitness = {
+    kind: "ENDPOINTS_NOT_MICROSTATE_COMPARABLE";
+    reason: string;
+    hydrogen_delta: number;
+    formal_charge_delta: number;
+};
+
+type PhysicsMotifRbfe_networkOutputDefFormalChargeWitness = (PhysicsMotifRbfe_networkOutputDefAtomChargeWitness | PhysicsMotifRbfe_networkOutputDefTotalChargeWitness);
+
+type PhysicsMotifRbfe_networkOutputDefStereoLedgerWitness = (PhysicsMotifRbfe_networkOutputDefStereoChangeWitness | PhysicsMotifRbfe_networkOutputDefStereoSideWitness | PhysicsMotifRbfe_networkOutputDefStereoExpectationWitness | PhysicsMotifRbfe_networkOutputDefStereoObservedWitness);
+
+type PhysicsMotifRbfe_networkOutputDefMicrostateLedgerWitness = (PhysicsMotifRbfe_networkOutputDefProtonationWitness | PhysicsMotifRbfe_networkOutputDefHydrogenChargeWitness | PhysicsMotifRbfe_networkOutputDefTautomerWitness | PhysicsMotifRbfe_networkOutputDefIncomparableEndpointWitness);
+
+type PhysicsMotifRbfe_networkOutputDefChemistryWitness = (PhysicsMotifRbfe_networkOutputDefScopeWitness | PhysicsMotifRbfe_networkOutputDefElementWitness | PhysicsMotifRbfe_networkOutputDefBondChangeWitness | PhysicsMotifRbfe_networkOutputDefFormalChargeWitness | PhysicsMotifRbfe_networkOutputDefStereoLedgerWitness | PhysicsMotifRbfe_networkOutputDefCycleRankWitness | PhysicsMotifRbfe_networkOutputDefUnmappedWitness | PhysicsMotifRbfe_networkOutputDefMicrostateLedgerWitness);
+
+type PhysicsMotifRbfe_networkOutputDefChemistryLedgerRow = ({
+    dimension: "SCOPE" | "ELEMENT" | "CONNECTIVITY" | "BOND_ORDER" | "FORMAL_CHARGE" | "STEREO" | "RING_CYCLE_RANK" | "UNMAPPED" | "PROTONATION_TAUTOMER";
+    verdict: PhysicsMotifRbfe_networkOutputDefVerdict;
+    summary: string;
+    witnesses: Array<PhysicsMotifRbfe_networkOutputDefChemistryWitness>;
+} & (({
+    dimension?: "SCOPE";
+    witnesses?: Array<PhysicsMotifRbfe_networkOutputDefScopeWitness>;
+} | {
+    dimension?: "ELEMENT";
+    witnesses?: Array<PhysicsMotifRbfe_networkOutputDefElementWitness>;
+} | {
+    dimension?: "CONNECTIVITY";
+    witnesses?: Array<PhysicsMotifRbfe_networkOutputDefBondChangeWitness>;
+} | {
+    dimension?: "BOND_ORDER";
+    witnesses?: Array<PhysicsMotifRbfe_networkOutputDefBondChangeWitness>;
+} | {
+    dimension?: "FORMAL_CHARGE";
+    witnesses?: Array<PhysicsMotifRbfe_networkOutputDefFormalChargeWitness>;
+} | {
+    dimension?: "STEREO";
+    witnesses?: Array<PhysicsMotifRbfe_networkOutputDefStereoLedgerWitness>;
+} | {
+    dimension?: "RING_CYCLE_RANK";
+    witnesses?: Array<PhysicsMotifRbfe_networkOutputDefCycleRankWitness>;
+} | {
+    dimension?: "UNMAPPED";
+    witnesses?: Array<PhysicsMotifRbfe_networkOutputDefUnmappedWitness>;
+} | {
+    dimension?: "PROTONATION_TAUTOMER";
+    witnesses?: Array<PhysicsMotifRbfe_networkOutputDefMicrostateLedgerWitness>;
+})));
+
+type PhysicsMotifRbfe_networkOutputDefChemistryEvidence = {
+    schema_version: "rbfe-chemistry-change.v1";
+    verdict: PhysicsMotifRbfe_networkOutputDefVerdict;
+    mapped_heavy_atom_count: number;
+    mapped_bond_count: number;
+    heavy_atom_coverage: number;
+    full_heavy_atom_coverage: boolean;
+    selected_heavy_atom_mapping: PhysicsMotifRbfe_networkOutputDefIndexPairs;
+    ledger: [(PhysicsMotifRbfe_networkOutputDefChemistryLedgerRow & {
+        dimension?: "SCOPE";
+    }), (PhysicsMotifRbfe_networkOutputDefChemistryLedgerRow & {
+        dimension?: "ELEMENT";
+    }), (PhysicsMotifRbfe_networkOutputDefChemistryLedgerRow & {
+        dimension?: "CONNECTIVITY";
+    }), (PhysicsMotifRbfe_networkOutputDefChemistryLedgerRow & {
+        dimension?: "BOND_ORDER";
+    }), (PhysicsMotifRbfe_networkOutputDefChemistryLedgerRow & {
+        dimension?: "FORMAL_CHARGE";
+    }), (PhysicsMotifRbfe_networkOutputDefChemistryLedgerRow & {
+        dimension?: "STEREO";
+    }), (PhysicsMotifRbfe_networkOutputDefChemistryLedgerRow & {
+        dimension?: "RING_CYCLE_RANK";
+    }), (PhysicsMotifRbfe_networkOutputDefChemistryLedgerRow & {
+        dimension?: "UNMAPPED";
+    }), (PhysicsMotifRbfe_networkOutputDefChemistryLedgerRow & {
+        dimension?: "PROTONATION_TAUTOMER";
+    })];
+};
+
+type PhysicsMotifRbfe_networkOutputDefDepictionIndexContract = {
+    schema_version: "rbfe-depiction-index.v2";
+    parent_smiles: string;
+    proposal_smiles: string;
+    parent_source_to_depiction: Record<string, number>;
+    proposal_source_to_depiction: Record<string, number>;
+    selected_heavy_atom_mapping: PhysicsMotifRbfe_networkOutputDefIndexPairs;
+    chemistry_evidence: PhysicsMotifRbfe_networkOutputDefChemistryEvidence;
+};
+
+type PhysicsMotifRbfe_networkOutputDefEligibilityReason = {
+    code: "ZERO_HEAVY_ATOM_MAP" | "FORMAL_CHARGE_CHANGE" | "NON_POSITIVE_MAPPING_SCORE" | "MAPPING_SCORE_BELOW_EXECUTION_FLOOR" | "CHEMISTRY_EVIDENCE_UNVERIFIED" | "STEREOCHEMISTRY_UNVERIFIED" | "MAPPING_DIRECTION_UNVERIFIED";
+    message: string;
+};
+
+type PhysicsMotifRbfe_networkOutputDefExecutionEligibility = {
+    verdict: PhysicsMotifRbfe_networkOutputDefVerdict;
+    reasons: Array<PhysicsMotifRbfe_networkOutputDefEligibilityReason>;
+};
+
+type PhysicsMotifRbfe_networkOutputDefAutomorphismAudit = {
+    verdict: PhysicsMotifRbfe_networkOutputDefVerdict;
+    equivalent: boolean;
+    method: "INDEX_EXACT" | "CARDINALITY_MISMATCH" | "RDKIT_GRAPH_AUTOMORPHISM";
+    index_exact_jaccard: number;
+    automorphism_aware_jaccard: number;
+    automorphism_search_truncated: boolean;
+    left_automorphisms_examined?: number;
+    right_automorphisms_examined?: number;
+};
+
+type PhysicsMotifRbfe_networkOutputDefDirectionAudit = ({
+    schema_version: "rbfe-mapping-direction-audit.v1";
+    verdict: "UNVERIFIED";
+    reason: string;
+} | {
+    schema_version: "rbfe-mapping-direction-audit.v1";
+    verdict: PhysicsMotifRbfe_networkOutputDefVerdict;
+    equivalent: boolean;
+    method: "INDEX_EXACT" | "CARDINALITY_MISMATCH" | "RDKIT_GRAPH_AUTOMORPHISM";
+    index_exact_jaccard: number;
+    automorphism_aware_jaccard: number;
+    automorphism_search_truncated: boolean;
+    left_automorphisms_examined?: number;
+    right_automorphisms_examined?: number;
+    forward_mapping: PhysicsMotifRbfe_networkOutputDefIndexPairs;
+    inverse_reverse_mapping: PhysicsMotifRbfe_networkOutputDefIndexPairs;
+});
+
+type PhysicsMotifRbfe_networkOutputDefMappingProposals = Record<string, PhysicsMotifRbfe_networkOutputDefIndexPairs>;
+
+type PhysicsMotifRbfe_networkOutputDefOpenfeEdge = {
+    edge_id?: string;
+    left_id: string;
+    right_id: string;
+    selected_atom_mapping: PhysicsMotifRbfe_networkOutputDefIndexPairs;
+    selected_heavy_atom_mapping: PhysicsMotifRbfe_networkOutputDefIndexPairs;
+    mapped_heavy_atom_count: number;
+    mapped_atom_count?: number;
+    mapping_score: number;
+    mapping_methods: Array<string>;
+    mapping_disagreement_jaccard: (number | null);
+    mapping_disagreement_index_exact_jaccard: (number | null);
+    mapping_disagreement_all_atoms_jaccard: (number | null);
+    mapping_automorphism_audit: (null | PhysicsMotifRbfe_networkOutputDefAutomorphismAudit);
+    mapping_direction_audits: Record<string, PhysicsMotifRbfe_networkOutputDefDirectionAudit>;
+    selected_mapping_direction_audit: PhysicsMotifRbfe_networkOutputDefDirectionAudit;
+    mapping_proposals: PhysicsMotifRbfe_networkOutputDefMappingProposals;
+    heavy_atom_mapping_proposals: PhysicsMotifRbfe_networkOutputDefMappingProposals;
+    depiction_contract: PhysicsMotifRbfe_networkOutputDefDepictionIndexContract;
+    chemistry_evidence: PhysicsMotifRbfe_networkOutputDefChemistryEvidence;
+    execution_eligibility: PhysicsMotifRbfe_networkOutputDefExecutionEligibility;
+    culprit_endpoints: Array<string>;
+    status: "planned" | "candidate" | "rejected";
+    purpose?: "openfe_redundant_network";
+    rdkit_fmcs_diagnostic?: {
+        tanimoto: (number | null);
+        mcs_smarts: (string | null);
+        mapped_atom_count: (number | null);
+        left_heavy_atom_fraction: (number | null);
+        right_heavy_atom_fraction: (number | null);
+    };
+};
+
+type PhysicsMotifRbfe_networkOutputDefRdkitEdge = {
+    edge_id: string;
+    left_id: string;
+    right_id: string;
+    tanimoto: number;
+    mcs_smarts: string;
+    mapped_atom_count: number;
+    left_heavy_atom_fraction: number;
+    right_heavy_atom_fraction: number;
+    purpose: "connectivity" | "redundancy";
+    status: "planned";
+};
+
+type PhysicsMotifRbfe_networkOutputDefNetworkEdge = (PhysicsMotifRbfe_networkOutputDefRdkitEdge | (PhysicsMotifRbfe_networkOutputDefOpenfeEdge & {
+    edge_id: unknown;
+    mapped_atom_count: unknown;
+    purpose: unknown;
+    rdkit_fmcs_diagnostic: unknown;
+}));
+
+type PhysicsMotifRbfe_networkOutputDefNetworkDepictions = {
+    schema_version: "rbfe-network-depictions.v1";
+    edges: Array<{
+        left_id: string;
+        right_id: string;
+        status: "planned" | "candidate" | "rejected";
+        contract: PhysicsMotifRbfe_networkOutputDefDepictionIndexContract;
+    }>;
+    digest: PhysicsMotifRbfe_networkOutputDefDigest;
+};
+
+type PhysicsMotifRbfe_networkOutputDefNetworkChemistryEvidence = {
+    schema_version: "rbfe-network-chemistry-evidence.v1";
+    verdict: PhysicsMotifRbfe_networkOutputDefVerdict;
+    edges: Array<{
+        left_id: string;
+        right_id: string;
+        status: "planned" | "candidate" | "rejected";
+        evidence: PhysicsMotifRbfe_networkOutputDefChemistryEvidence;
+    }>;
+    digest: PhysicsMotifRbfe_networkOutputDefDigest;
+};
+
+type PhysicsMotifRbfe_networkOutputDefCulpritEdge = {
+    left_id: string;
+    right_id: string;
+    reasons: Array<PhysicsMotifRbfe_networkOutputDefEligibilityReason>;
+};
+
+type PhysicsMotifRbfe_networkOutputDefExecutionNetworkGate = {
+    verdict: "CONFIRMED" | "UNVERIFIED";
+    connected_components: Array<Array<string>>;
+    culprit_edges: Array<PhysicsMotifRbfe_networkOutputDefCulpritEdge>;
+    reason: string;
+};
+
+type PhysicsMotifRbfe_networkOutputDefPlannerDiagnostics = {
+    reviewed_edge_count: number;
+    executable_edge_count: number;
+    candidate_edge_count: number;
+    rejected_edge_count: number;
+    network_gate: "CONFIRMED" | "UNVERIFIED";
+    minimum_execution_mapping_score: number;
+    culprit_edges: Array<PhysicsMotifRbfe_networkOutputDefCulpritEdge>;
+};
+
+type PhysicsMotifRbfe_networkOutputDefIdentityContract = {
+    schema_version: "rbfe-network-identity.v1";
+    compounds: Record<string, PhysicsMotifRbfe_networkOutputDefChemicalIdentity>;
+    digest: PhysicsMotifRbfe_networkOutputDefDigest;
+};
+
+type PhysicsMotifRbfe_networkOutputDefOfficialPlan = {
+    schema_version: "1.0";
+    engine: "OpenFE";
+    engine_version: string;
+    planner: "generate_minimal_redundant_network";
+    mappers: Array<string>;
+    ligand_network: (Record<string, unknown> | Array<unknown>);
+    compound_identities: Record<string, PhysicsMotifRbfe_networkOutputDefChemicalIdentity>;
+    identity_contract: PhysicsMotifRbfe_networkOutputDefIdentityContract;
+    depiction_contract: PhysicsMotifRbfe_networkOutputDefNetworkDepictions;
+    chemistry_evidence: PhysicsMotifRbfe_networkOutputDefNetworkChemistryEvidence;
+    edges: Array<PhysicsMotifRbfe_networkOutputDefOpenfeEdge>;
+    candidate_edges: Array<PhysicsMotifRbfe_networkOutputDefOpenfeEdge>;
+    rejected_edges: Array<PhysicsMotifRbfe_networkOutputDefOpenfeEdge>;
+    execution_network_gate: PhysicsMotifRbfe_networkOutputDefExecutionNetworkGate;
+    planner_diagnostics: PhysicsMotifRbfe_networkOutputDefPlannerDiagnostics;
+    campaign_contract: PhysicsMotifRbfe_networkOutputDefCampaignContract;
+    campaign_id?: string;
+    campaign_scientific_generation?: number;
+    campaign_scientific_digest?: PhysicsMotifRbfe_networkOutputDefDigest;
+    prepared_system_id?: string;
+};
+
+type PhysicsMotifRbfe_networkOutputDefExecutionMatrix = ({
+    edge_count: number;
+    legs_per_edge: 2;
+    repeat_count: number;
+    production_execution_count: number;
+    pilot_included_in_production_count: boolean;
+    executions: Array<{
+        edge_id: string;
+        leg: "complex" | "solvent";
+        repeat_index: number;
+        role: "production";
+    }>;
+} | {
+    verdict: "UNVERIFIED";
+    executions: Array<unknown>;
+    reason: string;
+});
+
+/** physics.motif.rbfe_network output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type PhysicsMotifRbfe_networkOutput = {
+    network_digest: PhysicsMotifRbfe_networkOutputDefDigest;
+    compound_count: number;
+    edge_count: number;
+    network: ({
+        schema_version: "1.0";
+        kind: "rbfe_network_plan";
+        digest: PhysicsMotifRbfe_networkOutputDefDigest;
+        compounds: Array<{
+            id: string;
+            canonical_smiles: string;
+        }>;
+        edges: Array<PhysicsMotifRbfe_networkOutputDefNetworkEdge>;
+        mode: "pilot" | "full";
+        official_openfe_plan: (null | PhysicsMotifRbfe_networkOutputDefOfficialPlan);
+        policy: {
+            extra_edge_fraction: number;
+            minimum_similarity: number;
+            mapping: string;
+            planner: "openfe" | "rdkit_fallback";
+        };
+        claim_boundary: string;
+        campaign_context?: PhysicsMotifRbfe_networkOutputDefCampaignContext;
+        campaign_admission: PhysicsMotifRbfe_networkOutputDefCampaignAdmission;
+        identity_contract?: PhysicsMotifRbfe_networkOutputDefIdentityContract;
+        depiction_contract?: PhysicsMotifRbfe_networkOutputDefNetworkDepictions;
+        chemistry_evidence?: PhysicsMotifRbfe_networkOutputDefNetworkChemistryEvidence;
+        candidate_edges?: Array<PhysicsMotifRbfe_networkOutputDefOpenfeEdge>;
+        rejected_edges?: Array<PhysicsMotifRbfe_networkOutputDefOpenfeEdge>;
+        execution_network_gate?: PhysicsMotifRbfe_networkOutputDefExecutionNetworkGate;
+        planner_diagnostics?: PhysicsMotifRbfe_networkOutputDefPlannerDiagnostics;
+        campaign_contract?: PhysicsMotifRbfe_networkOutputDefCampaignContract;
+        execution_matrix?: PhysicsMotifRbfe_networkOutputDefExecutionMatrix;
+    } & (({
+        campaign_admission?: PhysicsMotifRbfe_networkOutputDefBoundCampaignAdmission;
+        campaign_context: PhysicsMotifRbfe_networkOutputDefCampaignContext;
+    } | {
+        campaign_admission?: PhysicsMotifRbfe_networkOutputDefUnboundCampaignAdmission;
+        campaign_context?: never;
+    }) & ({
+        official_openfe_plan?: null;
+        identity_contract?: never;
+        depiction_contract?: never;
+        chemistry_evidence?: never;
+        candidate_edges?: never;
+        rejected_edges?: never;
+        execution_network_gate?: never;
+        planner_diagnostics?: never;
+        campaign_contract?: never;
+        execution_matrix?: never;
+    } | {
+        official_openfe_plan?: PhysicsMotifRbfe_networkOutputDefOfficialPlan;
+        campaign_contract: unknown;
+        candidate_edges: unknown;
+        chemistry_evidence: unknown;
+        depiction_contract: unknown;
+        execution_network_gate: unknown;
+        identity_contract: unknown;
+        planner_diagnostics: unknown;
+        rejected_edges: unknown;
+    })));
+};
 
 /** physics.motif.rbfe_network — Plan an auditable RBFE network and optionally aggregate explicit edge observations. */
 export const PhysicsMotifRbfe_networkExecution = {
@@ -1205,12 +1848,53 @@ export const PhysicsMotifRbfe_networkExecution = {
     "side_effects": "immutable_artifacts"
 } as const;
 
+/** physics.motif.rbfe_system_prepare output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type PhysicsMotifRbfe_system_prepareOutput = {
+    spec_digest: string;
+    edge_network_digest: string;
+    edge_id: string;
+    left_id: string;
+    right_id: string;
+    complex_transformation_digest: string;
+    solvent_transformation_digest: string;
+    execution_matrix: Array<unknown>;
+    execution_count: 6;
+    validation_status: "server_preflight_passed";
+    resolved_target: Record<string, unknown>;
+    campaign_binding: Record<string, unknown>;
+    system_build: Record<string, unknown>;
+};
+
+/** physics.motif.rbfe_system_prepare — Resolve an attested prepared receptor and two aligned endpoint poses, compile them into server-owned complex and solvent OpenFE Transformations, then freeze the selected six-run edge specification. */
+export const PhysicsMotifRbfe_system_prepareExecution = {
+    "supported_modes": [
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "cpu",
+    "determinism": "bitwise",
+    "checkpointable": false,
+    "cancellation": "cooperative",
+    "artifact_access": [
+        "read:rbfe",
+        "write:rbfe"
+    ],
+    "supported_adapters": [
+        "local_cpu",
+        "slurm",
+        "kubernetes"
+    ],
+    "cacheable": false,
+    "deterministic": true,
+    "side_effects": "immutable_artifacts"
+} as const;
+
 /** structure.motif.conformers output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type StructureMotifConformersOutput = {
     ensemble_digest: string;
     generated_count: number;
     cluster_count: number;
-    force_field: 'MMFF94s' | 'UFF';
+    force_field: "MMFF94s" | "UFF";
 };
 
 /** structure.motif.conformers — Generate, minimize, energy-rank and cluster a deterministic ETKDGv3 conformer ensemble. */
@@ -1291,6 +1975,10 @@ export const SurfaceMepExecution = {
     "default_mode": "job",
     "inline_threshold_seconds": 2.0,
     "resource_class": "cpu-qm",
+    "supported_adapters": [
+        "inline",
+        "local_cpu"
+    ],
     "concurrency_class": "scf",
     "supports_cancellation": false,
     "deterministic": true,
@@ -1317,6 +2005,10 @@ export const SurfaceMep_atExecution = {
     "default_mode": "job",
     "inline_threshold_seconds": 2.0,
     "resource_class": "cpu-qm",
+    "supported_adapters": [
+        "inline",
+        "local_cpu"
+    ],
     "concurrency_class": "scf",
     "supports_cancellation": false,
     "deterministic": true,
@@ -1345,6 +2037,10 @@ export const TorsionStrainExecution = {
     "default_mode": "job",
     "inline_threshold_seconds": 2.0,
     "resource_class": "cpu",
+    "supported_adapters": [
+        "inline",
+        "local_cpu"
+    ],
     "concurrency_class": "torsion",
     "scale_profile": {
         "cpu_cores": 1,
@@ -1382,7 +2078,9 @@ export const METHOD_IDS: readonly MethodId[] = [
     "physics.motif.openfe_edge",
     "physics.motif.openmm_md",
     "physics.motif.rbfe_aggregate",
+    "physics.motif.rbfe_campaign_prepare",
     "physics.motif.rbfe_network",
+    "physics.motif.rbfe_system_prepare",
     "structure.motif.conformers",
     "structure.motif.vina",
     "surface.mep",

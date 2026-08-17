@@ -160,7 +160,10 @@ EXECUTION_REQUEST = {
 OUTPUT_MANIFEST = {
     "schema_version": "1.0", "job_id": UUIDS[18], "attempt_id": UUIDS[19],
     "fencing_token": 1, "execution_digest": DIGEST, "artifacts": [],
-    "result_summary": {}, "warnings": [], "started_at": NOW, "finished_at": NOW,
+    "result_summary": {},
+    "warnings": [{"code": "MODEL_CAVEAT", "message": "Shape only.",
+                  "affects": ["wavefunction.homo_ev"]}],
+    "started_at": NOW, "finished_at": NOW,
 }
 
 FIXTURES = {

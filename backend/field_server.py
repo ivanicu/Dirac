@@ -356,6 +356,213 @@ def _dispatcher():
     return _dispatcher_singleton
 
 
+def _rbfe_readiness(service=None) -> dict[str, dict[str, object]]:
+    """Report the two database-backed RBFE capabilities without guessing green.
+
+    The fields daemon can still serve classical/quantum fields when an RBFE
+    migration is absent.  That graceful degradation is useful, but it used to
+    make the process-wide ``ok: true`` look like evidence that Campaign and
+    RunSet persistence were usable.  Probe the exact schema witnesses consumed
+    by the two controllers and keep their readiness independent of global
+    service health.
+
+    ``service`` is optional so ``/health`` does not initialise the v2 kernel as
+    a side effect.  Kernel construction wakes the durable RunSet controller;
+    a health probe must never start/recover scientific work.
+    """
+    required_campaign = (
+        '040_rbfe_campaign_state.sql',
+        '045_rbfe_campaign_artifact_ownership.sql',
+        '046_job_command_request_key.sql',
+        '047_job_dispatch_fence.sql',
+    )
+    required_runset = (
+        '041_rbfe_runset_cancellation.sql',
+        '042_job_tenant_isolation.sql',
+        '043_rbfe_runset_tenant_request_key.sql',
+        '044_rbfe_runset_state_integrity.sql',
+        '046_job_command_request_key.sql',
+    )
+    schema = {'campaign': False, 'runset': False}
+    schema_reason = {
+        'campaign': f'{", ".join(required_campaign)} are not fully applied',
+        'runset': f'{", ".join(required_runset)} are not fully applied',
+    }
+    if psycopg is None:
+        schema_reason = {
+            'campaign': 'PostgreSQL driver is unavailable',
+            'runset': 'PostgreSQL driver is unavailable',
+        }
+    else:
+        try:
+            with _db() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "SELECT "
+                    "to_regclass('app.rbfe_campaign') IS NOT NULL, "
+                    "to_regclass('app.rbfe_campaign_revision') IS NOT NULL, "
+                    "to_regclass('app.rbfe_campaign_system_import') IS NOT NULL, "
+                    "EXISTS (SELECT 1 FROM information_schema.columns "
+                    " WHERE table_schema='app' AND table_name='rbfe_campaign' "
+                    " AND column_name='state_digest'), "
+                    "to_regclass('app.rbfe_campaign_owner_updated_idx') IS NOT NULL, "
+                    "to_regclass('app.rbfe_campaign_artifact') IS NOT NULL, "
+                    "EXISTS (SELECT 1 FROM pg_constraint "
+                    " WHERE conrelid=to_regclass('app.rbfe_campaign_artifact') "
+                    " AND contype='f' "
+                    " AND conname='rbfe_campaign_artifact_role_fk' "
+                    " AND pg_get_constraintdef(oid) LIKE "
+                    " '%%FOREIGN KEY (artifact_id, role)%%'), "
+                    "to_regclass('app.rbfe_run_set') IS NOT NULL, "
+                    "EXISTS (SELECT 1 FROM information_schema.columns "
+                    " WHERE table_schema='app' AND table_name='rbfe_run_set' "
+                    " AND column_name='cancellation_requested_at'), "
+                    "EXISTS (SELECT 1 FROM pg_constraint "
+                    " WHERE conrelid=to_regclass('app.rbfe_run_set') "
+                    " AND contype='c' AND conname='rbfe_run_set_state_check' "
+                    " AND pg_get_constraintdef(oid) LIKE '%%cancel_requested%%'), "
+                    "EXISTS (SELECT 1 FROM pg_index "
+                    " WHERE indexrelid=to_regclass('app.job_one_inflight') "
+                    " AND indisunique "
+                    " AND pg_get_indexdef(indexrelid) LIKE "
+                    " 'CREATE UNIQUE INDEX job_one_inflight ON app.job USING btree "
+                    "(actor_kind, actor_id, method_row_id, request_digest) WHERE %%' "
+                    " AND pg_get_expr(indpred, indrelid) = "
+                    " '((request_key IS NULL) AND (state = ANY (ARRAY[''queued''::app.job_state, ''running''::app.job_state])))'), "
+                    "EXISTS (SELECT 1 FROM pg_constraint "
+                    " WHERE conrelid=to_regclass('app.rbfe_run_set') "
+                    " AND contype='u' "
+                    " AND conname='rbfe_run_set_actor_request_key_key' "
+                    " AND pg_get_constraintdef(oid) LIKE "
+                    " '%%actor_kind, actor_id, request_key%%'), "
+                    "EXISTS (SELECT 1 FROM pg_constraint "
+                    " WHERE conrelid=to_regclass('app.rbfe_run_set') "
+                    " AND contype='c' "
+                    " AND conname='rbfe_run_set_state_timestamps_check'), "
+                    "EXISTS (SELECT 1 FROM information_schema.columns "
+                    " WHERE table_schema='app' AND table_name='job' "
+                    " AND column_name='request_key') "
+                    "AND EXISTS (SELECT 1 FROM pg_constraint "
+                    " WHERE conrelid=to_regclass('app.job') AND contype='c' "
+                    " AND conname='job_request_key_nonempty' "
+                    " AND pg_get_constraintdef(oid) = format("
+                    "'CHECK (((request_key IS NULL) OR (request_key ~ "
+                    "((%L::text || %L::text) || %L::text))))', "
+                    "'[^[:space:]', U&'\\00A0\\2007\\202F\\FEFF', ']')) "
+                    "AND EXISTS (SELECT 1 FROM pg_constraint "
+                    " WHERE conrelid=to_regclass('app.job') AND contype='c' "
+                    " AND conname='job_request_key_length' "
+                    " AND pg_get_constraintdef(oid) = "
+                    " 'CHECK (((request_key IS NULL) OR "
+                    "(length(request_key) <= 256)))') "
+                    "AND EXISTS (SELECT 1 FROM pg_constraint "
+                    " WHERE conrelid=to_regclass('app.job') AND contype='c' "
+                    " AND conname='job_request_key_has_command' "
+                    " AND pg_get_constraintdef(oid) = "
+                    " 'CHECK (((request_key IS NULL) OR "
+                    "(command_id IS NOT NULL)))'), "
+                    "EXISTS (SELECT 1 FROM pg_index "
+                    " WHERE indexrelid=to_regclass('app.job_command_request_key_once') "
+                    " AND indisunique "
+                    " AND pg_get_indexdef(indexrelid) LIKE "
+                    " 'CREATE UNIQUE INDEX job_command_request_key_once ON app.job USING btree "
+                    "(actor_kind, actor_id, command_id, request_key) WHERE %%' "
+                    " AND pg_get_expr(indpred, indrelid) = '(request_key IS NOT NULL)'), "
+                    "to_regclass('app.job_dispatch') IS NOT NULL")
+                row = cur.fetchone()
+            if row:
+                campaign_040 = all(bool(value) for value in row[:5])
+                campaign_045 = all(bool(value) for value in row[5:7])
+                runset_041 = all(bool(value) for value in row[7:10])
+                runset_042 = bool(row[10])
+                runset_043 = bool(row[11])
+                runset_044 = bool(row[12])
+                command_key_046 = all(bool(value) for value in row[13:15])
+                dispatch_047 = bool(row[15])
+                schema['campaign'] = (
+                    campaign_040 and campaign_045 and command_key_046
+                    and dispatch_047)
+                schema['runset'] = (
+                    runset_041 and runset_042 and runset_043 and runset_044
+                    and command_key_046)
+                missing_campaign = [
+                    migration for migration, present in (
+                        (required_campaign[0], campaign_040),
+                        (required_campaign[1], campaign_045),
+                        (required_campaign[2], command_key_046),
+                        (required_campaign[3], dispatch_047),
+                    ) if not present]
+                missing_runset = [
+                    migration for migration, present in (
+                        (required_runset[0], runset_041),
+                        (required_runset[1], runset_042),
+                        (required_runset[2], runset_043),
+                        (required_runset[3], runset_044),
+                        (required_runset[4], command_key_046),
+                    ) if not present]
+                if missing_campaign:
+                    schema_reason['campaign'] = (
+                        'missing schema capability from '
+                        + ', '.join(missing_campaign))
+                if missing_runset:
+                    schema_reason['runset'] = (
+                        'missing schema capability from '
+                        + ', '.join(missing_runset))
+        except Exception as error:                                 # noqa: BLE001
+            reason = (f'database readiness probe failed '
+                      f'({type(error).__name__})')
+            schema_reason = {'campaign': reason, 'runset': reason}
+
+    campaign_component = (getattr(service, 'rbfe_reference_resolver', None)
+                          if service is not None else None)
+    runset_component = (getattr(service, 'rbfe_runset_controller', None)
+                        if service is not None else None)
+    service_capabilities = (
+        service.capabilities() if service is not None
+        and callable(getattr(service, 'capabilities', None)) else {})
+    executor_capability = dict(service_capabilities.get('executor') or {})
+    gpu_execution = bool(executor_capability.get('gpu_execution'))
+    executor_adapter = str(executor_capability.get('adapter') or 'unconfigured')
+    campaign_ready = schema['campaign'] and campaign_component is not None
+    runset_ready = (schema['runset'] and runset_component is not None
+                    and campaign_ready and gpu_execution)
+
+    def reason_for(kind: str, component, ready: bool) -> str:
+        if ready:
+            return 'ready'
+        if not schema[kind]:
+            return schema_reason[kind]
+        if service is None:
+            return 'v2 kernel is not initialized; capability is not yet proven'
+        if component is None:
+            label = ('campaign resolver' if kind == 'campaign'
+                     else 'RunSet controller')
+            return f'{label} initialization failed'
+        if kind == 'runset' and not campaign_ready:
+            return 'RBFE campaign store prerequisite is unavailable'
+        if kind == 'runset' and not gpu_execution:
+            return (f'OpenFE GPU execution is unavailable; configured adapter is '
+                    f'{executor_adapter!r}')
+        return 'capability is unavailable'
+
+    return {
+        'rbfe_campaign_store': {
+            'ready': campaign_ready,
+            'required_migrations': list(required_campaign),
+            'reason': reason_for('campaign', campaign_component, campaign_ready),
+            'legacy_unowned_policy': 'fail_closed',
+            'owner_inference': False,
+            'implicit_public': False,
+        },
+        'rbfe_runset': {
+            'ready': runset_ready,
+            'required_migrations': list(required_runset),
+            'reason': reason_for('runset', runset_component, runset_ready),
+            'gpu_execution': gpu_execution,
+            'executor_adapter': executor_adapter,
+        },
+    }
+
+
 def _v2_error(code: str, message: str, **details) -> tuple[int, dict]:
     f = failures.DiracFailure(code, message, details=details or None)
     return f.http_status if f.http_status != 200 else 400, {
@@ -379,10 +586,12 @@ def handle_v2(method: str, path: str, body: dict | None, *,
     try:
         if method == 'GET' and path == '/v2/meta':
             svc = _kernel()
+            capabilities = dict(svc.capabilities())
+            capabilities.update(_rbfe_readiness(svc))
             return 200, {'ok': True,
                          'data': {'api_version': '2.0.0',
                                   'supported_envelopes': [2],
-                                  'capabilities': svc.capabilities()},
+                                  'capabilities': capabilities},
                          'meta': {'envelope': 2}}
 
         if method == 'GET' and path == '/v2/commands':
@@ -416,7 +625,8 @@ def handle_v2(method: str, path: str, body: dict | None, *,
             state = (query.get('state') or [None])[0]
             limit = int((query.get('limit') or ['100'])[0])
             return 200, {'ok': True,
-                         'data': {'jobs': svc.list_jobs(state=state, limit=limit)},
+                         'data': {'jobs': svc.list_jobs(
+                             actor=actor, state=state, limit=limit)},
                          'meta': {'envelope': 2,
                                   'durability': getattr(svc, 'job_durability', None)}}
 
@@ -436,16 +646,19 @@ def handle_v2(method: str, path: str, body: dict | None, *,
             rest = urllib.parse.unquote(path[len('/v2/jobs/'):]).strip('/')
             if method == 'POST' and rest.endswith('/cancel'):
                 job_id = rest[:-len('/cancel')].strip('/')
-                return 200, {'ok': True, 'data': _kernel().cancel_job(job_id),
+                return 200, {'ok': True, 'data': _kernel().cancel_job(
+                                 job_id, actor=actor),
                              'meta': {'envelope': 2}}
             if method == 'GET' and rest.endswith('/wait'):
                 job_id = rest[:-len('/wait')].strip('/')
                 timeout = float((query.get('timeout') or ['300'])[0])
                 return 200, {'ok': True,
-                             'data': _kernel().wait_job(job_id, timeout=timeout),
+                             'data': _kernel().wait_job(
+                                 job_id, actor=actor, timeout=timeout),
                              'meta': {'envelope': 2}}
             if method == 'GET' and rest and '/' not in rest:
-                return 200, {'ok': True, 'data': _kernel().get_job(rest),
+                return 200, {'ok': True, 'data': _kernel().get_job(
+                                 rest, actor=actor),
                              'meta': {'envelope': 2}}
 
         if method == 'GET' and path == '/v2/methods':
@@ -2287,6 +2500,10 @@ class Handler(BaseHTTPRequestHandler):
         origin = self._cors_origin()
         if origin:
             self.send_header('Access-Control-Allow-Origin', origin)
+            # CORS is origin-specific while artifact bytes are immutable. Without
+            # Vary, a public cache can replay the old 1338 allow-origin header to
+            # the current 1360 app and make verified artifacts unreadable.
+            self.send_header('Vary', 'Origin')
         for key, value in (headers or {}).items():
             self.send_header(key, str(value))
         self.send_header('Content-Length', str(len(body)))
@@ -2312,6 +2529,7 @@ class Handler(BaseHTTPRequestHandler):
         origin = self._cors_origin()
         if origin:
             self.send_header('Access-Control-Allow-Origin', origin)
+            self.send_header('Vary', 'Origin')
             # Without this the browser can read the body and NOT the digest, so the
             # frontend could not verify what it downloaded. The header exists to be
             # read cross-origin or it may as well not be sent.
@@ -2346,22 +2564,29 @@ class Handler(BaseHTTPRequestHandler):
         try:
             import artifacts as A
             store = _artifact_store()
+            if self._principal is None:
+                raise failures.DiracNotFound(f'no artifact at {address!r}')
+            actor = self._principal.actor
             if want_metadata:
-                art = store.head(address)
+                art = store.head_authorized(address, actor)
                 # The reference, and nothing else — this is the request a client
                 # makes to decide whether it wants 2.5 MB, so returning the bytes
                 # here would defeat the purpose of asking.
                 self._send(200, {'ok': True, 'data': art.to_reference(),
                                  'meta': {'envelope': 2}})
                 return True
-            art, data, rng = store.read_range(address, self.headers.get('Range'))
+            art, data, rng = store.read_range_authorized(
+                address, self.headers.get('Range'), actor)
             headers = {'X-Dirac-Sha256': art.sha256,
                        'X-Dirac-Artifact-Id': art.id or '',
                        'X-Dirac-Role': art.role,
                        'ETag': f'"{art.sha256}"',
                        # Immutable because the name IS the content: bytes under this
                        # address can never change, so a cache may keep them forever.
-                       'Cache-Control': 'public, max-age=31536000, immutable'}
+                       # Authorization is per principal. Shared caches must never
+                       # replay one scientist's receptor or FEP evidence to another.
+                       'Cache-Control': 'private, max-age=31536000, immutable',
+                       'Vary': 'Authorization'}
             if rng is not None:
                 lo, hi = rng
                 headers['Content-Range'] = f'bytes {lo}-{hi}/{art.size_bytes}'
@@ -2403,6 +2628,7 @@ class Handler(BaseHTTPRequestHandler):
         origin = self._cors_origin()
         if origin:
             self.send_header('Access-Control-Allow-Origin', origin)
+            self.send_header('Vary', 'Origin')
         self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
         self.send_header('Access-Control-Allow-Headers',
                          'Content-Type, Authorization, X-Request-Id')
@@ -2446,6 +2672,7 @@ class Handler(BaseHTTPRequestHandler):
                     rss_mb = int(fh.read().split()[1]) * os.sysconf('SC_PAGE_SIZE') // (1 << 20)
             except Exception:                                # noqa: BLE001
                 rss_mb = None
+            rbfe = _rbfe_readiness(_kernel_singleton)
             self._send(200, {'ok': True, 'rdkit': rdkit.__version__,
                              'pyscf': pyscf.__version__,
                              'db_cache': 'on' if _db_ok else 'off',
@@ -2457,7 +2684,8 @@ class Handler(BaseHTTPRequestHandler):
                              'qm_waiting': dict(_qm_waiting),
                              'security_mode': _security_policy().mode,
                              'security_audit_failures': _security_audit_failures,
-                             'rss_mb': rss_mb})
+                             'rss_mb': rss_mb,
+                             **rbfe})
         else:
             self._send(404, {'ok': False, 'error': 'not found'})
 
@@ -2643,6 +2871,8 @@ class Handler(BaseHTTPRequestHandler):
             job_id = None
             job_params = {'kind': kind, 'basis': basis_key,
                           'spin': spin, 'max_seconds': max_seconds}
+            job_actor = (self._principal.actor if self._principal is not None
+                         else {'kind': 'service', 'id': 'dirac-field-server'})
             if _jobs is not None and method_row_id is not None:
                 # A quantum job may WAIT for a slot, so its row starts as
                 # 'queued' and is promoted by start() once it holds one. Without
@@ -2652,6 +2882,7 @@ class Handler(BaseHTTPRequestHandler):
                 job_id, conflicted = _jobs.open(
                     method_row_id=method_row_id, input_sha256=molfile_sha,
                     params=job_params, budget_seconds=max_seconds,
+                    actor_kind=job_actor['kind'], actor_id=job_actor['id'],
                     queued=(kind not in ('mep', 'mlp')))
                 if conflicted:
                     # SOMEONE ELSE IS ALREADY COMPUTING EXACTLY THIS. Until today
@@ -2662,6 +2893,7 @@ class Handler(BaseHTTPRequestHandler):
                     outcome = _jobs.wait_for(
                         method_row_id=method_row_id, input_sha256=molfile_sha,
                         params=job_params,
+                        actor_kind=job_actor['kind'], actor_id=job_actor['id'],
                         timeout=min(max_seconds or JOIN_WAIT_CEILING,
                                     JOIN_WAIT_CEILING))
                     print(f"[job] joined an in-flight {kind} "
@@ -2701,6 +2933,7 @@ class Handler(BaseHTTPRequestHandler):
                     job_id, _ = _jobs.open(
                         method_row_id=method_row_id, input_sha256=molfile_sha,
                         params=job_params, budget_seconds=max_seconds,
+                        actor_kind=job_actor['kind'], actor_id=job_actor['id'],
                         queued=(kind not in ('mep', 'mlp')))
             mol = prepare_mol(molblock)
             if kind == 'mep':

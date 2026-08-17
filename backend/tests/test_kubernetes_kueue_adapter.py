@@ -20,10 +20,30 @@ class FakeKubectl:
         self.config_map: dict = {}
         self.pods: list[dict] = []
         self.job_exists = False
+        self.queue_active = True
+        self.nodes = [{
+            "metadata": {"name": "gpu-node-1", "labels": {
+                "dirac.io/gpu-arch": "blackwell",
+                "dirac.io/gpu-numeric-mode": "fp32",
+                "dirac.io/gpu-memory-bytes": str(16 << 30),
+            }},
+            "spec": {"unschedulable": False},
+            "status": {
+                "conditions": [{"type": "Ready", "status": "True"}],
+                "allocatable": {"nvidia.com/gpu": "1"},
+            },
+        }]
 
     def __call__(self, command, *, input=None, text, capture_output, check):
         self.calls.append((tuple(command), input))
         args = tuple(command[1:])
+        if args[:3] == ("get", "localqueues.kueue.x-k8s.io", "motif"):
+            return self._result(json.dumps({"status": {"conditions": [{
+                "type": "Active",
+                "status": "True" if self.queue_active else "False",
+            }]}}))
+        if args[:2] == ("get", "nodes"):
+            return self._result(json.dumps({"items": self.nodes}))
         if args[:3] == ("get", "job", "dirac-00000000000040008000000000000004"):
             if not self.job_exists:
                 raise subprocess.CalledProcessError(
@@ -119,6 +139,12 @@ class KubernetesKueueAdapterTests(unittest.TestCase):
             "gpu_arch": ["blackwell"],
             "gpu_memory_bytes_min": 1,
         })
+        request["determinism"]["numeric_mode"] = "fp32"
+        request["placement"]["node_constraints"] = {
+            "dirac.io/gpu-arch": "blackwell",
+            "dirac.io/gpu-numeric-mode": "fp32",
+            "dirac.io/gpu-memory-bytes": str(16 << 30),
+        }
         self.adapter.submit(request)
         manifests = [json.loads(body) for command, body in self.runner.calls
                      if command[1:3] == ("apply", "--server-side")]
@@ -127,6 +153,25 @@ class KubernetesKueueAdapterTests(unittest.TestCase):
         resources = pod_spec["containers"][0]["resources"]
         self.assertEqual(resources["requests"]["nvidia.com/gpu"], "1")
         self.assertEqual(resources["limits"]["nvidia.com/gpu"], "1")
+        self.assertEqual(pod_spec["nodeSelector"],
+                         request["placement"]["node_constraints"])
+
+    def test_gpu_admission_refuses_unlabeled_or_unhealthy_inventory(self):
+        request = copy.deepcopy(self.request)
+        request["resource_request"].update({
+            "gpus": 1, "gpu_arch": ["blackwell"],
+            "gpu_memory_bytes_min": 1,
+        })
+        request["determinism"]["numeric_mode"] = "fp32"
+        request["placement"]["node_constraints"] = {
+            "dirac.io/gpu-arch": "blackwell",
+            "dirac.io/gpu-numeric-mode": "fp32",
+            "dirac.io/gpu-memory-bytes": str(16 << 30),
+        }
+        self.runner.nodes[0]["metadata"]["labels"].pop("dirac.io/gpu-arch")
+        decision = self.adapter.admit(request)
+        self.assertFalse(decision.admitted)
+        self.assertEqual(decision.code, "GPU_INVENTORY_UNVERIFIED")
 
     def test_deployment_owned_host_mounts_are_fixed_and_not_request_controlled(self):
         adapter = KubernetesKueueAdapter(

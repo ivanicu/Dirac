@@ -20,6 +20,10 @@ from execution_control.protocol import (
     EventPage,
     validate_execution_request,
 )
+from execution_control.identity import (
+    CUDA_NUMERIC_MODES,
+    CUDA_GPU_ARCHITECTURES,
+)
 
 
 _DNS_LABEL = re.compile(r"^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$")
@@ -144,6 +148,80 @@ class KubernetesKueueAdapter:
         self.static_pvc_mounts = tuple(static_pvc_mounts)
         self._runner = runner or subprocess.run
 
+    def health(self) -> dict[str, Any]:
+        """Read-only positive control for Kueue plus schedulable GPU inventory.
+
+        Architecture and numeric mode are deployment labels, not product-name
+        guesses.  An unlabeled, unhealthy, unschedulable, or heterogeneous GPU
+        fleet therefore remains visible but is not eligible to mint provenance.
+        """
+        queue = self._json(
+            "get", "localqueues.kueue.x-k8s.io", self.config.queue_name,
+            "--namespace", self.config.namespace)
+        queue_active = any(
+            item.get("type") == "Active" and item.get("status") == "True"
+            for item in queue.get("status", {}).get("conditions", ()))
+        nodes = self._json("get", "nodes")
+        candidates: list[dict[str, Any]] = []
+        for node in nodes.get("items", ()):
+            spec = node.get("spec", {})
+            status = node.get("status", {})
+            if spec.get("unschedulable"):
+                continue
+            if not any(item.get("type") == "Ready" and item.get("status") == "True"
+                       for item in status.get("conditions", ())):
+                continue
+            allocatable = status.get("allocatable", {})
+            try:
+                gpu_count = int(str(allocatable.get("nvidia.com/gpu", "0")))
+            except ValueError:
+                gpu_count = 0
+            if gpu_count < 1:
+                continue
+            labels = node.get("metadata", {}).get("labels", {})
+            arch = str(labels.get("dirac.io/gpu-arch") or "")
+            numeric_mode = str(labels.get("dirac.io/gpu-numeric-mode") or "")
+            try:
+                memory_bytes = int(labels.get("dirac.io/gpu-memory-bytes") or 0)
+            except (TypeError, ValueError):
+                memory_bytes = 0
+            if (arch not in CUDA_GPU_ARCHITECTURES
+                    or numeric_mode not in CUDA_NUMERIC_MODES
+                    or memory_bytes < 1):
+                continue
+            candidates.append({
+                "node": str(node.get("metadata", {}).get("name") or "unknown"),
+                "gpus": gpu_count,
+                "arch": arch,
+                "numeric_mode": numeric_mode,
+                "memory_bytes": memory_bytes,
+            })
+        profiles = {(item["arch"], item["numeric_mode"], item["memory_bytes"])
+                    for item in candidates}
+        verified = queue_active and len(profiles) == 1
+        arch, numeric_mode, memory_bytes = (
+            next(iter(profiles)) if verified else (None, None, None))
+        return {
+            "protocol": "kubernetes+kueue/v1",
+            "ready": queue_active,
+            "queue": {"name": self.config.queue_name, "active": queue_active},
+            "gpu": {
+                "verified": verified,
+                "arch": arch,
+                "numeric_mode": numeric_mode,
+                "memory_bytes": memory_bytes,
+                "count": sum(item["gpus"] for item in candidates),
+                "nodes": [item["node"] for item in candidates],
+                "node_selector": ({
+                    "dirac.io/gpu-arch": arch,
+                    "dirac.io/gpu-numeric-mode": numeric_mode,
+                    "dirac.io/gpu-memory-bytes": str(memory_bytes),
+                } if verified else {}),
+                "ambiguity": (None if len(profiles) <= 1
+                              else "multiple GPU architecture/numeric profiles"),
+            },
+        }
+
     def admit(self, request: dict[str, Any]) -> AdmissionDecision:
         validate_execution_request(request)
         if request["placement"]["backend"] != self.kind:
@@ -191,6 +269,39 @@ class KubernetesKueueAdapter:
                 False, "PLACEMENT_MISMATCH",
                 "a deployed Motif WorkloadPriorityClass is required",
                 self._available())
+        if request["resource_request"].get("gpus", 0):
+            try:
+                health = self.health()
+            except Exception as error:  # noqa: BLE001 - admission fails closed
+                return AdmissionDecision(
+                    False, "SCHEDULER_UNAVAILABLE",
+                    f"Kubernetes/Kueue health probe failed: {type(error).__name__}",
+                    self._available())
+            gpu = dict(health.get("gpu") or {})
+            if not health.get("ready") or not gpu.get("verified"):
+                return AdmissionDecision(
+                    False, "GPU_INVENTORY_UNVERIFIED",
+                    "no single healthy labeled GPU scheduling profile is verified",
+                    {**self._available(), "health": health})
+            requested_arch = set(request["resource_request"].get("gpu_arch") or ())
+            if requested_arch != {gpu["arch"]}:
+                return AdmissionDecision(
+                    False, "GPU_ARCH",
+                    "request architecture differs from verified cluster inventory",
+                    {**self._available(), "health": health})
+            if (int(request["resource_request"].get("gpu_memory_bytes_min") or 0)
+                    > int(gpu["memory_bytes"])):
+                return AdmissionDecision(
+                    False, "GPU_MEMORY",
+                    "request memory floor exceeds verified GPU inventory",
+                    {**self._available(), "health": health})
+            if (request["determinism"].get("numeric_mode") != gpu["numeric_mode"]
+                    or request["placement"].get("node_constraints")
+                    != gpu["node_selector"]):
+                return AdmissionDecision(
+                    False, "PLACEMENT_MISMATCH",
+                    "numeric mode and node selector must equal verified inventory",
+                    {**self._available(), "health": health})
         return AdmissionDecision(
             True,
             "ADMITTED",
@@ -397,6 +508,10 @@ class KubernetesKueueAdapter:
                     }},
                     "spec": {
                         **({"runtimeClassName": "nvidia"} if resources["gpus"] else {}),
+                        **({"nodeSelector": {
+                            str(key): str(value) for key, value in
+                            request["placement"].get("node_constraints", {}).items()
+                        }} if request["placement"].get("node_constraints") else {}),
                         # Pod-level deadline leaves a terminal Pod behind, so
                         # kubectl logs and termination evidence survive timeout.
                         "activeDeadlineSeconds": resources["walltime_seconds"],

@@ -15,6 +15,8 @@ import traces
 from dirac_app import CommandDispatcher
 
 PASS, FAIL = [], []
+OWNER = {'actor_kind': 'human', 'actor_id': 'chemist-a'}
+OTHER = {'actor_kind': 'human', 'actor_id': 'chemist-b'}
 
 
 def _add(a, b):
@@ -35,17 +37,17 @@ def test_memory_store_lifecycle_and_durability_are_explicit():
     store = jobs.MemoryJobStore()
     jid, joined = store.open(
         method_row_id='fields.qm.homo', input_sha256=hashlib.sha256(b'a').digest(),
-        params={'basis': 'sto-3g'}, queued=True)
+        params={'basis': 'sto-3g'}, queued=True, **OWNER)
     assert jid and not joined
     assert store.kind == 'memory' and store.durability == 'process'
-    assert store.get(jid)['state'] == 'queued'
+    assert store.get(jid, **OWNER)['state'] == 'queued'
     store.start(jid)
-    assert store.get(jid)['state'] == 'running'
+    assert store.get(jid, **OWNER)['state'] == 'running'
     store.done(jid, seconds=1.2349)
-    assert store.get(jid)['state'] == 'done'
-    assert store.get(jid)['seconds'] == 1.235
-    assert store.list(state='done')[0]['id'] == jid
-    assert store.get(jid)['outcome_class'] == 'success'
+    assert store.get(jid, **OWNER)['state'] == 'done'
+    assert store.get(jid, **OWNER)['seconds'] == 1.235
+    assert store.list(state='done', **OWNER)[0]['id'] == jid
+    assert store.get(jid, **OWNER)['outcome_class'] == 'success'
 
 
 def test_outcome_classes_separate_refusals_science_and_operations():
@@ -61,13 +63,16 @@ def test_outcome_classes_separate_refusals_science_and_operations():
 
 def test_attention_is_derived_from_terminal_jobs_not_written_separately():
     store = jobs.MemoryJobStore()
-    expected, _ = store.open(method_row_id='m', input_sha256=b'e' * 32, params={})
+    expected, _ = store.open(method_row_id='m', input_sha256=b'e' * 32,
+                             params={}, **OWNER)
     store.failed(expected, code='BUDGET', detail='expected refusal')
-    scientific, _ = store.open(method_row_id='m', input_sha256=b's' * 32, params={})
+    scientific, _ = store.open(method_row_id='m', input_sha256=b's' * 32,
+                               params={}, **OWNER)
     store.failed(scientific, code='UNCONVERGED', detail='review science')
-    operational, _ = store.open(method_row_id='m', input_sha256=b'o' * 32, params={})
+    operational, _ = store.open(method_row_id='m', input_sha256=b'o' * 32,
+                                params={}, **OWNER)
     store.failed(operational, code='INTERNAL', detail='repair system')
-    items = store.list_attention()
+    items = store.list_attention(**OWNER)
     assert {item['object_id'] for item in items} == {scientific, operational}
     assert {item['priority'] for item in items} == {'review', 'critical'}
 
@@ -78,12 +83,12 @@ def test_memory_store_persists_invocation_identity_and_terminal_meaning():
         method_row_id='fields.mep', input_sha256=b'i' * 32, params={},
         actor_kind='agent', actor_id='planner-7',
         command_id='structure.field.compute', request_id='req-identity')
-    row = store.get(jid)
+    row = store.get(jid, actor_kind='agent', actor_id='planner-7')
     assert (row['actor_kind'], row['actor_id']) == ('agent', 'planner-7')
     assert row['command_id'] == 'structure.field.compute'
     assert row['request_id'] == 'req-identity'
     store.failed(jid, code='BUDGET', detail='cost exceeds caller budget')
-    row = store.get(jid)
+    row = store.get(jid, actor_kind='agent', actor_id='planner-7')
     assert row['outcome_class'] == 'expected_refusal'
 
 
@@ -120,23 +125,61 @@ def test_identical_inflight_open_joins_instead_of_duplicating():
     store = jobs.MemoryJobStore()
     kw = dict(method_row_id='fields.qm.homo',
               input_sha256=hashlib.sha256(b'same').digest(),
-              params={'basis': 'sto-3g'}, queued=True)
+              params={'basis': 'sto-3g'}, queued=True, **OWNER)
     first, joined_first = store.open(**kw)
     second, joined_second = store.open(**kw)
     assert not joined_first and joined_second
-    assert first == second and len(store.list()) == 1
+    assert first == second and len(store.list(**OWNER)) == 1
+
+
+def test_actor_boundary_scopes_get_list_attention_cancel_and_dedup():
+    store = jobs.MemoryJobStore()
+    request = dict(method_row_id='fields.qm.homo', input_sha256=b'x' * 32,
+                   params={'basis': 'sto-3g'}, queued=True)
+    owner_job, owner_conflict = store.open(**request, **OWNER)
+    other_job, other_conflict = store.open(**request, **OTHER)
+    owner_replay, replay_conflict = store.open(**request, **OWNER)
+
+    assert owner_job != other_job
+    assert not owner_conflict and not other_conflict
+    assert owner_replay == owner_job and replay_conflict
+    assert store.get(owner_job, **OTHER) is None
+    assert [row['id'] for row in store.list(**OTHER)] == [other_job]
+    assert store.request_cancel(owner_job, **OTHER) is None
+    assert store.get(owner_job, **OWNER)['state'] == 'queued'
+
+    store.start(owner_job)
+    store.failed(owner_job, code='INTERNAL', detail='owner incident')
+    assert store.list_attention(**OTHER) == []
+    assert [row['object_id'] for row in store.list_attention(**OWNER)] == [owner_job]
+
+
+def test_wait_never_joins_another_actors_terminal_job():
+    store = jobs.MemoryJobStore()
+    request = dict(method_row_id='fields.qm.homo', input_sha256=b'w' * 32,
+                   params={'basis': 'sto-3g'}, queued=False)
+    owner_job, _ = store.open(**request, **OWNER)
+    other_job, _ = store.open(**request, **OTHER)
+    store.done(owner_job, seconds=0.1)
+
+    wait_request = {key: value for key, value in request.items() if key != 'queued'}
+    owner = store.wait_for(**wait_request, **OWNER, timeout=0.05, poll=0.001)
+    other = store.wait_for(**wait_request, **OTHER, timeout=0.01, poll=0.001)
+    assert owner['state'] == 'done'
+    assert other['state'] == 'timeout' and other['last_state'] == 'running'
+    store.failed(other_job, code='CANCELLED', detail='test cleanup')
 
 
 def test_cancellation_distinguishes_queued_from_running():
     store = jobs.MemoryJobStore()
     queued, _ = store.open(method_row_id='m', input_sha256=b'q' * 32,
-                           params={}, queued=True)
-    q = store.request_cancel(queued)
+                           params={}, queued=True, **OWNER)
+    q = store.request_cancel(queued, **OWNER)
     assert q['state'] == 'cancelled' and q['cancel']['accepted'] is True
 
     running, _ = store.open(method_row_id='m', input_sha256=b'r' * 32,
-                            params={}, queued=False)
-    r = store.request_cancel(running)
+                            params={}, queued=False, **OWNER)
+    r = store.request_cancel(running, **OWNER)
     assert r['state'] == 'running' and r['cancel'] == {
         'requested': True, 'accepted': False, 'capability': 'not_interruptible'}
 

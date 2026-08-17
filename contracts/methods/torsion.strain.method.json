@@ -180,6 +180,7 @@
     "default_mode": "job",
     "inline_threshold_seconds": 2.0,
     "resource_class": "cpu",
+    "supported_adapters": ["inline", "local_cpu"],
     "concurrency_class": "torsion",
     "scale_profile": {"cpu_cores": 1, "shardable": true, "distributed": false, "min_gpus": 0, "max_gpus": 0},
     "supports_cancellation": false,

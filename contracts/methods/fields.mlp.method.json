@@ -297,6 +297,7 @@
     "default_mode": "sync",
     "inline_threshold_seconds": 5.0,
     "resource_class": "cpu-classical",
+    "supported_adapters": ["inline", "local_cpu"],
     "concurrency_class": "classical",
     "supports_cancellation": false,
     "deterministic": true,

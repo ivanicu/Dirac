@@ -168,6 +168,49 @@ class MotifCoreTests(unittest.TestCase):
             service.submit("ml.motif.mesh.train", payload)
         thread.submit.assert_not_called()
 
+    def test_method_descriptor_cannot_be_mutated_through_read_surfaces(self):
+        catalog = MethodCatalog.load()
+        spec = catalog.get("physics.motif.openfe_edge")
+        self.assertEqual(spec.execution["resource_class"], "gpu")
+
+        with self.assertRaises(TypeError):
+            spec.descriptor["execution"]["resource_class"] = "cpu"
+        with self.assertRaises(TypeError):
+            spec.descriptor["execution"]["supported_adapters"].append(
+                "local_cpu")
+
+        public = catalog.describe("physics.motif.openfe_edge")
+        public["execution"]["resource_class"] = "cpu"
+        public["execution"]["supported_adapters"].append("local_cpu")
+        self.assertEqual(
+            catalog.get("physics.motif.openfe_edge").execution["resource_class"],
+            "gpu")
+        self.assertNotIn(
+            "local_cpu",
+            catalog.get("physics.motif.openfe_edge").execution[
+                "supported_adapters"])
+
+    def test_job_only_method_cannot_run_through_synchronous_invoke(self):
+        service = InvocationService(MethodCatalog.load())
+        result = service.invoke("data.motif.snapshot", {
+            "selection_query": "SELECT governed rows",
+            "endpoint_definitions": [{
+                "endpoint_key": "potency", "version": "v1",
+                "canonical_unit": "nM", "measurement_type": "IC50",
+            }],
+            "rows": [],
+            "registration": {
+                "program_ref": {"kind": "program", "id": UUID(41)},
+                "campaign_ref": {"kind": "campaign", "id": UUID(42)},
+                "identity_policy_release_id": UUID(43),
+                "data_classification": "internal",
+            },
+        })
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"]["code"], "UNSUPPORTED")
+        self.assertEqual(result["error"]["details"]["required_endpoint"],
+                         "/v2/jobs")
+
     def test_production_invocation_refuses_partial_implicit_identity(self):
         service = InvocationService(MethodCatalog.load(), production_execution=True)
         result = service.invoke("design.motif.acquire", {

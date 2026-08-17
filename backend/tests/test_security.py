@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import pathlib
 import sys
 
@@ -89,6 +90,55 @@ def test_command_adapter_cannot_bypass_the_underlying_method_scope():
         who, 'POST', '/v2/execute', body, 100))
 
 
+def test_rbfe_command_fanout_requires_every_declared_method_scope_before_dispatch():
+    calls = []
+
+    class UsageSpy:
+        def reserve(self, who, cost_units):
+            calls.append((who.actor_id, cost_units))
+            return True
+
+    p = SecurityPolicy(
+        'remote', {DIGEST: principal(scopes=(
+            'command:physics.rbfe-run.start:execute',
+        ))}, usage_store=UsageSpy())
+    who = p.authenticate(headers())
+    body = {'command': 'physics.rbfe-run.start', 'input': {}}
+    writes = []
+
+    def dispatch():
+        p.authorize(who, 'POST', '/v2/execute', body, 100)
+        writes.append('runset-or-job')
+
+    assert required_scopes('POST', '/v2/execute', body) == (
+        'command:physics.rbfe-run.start:execute',
+        'method:physics.motif.openfe_edge:invoke',
+        'method:physics.motif.rbfe_aggregate:invoke',
+    )
+    refusal('FORBIDDEN', dispatch)
+    assert calls == []
+    assert writes == []
+
+
+def test_rbfe_command_fanout_reserves_full_cost_before_dispatch():
+    p = policy(principal(scopes=(
+        'command:physics.rbfe-run.start:execute',
+        'method:physics.motif.openfe_edge:invoke',
+        'method:physics.motif.rbfe_aggregate:invoke',
+    ), cost=609))
+    who = p.authenticate(headers())
+    body = {'command': 'physics.rbfe-run.start', 'input': {}}
+    writes = []
+
+    def dispatch():
+        p.authorize(who, 'POST', '/v2/execute', body, 100)
+        writes.append('runset-or-job')
+
+    assert request_cost_units('POST', '/v2/execute', body) == 610
+    refusal('QUOTA_EXCEEDED', dispatch)
+    assert writes == []
+
+
 def test_request_cap_rate_limit_and_daily_compute_quota_are_independent():
     refusal('TOO_LARGE', lambda: policy().authorize(
         principal(), 'POST', '/v2/invoke', {'method_id': 'fields.mep'}, 1025))
@@ -116,6 +166,54 @@ def test_cost_policy_prices_expensive_work_before_execution():
         'command': 'structure.field.compute',
         'input': {'field_kind': 'mep'}}) == 2
     assert request_cost_units('GET', '/v2/meta') == 1
+
+
+def test_rbfe_command_costs_and_method_scopes_are_registry_derived():
+    registry = json.loads(
+        (BACKEND.parent / 'contracts/commands/registry.json').read_text(
+            encoding='utf-8'))
+    descriptors = {item['id']: item for item in registry['commands']}
+    expected_costs = {
+        'physics.rbfe-network': 10,
+        'physics.openfe-edge': 100,
+        'physics.rbfe-campaign.prepare': 25,
+        'physics.rbfe-system.prepare': 25,
+        'physics.rbfe-aggregate': 10,
+        'physics.rbfe-run.start': 610,
+        'physics.rbfe-run.retry': 610,
+    }
+    for command, expected_cost in expected_costs.items():
+        body = {'command': command, 'input': {}}
+        declared = descriptors[command]['invokes_methods']
+        declared_methods = tuple(dict.fromkeys(
+            item['method_id'] for item in declared))
+        assert required_scopes('POST', '/v2/execute', body) == (
+            f'command:{command}:execute',
+            *(f'method:{method_id}:invoke'
+              for method_id in declared_methods),
+        )
+        assert request_cost_units('POST', '/v2/execute', body) == expected_cost
+        assert sum(item['multiplicity'] * item['cost_units']
+                   for item in declared) == expected_cost
+
+
+def test_rbfe_command_errors_declare_owner_and_readiness_refusals():
+    registry = json.loads(
+        (BACKEND.parent / 'contracts/commands/registry.json').read_text(
+            encoding='utf-8'))
+    descriptors = {item['id']: item for item in registry['commands']}
+    expected = {
+        'physics.rbfe-system.list': {'INVALID_PARAMETERS', 'NOT_FOUND'},
+        'physics.rbfe-campaign.save': {'INVALID_PARAMETERS', 'NOT_FOUND'},
+        'physics.rbfe-campaign.prepare': {
+            'INVALID_PARAMETERS', 'NOT_FOUND', 'UNSUPPORTED'},
+        'physics.rbfe-campaign.accept-poses': {
+            'INVALID_PARAMETERS', 'NOT_FOUND'},
+        'physics.rbfe-run.start': {
+            'INVALID_PARAMETERS', 'NOT_FOUND', 'UNSUPPORTED'},
+    }
+    for command, required in expected.items():
+        assert required <= set(descriptors[command]['errors'])
 
 
 def test_audit_redaction_never_preserves_secrets_or_query_values():

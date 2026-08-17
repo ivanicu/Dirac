@@ -411,6 +411,7 @@
     "default_mode": "auto",
     "inline_threshold_seconds": 2.0,
     "resource_class": "cpu-qm",
+    "supported_adapters": ["inline", "local_cpu"],
     "concurrency_class": "scf",
     "supports_cancellation": false,
     "deterministic": true,

@@ -13,6 +13,7 @@ from typing import Any
 
 import failures
 from invocation import HandlerResult, InvocationContext
+from motif.rbfe_binding import validate_campaign_binding
 
 
 OPENFE_VERSION = "1.11.1"
@@ -48,6 +49,63 @@ def _canonical(value: Any) -> bytes:
 
 def _digest(value: Any) -> str:
     return "sha256:" + hashlib.sha256(_canonical(value)).hexdigest()
+
+
+def _edge_spec(payload: dict[str, Any], ctx: InvocationContext) -> tuple[dict, str]:
+    edge_spec_ref = payload.get("edge_spec_ref")
+    if not isinstance(edge_spec_ref, dict) or ctx.artifact_reader is None:
+        raise failures.DiracInvalidParameters(
+            "a server-owned rbfe.edge_spec artifact capability is required")
+    spec_artifact, spec_bytes = ctx.artifact_reader.read(edge_spec_ref.get("id", ""))
+    expected_spec_sha = "sha256:" + hashlib.sha256(spec_bytes).hexdigest()
+    if (edge_spec_ref.get("sha256") != expected_spec_sha
+            or spec_artifact.role != "rbfe.edge_spec"):
+        raise failures.DiracInvalidParameters(
+            "edge_spec_ref does not resolve to the declared server-owned RBFE spec")
+    try:
+        edge_spec = json.loads(spec_bytes)
+    except json.JSONDecodeError as error:
+        raise failures.DiracInvalidParameters("rbfe.edge_spec is not valid JSON") from error
+    declared_spec_digest = edge_spec.get("digest")
+    computed_spec_digest = _digest({key: value for key, value in edge_spec.items()
+                                    if key != "digest"})
+    if declared_spec_digest != computed_spec_digest:
+        raise failures.DiracInvalidParameters("rbfe.edge_spec content digest is invalid")
+    return edge_spec, expected_spec_sha
+
+
+def _campaign_binding(edge_spec: dict) -> dict:
+    try:
+        return validate_campaign_binding(edge_spec.get("campaign_binding"))
+    except (TypeError, ValueError) as error:
+        raise failures.DiracInvalidParameters(
+            f"rbfe.edge_spec Campaign binding is invalid: {error}") from error
+
+
+def attest_openfe_edge_admission(payload: dict[str, Any],
+                                 ctx: InvocationContext) -> dict[str, Any]:
+    """Resolve the DB-owned generation before a network-isolated worker starts."""
+    edge_spec, edge_spec_sha = _edge_spec(payload, ctx)
+    binding = _campaign_binding(edge_spec)
+    resolver = getattr(ctx, "rbfe_reference_resolver", None)
+    if resolver is None:
+        raise failures.DiracUnsupported(
+            "versioned Campaign admission is unavailable on the API service")
+    resolver.assert_campaign_generation(
+        binding.get("campaign_id"),
+        binding.get("campaign_scientific_generation"),
+        binding.get("campaign_scientific_digest"), ctx.actor)
+    return {
+        "verdict": "CONFIRMED",
+        "edge_spec_sha256": edge_spec_sha,
+        "campaign_binding_digest": binding.get("digest"),
+        "campaign_id": binding.get("campaign_id"),
+        "campaign_scientific_generation": binding.get(
+            "campaign_scientific_generation"),
+        "campaign_scientific_digest": binding.get(
+            "campaign_scientific_digest"),
+        "actor": dict(ctx.actor or {}),
+    }
 
 
 def _quantity(value: Any) -> tuple[float | None, str | None]:
@@ -183,6 +241,35 @@ def execute_openfe_edge(payload: dict[str, Any], ctx: InvocationContext) -> Hand
     is deliberately not called a converged RBFE result; convergence and the
     complex-minus-solvent thermodynamic cycle are downstream scientific gates.
     """
+    edge_spec, expected_spec_sha = _edge_spec(payload, ctx)
+    edge_spec_ref = payload["edge_spec_ref"]
+    campaign_binding = _campaign_binding(edge_spec)
+    declared_spec_digest = edge_spec["digest"]
+    resolver = getattr(ctx, "rbfe_reference_resolver", None)
+    if resolver is not None:
+        resolver.assert_campaign_generation(
+            campaign_binding.get("campaign_id"),
+            campaign_binding.get("campaign_scientific_generation"),
+            campaign_binding.get("campaign_scientific_digest"), ctx.actor)
+    else:
+        expected_attestation = {
+            "verdict": "CONFIRMED",
+            "edge_spec_sha256": expected_spec_sha,
+            "campaign_binding_digest": campaign_binding.get("digest"),
+            "campaign_id": campaign_binding.get("campaign_id"),
+            "campaign_scientific_generation": campaign_binding.get(
+                "campaign_scientific_generation"),
+            "campaign_scientific_digest": campaign_binding.get(
+                "campaign_scientific_digest"),
+            "actor": dict(ctx.actor or {}),
+        }
+        observed_attestation = (ctx.server_attestations or {}).get(
+            "rbfe_campaign_generation")
+        if observed_attestation != expected_attestation:
+            raise failures.DiracUnsupported(
+                "network-isolated OpenFE execution requires a server-sealed "
+                "Campaign generation attestation")
+
     leg = payload["leg"]
     target_ref = payload.get("target_ref")
     structure_ref = payload.get("protein_structure_ref")
@@ -224,13 +311,49 @@ def execute_openfe_edge(payload: dict[str, Any], ctx: InvocationContext) -> Hand
         raise failures.DiracInvalidParameters(
             "transformation_digest does not match canonical Transformation JSON",
             details={"expected": transformation_digest, "received": declared})
+    repeat_index = int(payload.get("repeat_index", 0))
+    matrix_row = next((row for row in edge_spec.get("execution_matrix", [])
+                       if row.get("leg") == leg
+                       and int(row.get("repeat_index", 0)) == repeat_index), None)
+    expected_transformation_digest = edge_spec.get(
+        "complex_transformation_digest" if leg == "complex"
+        else "solvent_transformation_digest")
+    expected = {
+        "edge_id": edge_spec.get("edge_id"),
+        "target_ref": edge_spec.get("target_ref"),
+        "protein_structure_ref": edge_spec.get("protein_structure_ref"),
+        "thermodynamic_cycle_id": edge_spec.get("thermodynamic_cycle_id"),
+        "ligand_charge_digest": edge_spec.get("ligand_charge_digest"),
+        "transformation_digest": expected_transformation_digest,
+    }
+    received = {
+        "edge_id": payload.get("edge_id"), "target_ref": target_ref,
+        "protein_structure_ref": structure_ref,
+        "thermodynamic_cycle_id": cycle_id,
+        "ligand_charge_digest": charge_digest,
+        "transformation_digest": transformation_digest,
+    }
+    if matrix_row is None or expected != received:
+        raise failures.DiracInvalidParameters(
+            "OpenFE execution payload is not authorized by rbfe.edge_spec",
+            details={"expected": expected, "received": received,
+                     "leg": leg, "repeat_index": repeat_index})
+    orchestration_seed = int(payload.get("seed", 0))
+    if orchestration_seed != int(matrix_row.get("orchestration_seed", 0)):
+        raise failures.DiracInvalidParameters(
+            "OpenFE execution seed is not authorized by rbfe.edge_spec")
 
     attempt_root_text = os.environ.get("DIRAC_MOTIF_ATTEMPT_DIR")
     if not attempt_root_text:
         raise failures.DiracInternal(
             "OpenFE execution requires the fenced Motif worker attempt directory")
     attempt_root = Path(attempt_root_text).resolve()
-    work_root = attempt_root / "openfe" / transformation_digest.removeprefix("sha256:")
+    work_identity = _digest({
+        "edge_spec_digest": declared_spec_digest, "leg": leg,
+        "repeat_index": repeat_index, "orchestration_seed": orchestration_seed,
+        "transformation_digest": transformation_digest,
+    })
+    work_root = attempt_root / "openfe" / work_identity.removeprefix("sha256:")
     work_root.mkdir(parents=True, exist_ok=True)
     transformation_path = work_root / "transformation.json"
     result_path = work_root / "result.json"
@@ -309,6 +432,9 @@ def execute_openfe_edge(payload: dict[str, Any], ctx: InvocationContext) -> Hand
         "target_ref": target_ref, "protein_structure_ref": structure_ref,
         "thermodynamic_cycle_id": cycle_id,
         "repeat_index": payload.get("repeat_index", 0),
+        "edge_spec_ref": edge_spec_ref,
+        "edge_spec_digest": declared_spec_digest,
+        "orchestration_seed": orchestration_seed,
         "ligand_charge_digest": charge_digest,
         "analysis_bootstraps": analysis_bootstraps,
         "gufe_component_types": sorted(component_types),
@@ -319,7 +445,7 @@ def execute_openfe_edge(payload: dict[str, Any], ctx: InvocationContext) -> Hand
         "result_sha256": "sha256:" + hashlib.sha256(result_bytes).hexdigest(),
         "elapsed_seconds": elapsed, "returncode": process.returncode,
         "resume_enabled": bool(payload.get("resume", True)),
-        "work_identity": transformation_digest,
+        "work_identity": work_identity,
         "scientific_status": "completed_unvalidated",
         "claim_boundary": (
             "A real OpenFE protocol execution completed. This edge is not a "
@@ -354,12 +480,15 @@ def execute_openfe_edge(payload: dict[str, Any], ctx: InvocationContext) -> Hand
                     "posix_shell_sha256": "sha256:" + POSIX_SHELL_SHA256,
                     "physical_execution": True,
                     "ambertools_wrapper_mode": "compiled_program_shims",
-                    "work_identity": transformation_digest},
+                    "edge_spec_digest": declared_spec_digest,
+                    "orchestration_seed": orchestration_seed,
+                    "work_identity": work_identity},
         warnings=[{"code": "RBFE_EDGE_UNVALIDATED",
                    "message": report["claim_boundary"]}],
         parameters_used={"resume": bool(payload.get("resume", True)),
                          "leg": leg, "thermodynamic_cycle_id": cycle_id,
                          "repeat_index": payload.get("repeat_index", 0),
+                         "orchestration_seed": orchestration_seed,
                          "analysis_bootstraps": analysis_bootstraps})
 
 

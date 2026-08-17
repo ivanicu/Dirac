@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -176,36 +177,152 @@ def render_python(descriptors: list[dict]) -> str:
     return '\n'.join(lines)
 
 
-def ts_type(schema: dict, indent: int = 0) -> str:
-    """A JSON Schema fragment as a TypeScript type. Enough of the spec, honestly bounded.
+_TS_SCHEMA_METADATA = {
+    '$schema', '$id', '$anchor', '$defs', '$comment', 'title', 'description',
+    'examples', 'default', 'deprecated', 'readOnly', 'writeOnly',
+}
 
-    WHY GENERATE INSTEAD OF HAND-WRITING: the frontend carried a 26-field `FieldMeta`
-    interface that a gate had to police against the backend key by key, because the type
-    and the truth lived in two places. A generated type cannot drift — the drift check for
-    it is `--check`, which fails when the file is stale, and that is one comparison rather
-    than one per key.
 
-    WHAT IS NOT SUPPORTED, stated rather than silently mishandled: $ref, allOf/anyOf/oneOf
-    beyond a nullable type union, and pattern properties. None appear in these descriptors;
-    if one is added, this raises rather than emitting `any` — an `any` here would quietly
-    delete the type safety the generation exists to provide.
-    """
+def _json_pointer_token(raw: str, reference: str) -> str:
+    if re.search(r'~(?![01])', raw):
+        raise SystemExit(
+            f'gen_contracts: malformed JSON Pointer escape in local $ref {reference!r}')
+    return raw.replace('~1', '/').replace('~0', '~')
+
+
+def _resolve_local_ref(root: dict | bool, reference: object) -> dict | bool:
+    """Resolve only descriptor-local `$defs` references, never a file or URI."""
+    if not isinstance(reference, str) or not reference.startswith('#/$defs/'):
+        raise SystemExit(
+            f'gen_contracts: output $ref {reference!r} is not a descriptor-local '
+            '`#/$defs/...` reference; remote and cross-document refs are forbidden')
+    node: object = root
+    for raw in reference[2:].split('/'):
+        token = _json_pointer_token(raw, reference)
+        if not isinstance(node, dict) or token not in node:
+            raise SystemExit(
+                f'gen_contracts: output $ref {reference!r} does not resolve in '
+                'the descriptor schema')
+        node = node[token]
+    if not isinstance(node, (dict, bool)):
+        raise SystemExit(
+            f'gen_contracts: output $ref {reference!r} resolves to a non-schema value')
+    return node
+
+
+def _validate_ref_graph(root: dict | bool) -> None:
+    """Reject every unresolved/remote/cyclic ref before emitting any partial type."""
+    seen: set[tuple[int, tuple[str, ...]]] = set()
+
+    def walk(node: object, stack: tuple[str, ...]) -> None:
+        if isinstance(node, list):
+            for item in node:
+                walk(item, stack)
+            return
+        if not isinstance(node, dict):
+            return
+        marker = (id(node), stack)
+        if marker in seen:
+            return
+        seen.add(marker)
+        if '$ref' in node:
+            reference = node['$ref']
+            if not isinstance(reference, str):
+                raise SystemExit('gen_contracts: output $ref must be a string')
+            if reference in stack:
+                cycle = ' -> '.join((*stack, reference))
+                raise SystemExit(
+                    f'gen_contracts: circular output $ref is forbidden: {cycle}')
+            target = _resolve_local_ref(root, reference)
+            walk(target, (*stack, reference))
+        for key, value in node.items():
+            if key != '$ref':
+                walk(value, stack)
+
+    walk(root, ())
+
+
+def _ts_literal(value: object) -> str:
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if value is True:
+        return 'true'
+    if value is False:
+        return 'false'
+    if value is None:
+        return 'null'
+    return str(value)
+
+
+def _ts_type(schema: dict | bool, root: dict | bool, indent: int,
+             ref_stack: tuple[str, ...], aliases: dict[str, str]) -> str:
+    if schema is True:
+        return 'unknown'
+    if schema is False:
+        return 'never'
+    if not isinstance(schema, dict):
+        raise SystemExit(
+            f'gen_contracts: output schema node must be an object or boolean, got '
+            f'{type(schema).__name__}')
+
+    if '$ref' in schema:
+        reference = schema['$ref']
+        if not isinstance(reference, str):
+            raise SystemExit('gen_contracts: output $ref must be a string')
+        if reference in ref_stack:
+            cycle = ' -> '.join((*ref_stack, reference))
+            raise SystemExit(
+                f'gen_contracts: circular output $ref is forbidden: {cycle}')
+        target = _resolve_local_ref(root, reference)
+        resolved = (aliases[reference] if reference in aliases else
+                    _ts_type(target, root, indent, (*ref_stack, reference), aliases))
+        siblings = {key: value for key, value in schema.items()
+                    if key != '$ref' and key not in _TS_SCHEMA_METADATA}
+        if not siblings:
+            return resolved
+        sibling_type = _ts_type(siblings, root, indent, ref_stack, aliases)
+        return resolved if sibling_type == 'unknown' else f'({resolved} & {sibling_type})'
+
+    combinators: list[str] = []
+    for keyword, operator in (('oneOf', ' | '), ('allOf', ' & ')):
+        if keyword not in schema:
+            continue
+        branches = schema[keyword]
+        if not isinstance(branches, list) or not branches:
+            raise SystemExit(
+                f'gen_contracts: output {keyword} must be a non-empty array of schemas')
+        rendered = [_ts_type(branch, root, indent, ref_stack, aliases)
+                    for branch in branches]
+        combinators.append('(' + operator.join(rendered) + ')')
+
+    base_schema = {key: value for key, value in schema.items()
+                   if key not in {'oneOf', 'allOf'}
+                   and key not in _TS_SCHEMA_METADATA}
+    base = _ts_type_base(base_schema, root, indent, ref_stack, aliases)
+    components = ([base] if base != 'unknown' else []) + combinators
+    if components:
+        return components[0] if len(components) == 1 else '(' + ' & '.join(components) + ')'
+    return 'unknown'
+
+
+def _ts_type_base(schema: dict, root: dict | bool, indent: int,
+                  ref_stack: tuple[str, ...], aliases: dict[str, str]) -> str:
+    """Render the non-combinator portion of a schema node."""
     pad = '    ' * indent
-    for unsupported in ('$ref', 'allOf', 'oneOf'):
-        if unsupported in schema:
-            raise SystemExit(f'gen_contracts: {unsupported} in an output schema is not '
-                             f'supported by the TypeScript emitter. Emitting `any` would '
-                             f'silently remove the type safety this generation exists for '
-                             f'— extend the emitter instead.')
     if 'const' in schema:
-        v = schema['const']
-        return repr(v).replace("'", "'") if isinstance(v, str) else str(v).lower()
+        return _ts_literal(schema['const'])
     if 'enum' in schema:
-        return ' | '.join(f"'{v}'" if isinstance(v, str) else str(v).lower()
-                          for v in schema['enum'])
+        values = schema['enum']
+        if not isinstance(values, list) or not values:
+            raise SystemExit('gen_contracts: output enum must be a non-empty array')
+        return ' | '.join(_ts_literal(value) for value in values)
     t = schema.get('type')
     if isinstance(t, list):
-        return ' | '.join(ts_type({**schema, 'type': one}, indent) for one in t)
+        if not t:
+            raise SystemExit('gen_contracts: output type union must not be empty')
+        return '(' + ' | '.join(
+            _ts_type({**schema, 'type': one}, root, indent, ref_stack, aliases)
+            for one in t) + ')'
     if t == 'null':
         return 'null'
     if t in ('number', 'integer'):
@@ -214,23 +331,93 @@ def ts_type(schema: dict, indent: int = 0) -> str:
         return 'string'
     if t == 'boolean':
         return 'boolean'
-    if t == 'array':
-        return f'Array<{ts_type(schema.get("items") or {}, indent)}>'
-    if t == 'object':
+    if t == 'array' or 'prefixItems' in schema or 'items' in schema:
+        prefix = schema.get('prefixItems')
+        if prefix is not None:
+            if not isinstance(prefix, list):
+                raise SystemExit('gen_contracts: output prefixItems must be an array')
+            parts = [_ts_type(item, root, indent, ref_stack, aliases)
+                     for item in prefix]
+            maximum = schema.get('maxItems')
+            items = schema.get('items', True)
+            if maximum == len(prefix) or items is False:
+                return '[' + ', '.join(parts) + ']'
+            return ('[' + ', '.join(parts)
+                    + (', ' if parts else '')
+                    + f'...Array<{_ts_type(items, root, indent, ref_stack, aliases)}>]')
+        return f'Array<{_ts_type(schema.get("items", True), root, indent, ref_stack, aliases)}>'
+    if (t == 'object' or 'properties' in schema or 'required' in schema
+            or 'additionalProperties' in schema):
         props = schema.get('properties') or {}
-        if not props:
-            return 'Record<string, unknown>'
-        required = set(schema.get('required') or [])
+        if not isinstance(props, dict):
+            raise SystemExit('gen_contracts: output properties must be an object')
+        required_values = schema.get('required') or []
+        if not isinstance(required_values, list) or not all(
+                isinstance(value, str) for value in required_values):
+            raise SystemExit('gen_contracts: output required must be a string array')
+        required = set(required_values)
+        if not props and not required:
+            additional = schema.get('additionalProperties', True)
+            if additional is False:
+                return 'Record<string, never>'
+            return f'Record<string, {_ts_type(additional, root, indent, ref_stack, aliases)}>'
         out = ['{']
-        for k, v in props.items():
-            opt = '' if k in required else '?'
-            desc = (v.get('description') or '').strip().replace('*/', '* /')
+        for key in list(props) + sorted(required - set(props)):
+            value = props.get(key, True)
+            opt = '' if key in required else '?'
+            desc = ((value.get('description') or '').strip().replace('*/', '* /')
+                    if isinstance(value, dict) else '')
             if desc:
                 out.append(f'{pad}    /** {desc[:220]} */')
-            out.append(f'{pad}    {k}{opt}: {ts_type(v, indent + 1)};')
+            rendered_key = key if re.fullmatch(r'[A-Za-z_$][A-Za-z0-9_$]*', key) \
+                else json.dumps(key, ensure_ascii=False)
+            out.append(
+                f'{pad}    {rendered_key}{opt}: '
+                f'{_ts_type(value, root, indent + 1, ref_stack, aliases)};')
         out.append(pad + '}')
         return '\n'.join(out)
     return 'unknown'
+
+
+def ts_type(schema: dict | bool, indent: int = 0, *,
+            root: dict | bool | None = None,
+            aliases: dict[str, str] | None = None) -> str:
+    """A JSON Schema fragment as a fail-closed TypeScript structural type.
+
+    WHY GENERATE INSTEAD OF HAND-WRITING: the frontend carried a 26-field `FieldMeta`
+    interface that a gate had to police against the backend key by key, because the type
+    and the truth lived in two places. A generated type cannot drift — the drift check for
+    it is `--check`, which fails when the file is stale, and that is one comparison rather
+    than one per key.
+
+    Descriptor-local `$defs`/`$ref`, `oneOf`, and `allOf` remain structural in the
+    generated type.  Cross-document/remote, unknown, malformed, and circular refs fail
+    generation rather than degrading to `any` or `unknown`.
+    """
+    if not isinstance(schema, (dict, bool)):
+        raise SystemExit('gen_contracts: output schema root must be an object or boolean')
+    root_schema = schema if root is None else root
+    if not isinstance(root_schema, (dict, bool)):
+        raise SystemExit('gen_contracts: output schema root must be an object or boolean')
+    _validate_ref_graph(root_schema)
+    return _ts_type(schema, root_schema, indent, (), aliases or {})
+
+
+def _definition_aliases(output_name: str, schema: dict) -> dict[str, str]:
+    definitions = schema.get('$defs') or {}
+    if not isinstance(definitions, dict):
+        raise SystemExit('gen_contracts: output $defs must be an object')
+    aliases: dict[str, str] = {}
+    for key in definitions:
+        words = [word for word in re.split(r'[^A-Za-z0-9]+', key) if word]
+        suffix = ''.join(word[:1].upper() + word[1:] for word in words) or 'Value'
+        aliases[f'#/$defs/{key.replace("~", "~0").replace("/", "~1")}'] = (
+            f'{output_name}Def{suffix}')
+    if len(set(aliases.values())) != len(aliases):
+        raise SystemExit(
+            f'gen_contracts: output $defs in {output_name} collapse to duplicate '
+            'TypeScript identifiers')
+    return aliases
 
 
 def render_typescript(descriptors: list[dict]) -> str:
@@ -278,9 +465,20 @@ export type DiracEnvelope<TData = unknown> = {
                   .get('parameters', {}).get('properties') or {})
         out_schema = (d.get('output') or {}).get('schema') or {}
         if out_schema.get('properties'):
+            aliases = _definition_aliases(name + 'Output', out_schema)
+            for definition_key, definition_schema in (
+                    (out_schema.get('$defs') or {}).items()):
+                reference = ('#/$defs/'
+                             + definition_key.replace('~', '~0').replace('/', '~1'))
+                lines.append(
+                    f'type {aliases[reference]} = '
+                    + ts_type(definition_schema, root=out_schema, aliases=aliases)
+                    + ';')
+                lines.append('')
             lines.append(f'/** {mid} output — generated from its declared output schema. '
                          f'The renderer reads THIS, not a hand-kept mirror of it. */')
-            lines.append(f'export type {name}Output = ' + ts_type(out_schema) + ';')
+            lines.append(f'export type {name}Output = '
+                         + ts_type(out_schema, root=out_schema, aliases=aliases) + ';')
             lines.append('')
         lines.append(f'/** {mid} — {d["summary"]} */')
         if params:

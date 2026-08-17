@@ -3,6 +3,32 @@ from __future__ import annotations
 import base64
 
 
+def _validated_rbfe_legs(edge_id: str, ddg: float, *, repeats: int = 3,
+                         uncertainty: float = .1) -> list[dict]:
+    from motif.rbfe import ingest_openfe_edge_result
+    rows = []
+    for repeat in range(1, repeats + 1):
+        for leg, estimate in (("complex", ddg + .5), ("solvent", .5)):
+            result = {
+                "engine": "OpenFE", "scientific_status": "completed_unvalidated",
+                "edge_id": edge_id, "leg": leg, "repeat_index": repeat,
+                "target_ref": {"kind": "target", "id": "target-1"},
+                "protein_structure_ref": ({"kind": "structure", "id": "pose-1"}
+                                          if leg == "complex" else None),
+                "thermodynamic_cycle_id": "cycle-1",
+                "ligand_charge_digest": "sha256:" + "1" * 64,
+                "transformation_digest": "sha256:" + ("2" if leg == "complex" else "3") * 64,
+                "result_digest": "sha256:" + f"{repeat}{'4' if leg == 'complex' else '5'}".ljust(64, "0"),
+                "estimate": estimate, "uncertainty": uncertainty, "unit": "kcal/mol",
+            }
+            rows.append(ingest_openfe_edge_result(result, {
+                "verdict": "passed", "policy_digest": "sha256:" + "6" * 64,
+                "diagnostics_digest": "sha256:" + f"{repeat}7".ljust(64, "0"),
+                "effective_samples": 1000, "minimum_overlap": .2,
+            }))
+    return rows
+
+
 def test_etkdg_conformer_ensemble_is_ranked_and_addressed():
     from motif.structure import generate_conformers
     report, sdf = generate_conformers("CCO", count=6, seed=23)
@@ -63,25 +89,130 @@ def test_openmm_checkpoint_restarts_on_reference_platform():
 
 def test_rbfe_network_and_weighted_aggregation_keep_failures_visible():
     from motif.rbfe import aggregate_rbfe_results, plan_rbfe_network
-    network = plan_rbfe_network([
+    rejected_network = plan_rbfe_network([
         {"id": "a", "smiles": "CCO"}, {"id": "b", "smiles": "CCN"},
         {"id": "c", "smiles": "CCC"}], extra_edge_fraction=1)
-    observations = []
-    for index, edge in enumerate(network["edges"]):
-        observations.append({"edge_id": edge["edge_id"], "status": "completed",
-                             "ddg_kcal_mol": float(index + 1),
-                             "uncertainty_kcal_mol": .2})
-    result = aggregate_rbfe_results(network, observations)
-    assert result["status"] == "complete"
-    assert len(result["node_estimates"]) == 3
-    partial = aggregate_rbfe_results(network, [
-        observations[0], {"edge_id": network["edges"][1]["edge_id"],
-                          "status": "failed", "reason": "engine_failed"}])
-    assert partial["status"] == "partial"
-    assert partial["failed_edges"][0]["reason"] == "engine_failed"
+    result = aggregate_rbfe_results(rejected_network, [])
+    # The chemistry-aware planner refuses to promote a disconnected executable
+    # graph.  Candidate/rejected mappings remain visible, but aggregation cannot
+    # manufacture a complete network result from zero executable edges.
+    assert rejected_network["execution_network_gate"]["verdict"] == "UNVERIFIED"
+    assert result["status"] == "partial_unattested"
+    assert result["release_eligible"] is False
+    # No executable observations means there is no identifiable node estimate;
+    # returning three zero-like rows would be a fabricated scientific result.
+    assert result["node_estimates"] == []
+
+    network = plan_rbfe_network([
+        {"id": "a", "smiles": "c1ccccc1"},
+        {"id": "b", "smiles": "Fc1ccccc1"},
+        {"id": "c", "smiles": "Clc1ccccc1"},
+    ], extra_edge_fraction=1)
+    assert network["execution_network_gate"]["verdict"] == "UNVERIFIED"
+    assert network["candidate_edges"]
+    assert all(edge["execution_eligibility"]["verdict"] == "UNVERIFIED"
+               for edge in network["edges"])
+    partial = aggregate_rbfe_results(network, _validated_rbfe_legs(
+        network["edges"][0]["edge_id"], 1.0))
+    assert partial["status"] == "partial_unattested"
+    assert partial["release_eligible"] is False
+    assert set(partial["missing_edge_ids"]) == {
+        edge["edge_id"] for edge in network["edges"][1:]}
+
+
+def test_rbfe_network_output_contract_rejects_missing_or_untyped_summary():
+    import pytest
+    import catalog
+    import failures
+
+    method_id = "physics.motif.rbfe_network"
+    complete = {
+        "network_digest": "sha256:" + "a" * 64,
+        "compound_count": 2,
+        "edge_count": 0,
+        "network": {
+            "schema_version": "1.0", "kind": "rbfe_network_plan",
+            "digest": "sha256:" + "a" * 64,
+            "compounds": [
+                {"id": "a", "canonical_smiles": "CC"},
+                {"id": "b", "canonical_smiles": "CCC"},
+            ],
+            "edges": [], "mode": "pilot", "official_openfe_plan": None,
+            "policy": {
+                "extra_edge_fraction": .35,
+                "minimum_similarity": .15,
+                "mapping": "RDKit FMCS fallback",
+                "planner": "rdkit_fallback",
+            },
+            "claim_boundary": "mapping plan only",
+            "campaign_admission": {
+                "schema_version": "rbfe-network-admission.v1",
+                "verdict": "UNBOUND", "scope": "smoke_plan",
+                "campaign_bound": False,
+            },
+        },
+    }
+    registry = catalog.default_catalog()
+    registry.validate_output(method_id, complete)
+    for malformed in (
+        {key: value for key, value in complete.items() if key != "network_digest"},
+        {**complete, "edge_count": "0"},
+        {**complete, "network": {**complete["network"], "kind": "result"}},
+        {**complete, "unexpected": True},
+    ):
+        with pytest.raises(failures.DiracInternal):
+            registry.validate_output(method_id, malformed)
+
+
+def test_rbfe_rejects_direct_edge_observation_passthrough():
+    import pytest
+    from motif.rbfe import aggregate_rbfe_results
+    network = {"digest": "sha256:" + "a" * 64,
+               "compounds": [{"id": "a"}, {"id": "b"}],
+               "edges": [{"edge_id": "e1", "left_id": "a", "right_id": "b"}]}
+    with pytest.raises(ValueError, match="direct edge observations"):
+        aggregate_rbfe_results(network, [{
+            "edge_id": "e1", "status": "completed", "ddg_kcal_mol": 1.0,
+            "uncertainty_kcal_mol": .2,
+        }])
+
+
+def test_rbfe_rejects_tampered_receipt_and_single_repeat_cannot_complete():
+    import pytest
+    from motif.rbfe import aggregate_rbfe_results
+    network = {"digest": "sha256:" + "a" * 64,
+               "compounds": [{"id": "a"}, {"id": "b"}],
+               "edges": [{"edge_id": "e1", "left_id": "a", "right_id": "b"}]}
+    tampered = _validated_rbfe_legs("e1", 1.0)
+    tampered[0]["dg_kcal_mol"] = 999.0
+    with pytest.raises(ValueError, match="checksum"):
+        aggregate_rbfe_results(network, tampered)
+    single = _validated_rbfe_legs("e1", 1.0, repeats=1)
+    result = aggregate_rbfe_results(network, single)
+    assert result["status"] == "partial_unattested"
+    assert result["release_eligible"] is False
+    assert result["node_estimates"] == []
+    assert result["missing_edge_ids"] == ["e1"]
+
+
+def test_public_rbfe_aggregate_route_fails_closed_without_server_owned_refs():
+    import pytest
+    pytest.importorskip("jsonschema")
+    import failures
+    from invocation import InvocationContext
+    from motif.structure_methods import rbfe_aggregate_handler
+    with pytest.raises(failures.DiracUnsupported, match="server-owned network artifact"):
+        rbfe_aggregate_handler({
+            "network_ref": {"kind": "artifact", "id": "n", "sha256": "sha256:" + "1" * 64},
+            "validated_leg_refs": [], "convergence_refs": [],
+        }, InvocationContext(method_id="physics.motif.rbfe_aggregate"))
 
 
 def test_official_openfe_full_network_has_mapper_disagreement_and_24_execution_floor():
+    import copy
+    import catalog
+    import failures
+    import pytest
     from motif.rbfe import plan_rbfe_network
     network = plan_rbfe_network([
         {"id": "ethanol", "smiles": "CCO"},
@@ -95,6 +226,90 @@ def test_official_openfe_full_network_has_mapper_disagreement_and_24_execution_f
     assert all(len(edge["mapping_methods"]) >= 2 for edge in network["edges"])
     assert all(edge["mapping_disagreement_jaccard"] is not None
                for edge in network["edges"])
+    assert all(edge["mapped_heavy_atom_count"] > 0 for edge in network["edges"])
+    assert all(edge["mapping_disagreement_all_atoms_jaccard"] is not None
+               for edge in network["edges"])
+    assert any(edge["mapping_disagreement_all_atoms_jaccard"]
+               != edge["mapping_disagreement_jaccard"]
+               for edge in network["edges"])
+
+    # The public handler always seals one admission verdict into the immutable
+    # network. Reuse this real planner object to prove the descriptor accepts the
+    # exact producer shape and rejects malformed nested evidence rather than only
+    # checking the four summary fields.
+    network["campaign_admission"] = {
+        "schema_version": "rbfe-network-admission.v1",
+        "verdict": "UNBOUND", "scope": "smoke_plan",
+        "campaign_bound": False,
+    }
+    complete = {
+        "network_digest": network["digest"],
+        "compound_count": len(network["compounds"]),
+        "edge_count": len(network["edges"]),
+        "network": network,
+    }
+    registry = catalog.default_catalog()
+    registry.validate_output("physics.motif.rbfe_network", complete)
+
+    malformed_outputs = []
+    malformed = copy.deepcopy(complete)
+    malformed["network"]["edges"][0]["chemistry_evidence"]["verdict"] = "green"
+    malformed_outputs.append(malformed)
+    malformed = copy.deepcopy(complete)
+    malformed["network"]["edges"][0]["chemistry_evidence"]["ledger"][0][
+        "witnesses"] = [{"invented_evidence": True}]
+    malformed_outputs.append(malformed)
+    malformed = copy.deepcopy(complete)
+    malformed["network"]["edges"][0]["chemistry_evidence"]["ledger"][0][
+        "witnesses"] = [{"parent": None}]
+    malformed_outputs.append(malformed)
+    malformed = copy.deepcopy(complete)
+    malformed["network"]["edges"][0]["chemistry_evidence"]["ledger"][0][
+        "witnesses"] = [{"parent_cycle_rank": 0, "proposal_cycle_rank": 0}]
+    malformed_outputs.append(malformed)
+    malformed = copy.deepcopy(complete)
+    ledger = malformed["network"]["edges"][0]["chemistry_evidence"]["ledger"]
+    ledger[0], ledger[1] = ledger[1], ledger[0]
+    malformed_outputs.append(malformed)
+    malformed = copy.deepcopy(complete)
+    malformed["network"]["edges"][0]["depiction_contract"]["display_only"] = True
+    malformed_outputs.append(malformed)
+    malformed = copy.deepcopy(complete)
+    malformed["network"]["edges"][0]["execution_eligibility"]["reasons"] = "PASS"
+    malformed_outputs.append(malformed)
+    malformed = copy.deepcopy(complete)
+    malformed["network"]["execution_network_gate"]["verdict"] = True
+    malformed_outputs.append(malformed)
+    malformed = copy.deepcopy(complete)
+    malformed["network"]["edges"][0]["undeclared_field"] = "accepted"
+    malformed_outputs.append(malformed)
+    for malformed in malformed_outputs:
+        with pytest.raises(failures.DiracInternal):
+            registry.validate_output("physics.motif.rbfe_network", malformed)
+
+
+def test_rbfe_cycle_closure_is_derived_from_graph_not_planner_label():
+    from motif.rbfe import aggregate_rbfe_results
+    network = {
+        "digest": "sha256:" + "a" * 64,
+        "compounds": [{"id": name} for name in ("a", "b", "c")],
+        "edges": [
+            {"edge_id": "e1", "left_id": "a", "right_id": "b",
+             "purpose": "openfe_redundant_network"},
+            {"edge_id": "e2", "left_id": "b", "right_id": "c",
+             "purpose": "openfe_redundant_network"},
+            {"edge_id": "e3", "left_id": "a", "right_id": "c",
+             "purpose": "openfe_redundant_network"},
+        ],
+    }
+    observations = (_validated_rbfe_legs("e1", 1.0)
+                    + _validated_rbfe_legs("e2", 1.0)
+                    + _validated_rbfe_legs("e3", 2.2))
+    result = aggregate_rbfe_results(network, observations)
+    assert len(result["cycle_closure"]) == 1
+    closure = result["cycle_closure"][0]
+    assert closure["edge_ids"] == ["e1", "e2", "e3"]
+    assert abs(closure["closure_kcal_mol"] - .2) < 1e-12
 
 
 def test_chemistry_gate_exposes_properties_stereo_and_reactivity():

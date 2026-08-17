@@ -30,8 +30,8 @@ Three properties that are the actual content:
    the copy is never the one that gets corrected.
 
 ③ A CONFLICT ON `job_one_inflight` IS AN INSTRUCTION, and it used to be only a
-   measurement. The index makes an identical (method, input, params) impossible
-   to have twice in flight; for one day the conflict was merely COUNTED while
+measurement. The index makes an identical (actor, method, input, params)
+impossible to have twice in flight; for one day the conflict was merely COUNTED while
    both requests computed anyway, which was the honest intermediate state — the
    counter is what proved the duplicated work was real (it fired in production)
    rather than a story about concurrency. `wait_for` now acts on it: the second
@@ -44,9 +44,13 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
+import time
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable
+
+import failures
 
 # Counted rather than logged-and-forgotten. Same reasoning as the persist
 # counters: a number nobody can read is a log line with extra steps.
@@ -55,6 +59,12 @@ _counters = {
     'done': 0,            # reached state='done'
     'failed': 0,          # reached state='failed'
     'inflight_conflict': 0,   # an identical job was ALREADY running (see ③)
+    'idempotency_replay': 0,  # a client key recovered its existing Job
+    'idempotency_conflict': 0,  # a client key was reused for different bytes
+    'dispatch_claimed': 0,      # a durable keyed Job acquired one fenced owner
+    'dispatch_busy': 0,         # an existing live owner prevented redispatch
+    'dispatch_recovered': 0,    # an expired/dead owner was fenced out and replaced
+    'dispatch_stale': 0,        # a stale token tried to start/publish/finish
     'joined': 0,          # waited for that job and used its outcome
     'join_timeout': 0,    # waited, gave up, computed it after all
     'write_failed': 0,    # the ledger write itself failed; compute unaffected
@@ -127,6 +137,21 @@ def canonical_request_digest(method_row_id: str, input_sha256: bytes,
     return hashlib.sha256(material.encode()).digest()
 
 
+@dataclass(frozen=True)
+class DispatchClaim:
+    """One lease-bound right to start and finish a durable local dispatch."""
+
+    job_id: str
+    fencing_token: int
+    lease_owner: str
+    lease_expires_at: Any
+    execution_digest: bytes
+
+
+class StaleDispatchClaim(RuntimeError):
+    """A superseded local worker attempted a fenced state transition."""
+
+
 class JobLedger:
     """Writes job rows through a caller-supplied connection factory.
 
@@ -152,14 +177,17 @@ class JobLedger:
 
     # ── lifecycle ────────────────────────────────────────────────────────
     def open(self, *, method_row_id: str, input_sha256: bytes, params: dict,
+             actor_kind: str, actor_id: str,
              budget_seconds: float | None = None, est_seconds: float | None = None,
              compound_id: str | None = None,
              conformer_hash: bytes | None = None,
              queued: bool = False,
              request_digest: bytes | None = None,
-             actor_kind: str = 'service', actor_id: str = 'dirac-kernel',
              command_id: str | None = None,
-             request_id: str | None = None) -> tuple[str | None, bool]:
+             request_id: str | None = None,
+             request_key: str | None = None,
+             dispatch_payload: dict | None = None,
+             execution_adapter: str | None = None) -> tuple[str | None, bool]:
         """Insert a 'running' row. Returns (job_id, conflicted).
 
         THE SECOND VALUE EXISTS BECAUSE None HAD THREE MEANINGS — database
@@ -185,6 +213,12 @@ class JobLedger:
         try:
             request_digest = request_digest or canonical_request_digest(
                 method_row_id, input_sha256, params)
+            if request_key is not None:
+                if (not queued or dispatch_payload is None
+                        or execution_adapter != 'local_cpu'):
+                    raise failures.DiracInternal(
+                        'client-key Job admission requires a queued local_cpu '
+                        'dispatch payload')
             with self._connect() as conn, conn.cursor() as cur:
                 # 'queued' MUST have a NULL started_at and 'running' MUST have one —
                 # job_running_has_start says `(state = 'queued') = (started_at IS
@@ -192,19 +226,41 @@ class JobLedger:
                 # as two statements that could disagree.
                 state = 'queued' if queued else 'running'
                 started = None if queued else 'now()'
+                columns = (
+                    "method_row_id, state, input_sha256, request_digest, params, "
+                    "budget_seconds, est_seconds, compound_id, conformer_hash, "
+                    "worker, actor_kind, actor_id, command_id, request_id"
+                )
+                values = (
+                    method_row_id, input_sha256, request_digest, json.dumps(params),
+                    budget, est_seconds, compound_id, conformer_hash, self.worker,
+                    actor_kind, actor_id, command_id, request_id,
+                )
+                placeholders = (
+                    f"%s, '{state}', %s, %s, %s, %s, %s, %s, %s, %s, "
+                    "%s, %s, %s, %s"
+                )
+                # Keep unrelated Jobs operational during a rolling migration.
+                # Only the command that claims exactly-once semantics names the
+                # new column; that command fails closed if 046 is absent.
+                if request_key is not None:
+                    columns += ", request_key"
+                    values += (request_key,)
+                    placeholders += ", %s"
                 cur.execute(
-                    "INSERT INTO app.job (method_row_id, state, input_sha256, "
-                    "       request_digest, params, "
-                    "       budget_seconds, est_seconds, compound_id, conformer_hash, "
-                    f"       worker, actor_kind, actor_id, command_id, request_id, started_at) "
-                    f"VALUES (%s, '{state}', %s, %s, %s, %s, %s, %s, %s, %s, "
-                    f"        %s, %s, %s, %s, "
-                    f"        {started or 'NULL'}) "
-                    'RETURNING id',
-                    (method_row_id, input_sha256, request_digest, json.dumps(params), budget,
-                     est_seconds, compound_id, conformer_hash, self.worker,
-                     actor_kind, actor_id, command_id, request_id))
+                    f"INSERT INTO app.job ({columns}, started_at) "
+                    f"VALUES ({placeholders}, {started or 'NULL'}) RETURNING id",
+                    values)
                 row = cur.fetchone()
+                if row and request_key is not None:
+                    cur.execute(
+                        "INSERT INTO app.job_dispatch "
+                        "(job_id,payload,payload_sha256,execution_digest,"
+                        "execution_adapter) VALUES (%s,%s,%s,%s,%s)",
+                        (row[0], json.dumps(dispatch_payload, sort_keys=True,
+                                           separators=(',', ':'),
+                                           ensure_ascii=False, allow_nan=False),
+                         input_sha256, request_digest, execution_adapter))
             _bump('opened')
             return (str(row[0]) if row else None), False
         except Exception as e:                                       # noqa: BLE001
@@ -213,7 +269,62 @@ class JobLedger:
             # so a locale or a version change cannot turn a measurement into an
             # error count.
             conflict = False
-            if str(getattr(e, 'sqlstate', '')) == '23505' or 'job_one_inflight' in str(e):
+            constraint = str(getattr(getattr(e, 'diag', None),
+                                     'constraint_name', '') or '')
+            idempotency_collision = (
+                request_key is not None
+                and (constraint == 'job_command_request_key_once'
+                     or 'job_command_request_key_once' in str(e))
+            )
+            if idempotency_collision:
+                try:
+                    with self._connect() as conn, conn.cursor() as cur:
+                        cur.execute(
+                            'SELECT j.id,j.input_sha256,j.state::text,'
+                            'EXISTS (SELECT 1 FROM app.job_dispatch d '
+                            'WHERE d.job_id=j.id) FROM app.job j '
+                            'WHERE actor_kind=%s AND actor_id=%s AND command_id=%s '
+                            'AND request_key=%s LIMIT 1',
+                            (actor_kind, actor_id, command_id, request_key))
+                        row = cur.fetchone()
+                except Exception as lookup_error:                  # noqa: BLE001
+                    _bump('write_failed',
+                          f'{type(lookup_error).__name__}: {lookup_error}')
+                    raise failures.DiracFailure(
+                        'DB_UNAVAILABLE',
+                        'could not recover the durable Job for request_key',
+                        details={'command_id': command_id,
+                                 'request_key': request_key}) from lookup_error
+                if row is None:
+                    _bump('write_failed',
+                          'request-key unique collision had no recoverable row')
+                    raise failures.DiracFailure(
+                        'DB_UNAVAILABLE',
+                        'request_key was reserved but its durable Job could not be read',
+                        details={'command_id': command_id,
+                                 'request_key': request_key}) from e
+                if bytes(row[1]) != bytes(input_sha256):
+                    _bump('idempotency_conflict')
+                    raise failures.DiracIdempotencyConflict(
+                        'request_key already identifies a different command payload',
+                        details={'command_id': command_id,
+                                 'request_key': request_key,
+                                 'existing_job_id': str(row[0])}) from e
+                if row[2] in ('queued', 'running') and not bool(row[3]):
+                    _bump('write_failed',
+                          'active request-key Job has no durable dispatch row')
+                    raise failures.DiracFailure(
+                        'DB_UNAVAILABLE',
+                        'request_key Job is missing its durable dispatch outbox',
+                        details={'command_id': command_id,
+                                 'request_key': request_key,
+                                 'existing_job_id': str(row[0]),
+                                 'required_migration':
+                                     '047_job_dispatch_fence.sql'}) from e
+                _bump('idempotency_replay')
+                return str(row[0]), True
+            if (constraint == 'job_one_inflight'
+                    or 'job_one_inflight' in str(e)):
                 _bump('inflight_conflict')
                 conflict = True
             else:
@@ -224,12 +335,20 @@ class JobLedger:
                         cur.execute(
                             'SELECT id FROM app.job WHERE method_row_id = %s '
                             'AND request_digest = %s '
+                            'AND actor_kind = %s AND actor_id = %s '
                             "AND state IN ('queued','running') ORDER BY created_at DESC LIMIT 1",
-                            (method_row_id, request_digest))
+                            (method_row_id, request_digest, actor_kind, actor_id))
                         row = cur.fetchone()
                     return (str(row[0]) if row else None), True
                 except Exception as lookup_error:                    # noqa: BLE001
                     _bump('write_failed', f'{type(lookup_error).__name__}: {lookup_error}')
+            if request_key is not None:
+                raise failures.DiracFailure(
+                    'DB_UNAVAILABLE',
+                    'durable request-key admission is unavailable',
+                    details={'command_id': command_id, 'request_key': request_key,
+                             'required_migration':
+                                 '046_job_command_request_key.sql'}) from e
             return None, conflict
 
     def start(self, job_id: str | None) -> None:
@@ -250,6 +369,242 @@ class JobLedger:
                     "WHERE id = %s AND state = 'queued'", (job_id,))
         except Exception as e:                                        # noqa: BLE001
             _bump('write_failed', f'{type(e).__name__}: {e}')
+
+    # ── durable client-key dispatch fencing ─────────────────────────────
+    def claim_dispatch(self, job_id: str, execution_digest: bytes, *,
+                       lease_seconds: float = 90.0,
+                       recover_owner: str | None = None) -> DispatchClaim | None:
+        """Claim a pending/expired dispatch, fencing every older worker."""
+        lease = max(1.0, float(lease_seconds))
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    'SELECT d.execution_digest,d.state::text,d.fencing_token,'
+                    'd.lease_owner,d.lease_expires_at,'
+                    '(d.lease_expires_at IS NOT NULL AND '
+                    ' d.lease_expires_at <= now()),j.state::text '
+                    'FROM app.job_dispatch d JOIN app.job j ON j.id=d.job_id '
+                    'WHERE d.job_id=%s FOR UPDATE OF d,j', (job_id,))
+                row = cur.fetchone()
+                if row is None or row[6] not in ('queued', 'running'):
+                    return None
+                if bytes(row[0]) != bytes(execution_digest):
+                    raise failures.DiracInternal(
+                        'recoverable Job execution identity does not match its outbox')
+                owner = str(row[3]) if row[3] is not None else None
+                recoverable = (row[1] == 'pending' or bool(row[5])
+                               or (recover_owner is not None
+                                   and owner == recover_owner))
+                if not recoverable:
+                    _bump('dispatch_busy')
+                    return None
+                token = int(row[2]) + 1
+                recovered = row[1] != 'pending'
+                cur.execute(
+                    "UPDATE app.job_dispatch SET state='claimed', "
+                    'fencing_token=%s,lease_owner=%s,claimed_at=now(),'
+                    "lease_expires_at=now()+(%s * interval '1 second'),"
+                    'heartbeat_at=now(),submitted_at=NULL WHERE job_id=%s '
+                    'RETURNING lease_expires_at',
+                    (token, self.worker, lease, job_id))
+                expires = cur.fetchone()[0]
+                cur.execute('UPDATE app.job SET worker=%s WHERE id=%s',
+                            (self.worker, job_id))
+            _bump('dispatch_recovered' if recovered else 'dispatch_claimed')
+            return DispatchClaim(job_id=str(job_id), fencing_token=token,
+                                 lease_owner=self.worker,
+                                 lease_expires_at=expires,
+                                 execution_digest=bytes(execution_digest))
+        except failures.DiracFailure:
+            raise
+        except Exception as e:                                       # noqa: BLE001
+            raise failures.DiracFailure(
+                'DB_UNAVAILABLE', 'durable dispatch claim failed',
+                details={'job_id': str(job_id),
+                         'required_migration':
+                             '047_job_dispatch_fence.sql'}) from e
+
+    def mark_dispatch_submitted(self, claim: DispatchClaim) -> None:
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    'UPDATE app.job_dispatch SET submitted_at=coalesce('
+                    'submitted_at,now()) WHERE job_id=%s AND fencing_token=%s '
+                    'AND lease_owner=%s AND state IN (\'claimed\',\'running\') '
+                    'AND lease_expires_at>now()',
+                    (claim.job_id, claim.fencing_token, claim.lease_owner))
+                if cur.rowcount != 1:
+                    self._raise_stale_dispatch(claim, 'mark submitted')
+        except StaleDispatchClaim:
+            raise
+        except Exception as e:                                       # noqa: BLE001
+            raise failures.DiracFailure(
+                'DB_UNAVAILABLE', 'durable dispatch submit acknowledgement failed',
+                details={'job_id': claim.job_id}) from e
+
+    def start_dispatch(self, claim: DispatchClaim, *,
+                       lease_seconds: float = 90.0) -> DispatchClaim:
+        lease = max(1.0, float(lease_seconds))
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE app.job_dispatch SET state='running',"
+                    'submitted_at=coalesce(submitted_at,now()),heartbeat_at=now(),'
+                    "lease_expires_at=now()+(%s * interval '1 second') "
+                    'WHERE job_id=%s AND fencing_token=%s AND lease_owner=%s '
+                    "AND state IN ('claimed','running') AND lease_expires_at>now() "
+                    'RETURNING lease_expires_at',
+                    (lease, claim.job_id, claim.fencing_token,
+                     claim.lease_owner))
+                dispatch = cur.fetchone()
+                if dispatch is None:
+                    self._raise_stale_dispatch(claim, 'start')
+                cur.execute(
+                    "UPDATE app.job SET state='running',"
+                    'started_at=coalesce(started_at,now()),worker=%s '
+                    "WHERE id=%s AND state IN ('queued','running') RETURNING id",
+                    (claim.lease_owner, claim.job_id))
+                if cur.fetchone() is None:
+                    self._raise_stale_dispatch(claim, 'start terminal Job')
+            return DispatchClaim(claim.job_id, claim.fencing_token,
+                                 claim.lease_owner, dispatch[0],
+                                 claim.execution_digest)
+        except (StaleDispatchClaim, failures.DiracFailure):
+            raise
+        except Exception as e:                                       # noqa: BLE001
+            raise failures.DiracFailure(
+                'DB_UNAVAILABLE', 'durable dispatch start failed',
+                details={'job_id': claim.job_id}) from e
+
+    def renew_dispatch(self, claim: DispatchClaim, *,
+                       lease_seconds: float = 90.0) -> DispatchClaim:
+        lease = max(1.0, float(lease_seconds))
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    'UPDATE app.job_dispatch SET heartbeat_at=now(),'
+                    "lease_expires_at=now()+(%s * interval '1 second') "
+                    'WHERE job_id=%s AND fencing_token=%s AND lease_owner=%s '
+                    "AND state IN ('claimed','running') AND lease_expires_at>now() "
+                    'RETURNING lease_expires_at',
+                    (lease, claim.job_id, claim.fencing_token,
+                     claim.lease_owner))
+                row = cur.fetchone()
+                if row is None:
+                    self._raise_stale_dispatch(claim, 'heartbeat')
+            return DispatchClaim(claim.job_id, claim.fencing_token,
+                                 claim.lease_owner, row[0],
+                                 claim.execution_digest)
+        except (StaleDispatchClaim, failures.DiracFailure):
+            raise
+        except Exception as e:                                       # noqa: BLE001
+            raise failures.DiracFailure(
+                'DB_UNAVAILABLE', 'durable dispatch heartbeat failed',
+                details={'job_id': claim.job_id}) from e
+
+    def assert_dispatch(self, claim: DispatchClaim, *, cursor: Any | None = None,
+                        lease_seconds: float = 90.0) -> None:
+        """Renew and lock the current token before scientific publication."""
+        lease = max(1.0, float(lease_seconds))
+
+        def check(cur: Any) -> None:
+            cur.execute(
+                'UPDATE app.job_dispatch SET heartbeat_at=now(),'
+                "lease_expires_at=now()+(%s * interval '1 second') "
+                'WHERE job_id=%s AND fencing_token=%s AND lease_owner=%s '
+                "AND state='running' AND lease_expires_at>now() RETURNING job_id",
+                (lease, claim.job_id, claim.fencing_token, claim.lease_owner))
+            if cur.fetchone() is None:
+                self._raise_stale_dispatch(claim, 'publish')
+
+        if cursor is not None:
+            check(cursor)
+            return
+        with self._connect() as conn, conn.cursor() as cur:
+            check(cur)
+
+    def release_dispatch(self, claim: DispatchClaim) -> None:
+        """Make a claim immediately recoverable after executor.submit failed."""
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    'UPDATE app.job_dispatch SET heartbeat_at=greatest('
+                    "now(),claimed_at+interval '1 microsecond'),"
+                    'lease_expires_at=greatest('
+                    "now(),claimed_at+interval '1 microsecond') "
+                    'WHERE job_id=%s AND fencing_token=%s '
+                    'AND lease_owner=%s AND state=\'claimed\'',
+                    (claim.job_id, claim.fencing_token, claim.lease_owner))
+        except Exception as e:                                       # noqa: BLE001
+            _bump('write_failed', f'{type(e).__name__}: {e}')
+
+    def done_claimed(self, claim: DispatchClaim, *, seconds: float,
+                     result_summary: dict | None = None) -> None:
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                self.assert_dispatch(claim, cursor=cur)
+                cur.execute(
+                    "UPDATE app.job SET state='done',finished_at=now(),seconds=%s,"
+                    'result_summary=%s WHERE id=%s AND state=\'running\' RETURNING id',
+                    (round(float(seconds), 3),
+                     json.dumps(result_summary) if result_summary is not None else None,
+                     claim.job_id))
+                if cur.fetchone() is None:
+                    self._raise_stale_dispatch(claim, 'complete')
+            _bump('done')
+        except StaleDispatchClaim:
+            raise
+
+    def failed_claimed(self, claim: DispatchClaim, *, code: str, detail: str,
+                       seconds: float | None = None,
+                       retryable: bool | None = None) -> None:
+        mapped = job_error_code(code)
+        state = 'cancelled' if mapped == 'CANCELLED' else 'failed'
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                self.assert_dispatch(claim, cursor=cur)
+                cur.execute(
+                    'UPDATE app.job SET state=%s,finished_at=now(),seconds=%s,'
+                    'error_code=%s,error_detail=%s WHERE id=%s '
+                    "AND state='running' RETURNING id",
+                    (state, None if seconds is None else round(float(seconds), 3),
+                     mapped, detail[:2000], claim.job_id))
+                if cur.fetchone() is None:
+                    self._raise_stale_dispatch(claim, 'fail')
+            _bump('failed')
+        except StaleDispatchClaim:
+            raise
+
+    def list_recoverable_dispatches(self, *, limit: int = 100) -> list[dict]:
+        try:
+            with self._connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    'SELECT j.id,m.method_id,d.payload,d.execution_digest,'
+                    'd.execution_adapter::text,j.actor_kind::text,j.actor_id,'
+                    'j.command_id::text,j.request_id,d.state::text,d.lease_owner,'
+                    'd.lease_expires_at,(d.lease_expires_at IS NULL OR '
+                    'd.lease_expires_at<=now()) FROM app.job_dispatch d '
+                    'JOIN app.job j ON j.id=d.job_id '
+                    'JOIN meta.method m ON m.id=j.method_row_id '
+                    "WHERE j.state IN ('queued','running') "
+                    'ORDER BY d.created_at LIMIT %s',
+                    (max(1, min(int(limit), 500)),))
+                rows = cur.fetchall()
+        except Exception as e:                                       # noqa: BLE001
+            raise failures.DiracFailure(
+                'DB_UNAVAILABLE', 'durable dispatch recovery scan failed') from e
+        keys = ('job_id', 'method_id', 'payload', 'execution_digest',
+                'execution_adapter', 'actor_kind', 'actor_id', 'command_id',
+                'request_id', 'dispatch_state', 'lease_owner',
+                'lease_expires_at', 'lease_expired')
+        return [{k: _json_value(v) for k, v in zip(keys, row)} for row in rows]
+
+    @staticmethod
+    def _raise_stale_dispatch(claim: DispatchClaim, action: str) -> None:
+        _bump('dispatch_stale')
+        raise StaleDispatchClaim(
+            f'dispatch token {claim.fencing_token} cannot {action} Job '
+            f'{claim.job_id}')
 
     def done(self, job_id: str | None, *, seconds: float,
              field_cube_id: str | None = None, peak_rss_mb: int | None = None,
@@ -295,24 +650,34 @@ class JobLedger:
             _bump('write_failed', f'{type(e).__name__}: {e}')
 
     # ── public query/cancellation contract ──────────────────────────────
-    def get(self, job_id: str) -> dict | None:
-        rows = self._query_jobs('WHERE j.id = %s', (job_id,), limit=1)
+    def get(self, job_id: str, *, actor_kind: str, actor_id: str) -> dict | None:
+        rows = self._query_jobs(
+            'WHERE j.id = %s AND j.actor_kind = %s AND j.actor_id = %s',
+            (job_id, actor_kind, actor_id), limit=1)
         return rows[0] if rows else None
 
-    def list(self, *, state: str | None = None, limit: int = 100) -> list[dict]:
+    def list(self, *, actor_kind: str, actor_id: str,
+             state: str | None = None, limit: int = 100) -> list[dict]:
         if state:
-            return self._query_jobs('WHERE j.state = %s', (state,), limit=limit)
-        return self._query_jobs('', (), limit=limit)
+            return self._query_jobs(
+                'WHERE j.actor_kind = %s AND j.actor_id = %s AND j.state = %s',
+                (actor_kind, actor_id, state), limit=limit)
+        return self._query_jobs(
+            'WHERE j.actor_kind = %s AND j.actor_id = %s',
+            (actor_kind, actor_id), limit=limit)
 
-    def list_attention(self, *, limit: int = 100) -> list[dict]:
+    def list_attention(self, *, actor_kind: str, actor_id: str,
+                       limit: int = 100) -> list[dict]:
         """Read the derived intervention queue; it has no independent write model."""
         try:
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute(
                     'SELECT kind::text, object_id, reason, priority, at, '
                     'actor_kind::text, actor_id, command_id, detail '
-                    'FROM app.v_attention ORDER BY at DESC LIMIT %s',
-                    (max(1, min(int(limit), 500)),))
+                    'FROM app.v_attention '
+                    'WHERE actor_kind = %s AND actor_id = %s '
+                    'ORDER BY at DESC LIMIT %s',
+                    (actor_kind, actor_id, max(1, min(int(limit), 500))))
                 rows = cur.fetchall()
         except Exception as e:                                      # noqa: BLE001
             _bump('write_failed', f'{type(e).__name__}: {e}')
@@ -323,7 +688,8 @@ class JobLedger:
                  'ref': {'kind': str(row[0]), 'id': str(row[1])}}
                 for row in rows]
 
-    def request_cancel(self, job_id: str) -> dict | None:
+    def request_cancel(self, job_id: str, *, actor_kind: str,
+                       actor_id: str) -> dict | None:
         """Cancel queued work; report running work as not interruptible.
 
         A queued row can transition atomically; a running row remains running and its
@@ -334,14 +700,18 @@ class JobLedger:
                 cur.execute(
                     'UPDATE app.job SET cancel_requested_at = coalesce('
                     'cancel_requested_at, now()) '
-                    "WHERE id = %s AND state IN ('queued','running')", (job_id,))
+                    "WHERE id = %s AND actor_kind = %s AND actor_id = %s "
+                    "AND state IN ('queued','running')",
+                    (job_id, actor_kind, actor_id))
                 cur.execute(
                     "UPDATE app.job SET state = 'cancelled', "
                     "       started_at = coalesce(started_at, now()), finished_at = now(), "
                     "       error_code = 'CANCELLED', error_detail = 'cancelled while queued' "
-                    " WHERE id = %s AND state = 'queued' RETURNING id", (job_id,))
+                    " WHERE id = %s AND actor_kind = %s AND actor_id = %s "
+                    "AND state = 'queued' RETURNING id",
+                    (job_id, actor_kind, actor_id))
                 cancelled = cur.fetchone() is not None
-            job = self.get(job_id)
+            job = self.get(job_id, actor_kind=actor_kind, actor_id=actor_id)
             if job is not None:
                 job['cancel'] = {
                     'requested': True,
@@ -386,13 +756,14 @@ class JobLedger:
 
     # ── coordination ─────────────────────────────────────────────────────
     def wait_for(self, *, method_row_id: str, input_sha256: bytes, params: dict,
+                 actor_kind: str, actor_id: str,
                  timeout: float, poll: float = 0.25,
                  request_digest: bytes | None = None) -> dict:
         """Wait for the identical job someone else is already running.
 
         THIS IS THE LEDGER BECOMING A COORDINATOR RATHER THAN AN OBSERVER, and
         it is the whole reason `job_one_inflight` exists. Until now two identical
-        concurrent requests both computed: nothing queued, nothing waited, and the
+        concurrent requests by one actor both computed: nothing queued, nothing waited, and the
         second one duplicated a six-minute SCF on 22 cores while the first was
         still running. The conflict counter had already fired in production, so
         the duplicated work was measured, not hypothesised.
@@ -423,8 +794,9 @@ class JobLedger:
                         'SELECT state::text, error_code::text, error_detail '
                         '  FROM app.job '
                         ' WHERE method_row_id = %s AND request_digest = %s '
+                        '   AND actor_kind = %s AND actor_id = %s '
                         ' ORDER BY created_at DESC LIMIT 1',
-                        (method_row_id, request_digest))
+                        (method_row_id, request_digest, actor_kind, actor_id))
                     row = cur.fetchone()
             except Exception as e:                                   # noqa: BLE001
                 _bump('write_failed', f'{type(e).__name__}: {e}')
@@ -489,7 +861,9 @@ class JobLedger:
             with self._connect() as conn, conn.cursor() as cur:
                 cur.execute(
                     "SELECT DISTINCT worker FROM app.job "
-                    " WHERE state IN ('queued','running') AND worker IS NOT NULL")
+                    " WHERE state IN ('queued','running') AND worker IS NOT NULL "
+                    'AND NOT EXISTS (SELECT 1 FROM app.job_dispatch d '
+                    'WHERE d.job_id=app.job.id)')
                 workers = [r[0] for r in cur.fetchall()]
                 for w in workers:
                     if w != self.worker and _worker_is_alive(w):
@@ -499,9 +873,16 @@ class JobLedger:
                         # the same pid AND the same source hash. Reap it: we know
                         # we did not start those.
                         pass
-                    cur.execute('SELECT app.reap_orphaned_jobs(%s)', (w,))
-                    row = cur.fetchone()
-                    out['dead_worker'] += int(row[0]) if row else 0
+                    cur.execute(
+                        "UPDATE app.job SET state='failed',error_code='INTERNAL',"
+                        "error_detail='worker restarted while job was in flight',"
+                        'started_at=coalesce(started_at,now()),finished_at=now(),'
+                        'seconds=coalesce(seconds,0) '
+                        "WHERE state IN ('queued','running') "
+                        'AND worker IS NOT DISTINCT FROM %s '
+                        'AND NOT EXISTS (SELECT 1 FROM app.job_dispatch d '
+                        'WHERE d.job_id=app.job.id)', (w,))
+                    out['dead_worker'] += max(0, cur.rowcount or 0)
 
                 # ② the age ceiling, independent of any pid
                 cur.execute(
@@ -513,6 +894,8 @@ class JobLedger:
                     '       seconds = extract(epoch FROM now() - '
                     '                         coalesce(started_at, created_at)) '
                     " WHERE state IN ('queued','running') "
+                    '   AND NOT EXISTS (SELECT 1 FROM app.job_dispatch d '
+                    '                   WHERE d.job_id=app.job.id) '
                     '   AND now() - coalesce(started_at, created_at) > %s * interval \'1 second\'',
                     (STALE_AFTER_SECONDS,))
                 out['overran'] += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
@@ -545,17 +928,44 @@ class MemoryJobStore:
         return method_id
 
     def open(self, *, method_row_id: str, input_sha256: bytes, params: dict,
+             actor_kind: str, actor_id: str,
              budget_seconds: float | None = None, est_seconds: float | None = None,
              queued: bool = False, request_digest: bytes | None = None,
-             actor_kind: str = 'service', actor_id: str = 'dirac-kernel',
              command_id: str | None = None, request_id: str | None = None,
+             request_key: str | None = None,
+             dispatch_payload: dict | None = None,
+             execution_adapter: str | None = None,
              **_kw) -> tuple[str | None, bool]:
         digest = bytes(request_digest or canonical_request_digest(
             method_row_id, input_sha256, params)).hex()
+        if request_key is not None and (not queued or dispatch_payload is None
+                                        or execution_adapter != 'local_cpu'):
+            raise failures.DiracInternal(
+                'client-key Job admission requires a queued local_cpu dispatch payload')
         with self._lock:
+            if request_key is not None:
+                for row in self._rows.values():
+                    if (row.get('request_key') == request_key
+                            and row['actor_kind'] == actor_kind
+                            and row['actor_id'] == actor_id
+                            and row.get('command_id') == command_id):
+                        if row['_input_sha256'] != bytes(input_sha256):
+                            _bump('idempotency_conflict')
+                            raise failures.DiracIdempotencyConflict(
+                                'request_key already identifies a different '
+                                'command payload',
+                                details={'command_id': command_id,
+                                         'request_key': request_key,
+                                         'existing_job_id': row['id']})
+                        _bump('idempotency_replay')
+                        return row['id'], True
             for row in self._rows.values():
-                if (row['_digest'] == digest and row['method_id'] == method_row_id
+                if (request_key is None and row.get('request_key') is None
+                        and row['_digest'] == digest
+                        and row['method_id'] == method_row_id
                         and row['parameters'] == params
+                        and row['actor_kind'] == actor_kind
+                        and row['actor_id'] == actor_id
                         and row['state'] in ('queued', 'running')):
                     return row['id'], True
             jid = new_uuid()
@@ -571,9 +981,172 @@ class MemoryJobStore:
                 'cancel_requested_at': None, 'result_summary': None,
                 'outcome_class': None, 'actor_kind': actor_kind, 'actor_id': actor_id,
                 'command_id': command_id, 'request_id': request_id,
+                'request_key': request_key,
                 'artifacts': [], '_digest': digest,
+                '_input_sha256': bytes(input_sha256),
+                '_dispatch': ({'payload': self._copy_json(dispatch_payload),
+                               'execution_digest': bytes.fromhex(digest),
+                               'execution_adapter': execution_adapter,
+                               'state': 'pending', 'fencing_token': 0,
+                               'lease_owner': None, 'lease_expires_at': None,
+                               'submitted_at': None}
+                              if request_key is not None else None),
             }
         return jid, False
+
+    @staticmethod
+    def _copy_json(value: dict | None) -> dict:
+        return json.loads(json.dumps(value or {}, sort_keys=True,
+                                     separators=(',', ':'), ensure_ascii=False,
+                                     allow_nan=False))
+
+    def claim_dispatch(self, job_id: str, execution_digest: bytes, *,
+                       lease_seconds: float = 90.0,
+                       recover_owner: str | None = None) -> DispatchClaim | None:
+        now = time.time()
+        with self._lock:
+            row = self._rows.get(job_id)
+            dispatch = row.get('_dispatch') if row else None
+            if not row or not dispatch or row['state'] not in ('queued', 'running'):
+                return None
+            if dispatch['execution_digest'] != bytes(execution_digest):
+                raise failures.DiracInternal(
+                    'recoverable Job execution identity does not match its outbox')
+            owner = dispatch['lease_owner']
+            recoverable = (dispatch['state'] == 'pending'
+                           or (dispatch['lease_expires_at'] is not None
+                               and dispatch['lease_expires_at'] <= now)
+                           or (recover_owner is not None
+                               and owner == recover_owner))
+            if not recoverable:
+                _bump('dispatch_busy')
+                return None
+            recovered = dispatch['state'] != 'pending'
+            dispatch.update(state='claimed',
+                            fencing_token=dispatch['fencing_token'] + 1,
+                            lease_owner=self.worker,
+                            lease_expires_at=now + max(1.0, float(lease_seconds)),
+                            submitted_at=None)
+            row['worker'] = self.worker
+            claim = DispatchClaim(job_id, dispatch['fencing_token'], self.worker,
+                                  dispatch['lease_expires_at'],
+                                  bytes(execution_digest))
+        _bump('dispatch_recovered' if recovered else 'dispatch_claimed')
+        return claim
+
+    def _memory_dispatch(self, claim: DispatchClaim, *,
+                         states: tuple[str, ...]) -> tuple[dict, dict]:
+        row = self._rows.get(claim.job_id)
+        dispatch = row.get('_dispatch') if row else None
+        if (not row or not dispatch or dispatch['state'] not in states
+                or dispatch['fencing_token'] != claim.fencing_token
+                or dispatch['lease_owner'] != claim.lease_owner
+                or dispatch['lease_expires_at'] <= time.time()):
+            self._raise_stale_dispatch(claim, 'use')
+        return row, dispatch
+
+    def mark_dispatch_submitted(self, claim: DispatchClaim) -> None:
+        with self._lock:
+            _, dispatch = self._memory_dispatch(
+                claim, states=('claimed', 'running'))
+            dispatch['submitted_at'] = dispatch['submitted_at'] or time.time()
+
+    def start_dispatch(self, claim: DispatchClaim, *,
+                       lease_seconds: float = 90.0) -> DispatchClaim:
+        with self._lock:
+            row, dispatch = self._memory_dispatch(
+                claim, states=('claimed', 'running'))
+            if row['state'] == 'queued':
+                row.update(state='running', started_at=_now())
+            dispatch.update(state='running',
+                            submitted_at=dispatch['submitted_at'] or time.time(),
+                            lease_expires_at=(time.time()
+                                              + max(1.0, float(lease_seconds))))
+            return DispatchClaim(claim.job_id, claim.fencing_token,
+                                 claim.lease_owner,
+                                 dispatch['lease_expires_at'],
+                                 claim.execution_digest)
+
+    def renew_dispatch(self, claim: DispatchClaim, *,
+                       lease_seconds: float = 90.0) -> DispatchClaim:
+        with self._lock:
+            _, dispatch = self._memory_dispatch(
+                claim, states=('claimed', 'running'))
+            dispatch['lease_expires_at'] = (
+                time.time() + max(1.0, float(lease_seconds)))
+            return DispatchClaim(claim.job_id, claim.fencing_token,
+                                 claim.lease_owner,
+                                 dispatch['lease_expires_at'],
+                                 claim.execution_digest)
+
+    def assert_dispatch(self, claim: DispatchClaim, *, cursor: Any | None = None,
+                        lease_seconds: float = 90.0) -> None:
+        if cursor is not None:
+            raise failures.DiracInternal(
+                'MemoryJobStore cannot fence a PostgreSQL publication cursor')
+        with self._lock:
+            _, dispatch = self._memory_dispatch(claim, states=('running',))
+            dispatch['lease_expires_at'] = (
+                time.time() + max(1.0, float(lease_seconds)))
+
+    def release_dispatch(self, claim: DispatchClaim) -> None:
+        with self._lock:
+            try:
+                _, dispatch = self._memory_dispatch(claim, states=('claimed',))
+            except StaleDispatchClaim:
+                return
+            dispatch['lease_expires_at'] = time.time() - 0.001
+
+    def done_claimed(self, claim: DispatchClaim, *, seconds: float,
+                     result_summary: dict | None = None) -> None:
+        with self._lock:
+            row, _ = self._memory_dispatch(claim, states=('running',))
+            row.update(state='done', seconds=round(float(seconds), 3),
+                       finished_at=_now(), result_summary=result_summary,
+                       outcome_class='success', _dispatch=None)
+        _bump('done')
+
+    def failed_claimed(self, claim: DispatchClaim, *, code: str, detail: str,
+                       seconds: float | None = None,
+                       retryable: bool | None = None) -> None:
+        mapped = job_error_code(code)
+        state = 'cancelled' if mapped == 'CANCELLED' else 'failed'
+        with self._lock:
+            row, _ = self._memory_dispatch(claim, states=('running',))
+            row.update(state=state, finished_at=_now(), seconds=seconds,
+                       error_code=mapped, error_detail=detail,
+                       outcome_class=job_outcome_class(state, mapped),
+                       _dispatch=None)
+        _bump('failed')
+
+    def list_recoverable_dispatches(self, *, limit: int = 100) -> list[dict]:
+        with self._lock:
+            rows = []
+            for row in self._rows.values():
+                dispatch = row.get('_dispatch')
+                if not dispatch or row['state'] not in ('queued', 'running'):
+                    continue
+                rows.append({
+                    'job_id': row['id'], 'method_id': row['method_id'],
+                    'payload': self._copy_json(dispatch['payload']),
+                    'execution_digest': dispatch['execution_digest'].hex(),
+                    'execution_adapter': dispatch['execution_adapter'],
+                    'actor_kind': row['actor_kind'], 'actor_id': row['actor_id'],
+                    'command_id': row['command_id'], 'request_id': row['request_id'],
+                    'dispatch_state': dispatch['state'],
+                    'lease_owner': dispatch['lease_owner'],
+                    'lease_expires_at': dispatch['lease_expires_at'],
+                    'lease_expired': (dispatch['lease_expires_at'] is None
+                                      or dispatch['lease_expires_at'] <= time.time()),
+                })
+            return rows[:max(1, min(int(limit), 500))]
+
+    @staticmethod
+    def _raise_stale_dispatch(claim: DispatchClaim, action: str) -> None:
+        _bump('dispatch_stale')
+        raise StaleDispatchClaim(
+            f'dispatch token {claim.fencing_token} cannot {action} Job '
+            f'{claim.job_id}')
 
     def start(self, job_id: str | None) -> None:
         with self._lock:
@@ -602,21 +1175,29 @@ class MemoryJobStore:
                            seconds=seconds, error_code=mapped, error_detail=detail,
                            outcome_class=job_outcome_class(state, mapped))
 
-    def get(self, job_id: str) -> dict | None:
+    def get(self, job_id: str, *, actor_kind: str, actor_id: str) -> dict | None:
         with self._lock:
             row = self._rows.get(job_id)
-            return _public_memory(row) if row else None
+            if (row is None or row['actor_kind'] != actor_kind
+                    or row['actor_id'] != actor_id):
+                return None
+            return _public_memory(row)
 
-    def list(self, *, state: str | None = None, limit: int = 100) -> list[dict]:
+    def list(self, *, actor_kind: str, actor_id: str,
+             state: str | None = None, limit: int = 100) -> list[dict]:
         with self._lock:
-            rows = [r for r in self._rows.values() if state is None or r['state'] == state]
+            rows = [r for r in self._rows.values()
+                    if r['actor_kind'] == actor_kind and r['actor_id'] == actor_id
+                    and (state is None or r['state'] == state)]
             rows.sort(key=lambda r: r['created_at'], reverse=True)
             return [_public_memory(r) for r in rows[:max(1, min(int(limit), 500))]]
 
-    def list_attention(self, *, limit: int = 100) -> list[dict]:
+    def list_attention(self, *, actor_kind: str, actor_id: str,
+                       limit: int = 100) -> list[dict]:
         with self._lock:
             rows = [r for r in self._rows.values()
-                    if r.get('outcome_class') in ('scientific_failure',
+                    if r['actor_kind'] == actor_kind and r['actor_id'] == actor_id
+                    and r.get('outcome_class') in ('scientific_failure',
                                                   'operational_failure')]
             rows.sort(key=lambda r: r.get('finished_at') or r['created_at'], reverse=True)
             return [{
@@ -630,10 +1211,12 @@ class MemoryJobStore:
                 'detail': row.get('error_detail'),
             } for row in rows[:max(1, min(int(limit), 500))]]
 
-    def request_cancel(self, job_id: str) -> dict | None:
+    def request_cancel(self, job_id: str, *, actor_kind: str,
+                       actor_id: str) -> dict | None:
         with self._lock:
             row = self._rows.get(job_id)
-            if row is None:
+            if (row is None or row['actor_kind'] != actor_kind
+                    or row['actor_id'] != actor_id):
                 return None
             accepted = row['state'] == 'queued'
             if row['state'] in ('queued', 'running'):
@@ -641,12 +1224,51 @@ class MemoryJobStore:
             if accepted:
                 row.update(state='cancelled', started_at=_now(), finished_at=_now(),
                            error_code='CANCELLED', error_detail='cancelled while queued',
-                           outcome_class='cancelled')
+                           outcome_class='cancelled', _dispatch=None)
             out = _public_memory(row)
             out['cancel'] = {'requested': True, 'accepted': accepted,
                              'capability': ('queued' if accepted else
                                             'not_interruptible')}
             return out
+
+    def wait_for(self, *, method_row_id: str, input_sha256: bytes, params: dict,
+                 actor_kind: str, actor_id: str, timeout: float,
+                 poll: float = 0.25,
+                 request_digest: bytes | None = None) -> dict:
+        """Process-local equivalent of :meth:`JobLedger.wait_for`.
+
+        The principal is part of the lookup key. A terminal row owned by another
+        actor is indistinguishable from no matching row and can never be joined.
+        """
+        import time
+        deadline = time.time() + max(0.0, timeout)
+        t0 = time.time()
+        digest = bytes(request_digest or canonical_request_digest(
+            method_row_id, input_sha256, params)).hex()
+        last: dict = {}
+        while time.time() < deadline:
+            with self._lock:
+                matches = [row for row in self._rows.values()
+                           if row['_digest'] == digest
+                           and row['method_id'] == method_row_id
+                           and row['actor_kind'] == actor_kind
+                           and row['actor_id'] == actor_id]
+                matches.sort(key=lambda row: row['created_at'], reverse=True)
+                row = dict(matches[0]) if matches else None
+            if row is None:
+                break
+            state = row['state']
+            if state in ('done', 'failed', 'cancelled'):
+                _bump('joined')
+                return {'state': state, 'error_code': row['error_code'],
+                        'error_detail': row['error_detail'],
+                        'waited': round(time.time() - t0, 3)}
+            last = {'last_state': state, 'error_code': row['error_code'],
+                    'error_detail': row['error_detail']}
+            time.sleep(poll)
+        _bump('join_timeout')
+        return {'state': 'timeout', 'waited': round(time.time() - t0, 3),
+                'error_code': None, 'error_detail': None, **last}
 
     def reap(self) -> dict[str, int]:
         return {'dead_worker': 0, 'overran': 0}

@@ -1,21 +1,44 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema", "schema_version": "2.0.0",
-  "method_id": "physics.motif.rbfe_aggregate", "summary": "Aggregate completed and failed RBFE edges with uncertainty and closure diagnostics.",
-  "implementation": {"module": "backend.motif.rbfe", "functions": ["_digest", "aggregate_rbfe_results"], "constants": []},
-  "input": {"schema": {"type": "object", "additionalProperties": false, "required": ["network", "observations"], "properties": {
-    "network": {"type": "object"}, "observations": {"type": "array", "items": {"type": "object"}}
+  "method_id": "physics.motif.rbfe_aggregate", "summary": "Resolve six physical OpenFE result/report pairs, apply a versioned convergence policy, normalize complex-solvent legs, combine three repeats, and aggregate the selected edge.",
+  "implementation": {
+    "module": "backend.motif.rbfe_pipeline",
+    "functions": [
+      "aggregate_rbfe_evidence", "_artifact_ref", "_assert_current_campaign_binding",
+      "_canonical", "_convergence", "_probe", "_read_json_ref", "_read_ref",
+      "_verified_network_digest",
+      "backend.motif.rbfe:_digest",
+      "backend.motif.rbfe:ingest_openfe_edge_result",
+      "backend.motif.rbfe:aggregate_rbfe_results",
+      "backend.motif.rbfe:_validate_ingested_leg",
+      "backend.motif.rbfe:_pair_legs_and_repeats",
+      "backend.motif.rbfe:_cycle_basis_closures",
+      "backend.motif.rbfe_binding:_digest",
+      "backend.motif.rbfe_binding:_uuid",
+      "backend.motif.rbfe_binding:_sha256",
+      "backend.motif.rbfe_binding:validate_campaign_binding"
+    ],
+    "constants": [
+      "_RUNTIME", "_PROBE", "_PROBE_SHA256", "_CONVERGENCE_POLICY",
+      "backend.motif.openfe_runner:OPENFE_VERSION",
+      "backend.motif.openfe_runner:OPENFE_INSTALLER_SHA256",
+      "backend.motif.rbfe_binding:SCHEMA_VERSION",
+      "backend.motif.rbfe_binding:VERDICT",
+      "backend.motif.rbfe_binding:BINDING_KEYS",
+      "backend.motif.rbfe_binding:_SHA256"
+    ]
+  },
+  "input": {"schema": {"type": "object", "additionalProperties": false, "required": ["network_ref", "edge_spec_ref", "runs"], "properties": {
+    "network_ref": {"$ref": "#/$defs/artifact_ref"},
+    "edge_spec_ref": {"$ref": "#/$defs/artifact_ref"},
+    "runs": {"type": "array", "minItems": 6, "maxItems": 6, "items": {"type": "object", "additionalProperties": false, "required": ["result_ref", "run_report_ref"], "properties": {"result_ref": {"$ref": "#/$defs/artifact_ref"}, "run_report_ref": {"$ref": "#/$defs/artifact_ref"}}}}
+  }, "$defs": {"artifact_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id", "sha256"], "properties": {"kind": {"const": "artifact"}, "id": {"type": "string", "format": "uuid"}, "sha256": {"type": "string", "format": "sha256-digest"}}}}}},
+  "output": {"schema": {"type": "object", "additionalProperties": false, "required": ["result_digest", "status", "release_eligible", "node_estimates", "failed_edges", "cycle_closure", "passed_leg_count", "convergence_verdicts"], "properties": {
+    "result_digest": {"type": "string", "format": "sha256-digest"}, "status": {"enum": ["computed_unattested", "partial_unattested"]}, "release_eligible": {"const": false},
+    "node_estimates": {"type": "array"}, "failed_edges": {"type": "array"}, "cycle_closure": {"type": "array"}, "passed_leg_count": {"type": "integer", "minimum": 0, "maximum": 6}, "convergence_verdicts": {"type": "array", "minItems": 6, "maxItems": 6}
   }}},
-  "output": {"schema": {"type": "object", "additionalProperties": false,
-    "required": ["result_digest", "status", "node_estimates", "failed_edges", "cycle_closure"], "properties": {
-      "result_digest": {"type": "string", "format": "sha256-digest"}, "status": {"enum": ["complete", "partial"]},
-      "node_estimates": {"type": "array"}, "failed_edges": {"type": "array"}, "cycle_closure": {"type": "array"}
-  }}},
-  "refusals": [{"code": "INVALID_PARAMETERS", "condition": "unknown edge or invalid value/uncertainty"}],
-  "execution": {"supported_modes": ["sync", "job"], "default_mode": "job", "resource_class": "cpu", "determinism": "bitwise",
-    "checkpointable": false, "cancellation": "cooperative", "artifact_access": ["read:rbfe", "write:rbfe"],
-    "supported_adapters": ["local_cpu", "slurm", "kubernetes"], "cacheable": true, "deterministic": true,
-    "side_effects": "immutable_artifacts"},
+  "refusals": [{"code": "INVALID_PARAMETERS", "condition": "evidence references are incomplete, duplicated, inconsistent, wrong-role, or digest-mismatched"}, {"code": "UNSUPPORTED", "condition": "artifact store or pinned OpenFE evidence decoder unavailable"}],
+  "execution": {"supported_modes": ["job"], "default_mode": "job", "resource_class": "cpu", "determinism": "bitwise", "checkpointable": false, "cancellation": "cooperative", "artifact_access": ["read:rbfe", "write:rbfe"], "supported_adapters": ["local_cpu", "slurm", "kubernetes"], "cacheable": false, "deterministic": true, "side_effects": "immutable_artifacts"},
   "exposure": {"sdk": true, "cli": true, "mcp": "hidden"},
-  "invocation": {"handler": "motif.structure_methods:rbfe_aggregate_handler", "estimate": "motif.structure_methods:rbfe_estimate",
-    "artifacts": [{"role": "rbfe.result", "media_type": "application/json", "required": true}]}
+  "invocation": {"handler": "motif.structure_methods:rbfe_aggregate_handler", "estimate": "motif.structure_methods:rbfe_estimate", "artifacts": [{"role": "rbfe.result", "media_type": "application/json", "required": true}, {"role": "rbfe.convergence", "media_type": "application/json", "required": true}, {"role": "rbfe.validated_legs", "media_type": "application/json", "required": true}]}
 }

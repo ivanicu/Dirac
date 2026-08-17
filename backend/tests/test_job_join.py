@@ -45,6 +45,8 @@ if 'pytest' in sys.modules and not os.environ.get('DIRAC_TEST_DSN'):
     pytest.skip('requires isolated PostgreSQL DIRAC_TEST_DSN', allow_module_level=True)
 
 PASS, FAIL = [], []
+OWNER = {'actor_kind': 'human', 'actor_id': 'join-test-a'}
+OTHER = {'actor_kind': 'human', 'actor_id': 'join-test-b'}
 
 
 def check(name, fn):
@@ -85,10 +87,10 @@ def test_the_index_actually_refuses_a_second_inflight_row():
     sha = fresh_input('premise')
     params = {'kind': 'mep', 'basis': 'none'}
     first, conflict1 = L.open(method_row_id=a_method_row(), input_sha256=sha,
-                              params=params)
+                              params=params, **OWNER)
     assert first and not conflict1, f'the first insert failed: {first} {conflict1}'
     second, conflict2 = L.open(method_row_id=a_method_row(), input_sha256=sha,
-                               params=params)
+                               params=params, **OWNER)
     assert second == first and conflict2, (
         f'the second open returned id={second}, conflict={conflict2} instead of '
         f'joining existing job {first} — job_one_inflight is not covering the '
@@ -96,11 +98,29 @@ def test_the_index_actually_refuses_a_second_inflight_row():
     L.failed(first, code='CANCELLED', detail='TEST premise row')
 
 
+def test_identical_requests_from_different_actors_do_not_conflict():
+    """Tenant identity is a positive-control dimension of the unique key."""
+    L = ledger()
+    sha = fresh_input('tenant-premise')
+    params = {'kind': 'mep', 'basis': 'none'}
+    owner, owner_conflict = L.open(
+        method_row_id=a_method_row(), input_sha256=sha, params=params, **OWNER)
+    other, other_conflict = L.open(
+        method_row_id=a_method_row(), input_sha256=sha, params=params, **OTHER)
+    assert owner and other and owner != other
+    assert not owner_conflict and not other_conflict
+    assert L.get(owner, **OTHER) is None
+    assert L.request_cancel(owner, **OTHER) is None
+    L.failed(owner, code='CANCELLED', detail='TEST tenant owner row')
+    L.failed(other, code='CANCELLED', detail='TEST tenant other row')
+
+
 def test_a_waiter_returns_the_winners_outcome():
     L = ledger()
     sha = fresh_input('outcome')
     params = {'kind': 'mep', 'basis': 'none'}
-    job, _ = L.open(method_row_id=a_method_row(), input_sha256=sha, params=params)
+    job, _ = L.open(method_row_id=a_method_row(), input_sha256=sha,
+                    params=params, **OWNER)
     assert job
 
     # the winner finishes while the waiter is waiting
@@ -111,7 +131,7 @@ def test_a_waiter_returns_the_winners_outcome():
 
     t0 = time.time()
     out = L.wait_for(method_row_id=a_method_row(), input_sha256=sha,
-                     params=params, timeout=10.0)
+                     params=params, timeout=10.0, **OWNER)
     waited = time.time() - t0
     assert out['state'] == 'done', f'the waiter did not see the completion: {out}'
     assert 0.4 < waited < 4.0, (
@@ -124,10 +144,11 @@ def test_a_waiter_times_out_instead_of_hanging():
     L = ledger()
     sha = fresh_input('timeout')
     params = {'kind': 'mep', 'basis': 'none'}
-    job, _ = L.open(method_row_id=a_method_row(), input_sha256=sha, params=params)
+    job, _ = L.open(method_row_id=a_method_row(), input_sha256=sha,
+                    params=params, **OWNER)
     t0 = time.time()
     out = L.wait_for(method_row_id=a_method_row(), input_sha256=sha,
-                     params=params, timeout=1.0)
+                     params=params, timeout=1.0, **OWNER)
     waited = time.time() - t0
     assert out['state'] == 'timeout', (
         f"a job still running reported {out['state']!r} — a waiter that believes "
@@ -145,7 +166,7 @@ def test_a_waiter_does_not_hang_when_the_row_vanishes():
     params = {'kind': 'mep', 'basis': 'none'}
     t0 = time.time()
     out = L.wait_for(method_row_id=a_method_row(), input_sha256=sha,
-                     params=params, timeout=8.0)
+                     params=params, timeout=8.0, **OWNER)
     waited = time.time() - t0
     assert waited < 2.0, (
         f'waited {waited:.2f}s for a job that never existed — the waiter polls '

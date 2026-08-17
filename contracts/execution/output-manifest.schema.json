@@ -62,6 +62,12 @@
       "properties": {
         "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$"},
         "message": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "affects": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1, "maxLength": 256},
+          "uniqueItems": true,
+          "maxItems": 256
+        },
         "details": {"type": "object"}
       }
     }

@@ -52,25 +52,30 @@ def method_estimate(input: dict, ctx) -> dict:
 
 
 def job_get(input: dict, ctx) -> dict:
-    return _job_ref(ctx.kernel.get_job(input['job_ref']['id']))
+    return _job_ref(ctx.kernel.get_job(
+        input['job_ref']['id'], actor=ctx.actor))
 
 
 def job_list(input: dict, ctx) -> dict:
     return {'jobs': [_job_ref(j) for j in ctx.kernel.list_jobs(
-        state=input.get('state'), limit=input.get('limit', 100))]}
+        actor=ctx.actor, state=input.get('state'),
+        limit=input.get('limit', 100))]}
 
 
 def attention_list(input: dict, ctx) -> dict:
-    return {'items': ctx.kernel.list_attention(limit=input.get('limit', 100))}
+    return {'items': ctx.kernel.list_attention(
+        actor=ctx.actor, limit=input.get('limit', 100))}
 
 
 def job_wait(input: dict, ctx) -> dict:
     return _job_ref(ctx.kernel.wait_job(
-        input['job_ref']['id'], timeout=input.get('timeout', 300)))
+        input['job_ref']['id'], actor=ctx.actor,
+        timeout=input.get('timeout', 300)))
 
 
 def job_cancel(input: dict, ctx) -> dict:
-    return _job_ref(ctx.kernel.cancel_job(input['job_ref']['id']))
+    return _job_ref(ctx.kernel.cancel_job(
+        input['job_ref']['id'], actor=ctx.actor))
 
 
 def _rdkit_molecule(value: dict):
@@ -193,10 +198,114 @@ def physics_rbfe_network(input: dict, ctx) -> dict:
         actor=ctx.actor, command_id=ctx.command_id)
 
 
+def _rbfe_references(ctx):
+    resolver = getattr(ctx.kernel, "rbfe_reference_resolver", None)
+    if resolver is None:
+        raise failures.DiracFailure(
+            "DB_UNAVAILABLE", "registered protein-system catalog is unavailable")
+    return resolver
+
+
+def physics_rbfe_system_list(input: dict, ctx) -> dict:
+    resolver = _rbfe_references(ctx)
+    return {
+        "systems": resolver.list_systems(
+            ctx.actor,
+            campaign_id=input.get("campaign_id"),
+            include_importable=bool(input.get("include_importable", False))),
+        "protocol_presets": [{
+            "id": "openfe-rfe-standard-v1",
+            "name": "OpenFE RFE Standard",
+            "sampler": "replica exchange",
+            "lambda_windows": 11,
+            "equilibration": "1 ns",
+            "production": "5 ns",
+            "forcefields": "AMBER ff14SB · OpenFF 2.2.1 · TIP3P",
+            "solvent": "NaCl 0.15 M",
+        }],
+        "required_sources": ["prepared_receptor_state_ref", "parent_pose_ref",
+                             "proposal_pose_ref"],
+    }
+
+
+def physics_rbfe_campaign_save(input: dict, ctx) -> dict:
+    return _rbfe_references(ctx).save_campaign(input, ctx.actor)
+
+
+def physics_rbfe_campaign_get(input: dict, ctx) -> dict:
+    return _rbfe_references(ctx).get_campaign(input["campaign_id"], ctx.actor)
+
+
+def physics_rbfe_campaign_list(input: dict, ctx) -> dict:
+    del input
+    return {"campaigns": _rbfe_references(ctx).list_campaigns(ctx.actor)}
+
+
+def physics_rbfe_campaign_invalidate(input: dict, ctx) -> dict:
+    return _rbfe_references(ctx).invalidate_campaign(
+        input["campaign_id"], input["expected_version"], input["reason"],
+        input["changed_domains"], ctx.actor)
+
+
+def physics_rbfe_campaign_import_system(input: dict, ctx) -> dict:
+    return _rbfe_references(ctx).import_system(
+        input["campaign_id"], input["prepared_receptor_state_ref"], ctx.actor,
+        expected_version=input["expected_version"], reason=input["reason"])
+
+
+def physics_rbfe_campaign_prepare(input: dict, ctx) -> dict:
+    """Queue server-owned receptor and pose preparation as a durable Job.
+
+    Preparation can invoke native chemistry tools for minutes.  Running that work in
+    the command request made a closed browser indistinguishable from a failed
+    campaign.  The method owns the resolver/store capabilities; this command only
+    mints the reconnectable handle.
+    """
+    return ctx.kernel.submit(
+        'physics.motif.rbfe_campaign_prepare', input,
+        request_id=ctx.request_id, actor=ctx.actor,
+        command_id=ctx.command_id)
+
+
+def physics_rbfe_campaign_accept_poses(input: dict, ctx) -> dict:
+    resolver = _rbfe_references(ctx)
+    return resolver.accept_poses(input, ctx.actor)
+
+
+def physics_rbfe_system_prepare(input: dict, ctx) -> dict:
+    return ctx.kernel.submit(
+        'physics.motif.rbfe_system_prepare', input, request_id=ctx.request_id,
+        actor=ctx.actor, command_id=ctx.command_id)
+
+
 def physics_rbfe_aggregate(input: dict, ctx) -> dict:
     return ctx.kernel.submit(
         'physics.motif.rbfe_aggregate', input, request_id=ctx.request_id,
         actor=ctx.actor, command_id=ctx.command_id)
+
+
+def _rbfe_runsets(ctx):
+    controller = getattr(ctx.kernel, "rbfe_runset_controller", None)
+    if controller is None:
+        raise failures.DiracFailure(
+            "DB_UNAVAILABLE", "durable RBFE RunSet controller is unavailable")
+    return controller
+
+
+def physics_rbfe_run_start(input: dict, ctx) -> dict:
+    return _rbfe_runsets(ctx).start(input, ctx.actor)
+
+
+def physics_rbfe_run_get(input: dict, ctx) -> dict:
+    return _rbfe_runsets(ctx).get(input["run_ref"]["id"], ctx.actor)
+
+
+def physics_rbfe_run_cancel(input: dict, ctx) -> dict:
+    return _rbfe_runsets(ctx).cancel(input["run_ref"]["id"], ctx.actor)
+
+
+def physics_rbfe_run_retry(input: dict, ctx) -> dict:
+    return _rbfe_runsets(ctx).retry(input["run_ref"]["id"], ctx.actor)
 
 
 def proposal_generate(input: dict, ctx) -> dict:

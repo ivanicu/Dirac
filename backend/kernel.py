@@ -136,23 +136,36 @@ def toolkit_versions() -> dict[str, str]:
     return out
 
 
-def source_versions() -> dict[str, str]:
-    """method_id → the digest of the running source.
+def source_identities() -> dict[str, dict[str, str]]:
+    """method_id → full running source witness.
 
     Imports field_server, and therefore RDKit — which is why this is a SEPARATE function
     from `catalog.MethodCatalog.load()`. A catalog client that only lists methods must
-    not pay for a chemistry toolkit, and the acceptance test needs the digest. Both are
-    true, so the expensive half is opt-in.
+    not pay for a chemistry toolkit.  Production execution needs BOTH the short display
+    version and the full SHA-256; truncating the latter into a cache identity would turn
+    a UI convenience into the scientific collision boundary.
     """
     try:
         import field_server as FS
         import method_registry as MR
-        return {row['method_id']: row['version'] for row in MR.plan(FS)}
+        return {
+            row['method_id']: {
+                'version': row['version'],
+                'digest': 'sha256:' + bytes(row['sha256']).hex(),
+            }
+            for row in MR.plan(FS)
+        }
     except Exception as e:                                          # noqa: BLE001
-        print(f'[kernel] source versions unavailable ({type(e).__name__}: {e}); '
-              f'provenance will report version: null rather than a guess',
+        print(f'[kernel] source identities unavailable ({type(e).__name__}: {e}); '
+              f'non-production provenance will report version: null rather than a guess',
               file=sys.stderr, flush=True)
         return {}
+
+
+def source_versions() -> dict[str, str]:
+    """Compatibility projection used by catalog/read-only callers."""
+    return {method_id: row['version']
+            for method_id, row in source_identities().items()}
 
 
 def default_store(dsn: str = DEFAULT_DSN) -> tuple[Any, str]:
@@ -179,6 +192,87 @@ def default_store(dsn: str = DEFAULT_DSN) -> tuple[Any, str]:
               f'addressable and verifiable, but their references do NOT survive this '
               f'process.', file=sys.stderr, flush=True)
         return artifacts.MemoryArtifactStore(), 'memory'
+
+
+def default_rbfe_reference_resolver(dsn: str = DEFAULT_DSN):
+    """Resolve only registered target/protein-pose pairs for RBFE preflight."""
+    try:
+        import psycopg
+        from motif.rbfe_references import PostgresRbfeReferenceResolver
+        # This resolver is a transactional aggregate, not a collection of
+        # independent statements.  Probe campaign state AND explicit artifact
+        # ownership up front so preparation cannot publish bytes that the HTTP
+        # authorization layer cannot safely attribute afterwards.
+        with psycopg.connect(dsn, autocommit=True) as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT to_regclass('app.rbfe_campaign') IS NOT NULL, "
+                "to_regclass('app.rbfe_campaign_revision') IS NOT NULL, "
+                "to_regclass('app.rbfe_campaign_system_import') IS NOT NULL, "
+                "EXISTS (SELECT 1 FROM information_schema.columns "
+                "WHERE table_schema='app' AND table_name='rbfe_campaign' "
+                "AND column_name='state_digest'), "
+                "to_regclass('app.rbfe_campaign_owner_updated_idx') IS NOT NULL, "
+                "to_regclass('app.rbfe_campaign_artifact') IS NOT NULL, "
+                "EXISTS (SELECT 1 FROM pg_constraint "
+                "WHERE conrelid=to_regclass('app.rbfe_campaign_artifact') "
+                "AND contype='f' "
+                "AND conname='rbfe_campaign_artifact_role_fk' "
+                "AND pg_get_constraintdef(oid) LIKE "
+                "'%%FOREIGN KEY (artifact_id, role)%%'), "
+                "EXISTS (SELECT 1 FROM information_schema.columns "
+                "WHERE table_schema='app' AND table_name='job' "
+                "AND column_name='request_key') "
+                "AND EXISTS (SELECT 1 FROM pg_constraint "
+                "WHERE conrelid=to_regclass('app.job') AND contype='c' "
+                "AND conname='job_request_key_nonempty' "
+                "AND pg_get_constraintdef(oid) = format("
+                "'CHECK (((request_key IS NULL) OR (request_key ~ "
+                "((%L::text || %L::text) || %L::text))))', "
+                "'[^[:space:]', U&'\\00A0\\2007\\202F\\FEFF', ']')) "
+                "AND EXISTS (SELECT 1 FROM pg_constraint "
+                "WHERE conrelid=to_regclass('app.job') AND contype='c' "
+                "AND conname='job_request_key_length' "
+                "AND pg_get_constraintdef(oid) = "
+                "'CHECK (((request_key IS NULL) OR "
+                "(length(request_key) <= 256)))') "
+                "AND EXISTS (SELECT 1 FROM pg_constraint "
+                "WHERE conrelid=to_regclass('app.job') AND contype='c' "
+                "AND conname='job_request_key_has_command' "
+                "AND pg_get_constraintdef(oid) = "
+                "'CHECK (((request_key IS NULL) OR "
+                "(command_id IS NOT NULL)))'), "
+                "EXISTS (SELECT 1 FROM pg_index "
+                "WHERE indexrelid=to_regclass('app.job_command_request_key_once') "
+                "AND indisunique "
+                "AND pg_get_indexdef(indexrelid) LIKE "
+                "'CREATE UNIQUE INDEX job_command_request_key_once ON app.job USING btree "
+                "(actor_kind, actor_id, command_id, request_key) WHERE %%' "
+                "AND pg_get_expr(indpred, indrelid) = '(request_key IS NOT NULL)'), "
+                "to_regclass('app.job_dispatch') IS NOT NULL")
+            capability = cur.fetchone()
+        if capability is None or not all(capability):
+            capability = tuple(capability or (False,) * 9)
+            missing = []
+            if not all(capability[:5]):
+                missing.append('040_rbfe_campaign_state.sql')
+            if not all(capability[5:7]):
+                missing.append('045_rbfe_campaign_artifact_ownership.sql')
+            if not all(capability[7:9]):
+                missing.append('046_job_command_request_key.sql')
+            if not bool(capability[9]):
+                missing.append('047_job_dispatch_fence.sql')
+            raise RuntimeError(
+                'RBFE campaign persistence requires complete migrations: '
+                + ', '.join(missing))
+        return PostgresRbfeReferenceResolver(
+            # Do not enable autocommit: mutators use SELECT FOR UPDATE and must
+            # commit campaign rows, revisions, dependency invalidations and
+            # import receipts atomically when their connection context exits.
+            lambda: psycopg.connect(dsn))
+    except Exception as error:                                    # noqa: BLE001
+        print(f'[kernel] RBFE reference resolver unavailable '
+              f'({type(error).__name__}: {error})', file=sys.stderr, flush=True)
+        return None
 
 
 def default_cache():
@@ -325,7 +419,8 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
           executor: Any | None = None,
           trace_store: Any | None = None,
           motif_governance: Any | None = None,
-          program_repository: Any | None = None) -> invocation.InvocationService:
+          program_repository: Any | None = None,
+          production_execution: bool = True) -> invocation.InvocationService:
     """A ready kernel. The only supported way to get one.
 
     `with_versions=False` skips the field_server import, for a caller that wants a
@@ -333,10 +428,17 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
     `version: null`, which is honest, rather than failing to start.
     """
     cat = catalog.MethodCatalog.load()
+    running_sources: dict[str, dict[str, str]] = {}
     if with_versions:
-        v = source_versions()
+        running_sources = source_identities()
+        v = {method_id: row['version']
+             for method_id, row in running_sources.items()}
         if v:
             cat = cat.bind_versions(v)
+    elif production_execution:
+        raise RuntimeError(
+            'production kernel construction cannot disable running source identities; '
+            'pass production_execution=False explicitly for a catalog-only/dev kernel')
     st, kind = (store, 'injected') if store is not None else default_store(dsn)
     # The cache is what makes a kernel invocation equivalent to the route's, and therefore
     # what makes deleting the route's orchestration a refactor rather than a regression:
@@ -357,14 +459,32 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
                   else default_motif_governance(dsn))
     programs = (program_repository if program_repository is not None
                 else default_program_repository(dsn))
+    rbfe_references = default_rbfe_reference_resolver(dsn)
     # A ThreadExecutor still executes sync calls inline, while also making descriptor
     # default_mode=job truthful for /v2/jobs submissions.
     ex = executor or default_executor()
+    if getattr(ex, "adapter_kind", None) == "kubernetes":
+        ex.artifact_reader = st
+    identity_resolver = None
+    if production_execution:
+        from execution_control.production_identity import (
+            build_production_identity_resolver)
+        identity_resolver = build_production_identity_resolver(
+            executor=ex,
+            method_sources=running_sources,
+            repository=Path(__file__).resolve().parents[1],
+            dependency_lock_path=(
+                Path(__file__).resolve().parent / 'motif/requirements.lock.txt'))
     svc = invocation.InvocationService(cat, store=st, cache=ca, ledger=js, executor=ex,
                                       trace_store=trace,
+                                      artifact_reader=st,
+                                      artifact_writer=st,
                                       attempt_store=getattr(ex, 'attempt_store', None),
                                       motif_governance=governance,
                                       program_repository=programs,
+                                      rbfe_reference_resolver=rbfe_references,
+                                      execution_identity_resolver=identity_resolver,
+                                      production_execution=production_execution,
                                       toolkit_versions=toolkit_versions())
     svc.store_kind = kind                    # type: ignore[attr-defined]
     svc.cache_kind = ('injected' if cache is not None
@@ -372,6 +492,8 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
     svc.job_store_kind = getattr(js, 'kind', 'injected')  # type: ignore[attr-defined]
     svc.job_durability = getattr(js, 'durability', 'unknown')  # type: ignore[attr-defined]
     svc.executor_kind = getattr(ex, 'kind', 'injected')  # type: ignore[attr-defined]
+    svc.execution_identity_mode = (  # type: ignore[attr-defined]
+        'production' if production_execution else 'development')
     try:
         import psycopg
         from motif.closed_loop import ClosedLoopController
@@ -382,4 +504,20 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
               f'({type(error).__name__}: {error})', file=sys.stderr, flush=True)
         controller = None
     svc.closed_loop_controller = controller  # type: ignore[attr-defined]
+    try:
+        from motif.rbfe_runset import RbfeRunSetController
+        rbfe_runsets = RbfeRunSetController(
+            svc, lambda: psycopg.connect(dsn, autocommit=True))
+    except Exception as error:  # noqa: BLE001
+        print(f'[kernel] RBFE RunSet controller unavailable '
+              f'({type(error).__name__}: {error})', file=sys.stderr, flush=True)
+        rbfe_runsets = None
+    svc.rbfe_runset_controller = rbfe_runsets  # type: ignore[attr-defined]
+    if getattr(js, 'durability', 'none') == 'durable':
+        try:
+            svc.recover_keyed_dispatches()
+        except Exception as error:  # noqa: BLE001
+            print(f'[kernel] durable dispatch recovery unavailable '
+                  f'({type(error).__name__}: {error})',
+                  file=sys.stderr, flush=True)
     return svc

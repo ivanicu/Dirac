@@ -112,10 +112,11 @@ def test_every_declared_constant_exists_today():
     """The declarations must be true right now, not aspirational."""
     for method_id, spec in mr.UNITS.items():
         module = importlib.import_module(spec['module']) if spec.get('module') else fs
-        for const in spec.get('consts', ()):
-            assert hasattr(module, const), (
+        for declaration in spec.get('consts', ()):
+            source_module, const = mr._resolve_declared_member(module, declaration)
+            assert hasattr(source_module, const), (
                 f'{method_id} declares the constant {const!r}, which is not in '
-                f'{module.__name__} today')
+                f'{source_module.__name__} today')
 
 
 if __name__ == '__main__':

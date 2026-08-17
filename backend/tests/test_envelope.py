@@ -146,7 +146,7 @@ def test_the_reverse_does_not_hold_and_the_gap_is_exactly_named_codes():
     assert only_in_vocabulary == {
         'BAD_HOST', 'OPEN_SHELL_SPIN_REQUIRED', 'NOT_FOUND', 'DB_UNAVAILABLE',
         'AUTH_REQUIRED', 'FORBIDDEN', 'RATE_LIMITED', 'QUOTA_EXCEEDED',
-        'TLS_REQUIRED'}, (
+        'TLS_REQUIRED', 'IDEMPOTENCY_CONFLICT'}, (
         f'the errors.json-minus-enum set difference moved to '
         f'{sorted(only_in_vocabulary)} — re-read db_enum_note in errors.json '
         f'and update either the note, the enum, or this test, deliberately')
@@ -322,6 +322,7 @@ def test_to_v1_reason_bucket_covers_every_code_and_only_budget_maps_to_budget():
 def test_err_uses_the_http_status_from_errors_json_not_always_200():
     assert env.err('TOO_LARGE', 'x')[0] == 413
     assert env.err('BAD_HOST', 'x')[0] == 403
+    assert env.err('IDEMPOTENCY_CONFLICT', 'x')[0] == 409
     assert env.err('PARSE', 'x')[0] == 200
 
 

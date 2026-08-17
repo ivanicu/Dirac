@@ -43,6 +43,43 @@ from contracts.validation import check_schema, violations
 CONTRACTS = pathlib.Path(__file__).resolve().parent.parent / 'contracts'
 
 
+class _FrozenDict(dict):
+    """JSON object whose contract bytes cannot be changed after catalog load."""
+
+    def _immutable(self, *_args, **_kwargs):
+        raise TypeError('Method descriptor is immutable')
+
+    __setitem__ = __delitem__ = clear = pop = popitem = setdefault = update = _immutable
+    __ior__ = _immutable
+
+
+class _FrozenList(list):
+    """JSON array companion to :class:`_FrozenDict`."""
+
+    def _immutable(self, *_args, **_kwargs):
+        raise TypeError('Method descriptor is immutable')
+
+    __setitem__ = __delitem__ = append = clear = extend = insert = pop = remove = _immutable
+    __iadd__ = __imul__ = reverse = sort = _immutable
+
+
+def _freeze_json(value: Any) -> Any:
+    if isinstance(value, dict):
+        return _FrozenDict({key: _freeze_json(child)
+                            for key, child in value.items()})
+    if isinstance(value, (list, tuple)):
+        return _FrozenList(_freeze_json(child) for child in value)
+    return value
+
+
+def _thaw_json(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _thaw_json(child) for key, child in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_thaw_json(child) for child in value]
+    return value
+
+
 @dataclass(frozen=True)
 class ArtifactDeclaration:
     role: str
@@ -172,7 +209,17 @@ class MethodCatalog:
     """
 
     def __init__(self, specs: dict[str, MethodSpec]) -> None:
-        self._specs = specs
+        # MethodSpec is frozen, but a frozen dataclass containing a mutable dict
+        # is not immutable.  Normalize even injected test/plugin specs here so no
+        # caller can rewrite execution routing after admission.
+        self._specs = {
+            mid: MethodSpec(
+                method_id=spec.method_id, summary=spec.summary,
+                descriptor=_freeze_json(spec.descriptor),
+                handler_ref=spec.handler_ref, estimate_ref=spec.estimate_ref,
+                artifacts=tuple(spec.artifacts), version=spec.version)
+            for mid, spec in specs.items()
+        }
 
     # ── loading ───────────────────────────────────────────────────────────────
     @classmethod
@@ -226,7 +273,7 @@ class MethodCatalog:
         for mid, spec in self._specs.items():
             out[mid] = MethodSpec(
                 method_id=spec.method_id, summary=spec.summary,
-                descriptor=spec.descriptor, handler_ref=spec.handler_ref,
+                descriptor=_freeze_json(spec.descriptor), handler_ref=spec.handler_ref,
                 estimate_ref=spec.estimate_ref, artifacts=spec.artifacts,
                 version=versions.get(mid))
         return MethodCatalog(out)
@@ -337,14 +384,14 @@ class MethodCatalog:
             'version': spec.version,
             'summary': spec.summary,
             'description': spec.descriptor.get('description', ''),
-            'input_schema': spec.input_schema,
-            'output_schema': spec.output_schema,
-            'refusals': spec.refusals,
+            'input_schema': _thaw_json(spec.input_schema),
+            'output_schema': _thaw_json(spec.output_schema),
+            'refusals': _thaw_json(spec.refusals),
             'artifacts': [{'role': a.role, 'media_type': a.media_type,
                            'required': a.required, 'typical_bytes': a.typical_bytes}
                           for a in spec.artifacts],
-            'execution': spec.execution,
-            'exposure': spec.exposure,
+            'execution': _thaw_json(spec.execution),
+            'exposure': _thaw_json(spec.exposure),
             'executable': spec.is_executable,
         }
 
@@ -368,7 +415,7 @@ class MethodCatalog:
                 'method_id': spec.method_id,
                 'description': (spec.summary + ' ' +
                                 spec.descriptor.get('description', '')).strip(),
-                'input_schema': spec.input_schema,
+                'input_schema': _thaw_json(spec.input_schema),
                 'curated': allowed == 'curated',
             })
         return out

@@ -373,6 +373,9 @@ _V1_REASON_FOR_CODE: dict[str, str] = {
     # declared code has a bucket — and that assertion is what refused to let the daemon
     # start when the code was added without one. Loud, at import, before a single request.
     'INVALID_PARAMETERS': 'unsupported',
+    # v1 has neither HTTP 409 nor a conflict branch. Flattening this to internal
+    # is deliberate; v2 clients retain IDEMPOTENCY_CONFLICT and its recovery rule.
+    'IDEMPOTENCY_CONFLICT': 'internal',
     'UNCONVERGED': 'unsupported',
     'UNPARAMETERIZED': 'unsupported',
     'BUDGET': 'budget',

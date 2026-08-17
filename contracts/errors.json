@@ -163,12 +163,20 @@
       "caller_action": "Fix the named parameter and call again. GET /v2/methods/{id} returns the schema, and `details.pointer` names the exact field.",
       "user_copy": "That request is not valid for this method.",
       "why_separate": "FOUND BY DOGFOODING, 2026-08-11: the frontend sent `basis` to fields.mlp, a classical method with no basis. The contract refused it correctly \u2014 and the user saw \"This molecule could not be parsed\", because schema violations were being reported as PARSE. The molecule was fine. One code was carrying two facts with opposite remedies: PARSE means the structure is unreadable and there is nothing to do; this means one named field is wrong and fixing it will work."
+    },
+    "IDEMPOTENCY_CONFLICT": {
+      "meaning": "A client request key already names a different canonical command payload for this actor.",
+      "retryable": false,
+      "http": 409,
+      "caller_action": "Generate a new request_key for the changed operation, or replay the original payload byte-for-byte to recover its existing Job.",
+      "user_copy": "That request key already belongs to a different operation.",
+      "points_at": null
     }
   },
   "db_enum_note": [
     "app.job_error (migration 007) is a SUBSET, and the omissions are deliberate:",
     "Runtime scientific parameter refusals are Job-reachable because schemas validate shape before opening a row, while chemistry engines can still reject inconsistent values after the Job starts; migration 029 added that state.",
-    "BAD_HOST, AUTH_REQUIRED, FORBIDDEN, RATE_LIMITED, QUOTA_EXCEEDED and TLS_REQUIRED are rejected by the remote transport boundary before a job exists;",
+    "BAD_HOST, AUTH_REQUIRED, FORBIDDEN, RATE_LIMITED, QUOTA_EXCEEDED and TLS_REQUIRED are rejected by the remote transport boundary before a job exists; IDEMPOTENCY_CONFLICT rejects reuse before a second Job may be created;",
     "OPEN_SHELL_SPIN_REQUIRED was added after 007 shipped; and the two ops codes NOT_FOUND / DB_UNAVAILABLE \u2014 neither",
     "of which can ever be a job's error, because a job that failed BECAUSE the",
     "database was unreachable has no row to record it in. That is not a gap; it is",

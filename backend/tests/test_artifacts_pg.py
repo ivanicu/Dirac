@@ -233,6 +233,45 @@ def test_a_missing_id_is_NOT_FOUND():
     raise AssertionError('reading an absent artifact succeeded')
 
 
+def test_lent_transaction_cursor_rolls_artifact_back_on_zero_row_campaign_cas():
+    """The production RBFE path lends its campaign transaction cursor to `put`.
+
+    Prove that a real zero-row CAS rolls both the artifact name and its blob back;
+    a fake-only test cannot establish psycopg connection-context semantics.
+    """
+    st = store()
+    data = payload('campaign-cas-rollback')
+    digest = A.sha256_hex(data)
+    try:
+        with psycopg.connect(DSN) as conn, conn.cursor() as cur:
+            st.put(data, role='rbfe.receptor.pdb', cursor=cur)
+            # The base artifact suite deliberately does not require migration 040;
+            # model the same versioned zero-row CAS in a transaction-local table.
+            cur.execute(
+                'CREATE TEMP TABLE rbfe_campaign_cas_probe '
+                '(id uuid PRIMARY KEY, version bigint NOT NULL) ON COMMIT DROP')
+            cur.execute(
+                "UPDATE rbfe_campaign_cas_probe SET version=version+1 "
+                "WHERE id=%s AND version=-1 RETURNING id",
+                ('00000000-0000-0000-0000-000000000000',))
+            assert cur.fetchone() is None, 'the injected impossible CAS unexpectedly matched'
+            raise RuntimeError('injected campaign CAS conflict')
+    except RuntimeError as error:
+        assert str(error) == 'injected campaign CAS conflict'
+
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            'SELECT count(*) FROM app.artifact WHERE blob_sha256=decode(%s,%s)',
+            (digest, 'hex'))
+        artifact_count = cur.fetchone()[0]
+        cur.execute(
+            'SELECT count(*) FROM app.blob WHERE sha256=decode(%s,%s)',
+            (digest, 'hex'))
+        blob_count = cur.fetchone()[0]
+    assert (artifact_count, blob_count) == (0, 0), (
+        'the campaign CAS rolled back but its preparation artifact survived')
+
+
 def test_an_artifact_links_to_the_job_that_produced_it():
     """The replacement for one result-id column per method. A job may emit several
     artifacts, and an artifact may belong to several jobs (a cache hit links an

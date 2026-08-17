@@ -15,6 +15,7 @@ import collections
 import dataclasses
 import datetime as dt
 import fnmatch
+import functools
 import hashlib
 import hmac
 import json
@@ -25,6 +26,12 @@ import threading
 import time
 import urllib.parse
 from typing import Any, Callable, Mapping, Protocol
+
+
+COMMAND_REGISTRY_PATH = (
+    pathlib.Path(__file__).resolve().parents[1]
+    / 'contracts' / 'commands' / 'registry.json'
+)
 
 
 class SecurityRefusal(Exception):
@@ -268,8 +275,12 @@ def required_scopes(method: str, path: str,
     if path == '/v2/execute':
         command = str(body.get('command', '<missing>'))
         scopes = [f'command:{command}:execute']
+        for method_id, _, _ in _command_method_invocations(command):
+            scope = f'method:{method_id}:invoke'
+            if scope not in scopes:
+                scopes.append(scope)
         mid = request_method_id(method, path, body)
-        if mid:
+        if mid and f'method:{mid}:invoke' not in scopes:
             scopes.append(f'method:{mid}:invoke')
         return tuple(scopes)
     if path == '/v2/jobs' and method == 'POST':
@@ -286,6 +297,14 @@ def required_scopes(method: str, path: str,
 
 def request_cost_units(method: str, path: str,
                        body: Mapping[str, Any] | None = None) -> int:
+    body = body or {}
+    clean_path = urllib.parse.urlsplit(path).path
+    if clean_path == '/v2/execute':
+        command = str(body.get('command', '<missing>'))
+        invocations = _command_method_invocations(command)
+        if invocations:
+            return sum(multiplicity * cost_units
+                       for _, multiplicity, cost_units in invocations)
     mid = request_method_id(method, path, body)
     if mid and (mid.startswith('fields.qm.') or mid.startswith('surface.')
                 or mid == 'torsion.strain'):
@@ -312,6 +331,78 @@ def request_method_id(method: str, path: str,
     if path == '/v2/execute' and body.get('command') == 'conformer.generate':
         mid = 'molecule.embed'
     return mid or None
+
+
+@functools.lru_cache(maxsize=1)
+def _command_method_invocation_index() -> dict[str, tuple[tuple[str, int, int], ...]]:
+    """Load declared command fan-out without importing command handlers.
+
+    Authorization and quota reservation happen before command dispatch.  The
+    fan-out therefore lives in the public command contract, not in handler
+    code that would only become visible after the security boundary.
+    """
+    try:
+        raw = json.loads(COMMAND_REGISTRY_PATH.read_text(encoding='utf-8'))
+    except Exception as error:
+        raise RuntimeError(
+            f'cannot load command security metadata from {COMMAND_REGISTRY_PATH}') \
+            from error
+    if not isinstance(raw, Mapping):
+        raise RuntimeError('command registry security metadata is not an object')
+    commands = raw.get('commands')
+    if not isinstance(commands, list):
+        raise RuntimeError('command registry security metadata has no commands list')
+    index: dict[str, tuple[tuple[str, int, int], ...]] = {}
+    known_commands: set[str] = set()
+    for descriptor in commands:
+        if not isinstance(descriptor, Mapping):
+            raise RuntimeError('command registry contains a non-object descriptor')
+        command_id = descriptor.get('id')
+        if not isinstance(command_id, str) or not command_id:
+            raise RuntimeError('command registry contains an invalid command id')
+        if command_id in known_commands:
+            raise RuntimeError(f'command registry repeats command {command_id!r}')
+        known_commands.add(command_id)
+        declared = descriptor.get('invokes_methods')
+        if declared is None:
+            continue
+        if not isinstance(declared, list) or not declared:
+            raise RuntimeError(
+                f'command {command_id!r} invokes_methods must be a non-empty list')
+        parsed: list[tuple[str, int, int]] = []
+        method_ids: set[str] = set()
+        for invocation in declared:
+            if not isinstance(invocation, Mapping) or set(invocation) != {
+                    'method_id', 'multiplicity', 'cost_units'}:
+                raise RuntimeError(
+                    f'command {command_id!r} has malformed invokes_methods metadata')
+            method_id = invocation.get('method_id')
+            multiplicity = invocation.get('multiplicity')
+            cost_units = invocation.get('cost_units')
+            if not isinstance(method_id, str) or not re.fullmatch(
+                    r'[a-z0-9][a-z0-9_.-]*', method_id):
+                raise RuntimeError(
+                    f'command {command_id!r} declares an invalid method id')
+            if method_id in method_ids:
+                raise RuntimeError(
+                    f'command {command_id!r} repeats method {method_id!r}')
+            if isinstance(multiplicity, bool) or not isinstance(multiplicity, int) \
+                    or multiplicity <= 0:
+                raise RuntimeError(
+                    f'command {command_id!r} declares invalid multiplicity')
+            if isinstance(cost_units, bool) or not isinstance(cost_units, int) \
+                    or cost_units <= 0:
+                raise RuntimeError(
+                    f'command {command_id!r} declares invalid cost_units')
+            method_ids.add(method_id)
+            parsed.append((method_id, multiplicity, cost_units))
+        index[command_id] = tuple(parsed)
+    return index
+
+
+def _command_method_invocations(
+        command_id: str) -> tuple[tuple[str, int, int], ...]:
+    return _command_method_invocation_index().get(command_id, ())
 
 
 def _positive(item: Mapping[str, Any], key: str, default: int) -> int:

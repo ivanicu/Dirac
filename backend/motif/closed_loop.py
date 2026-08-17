@@ -463,7 +463,8 @@ class ClosedLoopController:
             job_id = envelope["data"]["job"]["id"]
             item["jobs"][stage] = job_id
             self._persist(item)
-        job = self.service.wait_job(job_id, timeout=86400, poll=.25)
+        job = self.service.wait_job(
+            job_id, actor=item["actor"], timeout=86400, poll=.25)
         if job["state"] != "done":
             raise RuntimeError(
                 f"closed-loop {stage} Job {job_id} ended {job['state']}: "

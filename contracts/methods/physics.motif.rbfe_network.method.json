@@ -1,22 +1,1042 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema", "schema_version": "2.0.0",
   "method_id": "physics.motif.rbfe_network", "summary": "Plan an auditable RBFE network and optionally aggregate explicit edge observations.",
-  "implementation": {"module": "backend.motif.rbfe", "functions": ["_chemistry", "_digest", "plan_rbfe_network"], "constants": []},
+  "implementation": {
+    "module": "backend.motif.rbfe",
+    "functions": [
+      "_chemistry", "_digest", "_plan_with_openfe",
+      "expand_rbfe_execution_matrix", "plan_rbfe_network",
+      "backend.motif.structure_methods:_json",
+      "backend.motif.structure_methods:attest_rbfe_network_admission",
+      "backend.motif.structure_methods:rbfe_plan_handler",
+      "backend.motif.structure_methods:rbfe_estimate"
+    ],
+    "constants": [
+      "_OPENFE_NETWORK_PLANNER", "_OPENFE_NETWORK_PLANNER_SHA256",
+      "backend.motif.structure_methods:_RBFE_NETWORK_CAMPAIGN_KEYS",
+      "backend.motif.structure_methods:_RBFE_NETWORK_ATTESTATION_KEY"
+    ]
+  },
   "input": {"schema":
-    {"type": "object", "additionalProperties": false, "required": ["compounds"], "properties": {
+    {"type": "object", "additionalProperties": false, "required": ["compounds"],
+      "dependentRequired": {
+        "campaign_id": ["campaign_scientific_generation", "campaign_scientific_digest", "prepared_system_id"],
+        "campaign_scientific_generation": ["campaign_id", "campaign_scientific_digest", "prepared_system_id"],
+        "campaign_scientific_digest": ["campaign_id", "campaign_scientific_generation", "prepared_system_id"],
+        "prepared_system_id": ["campaign_id", "campaign_scientific_generation", "campaign_scientific_digest"]
+      }, "properties": {
       "compounds": {"type": "array", "minItems": 2, "items": {"type": "object", "additionalProperties": false,
         "required": ["id", "smiles"], "properties": {"id": {"type": "string", "minLength": 1}, "smiles": {"type": "string", "minLength": 1}}}},
-      "extra_edge_fraction": {"type": "number", "minimum": 0, "maximum": 5}, "minimum_similarity": {"type": "number", "minimum": 0, "maximum": 1}
+      "extra_edge_fraction": {"type": "number", "minimum": 0, "maximum": 5}, "minimum_similarity": {"type": "number", "minimum": 0, "maximum": 1},
+      "campaign_id": {"type": "string", "format": "uuid"}, "campaign_scientific_generation": {"type": "integer", "minimum": 1},
+      "campaign_scientific_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+      "prepared_system_id": {"type": "string", "format": "uuid"}
       ,"mode": {"enum": ["pilot", "full"], "default": "pilot"},
       "planner": {"enum": ["openfe", "rdkit_fallback"], "default": "openfe"}
     }}},
-  "output": {"schema": {"type": "object"}},
-  "refusals": [{"code": "INVALID_PARAMETERS", "condition": "invalid chemistry, mapping, disconnected results or invalid uncertainty"}],
+  "output": {"schema": {
+    "$defs": {
+      "digest": {"type": "string", "format": "sha256-digest"},
+      "verdict": {"enum": ["CONFIRMED", "CHANGED", "UNVERIFIED"]},
+      "index_pair": {
+        "type": "array", "minItems": 2, "maxItems": 2,
+        "prefixItems": [
+          {"type": "integer", "minimum": 0},
+          {"type": "integer", "minimum": 0}
+        ],
+        "items": false
+      },
+      "index_pairs": {"type": "array", "items": {"$ref": "#/$defs/index_pair"}},
+      "campaign_context": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "campaign_id", "campaign_scientific_generation",
+          "campaign_scientific_digest", "prepared_system_id"
+        ],
+        "properties": {
+          "campaign_id": {"type": "string", "format": "uuid"},
+          "campaign_scientific_generation": {"type": "integer", "minimum": 1},
+          "campaign_scientific_digest": {"$ref": "#/$defs/digest"},
+          "prepared_system_id": {"type": "string", "format": "uuid"}
+        }
+      },
+      "campaign_contract": {
+        "oneOf": [
+          {"type": "object", "maxProperties": 0, "additionalProperties": false},
+          {"$ref": "#/$defs/campaign_context"}
+        ]
+      },
+      "prepared_system_ref": {
+        "type": "object", "additionalProperties": false,
+        "required": ["kind", "id", "sha256"],
+        "properties": {
+          "kind": {"const": "prepared_receptor_state"},
+          "id": {"type": "string", "format": "uuid"},
+          "sha256": {"$ref": "#/$defs/digest"}
+        }
+      },
+      "unbound_campaign_admission": {
+        "type": "object", "additionalProperties": false,
+        "required": ["schema_version", "verdict", "scope", "campaign_bound"],
+        "properties": {
+          "schema_version": {"const": "rbfe-network-admission.v1"},
+          "verdict": {"const": "UNBOUND"},
+          "scope": {"const": "smoke_plan"},
+          "campaign_bound": {"const": false}
+        }
+      },
+      "bound_campaign_admission": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "schema_version", "verdict", "scope", "campaign_bound",
+          "campaign_id", "campaign_scientific_generation",
+          "campaign_scientific_digest", "prepared_system_id",
+          "prepared_system_ref"
+        ],
+        "properties": {
+          "schema_version": {"const": "rbfe-network-admission.v1"},
+          "verdict": {"const": "CONFIRMED"},
+          "scope": {"const": "campaign_bound_network"},
+          "campaign_bound": {"const": true},
+          "campaign_id": {"type": "string", "format": "uuid"},
+          "campaign_scientific_generation": {"type": "integer", "minimum": 1},
+          "campaign_scientific_digest": {"$ref": "#/$defs/digest"},
+          "prepared_system_id": {"type": "string", "format": "uuid"},
+          "prepared_system_ref": {"$ref": "#/$defs/prepared_system_ref"}
+        }
+      },
+      "campaign_admission": {
+        "oneOf": [
+          {"$ref": "#/$defs/unbound_campaign_admission"},
+          {"$ref": "#/$defs/bound_campaign_admission"}
+        ]
+      },
+      "stereo_witness": {
+        "type": "object", "additionalProperties": false,
+        "required": ["kind", "specified", "descriptor"],
+        "properties": {
+          "kind": {"type": "string", "minLength": 1},
+          "specified": {"type": "string", "minLength": 1},
+          "descriptor": {"type": "string"},
+          "center_atom_index": {"type": "integer", "minimum": 0},
+          "center_bond_index": {"type": "integer", "minimum": 0},
+          "begin_atom_index": {"type": "integer", "minimum": 0},
+          "end_atom_index": {"type": "integer", "minimum": 0},
+          "centered_on": {"type": "integer", "minimum": 0},
+          "element": {"type": "string", "minLength": 1},
+          "cip": {"type": ["string", "null"]},
+          "ez": {"type": ["string", "null"]},
+          "controlling_atom_indices": {
+            "type": "array", "items": {"type": "integer", "minimum": 0}
+          }
+        }
+      },
+      "microstate_identity": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "schema_version", "canonical_isomeric_smiles", "formal_charge",
+          "total_hydrogen_count", "identity_digest", "representation_verdict",
+          "solution_population_verdict", "reason"
+        ],
+        "properties": {
+          "schema_version": {"const": "rbfe-microstate-identity.v1"},
+          "canonical_isomeric_smiles": {"type": "string", "minLength": 1},
+          "formal_charge": {"type": "integer"},
+          "total_hydrogen_count": {"type": "integer", "minimum": 0},
+          "identity_digest": {"$ref": "#/$defs/digest"},
+          "representation_verdict": {"$ref": "#/$defs/verdict"},
+          "solution_population_verdict": {"$ref": "#/$defs/verdict"},
+          "reason": {"type": "string", "minLength": 1}
+        }
+      },
+      "chemical_identity": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "schema_version", "label", "canonical_isomeric_smiles",
+          "canonical_connectivity_smiles", "formula", "formal_charge",
+          "total_hydrogen_count", "heavy_atom_count", "bond_count",
+          "formal_charge_witnesses", "stereo", "unspecified_stereo",
+          "stereo_policy_verdict", "microstate"
+        ],
+        "properties": {
+          "schema_version": {"const": "rbfe-chemical-identity.v1"},
+          "label": {"type": "string", "minLength": 1},
+          "canonical_isomeric_smiles": {"type": "string", "minLength": 1},
+          "canonical_connectivity_smiles": {"type": "string", "minLength": 1},
+          "formula": {"type": "string", "minLength": 1},
+          "formal_charge": {"type": "integer"},
+          "total_hydrogen_count": {"type": "integer", "minimum": 0},
+          "heavy_atom_count": {"type": "integer", "minimum": 0},
+          "bond_count": {"type": "integer", "minimum": 0},
+          "formal_charge_witnesses": {
+            "type": "array",
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["atom_index", "element", "formal_charge"],
+              "properties": {
+                "atom_index": {"type": "integer", "minimum": 0},
+                "element": {"type": "string", "minLength": 1},
+                "formal_charge": {"type": "integer"}
+              }
+            }
+          },
+          "stereo": {"type": "array", "items": {"$ref": "#/$defs/stereo_witness"}},
+          "unspecified_stereo": {"type": "array", "items": {"$ref": "#/$defs/stereo_witness"}},
+          "stereo_policy_verdict": {"$ref": "#/$defs/verdict"},
+          "microstate": {"$ref": "#/$defs/microstate_identity"}
+        }
+      },
+      "bond_change_witness": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "change", "parent_atom_indices", "proposal_atom_indices"
+        ],
+        "properties": {
+          "change": {"enum": ["ADDED", "REMOVED", "BOND_ORDER"]},
+          "parent_atom_indices": {
+            "type": "array", "minItems": 2, "maxItems": 2,
+            "items": {"type": "integer", "minimum": 0}
+          },
+          "proposal_atom_indices": {
+            "type": "array", "minItems": 2, "maxItems": 2,
+            "items": {"type": "integer", "minimum": 0}
+          },
+          "parent_order": {"type": "string", "minLength": 1},
+          "proposal_order": {"type": "string", "minLength": 1},
+          "parent_aromatic": {"type": "boolean"},
+          "proposal_aromatic": {"type": "boolean"}
+        },
+        "allOf": [{"oneOf": [
+          {
+            "properties": {
+              "change": {"const": "ADDED"},
+              "parent_order": false,
+              "proposal_order": {"type": "string", "minLength": 1},
+              "parent_aromatic": false, "proposal_aromatic": false
+            },
+            "required": ["proposal_order"]
+          },
+          {
+            "properties": {
+              "change": {"const": "REMOVED"},
+              "parent_order": {"type": "string", "minLength": 1},
+              "proposal_order": false,
+              "parent_aromatic": false, "proposal_aromatic": false
+            },
+            "required": ["parent_order"]
+          },
+          {
+            "properties": {
+              "change": {"const": "BOND_ORDER"},
+              "parent_order": {"type": "string", "minLength": 1},
+              "proposal_order": {"type": "string", "minLength": 1},
+              "parent_aromatic": {"type": "boolean"},
+              "proposal_aromatic": {"type": "boolean"}
+            },
+            "required": [
+              "parent_order", "proposal_order",
+              "parent_aromatic", "proposal_aromatic"
+            ]
+          }
+        ]}]
+      },
+      "scope_witness": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "mapped_heavy_atom_pairs", "parent_heavy_atoms",
+          "proposal_heavy_atoms", "full_coverage"
+        ],
+        "properties": {
+          "mapped_heavy_atom_pairs": {"$ref": "#/$defs/index_pairs"},
+          "parent_heavy_atoms": {"type": "integer", "minimum": 0},
+          "proposal_heavy_atoms": {"type": "integer", "minimum": 0},
+          "full_coverage": {"type": "boolean"}
+        }
+      },
+      "element_witness": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "parent_atom_index", "proposal_atom_index",
+          "parent_element", "proposal_element"
+        ],
+        "properties": {
+          "parent_atom_index": {"type": "integer", "minimum": 0},
+          "proposal_atom_index": {"type": "integer", "minimum": 0},
+          "parent_element": {"type": "string", "minLength": 1},
+          "proposal_element": {"type": "string", "minLength": 1}
+        }
+      },
+      "atom_charge_witness": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "parent_atom_index", "proposal_atom_index",
+          "parent_formal_charge", "proposal_formal_charge"
+        ],
+        "properties": {
+          "parent_atom_index": {"type": "integer", "minimum": 0},
+          "proposal_atom_index": {"type": "integer", "minimum": 0},
+          "parent_formal_charge": {"type": "integer"},
+          "proposal_formal_charge": {"type": "integer"}
+        }
+      },
+      "total_charge_witness": {
+        "type": "object", "additionalProperties": false,
+        "required": ["scope", "parent", "proposal"],
+        "properties": {
+          "scope": {"const": "TOTAL"},
+          "parent": {"type": "integer"},
+          "proposal": {"type": "integer"}
+        }
+      },
+      "stereo_change_witness": {
+        "oneOf": [
+          {
+            "type": "object", "additionalProperties": false,
+            "required": ["change", "parent", "proposal"],
+            "properties": {
+              "change": {"const": "REMOVED_STEREOCENTER"},
+              "parent": {"$ref": "#/$defs/stereo_witness"},
+              "proposal": {"type": "null"}
+            }
+          },
+          {
+            "type": "object", "additionalProperties": false,
+            "required": ["change", "parent", "proposal"],
+            "properties": {
+              "change": {"const": "ADDED_STEREOCENTER"},
+              "parent": {"type": "null"},
+              "proposal": {"$ref": "#/$defs/stereo_witness"}
+            }
+          },
+          {
+            "type": "object", "additionalProperties": false,
+            "required": ["parent", "proposal"],
+            "properties": {
+              "parent": {"$ref": "#/$defs/stereo_witness"},
+              "proposal": {"$ref": "#/$defs/stereo_witness"}
+            }
+          }
+        ]
+      },
+      "stereo_side_witness": {
+        "type": "object", "additionalProperties": false,
+        "required": ["side", "kind", "specified", "descriptor"],
+        "properties": {
+          "side": {"enum": ["parent", "proposal"]},
+          "kind": {"type": "string", "minLength": 1},
+          "specified": {"type": "string", "minLength": 1},
+          "descriptor": {"type": "string"},
+          "center_atom_index": {"type": "integer", "minimum": 0},
+          "center_bond_index": {"type": "integer", "minimum": 0},
+          "begin_atom_index": {"type": "integer", "minimum": 0},
+          "end_atom_index": {"type": "integer", "minimum": 0},
+          "centered_on": {"type": "integer", "minimum": 0},
+          "element": {"type": "string", "minLength": 1},
+          "cip": {"type": ["string", "null"]},
+          "ez": {"type": ["string", "null"]},
+          "controlling_atom_indices": {
+            "type": "array", "items": {"type": "integer", "minimum": 0}
+          }
+        }
+      },
+      "stereo_expectation_witness": {
+        "type": "object", "additionalProperties": false,
+        "required": ["side", "expected_from", "observed"],
+        "properties": {
+          "side": {"const": "proposal"},
+          "expected_from": {"$ref": "#/$defs/stereo_witness"},
+          "observed": {
+            "oneOf": [{"type": "null"}, {"$ref": "#/$defs/stereo_witness"}]
+          }
+        }
+      },
+      "stereo_observed_witness": {
+        "type": "object", "additionalProperties": false,
+        "required": ["side", "observed", "reason"],
+        "properties": {
+          "side": {"const": "proposal"},
+          "observed": {"$ref": "#/$defs/stereo_witness"},
+          "reason": {"type": "string", "minLength": 1}
+        }
+      },
+      "cycle_rank_witness": {
+        "type": "object", "additionalProperties": false,
+        "required": ["parent_cycle_rank", "proposal_cycle_rank"],
+        "properties": {
+          "parent_cycle_rank": {"type": "integer", "minimum": 0},
+          "proposal_cycle_rank": {"type": "integer", "minimum": 0}
+        }
+      },
+      "unmapped_witness": {
+        "type": "object", "additionalProperties": false,
+        "required": ["parent_atom_indices", "proposal_atom_indices"],
+        "properties": {
+          "parent_atom_indices": {
+            "type": "array", "items": {"type": "integer", "minimum": 0}
+          },
+          "proposal_atom_indices": {
+            "type": "array", "items": {"type": "integer", "minimum": 0}
+          }
+        }
+      },
+      "protonation_witness": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "kind", "parent_total_hydrogen_count", "proposal_total_hydrogen_count",
+          "parent_formal_charge", "proposal_formal_charge"
+        ],
+        "properties": {
+          "kind": {"const": "PROTONATION"},
+          "parent_total_hydrogen_count": {"type": "integer", "minimum": 0},
+          "proposal_total_hydrogen_count": {"type": "integer", "minimum": 0},
+          "parent_formal_charge": {"type": "integer"},
+          "proposal_formal_charge": {"type": "integer"}
+        }
+      },
+      "hydrogen_charge_witness": {
+        "type": "object", "additionalProperties": false,
+        "required": ["kind", "hydrogen_delta", "formal_charge_delta"],
+        "properties": {
+          "kind": {"const": "HYDROGEN_CHARGE_DELTA_NOT_DIAGNOSTIC_OF_PROTONATION"},
+          "hydrogen_delta": {"type": "integer"},
+          "formal_charge_delta": {"type": "integer"}
+        }
+      },
+      "tautomer_witness": {
+        "type": "object", "additionalProperties": false,
+        "required": ["kind", "bond_order_witnesses"],
+        "properties": {
+          "kind": {"const": "TAUTOMER_OR_VALENCE_STATE"},
+          "bond_order_witnesses": {
+            "type": "array", "minItems": 1,
+            "items": {"$ref": "#/$defs/bond_change_witness"}
+          }
+        }
+      },
+      "incomparable_endpoint_witness": {
+        "type": "object", "additionalProperties": false,
+        "required": ["kind", "reason", "hydrogen_delta", "formal_charge_delta"],
+        "properties": {
+          "kind": {"const": "ENDPOINTS_NOT_MICROSTATE_COMPARABLE"},
+          "reason": {"type": "string", "minLength": 1},
+          "hydrogen_delta": {"type": "integer"},
+          "formal_charge_delta": {"type": "integer"}
+        }
+      },
+      "formal_charge_witness": {
+        "oneOf": [
+          {"$ref": "#/$defs/atom_charge_witness"},
+          {"$ref": "#/$defs/total_charge_witness"}
+        ]
+      },
+      "stereo_ledger_witness": {
+        "oneOf": [
+          {"$ref": "#/$defs/stereo_change_witness"},
+          {"$ref": "#/$defs/stereo_side_witness"},
+          {"$ref": "#/$defs/stereo_expectation_witness"},
+          {"$ref": "#/$defs/stereo_observed_witness"}
+        ]
+      },
+      "microstate_ledger_witness": {
+        "oneOf": [
+          {"$ref": "#/$defs/protonation_witness"},
+          {"$ref": "#/$defs/hydrogen_charge_witness"},
+          {"$ref": "#/$defs/tautomer_witness"},
+          {"$ref": "#/$defs/incomparable_endpoint_witness"}
+        ]
+      },
+      "chemistry_witness": {
+        "oneOf": [
+          {"$ref": "#/$defs/scope_witness"},
+          {"$ref": "#/$defs/element_witness"},
+          {"$ref": "#/$defs/bond_change_witness"},
+          {"$ref": "#/$defs/formal_charge_witness"},
+          {"$ref": "#/$defs/stereo_ledger_witness"},
+          {"$ref": "#/$defs/cycle_rank_witness"},
+          {"$ref": "#/$defs/unmapped_witness"},
+          {"$ref": "#/$defs/microstate_ledger_witness"}
+        ]
+      },
+      "chemistry_ledger_row": {
+        "type": "object", "additionalProperties": false,
+        "required": ["dimension", "verdict", "summary", "witnesses"],
+        "properties": {
+          "dimension": {"enum": [
+            "SCOPE", "ELEMENT", "CONNECTIVITY", "BOND_ORDER",
+            "FORMAL_CHARGE", "STEREO", "RING_CYCLE_RANK", "UNMAPPED",
+            "PROTONATION_TAUTOMER"
+          ]},
+          "verdict": {"$ref": "#/$defs/verdict"},
+          "summary": {"type": "string", "minLength": 1},
+          "witnesses": {
+            "type": "array", "items": {"$ref": "#/$defs/chemistry_witness"}
+          }
+        },
+        "allOf": [{"oneOf": [
+          {"properties": {
+            "dimension": {"const": "SCOPE"},
+            "witnesses": {"type": "array", "items": {"$ref": "#/$defs/scope_witness"}}
+          }},
+          {"properties": {
+            "dimension": {"const": "ELEMENT"},
+            "witnesses": {"type": "array", "items": {"$ref": "#/$defs/element_witness"}}
+          }},
+          {"properties": {
+            "dimension": {"const": "CONNECTIVITY"},
+            "witnesses": {"type": "array", "items": {"$ref": "#/$defs/bond_change_witness"}}
+          }},
+          {"properties": {
+            "dimension": {"const": "BOND_ORDER"},
+            "witnesses": {"type": "array", "items": {"$ref": "#/$defs/bond_change_witness"}}
+          }},
+          {"properties": {
+            "dimension": {"const": "FORMAL_CHARGE"},
+            "witnesses": {"type": "array", "items": {"$ref": "#/$defs/formal_charge_witness"}}
+          }},
+          {"properties": {
+            "dimension": {"const": "STEREO"},
+            "witnesses": {"type": "array", "items": {"$ref": "#/$defs/stereo_ledger_witness"}}
+          }},
+          {"properties": {
+            "dimension": {"const": "RING_CYCLE_RANK"},
+            "witnesses": {"type": "array", "items": {"$ref": "#/$defs/cycle_rank_witness"}}
+          }},
+          {"properties": {
+            "dimension": {"const": "UNMAPPED"},
+            "witnesses": {"type": "array", "items": {"$ref": "#/$defs/unmapped_witness"}}
+          }},
+          {"properties": {
+            "dimension": {"const": "PROTONATION_TAUTOMER"},
+            "witnesses": {"type": "array", "items": {"$ref": "#/$defs/microstate_ledger_witness"}}
+          }}
+        ]}]
+      },
+      "chemistry_evidence": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "schema_version", "verdict", "mapped_heavy_atom_count",
+          "mapped_bond_count", "heavy_atom_coverage", "full_heavy_atom_coverage",
+          "selected_heavy_atom_mapping", "ledger"
+        ],
+        "properties": {
+          "schema_version": {"const": "rbfe-chemistry-change.v1"},
+          "verdict": {"$ref": "#/$defs/verdict"},
+          "mapped_heavy_atom_count": {"type": "integer", "minimum": 0},
+          "mapped_bond_count": {"type": "integer", "minimum": 0},
+          "heavy_atom_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+          "full_heavy_atom_coverage": {"type": "boolean"},
+          "selected_heavy_atom_mapping": {"$ref": "#/$defs/index_pairs"},
+          "ledger": {
+            "type": "array", "minItems": 9, "maxItems": 9,
+            "prefixItems": [
+              {"allOf": [
+                {"$ref": "#/$defs/chemistry_ledger_row"},
+                {"properties": {"dimension": {"const": "SCOPE"}}}
+              ]},
+              {"allOf": [
+                {"$ref": "#/$defs/chemistry_ledger_row"},
+                {"properties": {"dimension": {"const": "ELEMENT"}}}
+              ]},
+              {"allOf": [
+                {"$ref": "#/$defs/chemistry_ledger_row"},
+                {"properties": {"dimension": {"const": "CONNECTIVITY"}}}
+              ]},
+              {"allOf": [
+                {"$ref": "#/$defs/chemistry_ledger_row"},
+                {"properties": {"dimension": {"const": "BOND_ORDER"}}}
+              ]},
+              {"allOf": [
+                {"$ref": "#/$defs/chemistry_ledger_row"},
+                {"properties": {"dimension": {"const": "FORMAL_CHARGE"}}}
+              ]},
+              {"allOf": [
+                {"$ref": "#/$defs/chemistry_ledger_row"},
+                {"properties": {"dimension": {"const": "STEREO"}}}
+              ]},
+              {"allOf": [
+                {"$ref": "#/$defs/chemistry_ledger_row"},
+                {"properties": {"dimension": {"const": "RING_CYCLE_RANK"}}}
+              ]},
+              {"allOf": [
+                {"$ref": "#/$defs/chemistry_ledger_row"},
+                {"properties": {"dimension": {"const": "UNMAPPED"}}}
+              ]},
+              {"allOf": [
+                {"$ref": "#/$defs/chemistry_ledger_row"},
+                {"properties": {"dimension": {"const": "PROTONATION_TAUTOMER"}}}
+              ]}
+            ],
+            "items": false
+          }
+        }
+      },
+      "depiction_index_contract": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "schema_version", "parent_smiles", "proposal_smiles",
+          "parent_source_to_depiction", "proposal_source_to_depiction",
+          "selected_heavy_atom_mapping", "chemistry_evidence"
+        ],
+        "properties": {
+          "schema_version": {"const": "rbfe-depiction-index.v2"},
+          "parent_smiles": {"type": "string", "minLength": 1},
+          "proposal_smiles": {"type": "string", "minLength": 1},
+          "parent_source_to_depiction": {
+            "type": "object", "propertyNames": {"pattern": "^[0-9]+$"},
+            "additionalProperties": {"type": "integer", "minimum": 0}
+          },
+          "proposal_source_to_depiction": {
+            "type": "object", "propertyNames": {"pattern": "^[0-9]+$"},
+            "additionalProperties": {"type": "integer", "minimum": 0}
+          },
+          "selected_heavy_atom_mapping": {"$ref": "#/$defs/index_pairs"},
+          "chemistry_evidence": {"$ref": "#/$defs/chemistry_evidence"}
+        }
+      },
+      "eligibility_reason": {
+        "type": "object", "additionalProperties": false,
+        "required": ["code", "message"],
+        "properties": {
+          "code": {"enum": [
+            "ZERO_HEAVY_ATOM_MAP", "FORMAL_CHARGE_CHANGE",
+            "NON_POSITIVE_MAPPING_SCORE", "MAPPING_SCORE_BELOW_EXECUTION_FLOOR",
+            "CHEMISTRY_EVIDENCE_UNVERIFIED", "STEREOCHEMISTRY_UNVERIFIED",
+            "MAPPING_DIRECTION_UNVERIFIED"
+          ]},
+          "message": {"type": "string", "minLength": 1}
+        }
+      },
+      "execution_eligibility": {
+        "type": "object", "additionalProperties": false,
+        "required": ["verdict", "reasons"],
+        "properties": {
+          "verdict": {"$ref": "#/$defs/verdict"},
+          "reasons": {"type": "array", "items": {"$ref": "#/$defs/eligibility_reason"}}
+        }
+      },
+      "automorphism_audit": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "verdict", "equivalent", "method", "index_exact_jaccard",
+          "automorphism_aware_jaccard", "automorphism_search_truncated"
+        ],
+        "properties": {
+          "verdict": {"$ref": "#/$defs/verdict"},
+          "equivalent": {"type": "boolean"},
+          "method": {"enum": ["INDEX_EXACT", "CARDINALITY_MISMATCH", "RDKIT_GRAPH_AUTOMORPHISM"]},
+          "index_exact_jaccard": {"type": "number", "minimum": 0, "maximum": 1},
+          "automorphism_aware_jaccard": {"type": "number", "minimum": 0, "maximum": 1},
+          "automorphism_search_truncated": {"type": "boolean"},
+          "left_automorphisms_examined": {"type": "integer", "minimum": 0},
+          "right_automorphisms_examined": {"type": "integer", "minimum": 0}
+        }
+      },
+      "direction_audit": {
+        "oneOf": [
+          {
+            "type": "object", "additionalProperties": false,
+            "required": ["schema_version", "verdict", "reason"],
+            "properties": {
+              "schema_version": {"const": "rbfe-mapping-direction-audit.v1"},
+              "verdict": {"const": "UNVERIFIED"},
+              "reason": {"type": "string", "minLength": 1}
+            }
+          },
+          {
+            "type": "object", "additionalProperties": false,
+            "required": [
+              "schema_version", "verdict", "equivalent", "method",
+              "index_exact_jaccard", "automorphism_aware_jaccard",
+              "automorphism_search_truncated", "forward_mapping",
+              "inverse_reverse_mapping"
+            ],
+            "properties": {
+              "schema_version": {"const": "rbfe-mapping-direction-audit.v1"},
+              "verdict": {"$ref": "#/$defs/verdict"},
+              "equivalent": {"type": "boolean"},
+              "method": {"enum": ["INDEX_EXACT", "CARDINALITY_MISMATCH", "RDKIT_GRAPH_AUTOMORPHISM"]},
+              "index_exact_jaccard": {"type": "number", "minimum": 0, "maximum": 1},
+              "automorphism_aware_jaccard": {"type": "number", "minimum": 0, "maximum": 1},
+              "automorphism_search_truncated": {"type": "boolean"},
+              "left_automorphisms_examined": {"type": "integer", "minimum": 0},
+              "right_automorphisms_examined": {"type": "integer", "minimum": 0},
+              "forward_mapping": {"$ref": "#/$defs/index_pairs"},
+              "inverse_reverse_mapping": {"$ref": "#/$defs/index_pairs"}
+            }
+          }
+        ]
+      },
+      "mapping_proposals": {
+        "type": "object", "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+        "additionalProperties": {"$ref": "#/$defs/index_pairs"}
+      },
+      "openfe_edge": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "left_id", "right_id", "selected_atom_mapping",
+          "selected_heavy_atom_mapping", "mapped_heavy_atom_count",
+          "mapping_score", "mapping_methods", "mapping_disagreement_jaccard",
+          "mapping_disagreement_index_exact_jaccard",
+          "mapping_disagreement_all_atoms_jaccard", "mapping_automorphism_audit",
+          "mapping_direction_audits", "selected_mapping_direction_audit",
+          "mapping_proposals", "heavy_atom_mapping_proposals",
+          "depiction_contract", "chemistry_evidence", "execution_eligibility",
+          "culprit_endpoints", "status"
+        ],
+        "properties": {
+          "edge_id": {"type": "string", "minLength": 1},
+          "left_id": {"type": "string", "minLength": 1},
+          "right_id": {"type": "string", "minLength": 1},
+          "selected_atom_mapping": {"$ref": "#/$defs/index_pairs"},
+          "selected_heavy_atom_mapping": {"$ref": "#/$defs/index_pairs"},
+          "mapped_heavy_atom_count": {"type": "integer", "minimum": 0},
+          "mapped_atom_count": {"type": "integer", "minimum": 0},
+          "mapping_score": {"type": "number"},
+          "mapping_methods": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+          "mapping_disagreement_jaccard": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "mapping_disagreement_index_exact_jaccard": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "mapping_disagreement_all_atoms_jaccard": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "mapping_automorphism_audit": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/automorphism_audit"}]},
+          "mapping_direction_audits": {
+            "type": "object", "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"},
+            "additionalProperties": {"$ref": "#/$defs/direction_audit"}
+          },
+          "selected_mapping_direction_audit": {"$ref": "#/$defs/direction_audit"},
+          "mapping_proposals": {"$ref": "#/$defs/mapping_proposals"},
+          "heavy_atom_mapping_proposals": {"$ref": "#/$defs/mapping_proposals"},
+          "depiction_contract": {"$ref": "#/$defs/depiction_index_contract"},
+          "chemistry_evidence": {"$ref": "#/$defs/chemistry_evidence"},
+          "execution_eligibility": {"$ref": "#/$defs/execution_eligibility"},
+          "culprit_endpoints": {"type": "array", "items": {"type": "string", "minLength": 1}, "maxItems": 2},
+          "status": {"enum": ["planned", "candidate", "rejected"]},
+          "purpose": {"const": "openfe_redundant_network"},
+          "rdkit_fmcs_diagnostic": {
+            "type": "object", "additionalProperties": false,
+            "required": [
+              "tanimoto", "mcs_smarts", "mapped_atom_count",
+              "left_heavy_atom_fraction", "right_heavy_atom_fraction"
+            ],
+            "properties": {
+              "tanimoto": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+              "mcs_smarts": {"type": ["string", "null"]},
+              "mapped_atom_count": {"type": ["integer", "null"], "minimum": 0},
+              "left_heavy_atom_fraction": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+              "right_heavy_atom_fraction": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+            }
+          }
+        }
+      },
+      "rdkit_edge": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "edge_id", "left_id", "right_id", "tanimoto", "mcs_smarts",
+          "mapped_atom_count", "left_heavy_atom_fraction",
+          "right_heavy_atom_fraction", "purpose", "status"
+        ],
+        "properties": {
+          "edge_id": {"type": "string", "minLength": 1},
+          "left_id": {"type": "string", "minLength": 1},
+          "right_id": {"type": "string", "minLength": 1},
+          "tanimoto": {"type": "number", "minimum": 0, "maximum": 1},
+          "mcs_smarts": {"type": "string"},
+          "mapped_atom_count": {"type": "integer", "minimum": 0},
+          "left_heavy_atom_fraction": {"type": "number", "minimum": 0, "maximum": 1},
+          "right_heavy_atom_fraction": {"type": "number", "minimum": 0, "maximum": 1},
+          "purpose": {"enum": ["connectivity", "redundancy"]},
+          "status": {"const": "planned"}
+        }
+      },
+      "network_edge": {
+        "oneOf": [
+          {"$ref": "#/$defs/rdkit_edge"},
+          {
+            "allOf": [
+              {"$ref": "#/$defs/openfe_edge"},
+              {"required": ["edge_id", "mapped_atom_count", "purpose", "rdkit_fmcs_diagnostic"]}
+            ]
+          }
+        ]
+      },
+      "network_depictions": {
+        "type": "object", "additionalProperties": false,
+        "required": ["schema_version", "edges", "digest"],
+        "properties": {
+          "schema_version": {"const": "rbfe-network-depictions.v1"},
+          "edges": {
+            "type": "array",
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["left_id", "right_id", "status", "contract"],
+              "properties": {
+                "left_id": {"type": "string", "minLength": 1},
+                "right_id": {"type": "string", "minLength": 1},
+                "status": {"enum": ["planned", "candidate", "rejected"]},
+                "contract": {"$ref": "#/$defs/depiction_index_contract"}
+              }
+            }
+          },
+          "digest": {"$ref": "#/$defs/digest"}
+        }
+      },
+      "network_chemistry_evidence": {
+        "type": "object", "additionalProperties": false,
+        "required": ["schema_version", "verdict", "edges", "digest"],
+        "properties": {
+          "schema_version": {"const": "rbfe-network-chemistry-evidence.v1"},
+          "verdict": {"$ref": "#/$defs/verdict"},
+          "edges": {
+            "type": "array",
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["left_id", "right_id", "status", "evidence"],
+              "properties": {
+                "left_id": {"type": "string", "minLength": 1},
+                "right_id": {"type": "string", "minLength": 1},
+                "status": {"enum": ["planned", "candidate", "rejected"]},
+                "evidence": {"$ref": "#/$defs/chemistry_evidence"}
+              }
+            }
+          },
+          "digest": {"$ref": "#/$defs/digest"}
+        }
+      },
+      "culprit_edge": {
+        "type": "object", "additionalProperties": false,
+        "required": ["left_id", "right_id", "reasons"],
+        "properties": {
+          "left_id": {"type": "string", "minLength": 1},
+          "right_id": {"type": "string", "minLength": 1},
+          "reasons": {"type": "array", "items": {"$ref": "#/$defs/eligibility_reason"}}
+        }
+      },
+      "execution_network_gate": {
+        "type": "object", "additionalProperties": false,
+        "required": ["verdict", "connected_components", "culprit_edges", "reason"],
+        "properties": {
+          "verdict": {"enum": ["CONFIRMED", "UNVERIFIED"]},
+          "connected_components": {
+            "type": "array",
+            "items": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1}
+          },
+          "culprit_edges": {"type": "array", "items": {"$ref": "#/$defs/culprit_edge"}},
+          "reason": {"type": "string", "minLength": 1}
+        }
+      },
+      "planner_diagnostics": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "reviewed_edge_count", "executable_edge_count", "candidate_edge_count",
+          "rejected_edge_count",
+          "network_gate", "minimum_execution_mapping_score", "culprit_edges"
+        ],
+        "properties": {
+          "reviewed_edge_count": {"type": "integer", "minimum": 0},
+          "executable_edge_count": {"type": "integer", "minimum": 0},
+          "candidate_edge_count": {"type": "integer", "minimum": 0},
+          "rejected_edge_count": {"type": "integer", "minimum": 0},
+          "network_gate": {"enum": ["CONFIRMED", "UNVERIFIED"]},
+          "minimum_execution_mapping_score": {"type": "number", "minimum": 0, "maximum": 1},
+          "culprit_edges": {"type": "array", "items": {"$ref": "#/$defs/culprit_edge"}}
+        }
+      },
+      "identity_contract": {
+        "type": "object", "additionalProperties": false,
+        "required": ["schema_version", "compounds", "digest"],
+        "properties": {
+          "schema_version": {"const": "rbfe-network-identity.v1"},
+          "compounds": {"type": "object", "additionalProperties": {"$ref": "#/$defs/chemical_identity"}},
+          "digest": {"$ref": "#/$defs/digest"}
+        }
+      },
+      "official_plan": {
+        "type": "object", "additionalProperties": false,
+        "dependentRequired": {
+          "campaign_id": ["campaign_scientific_generation", "campaign_scientific_digest", "prepared_system_id"],
+          "campaign_scientific_generation": ["campaign_id", "campaign_scientific_digest", "prepared_system_id"],
+          "campaign_scientific_digest": ["campaign_id", "campaign_scientific_generation", "prepared_system_id"],
+          "prepared_system_id": ["campaign_id", "campaign_scientific_generation", "campaign_scientific_digest"]
+        },
+        "required": [
+          "schema_version", "engine", "engine_version", "planner", "mappers",
+          "ligand_network", "compound_identities", "identity_contract",
+          "depiction_contract", "chemistry_evidence", "edges", "candidate_edges",
+          "rejected_edges", "execution_network_gate", "planner_diagnostics",
+          "campaign_contract"
+        ],
+        "properties": {
+          "schema_version": {"const": "1.0"},
+          "engine": {"const": "OpenFE"},
+          "engine_version": {"type": "string", "minLength": 1},
+          "planner": {"const": "generate_minimal_redundant_network"},
+          "mappers": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 2, "uniqueItems": true},
+          "ligand_network": {"type": ["object", "array"]},
+          "compound_identities": {"type": "object", "additionalProperties": {"$ref": "#/$defs/chemical_identity"}},
+          "identity_contract": {"$ref": "#/$defs/identity_contract"},
+          "depiction_contract": {"$ref": "#/$defs/network_depictions"},
+          "chemistry_evidence": {"$ref": "#/$defs/network_chemistry_evidence"},
+          "edges": {"type": "array", "items": {"$ref": "#/$defs/openfe_edge"}},
+          "candidate_edges": {"type": "array", "items": {"$ref": "#/$defs/openfe_edge"}},
+          "rejected_edges": {"type": "array", "items": {"$ref": "#/$defs/openfe_edge"}},
+          "execution_network_gate": {"$ref": "#/$defs/execution_network_gate"},
+          "planner_diagnostics": {"$ref": "#/$defs/planner_diagnostics"},
+          "campaign_contract": {"$ref": "#/$defs/campaign_contract"},
+          "campaign_id": {"type": "string", "format": "uuid"},
+          "campaign_scientific_generation": {"type": "integer", "minimum": 1},
+          "campaign_scientific_digest": {"$ref": "#/$defs/digest"},
+          "prepared_system_id": {"type": "string", "format": "uuid"}
+        }
+      },
+      "execution_matrix": {
+        "oneOf": [
+          {
+            "type": "object", "additionalProperties": false,
+            "required": [
+              "edge_count", "legs_per_edge", "repeat_count",
+              "production_execution_count", "pilot_included_in_production_count",
+              "executions"
+            ],
+            "properties": {
+              "edge_count": {"type": "integer", "minimum": 0},
+              "legs_per_edge": {"const": 2},
+              "repeat_count": {"type": "integer", "minimum": 3},
+              "production_execution_count": {"type": "integer", "minimum": 0},
+              "pilot_included_in_production_count": {"type": "boolean"},
+              "executions": {
+                "type": "array",
+                "items": {
+                  "type": "object", "additionalProperties": false,
+                  "required": ["edge_id", "leg", "repeat_index", "role"],
+                  "properties": {
+                    "edge_id": {"type": "string", "minLength": 1},
+                    "leg": {"enum": ["complex", "solvent"]},
+                    "repeat_index": {"type": "integer", "minimum": 1},
+                    "role": {"const": "production"}
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object", "additionalProperties": false,
+            "required": ["verdict", "executions", "reason"],
+            "properties": {
+              "verdict": {"const": "UNVERIFIED"},
+              "executions": {"type": "array", "maxItems": 0},
+              "reason": {"type": "string", "minLength": 1}
+            }
+          }
+        ]
+      }
+    },
+    "type": "object", "additionalProperties": false,
+    "required": ["network_digest", "compound_count", "edge_count", "network"],
+    "properties": {
+      "network_digest": {"$ref": "#/$defs/digest"},
+      "compound_count": {"type": "integer", "minimum": 2},
+      "edge_count": {"type": "integer", "minimum": 0},
+      "network": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "schema_version", "kind", "digest", "compounds", "edges", "mode",
+          "official_openfe_plan", "policy", "claim_boundary", "campaign_admission"
+        ],
+        "properties": {
+          "schema_version": {"const": "1.0"},
+          "kind": {"const": "rbfe_network_plan"},
+          "digest": {"$ref": "#/$defs/digest"},
+          "compounds": {"type": "array", "minItems": 2, "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["id", "canonical_smiles"],
+            "properties": {
+              "id": {"type": "string", "minLength": 1},
+              "canonical_smiles": {"type": "string", "minLength": 1}
+            }
+          }},
+          "edges": {"type": "array", "items": {"$ref": "#/$defs/network_edge"}},
+          "mode": {"enum": ["pilot", "full"]},
+          "official_openfe_plan": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/official_plan"}]},
+          "policy": {
+            "type": "object", "additionalProperties": false,
+            "required": ["extra_edge_fraction", "minimum_similarity", "mapping", "planner"],
+            "properties": {
+              "extra_edge_fraction": {"type": "number", "minimum": 0, "maximum": 5},
+              "minimum_similarity": {"type": "number", "minimum": 0, "maximum": 1},
+              "mapping": {"type": "string", "minLength": 1},
+              "planner": {"enum": ["openfe", "rdkit_fallback"]}
+            }
+          },
+          "claim_boundary": {"type": "string", "minLength": 1},
+          "campaign_context": {"$ref": "#/$defs/campaign_context"},
+          "campaign_admission": {"$ref": "#/$defs/campaign_admission"},
+          "identity_contract": {"$ref": "#/$defs/identity_contract"},
+          "depiction_contract": {"$ref": "#/$defs/network_depictions"},
+          "chemistry_evidence": {"$ref": "#/$defs/network_chemistry_evidence"},
+          "candidate_edges": {"type": "array", "items": {"$ref": "#/$defs/openfe_edge"}},
+          "rejected_edges": {"type": "array", "items": {"$ref": "#/$defs/openfe_edge"}},
+          "execution_network_gate": {"$ref": "#/$defs/execution_network_gate"},
+          "planner_diagnostics": {"$ref": "#/$defs/planner_diagnostics"},
+          "campaign_contract": {"$ref": "#/$defs/campaign_contract"},
+          "execution_matrix": {"$ref": "#/$defs/execution_matrix"}
+        },
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "properties": {
+                  "campaign_admission": {"$ref": "#/$defs/bound_campaign_admission"},
+                  "campaign_context": {"$ref": "#/$defs/campaign_context"}
+                },
+                "required": ["campaign_context"]
+              },
+              {
+                "properties": {
+                  "campaign_admission": {"$ref": "#/$defs/unbound_campaign_admission"},
+                  "campaign_context": false
+                }
+              }
+            ]
+          },
+          {
+            "oneOf": [
+              {
+                "properties": {
+                  "official_openfe_plan": {"type": "null"},
+                  "identity_contract": false,
+                  "depiction_contract": false,
+                  "chemistry_evidence": false,
+                  "candidate_edges": false,
+                  "rejected_edges": false,
+                  "execution_network_gate": false,
+                  "planner_diagnostics": false,
+                  "campaign_contract": false,
+                  "execution_matrix": false
+                }
+              },
+              {
+                "properties": {"official_openfe_plan": {"$ref": "#/$defs/official_plan"}},
+                "required": [
+                  "identity_contract", "depiction_contract", "chemistry_evidence",
+                  "candidate_edges", "rejected_edges", "execution_network_gate",
+                  "planner_diagnostics", "campaign_contract"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }},
+  "refusals": [
+    {"code": "INVALID_PARAMETERS", "condition": "invalid chemistry, mapping, disconnected results, stale Campaign generation, or prepared receptor not owned by the current Campaign"},
+    {"code": "NOT_FOUND", "condition": "the Campaign does not exist or is not accessible to the current actor"},
+    {"code": "UNSUPPORTED", "condition": "server-owned Campaign admission is unavailable or its sealed witness is missing"}
+  ],
   "execution": {"supported_modes": ["sync", "job"], "default_mode": "job", "resource_class": "cpu", "determinism": "bitwise",
     "checkpointable": false, "cancellation": "cooperative", "artifact_access": ["read:rbfe", "write:rbfe"],
     "supported_adapters": ["local_cpu", "slurm", "kubernetes"], "cacheable": true, "deterministic": true,
     "side_effects": "immutable_artifacts"},
   "exposure": {"sdk": true, "cli": true, "mcp": "hidden"},
   "invocation": {"handler": "motif.structure_methods:rbfe_plan_handler", "estimate": "motif.structure_methods:rbfe_estimate",
+    "admission": {"handler": "motif.structure_methods:attest_rbfe_network_admission", "attestation_key": "rbfe_network_campaign"},
     "artifacts": [{"role": "rbfe.network", "media_type": "application/json", "required": true}]}
 }

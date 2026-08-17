@@ -260,17 +260,23 @@ class ValidationAndResourceTests(unittest.TestCase):
             expand_rbfe_execution_matrix(network, repeats=2)
 
     def test_rbfe_pairs_legs_then_preserves_repeat_disagreement(self):
-        from motif.rbfe import _pair_legs_and_repeats
+        from motif.rbfe import _pair_legs_and_repeats, ingest_openfe_edge_result
         legs = []
         for repeat, complex_value in ((1, 2.0), (2, 3.0), (3, 1.0)):
-            legs.extend([
-                {"edge_id": "e1", "repeat_index": repeat, "leg": "complex",
-                 "status": "completed", "dg_kcal_mol": complex_value,
-                 "uncertainty_kcal_mol": .2},
-                {"edge_id": "e1", "repeat_index": repeat, "leg": "solvent",
-                 "status": "completed", "dg_kcal_mol": .5,
-                 "uncertainty_kcal_mol": .2},
-            ])
+            for leg, estimate in (("complex", complex_value), ("solvent", .5)):
+                legs.append(ingest_openfe_edge_result({
+                    "engine": "OpenFE", "scientific_status": "completed_unvalidated",
+                    "edge_id": "e1", "repeat_index": repeat, "leg": leg,
+                    "target_ref": "target-1", "protein_structure_ref": (
+                        "pose-1" if leg == "complex" else None),
+                    "thermodynamic_cycle_id": "cycle-1",
+                    "ligand_charge_digest": "sha256:" + "1" * 64,
+                    "transformation_digest": "sha256:" + (
+                        "2" if leg == "complex" else "3") * 64,
+                    "result_digest": "sha256:" + f"{repeat}{leg}".encode().hex().ljust(64, "0")[:64],
+                    "estimate": estimate, "uncertainty": .2, "unit": "kcal/mol",
+                }, {"verdict": "passed", "policy_digest": "sha256:" + "4" * 64,
+                    "diagnostics_digest": "sha256:" + f"{repeat}".ljust(64, "5")}))
         edges, diagnostics = _pair_legs_and_repeats(legs)
         self.assertEqual(edges[0]["repeat_count"], 3)
         diagnostic = next(row for row in diagnostics if row["status"] == "aggregated")

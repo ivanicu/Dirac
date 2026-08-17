@@ -14,10 +14,44 @@ import traceback
 from typing import Any
 
 import failures
+from artifacts import Artifact, verify_bytes
 from catalog import MethodCatalog
 from execution_control.protocol import validate_execution_request
 from execution_control.protocol import CancellationToken
+from execution_control.identity import cuda_architecture_for_capability
 from invocation import HandlerResult, InvocationContext
+
+
+class _GrantedArtifactReader:
+    """Read-only, request-scoped artifact capability for an isolated worker."""
+
+    def __init__(self, exchange_root: Path, grants: list[dict[str, Any]]) -> None:
+        self.exchange_root = exchange_root
+        self.grants = {str(item["id"]): dict(item) for item in grants}
+
+    def read(self, address: str) -> tuple[Artifact, bytes]:
+        grant = self.grants.get(str(address))
+        if grant is None:
+            raise failures.DiracNotFound(
+                "artifact is outside this worker's request-scoped capability",
+                details={"artifact_id": str(address)})
+        path = (self.exchange_root / grant["path"]).resolve()
+        if self.exchange_root not in path.parents:
+            raise failures.DiracInternal("granted artifact path escaped the exchange root")
+        data = path.read_bytes()
+        digest = str(grant["sha256"]).removeprefix("sha256:")
+        verify_bytes(data, digest)
+        if len(data) != int(grant["size_bytes"]):
+            raise failures.DiracInternal("granted artifact size does not match its manifest")
+        artifact = Artifact(
+            id=str(grant["id"]), sha256=digest, role=str(grant["role"]),
+            media_type=str(grant["media_type"]), size_bytes=len(data),
+            method_version=grant.get("method_version"))
+        return artifact, data
+
+    def head(self, address: str) -> Artifact:
+        artifact, _ = self.read(address)
+        return artifact
 
 
 def _utcnow() -> str:
@@ -39,11 +73,62 @@ def _gpu_evidence(request: dict[str, Any]) -> dict[str, Any]:
     import torch
     if not torch.cuda.is_available() or torch.cuda.device_count() < 1:
         raise RuntimeError("GPU was requested but CUDA is not available in the worker")
+    major, minor = (int(value) for value in torch.cuda.get_device_capability(0))
+    try:
+        architecture = cuda_architecture_for_capability(major, minor)
+    except ValueError as error:
+        raise RuntimeError(f"{error}; refusing to guess its architecture") from error
+    requested_arch = list(request["resource_request"].get("gpu_arch") or [])
+    if requested_arch != [architecture]:
+        raise RuntimeError(
+            f"worker GPU architecture {architecture} does not match admitted "
+            f"constraint {requested_arch}")
+    numeric_mode = str(request["determinism"].get("numeric_mode") or "")
+    memory_bytes = int(torch.cuda.get_device_properties(0).total_memory)
+    admitted_memory_bytes = int(
+        request["resource_request"].get("gpu_memory_bytes_min") or 0)
+    if memory_bytes < admitted_memory_bytes:
+        raise RuntimeError(
+            "worker GPU memory is below the admitted minimum capacity")
+    actual_dtype = str(torch.get_default_dtype())
+    expected_dtype = {
+        "fp64": "torch.float64",
+        "fp32": "torch.float32",
+        "tf32": "torch.float32",
+        "bf16": "torch.bfloat16",
+        "fp16": "torch.float16",
+    }.get(numeric_mode)
+    if expected_dtype is None or actual_dtype != expected_dtype:
+        raise RuntimeError(
+            f"worker numeric mode {numeric_mode!r} is not attested by default "
+            f"dtype {actual_dtype!r}")
+    backends = getattr(torch, "backends", None)
+    cuda_backend = getattr(backends, "cuda", None)
+    matmul_backend = getattr(cuda_backend, "matmul", None)
+    cudnn_backend = getattr(backends, "cudnn", None)
+    matmul_tf32 = getattr(matmul_backend, "allow_tf32", None)
+    cudnn_tf32 = getattr(cudnn_backend, "allow_tf32", None)
+    if numeric_mode in {"fp32", "tf32"}:
+        expected_tf32 = numeric_mode == "tf32"
+        if (not isinstance(matmul_tf32, bool)
+                or not isinstance(cudnn_tf32, bool)
+                or matmul_tf32 is not expected_tf32
+                or cudnn_tf32 is not expected_tf32):
+            raise RuntimeError(
+                f"worker numeric mode {numeric_mode!r} conflicts with CUDA "
+                f"TF32 flags matmul={matmul_tf32!r}, cudnn={cudnn_tf32!r}")
     return {
         "requested": True, "available": True,
         "torch": torch.__version__, "cuda": torch.version.cuda,
         "device_count": torch.cuda.device_count(),
         "device_name": torch.cuda.get_device_name(0),
+        "compute_capability": f"{major}.{minor}",
+        "memory_bytes": memory_bytes,
+        "architecture": architecture,
+        "numeric_mode": numeric_mode,
+        "default_dtype": actual_dtype,
+        "matmul_allow_tf32": matmul_tf32,
+        "cudnn_allow_tf32": cudnn_tf32,
     }
 
 
@@ -109,7 +194,10 @@ def run(request_path: Path, exchange_root: Path) -> int:
             actor=dict(request["security_context"]["actor"]),
             budget_seconds=document.get("budget_seconds"),
             job_id=request["job_id"], spec=spec, deadline=deadline,
-            cancellation_token=cancellation_token)
+            cancellation_token=cancellation_token,
+            artifact_reader=_GrantedArtifactReader(
+                exchange_root, list(document.get("artifact_grants") or [])),
+            server_attestations=dict(document.get("server_attestations") or {}))
         try:
             output = handler(payload, context)
         finally:
@@ -138,6 +226,7 @@ def run(request_path: Path, exchange_root: Path) -> int:
         }
         _atomic_json(result_path, {
             "schema_version": "1.0", **identity, "ok": True,
+            "worker_attestation": {"gpu": gpu},
             "handler_result": {
                 "result": output.result, "warnings": output.warnings,
                 "provenance": provenance,
