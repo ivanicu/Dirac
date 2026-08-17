@@ -6,6 +6,15 @@ repository inherited mol\* history and currently has no reliable release-tag ser
 
 ## Unreleased
 
+### Product surfaces
+
+- Added an independently built Discovery Lab that provides shared navigation between the
+  focused FEP and Field workbenches without replacing the full product shell.
+- Added recoverable FEP campaign preparation, exact pose/mapping review, scientific
+  generation binding and governed OpenFE run qualification.
+- Added linked parent/proposal field comparison across 2D, 3D, receptor-pocket, MEP and
+  MLP views.
+
 ### Application platform
 
 - Established one canonical domain vocabulary, semantic Command registry and generated
@@ -49,6 +58,11 @@ repository inherited mol\* history and currently has no reliable release-tag ser
   architecture coherence.
 - Added a remote fail-closed security profile while retaining the explicitly
   unauthenticated local/LAN development profile.
+- Added tenant-scoped Job idempotency, durable dispatch recovery and fenced terminal
+  publication for long campaign preparation and execution workflows.
+- Reworked repository metadata around product workflows, explicit architecture boundaries,
+  source-derived status, contribution guidance, private security reporting and third-party
+  attribution.
 
 ## Initial Dirac application — 2026-08-10
 

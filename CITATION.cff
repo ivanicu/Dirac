@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If Dirac contributes to your work, please cite the software and the upstream scientific libraries you use."
+title: "Dirac"
+type: software
+authors:
+  - family-names: "Rakamazov"
+    given-names: "Ivan"
+    alias: "ivanicu"
+repository-code: "https://github.com/ivanicu/Dirac"
+url: "https://github.com/ivanicu/Dirac"
+version: "5.11.0"
+license: MIT
+abstract: >-
+  An open molecular discovery environment for interactive design, scientific computation,
+  molecular machine learning, and traceable scientific workflows.
+keywords:
+  - drug discovery
+  - molecular design
+  - computational chemistry
+  - cheminformatics
+  - molecular machine learning
+  - scientific computing

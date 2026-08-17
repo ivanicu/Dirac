@@ -1,6 +1,6 @@
 # Dirac Architecture
 
-Current as of 2026-08-12. This document describes live boundaries; product intent and
+Current as of 2026-08-17. This document describes live boundaries; product intent and
 information architecture live under `docs/product/`, exact schemas under `contracts/`,
 and runtime evidence in `STATUS.md`.
 
@@ -59,15 +59,17 @@ errors and provenance belong below those adapters.
 validates command input and output, records `human | agent | service` actor identity,
 and enforces that long commands declared `job_policy=required` actually return a Job.
 
-`backend/invocation.py` is the single scientific invocation path for 28 registered Methods. It validates method
+`backend/invocation.py` is the single scientific invocation path for 30 executable scientific Methods. It validates method
 input/output, consults method-current caches, creates or joins Jobs, runs an injected
 Executor, stores content-addressed artifacts, and returns one v2 envelope with exact
 method version and provenance. Long scientific commands always submit through the
 durable JobStore.
 
-The executor boundary has four implementations: inline and bounded threads for the
-current service, process isolation for picklable workers, and an injected remote adapter
-for a future queue/cluster. SDK, CLI, HTTP and MCP do not change when the executor does.
+The executor boundary supports inline and bounded threads, process isolation, governed
+local GPU execution, and Kubernetes/Kueue placement. Admission seals the execution route
+and production identity before asynchronous dispatch; worker evidence and fencing prevent
+an incompatible or superseded worker from publishing completion. SDK, CLI, HTTP and MCP
+do not change when execution placement changes.
 
 ## Durable state
 
@@ -107,17 +109,37 @@ facets are modules over the shared scene and context. Molecule embedding, fields
 surface MEP and torsion strain enter through semantic commands; long results return by
 Job and content-addressed artifacts.
 
+The focused Discovery Lab is a second browser build, not a second scientific system. Its
+landing page, FEP workbench and Field workbench share one navigation contract and the same
+application/scientific backend while remaining deployable independently from the full
+AppShell. It does not create another Command registry, Method catalog, Job state machine,
+artifact identity or campaign generation clock.
+
 ## Runtime topology
 
 - `dirac-fields.service` on `:8901` is the one application/scientific control plane.
-- `dirac-web.service` on `:1360` serves the one production frontend bundle.
+- `dirac-web.service` on `:1360` serves the full product shell.
+- `dirac-discovery-lab.service` on `:1370` serves the independent Discovery Lab bundle.
 - `dirac-ops.service` on `:1355` is a read-only operational projection.
 - PostgreSQL `dirac` owns durable state.
 - the legacy `dirac-physics.service` is disabled and no process listens on `:8902`.
 
-The local/LAN deployment is intentionally unauthenticated; network reachability remains
-the boundary. A future multi-user or WAN deployment must add authentication and policy
-before it may expose mutation commands.
+The local/LAN profile is intentionally unauthenticated; network reachability remains its
+boundary. Remote mode is explicit and fail-closed on missing bearer identity, TLS, scope,
+quota or artifact authorization. The local profile must not be exposed directly as a
+public multi-user service.
+
+## System invariants
+
+1. A semantic Command has one application behavior regardless of transport.
+2. Long-running work crosses a durable Job boundary before execution.
+3. Scientific outputs remain content-addressed and linked to exact inputs, Method,
+   execution identity and actor.
+4. Navigation changes a projection; it does not create a second molecule, Program,
+   campaign generation or SceneService.
+5. Atom identity is preserved through molfile construction, RDKit perception, SVG
+   interaction and mol\* selection.
+6. Refused, stale, unverified and completed are distinct scientific states.
 
 ## Growth rule
 

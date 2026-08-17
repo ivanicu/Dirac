@@ -1,0 +1,48 @@
+name: Bug report
+description: Report a reproducible product, scientific-workflow, or operational defect
+title: "[bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include credentials, private molecule data, or vulnerability details. Use the repository security advisory for security reports.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the observed behavior and why it is incorrect.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Provide the smallest reproducible sequence, inputs, route, and deployment profile.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected boundary
+      description: What should the product, scientific method, or runtime have done instead?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Add screenshots, console output, Job IDs, refusal codes, or sanitized logs.
+  - type: input
+    id: commit
+    attributes:
+      label: Dirac commit
+      placeholder: Full Git commit SHA
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Data safety
+      options:
+        - label: I removed credentials, private molecule data, and sensitive artifact contents.
+          required: true

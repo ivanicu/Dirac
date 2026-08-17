@@ -20,6 +20,9 @@ This directory contains three different classes of material. Keep their status e
 | How is Motif designed and tested? | [`product/motif-v3/README.md`](product/motif-v3/README.md) |
 | How is the local runtime operated? | [`../deploy/README.md`](../deploy/README.md) and [`../backend/README.md`](../backend/README.md) |
 | How is remote access secured? | [`security/REMOTE.md`](security/REMOTE.md) |
+| How do I contribute? | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) |
+| How do I report a vulnerability? | [`../SECURITY.md`](../SECURITY.md) |
+| Which third-party licenses apply? | [`../THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md) |
 
 `adr/` contains accepted architecture decisions. `architecture/` contains the generated,
 source-derived architecture twin. `screenshots/` contains documentation assets.
@@ -56,3 +59,4 @@ mkdocs build
   current guidance with an ambiguous title.
 - Do not duplicate Commands, ObjectKinds or Method schemas in prose when a link to
   `contracts/` is sufficient.
+- Keep README product-first and put source-derived capability counts in `STATUS.md`.

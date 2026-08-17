@@ -1,7 +1,7 @@
 # Construction status
 
-Last re-derived: **2026-08-13** from the current working tree, repository gates and the
-live supervised local services.
+Last re-derived: **2026-08-17** from the canonical registries, contracts, migrations,
+repository gates, GitHub CI and live supervised local services.
 
 This page distinguishes platform plumbing, connected product capability and scientific
 validation. A green contract or transport gate does not validate a scientific model.
@@ -39,13 +39,29 @@ structure Views, compound records, material/sample records, experiment records, 
 and active/history compute projections. The other Views are navigable contracts, not
 claims of shipped scientific capability.
 
+## Focused Discovery Lab
+
+The separately built Discovery Lab is not counted as another AppShell Workspace or View.
+It is a focused frontend over the same application/scientific backend:
+
+| Entry | State |
+|---|---|
+| `discovery-lab/` | connected navigation and backend-health landing page |
+| `fep-workbench/` | connected campaign, pose-review, mapping and governed-run qualification workflow |
+| `field-workbench/` | connected parent/proposal field-comparison workflow |
+
+FEP and Field share navigation, visual language and backend contracts. The Discovery Lab
+is deployed independently from the full product shell so neither frontend can silently
+replace the other.
+
 ## Verified local topology
 
-Verified on 2026-08-13 with service state, listening sockets and HTTP responses:
+Verified on 2026-08-17 with listening sockets and HTTP responses:
 
 | Component | State |
 |---|---|
-| `dirac-web.service` / `:1360` | active; `0.0.0.0`; HTTP 200; the only Dirac web server |
+| `dirac-web.service` / `:1360` | `0.0.0.0`; HTTP 200; full Dirac product shell |
+| `dirac-discovery-lab.service` / `:1370` | `0.0.0.0`; HTTP 200; independent Discovery Lab with FEP and Field navigation |
 | `dirac-fields.service` / `:8901` | active; `0.0.0.0`; health HTTP 200; unified application/scientific control plane |
 | `dirac-ops.service` / `:1355` | active; `0.0.0.0`; HTTP 200; read-only operational projection |
 | `dirac-digital-twin.service` | active; watches first-party source and regenerates the twin |
@@ -60,13 +76,13 @@ facts, generated contracts, migrations, portability, layering, physics protectio
 transport parity, remote security and architecture-twin coherence. Database and live
 transport gates require their real dependencies; a skipped gate is unverified, not green.
 
-The working tree contains ongoing Motif scientific-semantics work. Counts above include
-those present files and contracts; they should not be interpreted as a release tag.
+Counts above describe the canonical source tree, not a release tag or a claim that every
+registered Method has completed prospective scientific validation.
 
 ## Scope verdict
 
-The command/method/job/artifact substrate and the complete navigation shell exist. The
-product remains partial: 12/30 Views are connected, application-grade HCI action semantics
-are still being migrated, and individual scientific Methods need method-specific validation
-before prospective claims can be made. Workflow completeness and scientific validity are
-separate acceptance gates.
+The command/method/job/artifact substrate, full navigation shell and focused Discovery Lab
+exist. The product remains partial: 12/30 AppShell Views are connected, the remaining Views
+are explicit shells, and individual scientific Methods need method-specific validation
+before prospective claims can be made. Workflow completeness, execution correctness and
+scientific validity remain separate acceptance gates.

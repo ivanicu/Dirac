@@ -1,0 +1,44 @@
+name: Capability proposal
+description: Propose a product or scientific capability with a clear ownership boundary
+title: "[proposal] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What decision or scientific workflow is blocked today?
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Proposed workflow
+      description: Describe the user-visible behavior, not only an algorithm or library.
+    validations:
+      required: true
+  - type: dropdown
+    id: boundary
+    attributes:
+      label: Likely owning boundary
+      options:
+        - Browser product
+        - Semantic Command
+        - Scientific Method
+        - Execution or persistence
+        - Contract or domain model
+        - Documentation or developer experience
+        - Unclear
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Acceptance evidence
+      description: What observable result would prove the capability is connected and scientifically honest?
+    validations:
+      required: true
+  - type: textarea
+    id: boundary_conditions
+    attributes:
+      label: Refusal and scope boundary
+      description: Which inputs, runtime states, or scientific claims must remain refused or unverified?

@@ -1,8 +1,8 @@
 {
   "name": "dirac",
   "version": "5.11.0",
-  "description": "A browser-native single-molecule deep design workbench built on mol* + RDKit-JS.",
-  "homepage": "https://github.com/ivanicu/Dirac",
+  "description": "Open molecular discovery environment for interactive design, scientific computation, molecular ML, and traceable scientific workflows.",
+  "homepage": "https://github.com/ivanicu/Dirac#readme",
   "repository": {
     "type": "git",
     "url": "https://github.com/ivanicu/Dirac.git"
@@ -10,6 +10,16 @@
   "bugs": {
     "url": "https://github.com/ivanicu/Dirac/issues"
   },
+  "keywords": [
+    "drug-discovery",
+    "molecular-design",
+    "computational-chemistry",
+    "cheminformatics",
+    "molecular-machine-learning",
+    "scientific-computing",
+    "molstar",
+    "rdkit"
+  ],
   "engines": {
     "node": ">=22.0.0"
   },
@@ -45,6 +55,7 @@
     "version": "npm run rebuild && cpx .npmignore lib/",
     "postversion": "git push && git push --tags",
     "build:dirac": "node ./scripts/build.mjs -a dirac --prd && node -e \"require('fs').cpSync('src/app.frontend.facets.molstar-rdkit.editable/assets/rdkit', 'build/dirac/assets/rdkit', {recursive: true})\"",
+    "build:discovery-lab": "node ./scripts/build-discovery-lab.mjs --prd",
     "prebuild:dirac": "npm run check:css && npm run hci:check",
     "hci:generate": "node scripts/generate-human-interface-contract.mjs",
     "hci:check": "node scripts/generate-human-interface-contract.mjs --check && node scripts/verify-human-interface-contract.mjs",

@@ -384,10 +384,6 @@ for (const relFile of COMMAND_DOC_FILES) {
     const modules = (moduleBlock.match(/^\s*\{ id: '/gm) ?? []).length;
 
     const expected = [
-        ['README.md', `${commands} versioned semantic Commands`],
-        ['README.md', `${kinds} canonical ObjectKinds`],
-        ['README.md', `${methods} scientific Method manifests`],
-        ['README.md', `${views} routable Views, of which ${connectedViews}`],
         ['STATUS.md', `${kinds} ObjectKinds`],
         ['STATUS.md', `${relations} controlled relation kinds`],
         ['STATUS.md', `${commands} registered Commands`],
@@ -424,6 +420,7 @@ for (const relFile of COMMAND_DOC_FILES) {
 
     const primaryDocs = [
         'README.md', 'STATUS.md', 'ARCHITECTURE.md', 'ROADMAP.md', 'docs/README.md',
+        'CONTRIBUTING.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md',
         'backend/README.md', 'deploy/README.md',
     ];
     for (const file of primaryDocs) {

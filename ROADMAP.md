@@ -1,6 +1,6 @@
 # Dirac roadmap
 
-Current as of 2026-08-13. This roadmap starts from the source-derived state in
+Current as of 2026-08-17. This roadmap starts from the source-derived state in
 [`STATUS.md`](STATUS.md); it does not repeat completed implementation history.
 
 ## Direction
@@ -65,7 +65,8 @@ A change is off-path if it:
 - treats a route transition as a scientific handoff;
 - stores presentation state as evidence;
 - equates a registered Method or passing transport test with scientific validation;
-- starts another Dirac web server instead of rebuilding the bundle served on 1360.
+- starts a duplicate Dirac service instead of rebuilding the intended supervised bundle
+  (full shell on 1360 or Discovery Lab on 1370).
 
 ## Deliberate non-goals for the current phase
 
