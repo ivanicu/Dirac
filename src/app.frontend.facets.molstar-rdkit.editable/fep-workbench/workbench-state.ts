@@ -317,3 +317,11 @@ export function chemistryEvidenceView(value: unknown): ChemistryEvidenceView {
         ledger,
     };
 }
+
+/** Kekulized mol blocks encode aromatic rings as alternating 1/2 bonds. */
+export function isPotentialEzBond(
+    bond: { left: number; right: number; order: number },
+    aromaticAtoms: ReadonlySet<number>,
+): boolean {
+    return bond.order === 2 && !(aromaticAtoms.has(bond.left) && aromaticAtoms.has(bond.right));
+}

@@ -1,7 +1,14 @@
 import { describe, expect, it } from '@jest/globals';
-import { CHEMISTRY_DIMENSIONS, OperationCoordinator, aggregateArmMatches, campaignsVisibleToCopy, canonicalJson, chemistryEvidenceFrom, chemistryEvidenceView, exactOperationBindingMatches, exactRunBindingMatches, executionEligibilityFrom, sameExactRef, type ChemistryDimension, type ChemistryVerdict, type ExactOperationBinding, type ExactRunBinding } from './workbench-state';
+import { CHEMISTRY_DIMENSIONS, OperationCoordinator, aggregateArmMatches, campaignsVisibleToCopy, canonicalJson, chemistryEvidenceFrom, chemistryEvidenceView, exactOperationBindingMatches, exactRunBindingMatches, executionEligibilityFrom, isPotentialEzBond, sameExactRef, type ChemistryDimension, type ChemistryVerdict, type ExactOperationBinding, type ExactRunBinding } from './workbench-state';
 
 describe('FEP workbench operation ownership', () => {
+    it('excludes kekulized aromatic bonds from unknown E/Z candidates', () => {
+        const aromaticAtoms = new Set([0, 1, 2, 3, 4, 5]);
+        expect(isPotentialEzBond({ left: 0, right: 1, order: 2 }, aromaticAtoms)).toBe(false);
+        expect(isPotentialEzBond({ left: 5, right: 6, order: 2 }, aromaticAtoms)).toBe(true);
+        expect(isPotentialEzBond({ left: 6, right: 7, order: 1 }, aromaticAtoms)).toBe(false);
+    });
+
     it('invalidates competitors while allowing the transition owner to continue', () => {
         const coordinator = new OperationCoordinator('tab-a');
         const owner = coordinator.begin('restore');
