@@ -144,6 +144,9 @@ export const T4L_EIGHT_LIGAND_EXAMPLE:GuidedExample={
         'cost-cap': '420 GPU hours',
         'next-action': 'Advance compounds whose predicted gain survives pose and convergence review.',
         'stop-rule': 'Stop an edge if pose evidence, mapping chemistry, or convergence is unresolved.',
+        'prep-missing-residues': 'auto_repair_report',
+        'prep-cofactors': 'remove',
+        'prep-metals': 'remove',
         'ligand-stereo': 'enumerate_unknown',
     },
 };

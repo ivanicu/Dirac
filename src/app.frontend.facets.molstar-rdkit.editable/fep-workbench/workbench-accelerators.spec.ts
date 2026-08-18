@@ -16,10 +16,10 @@ describe('FEP workflow accelerators',()=>{
 
     it('applies available safe defaults and derives a balanced cost cap',()=>{
         const nodes=new Map<string,any>(),select=(id:string,values:string[],value=values[0])=>nodes.set(id,{ value,options: values.map(option=>({ value: option })),dispatchEvent: jest.fn() });
-        select('assembly-select',['deposited_asymmetric_unit']); select('prep-waters',['keep_all','remove_all'],'keep_all'); select('protocol-select',['openfe-rfe-standard-v1']);
+        select('assembly-select',['deposited_asymmetric_unit']); select('prep-missing-residues',['block','auto_repair_report'],'block'); select('prep-waters',['keep_all','remove_all'],'keep_all'); select('prep-cofactors',['keep_parameter_gate','remove'],'keep_parameter_gate'); select('prep-metals',['keep_parameter_gate','remove'],'keep_parameter_gate'); select('protocol-select',['openfe-rfe-standard-v1']);
         nodes.set('cost-cap',{ value: '',dispatchEvent: jest.fn() }); nodes.set('pose-choice-align',{ classList: { contains: ()=>true },click: jest.fn() }); nodes.set('network-choice-balanced',{ classList: { contains: ()=>true },click: jest.fn() });
         const document={ getElementById: (id:string)=>nodes.get(id)||null } as unknown as Document;
-        applyRecommendedSetup(document,8); expect(nodes.get('prep-waters').value).toBe('remove_all'); expect(nodes.get('cost-cap').value).toBe('360 GPU hours');
+        applyRecommendedSetup(document,8); expect(nodes.get('prep-missing-residues').value).toBe('auto_repair_report'); expect(nodes.get('prep-waters').value).toBe('remove_all'); expect(nodes.get('prep-cofactors').value).toBe('remove'); expect(nodes.get('prep-metals').value).toBe('remove'); expect(nodes.get('cost-cap').value).toBe('360 GPU hours');
     });
 
     it('switches the whole review surface between all checks and exceptions',()=>{

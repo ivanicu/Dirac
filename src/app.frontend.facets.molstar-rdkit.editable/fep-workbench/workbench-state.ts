@@ -205,6 +205,7 @@ export type ExecutionEligibility = {
 export type ChemistryLedgerViewRow = {
     label: string;
     value: string;
+    detail: string;
     state: 'confirmed' | 'changed' | 'unverified';
 };
 export type ChemistryEvidenceView = {
@@ -264,7 +265,12 @@ export function chemistryEvidenceFrom(value: unknown): ChemistryEvidence | null 
     const derivedOverall: ChemistryVerdict = verdicts.has('UNVERIFIED')
         ? 'UNVERIFIED'
         : verdicts.has('CHANGED') ? 'CHANGED' : 'CONFIRMED';
-    if (overall !== derivedOverall) return null;
+    // A normal RBFE substitution can have a confirmed mapped core while the
+    // unmapped substituent is explicitly CHANGED.  Incomplete coverage is
+    // unsafe only when the ledger tries to call the whole transformation
+    // unchanged; CHANGED and UNVERIFIED are both honest outcomes.
+    if (overall !== derivedOverall
+        || (!candidate.full_heavy_atom_coverage && overall === 'CONFIRMED')) return null;
     return {
         schema_version: 'rbfe-chemistry-change.v1',
         verdict: overall,
@@ -277,7 +283,11 @@ export function executionEligibilityFrom(value: unknown): ExecutionEligibility |
     const candidate = record(value), verdict = chemistryVerdict(candidate?.verdict);
     if (!candidate || !verdict || !Array.isArray(candidate.reasons)) return null;
     const reasons = candidate.reasons.map(record);
-    return reasons.some(reason => !reason) ? null : {
+    if (reasons.some(reason=>!reason
+        || typeof reason.code !== 'string' || !reason.code.trim()
+        || typeof reason.message !== 'string' || !reason.message.trim())) return null;
+    if (verdict === 'CONFIRMED' && reasons.length) return null;
+    return {
         verdict,
         reasons: reasons as Array<Record<string, unknown>>,
     };
@@ -294,6 +304,7 @@ export function chemistryEvidenceView(value: unknown): ChemistryEvidenceView {
         const ledger = CHEMISTRY_DIMENSIONS.map(dimension => ({
             label: dimension.replace(/_/g, ' '),
             value: 'UNVERIFIED · server chemistry evidence missing or malformed · WITNESS NONE',
+            detail: 'UNVERIFIED · server chemistry evidence missing or malformed · WITNESS NONE',
             state: 'unverified' as const,
         }));
         return {
@@ -303,11 +314,15 @@ export function chemistryEvidenceView(value: unknown): ChemistryEvidenceView {
             ledger,
         };
     }
-    const ledger = evidence.ledger.map(row => ({
-        label: row.dimension.replace(/_/g, ' '),
-        value: `${row.verdict} · ${row.summary} · WITNESS ${row.witnesses.length ? canonicalJson(row.witnesses) : 'NONE'}`,
-        state: ledgerState(row.verdict),
-    }));
+    const ledger = evidence.ledger.map(row => {
+        const witnessDetail=row.witnesses.length ? canonicalJson(row.witnesses) : 'NONE';
+        return {
+            label: row.dimension.replace(/_/g, ' '),
+            value: `${row.verdict} · ${row.summary} · WITNESS ${row.witnesses.length||'NONE'}`,
+            detail: `${row.verdict} · ${row.summary} · WITNESS ${witnessDetail}`,
+            state: ledgerState(row.verdict),
+        };
+    });
     const changed = evidence.ledger.filter(row => row.verdict === 'CHANGED').length;
     const unverified = evidence.ledger.filter(row => row.verdict === 'UNVERIFIED').length;
     return {

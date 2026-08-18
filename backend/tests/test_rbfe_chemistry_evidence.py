@@ -255,6 +255,22 @@ def test_tautomer_bond_pattern_is_changed_but_analogue_hydrogens_are_not() -> No
     assert analogue_row["witnesses"][0][
         "kind"] == "ENDPOINTS_NOT_MICROSTATE_COMPARABLE"
 
+    attested_analogue = mapping_change_evidence(
+        _mol("c1ccccc1"), _mol("Cc1ccccc1"),
+        [(index, index + 1) for index in range(6)],
+        microstate_contract_attached=True)
+    attested_ledger = _ledger(attested_analogue)
+    assert attested_analogue["verdict"] == CHANGED
+    assert attested_ledger["UNMAPPED"]["verdict"] == CHANGED
+    assert attested_ledger["ELEMENT"]["verdict"] == CONFIRMED
+    assert attested_ledger["CONNECTIVITY"]["verdict"] == CONFIRMED
+    assert attested_ledger["BOND_ORDER"]["verdict"] == CONFIRMED
+    assert attested_ledger["FORMAL_CHARGE"]["verdict"] == CONFIRMED
+    assert attested_ledger["RING_CYCLE_RANK"]["verdict"] == CONFIRMED
+    assert attested_ledger["PROTONATION_TAUTOMER"]["verdict"] == CONFIRMED
+    assert attested_ledger["PROTONATION_TAUTOMER"]["witnesses"][0][
+        "kind"] == "ATTESTED_ENDPOINTS_WITH_STRUCTURAL_DELTA"
+
 
 @pytest.mark.parametrize("parent, proposal, change", [
     ("CC(O)C", "C[C@H](O)F", "ADDED_STEREOCENTER"),
@@ -352,6 +368,26 @@ def test_planner_preserves_campaign_contract_and_all_depictions(
     assert len(network["depiction_contract"]["edges"]) == 1
     assert network["edges"][0]["depiction_contract"][
         "schema_version"] == "rbfe-depiction-index.v2"
+
+
+@pytest.mark.skipif(not RUNTIME.is_file(), reason="pinned OpenFE runtime unavailable")
+def test_topology_planning_does_not_trim_a_common_core_by_random_3d_distance(
+        tmp_path: Path) -> None:
+    network = _plan(tmp_path, {
+        "compounds": [
+            {"id": "BEN", "smiles": "c1ccccc1"},
+            {"id": "TOL", "smiles": "Cc1ccccc1"},
+        ],
+        "seed": 1729,
+        "mst_num": 1,
+    })
+    assert network["rejected_edges"] == []
+    assert len(network["edges"]) == 1
+    edge = network["edges"][0]
+    assert {edge["left_id"], edge["right_id"]} == {"BEN", "TOL"}
+    assert edge["mapped_heavy_atom_count"] == 6
+    assert len(edge["selected_heavy_atom_mapping"]) == 6
+    assert edge["mapping_score"] >= 0.8
 
 
 @pytest.mark.skipif(not RUNTIME.is_file(), reason="pinned OpenFE runtime unavailable")

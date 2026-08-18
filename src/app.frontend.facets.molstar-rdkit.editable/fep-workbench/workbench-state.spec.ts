@@ -163,6 +163,22 @@ function chemistryFixture(overrides:Partial<Record<ChemistryDimension,{verdict:C
 }
 
 describe('server-owned FEP chemistry evidence',()=>{
+    it('accepts a confirmed common core with an explicitly changed unmapped substituent',()=>{
+        const evidence=chemistryFixture({
+            SCOPE: { verdict: 'CONFIRMED',summary: 'mapped heavy subgraph 6/7 atoms; coverage 0.857',witnesses: [{ mapped_heavy_atom_pairs: [[0,1],[1,2]],full_coverage: false }] },
+            UNMAPPED: { verdict: 'CHANGED',summary: '0 parent / 1 proposal heavy atoms unmapped',witnesses: [{ parent_atom_indices: [],proposal_atom_indices: [0] }] },
+            PROTONATION_TAUTOMER: { verdict: 'CONFIRMED',summary: 'endpoint microstates attested; hydrogen delta is explained by the explicit structural transformation',witnesses: [{ kind: 'ATTESTED_ENDPOINTS_WITH_STRUCTURAL_DELTA',formal_charge_delta: 0,parent_total_hydrogen_count: 6,proposal_total_hydrogen_count: 8,unmapped_parent_heavy_atoms: 0,unmapped_proposal_heavy_atoms: 1 }] },
+        });
+        const parsed=chemistryEvidenceFrom(evidence);
+        expect(parsed?.verdict).toBe('CHANGED');
+        expect(parsed?.full_heavy_atom_coverage).toBe(false);
+        expect(parsed?.ledger.find(row=>row.dimension==='UNMAPPED')?.verdict).toBe('CHANGED');
+    });
+
+    it('rejects incomplete coverage that falsely claims the whole transformation is unchanged',()=>{
+        expect(chemistryEvidenceFrom(chemistryFixture())).toBeNull();
+    });
+
     it('renders the backend F-to-Cl 6/7 verdicts instead of promoting local no-change',()=>{
         const view=chemistryEvidenceView(chemistryFixture({
             SCOPE: { verdict: 'CONFIRMED',summary: 'mapped heavy subgraph 6/7 atoms; coverage 0.857',witnesses: [{ mapped_heavy_atom_pairs: [[0,0],[1,1]],full_coverage: false }] },
@@ -179,8 +195,9 @@ describe('server-owned FEP chemistry evidence',()=>{
         expect(element.state).toBe('unverified');
         expect(element.value).toContain('UNVERIFIED · no mapped element change');
         expect(unmapped.state).toBe('changed');
-        expect(unmapped.value).toContain('"parent_element":"F"');
-        expect(unmapped.value).toContain('"proposal_element":"Cl"');
+        expect(unmapped.value).toContain('WITNESS 1');
+        expect(unmapped.detail).toContain('"parent_element":"F"');
+        expect(unmapped.detail).toContain('"proposal_element":"Cl"');
     });
 
     it('does not promote protonation or tautomer evidence when execution is eligible',()=>{

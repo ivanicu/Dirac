@@ -4,7 +4,7 @@ import { getRDKit } from '../../chemistry.backend.perception.rdkit-wasm.editable
 import { MoleculeSketcher, type SketchedMolecule } from './molecule-sketcher';
 import { PoseReviewer, type ReviewSystem } from './pose-reviewer';
 import { decideWorkbenchBoot } from './workbench-boot';
-import { escapeHtml, markPipelineReadyDom, renderOperationConfirmationDom, renderPreparationControlsDom, renderPreparationPolicyDom, renderRunHistoryDom, renderRunJobsDom, setSafeText } from './workbench-dom';
+import { bindDialogEscape,dialogReturnTarget,escapeHtml, markPipelineReadyDom, renderOperationConfirmationDom, renderPreparationControlsDom, renderPreparationPolicyDom, renderRunHistoryDom, renderRunJobsDom, setSafeText } from './workbench-dom';
 import { acknowledgedPreparationReceipt, campaignScientificRefFrom, contentRef, fullJobId, operationBindingFromReceipt, preparationReceiptBinding, runReceiptFromData, runReceiptMatchesData, runReceiptState, type AcknowledgedPreparationReceipt, type AnyPreparationReceipt as PreparationReceipt, type ArtifactRef, type CampaignScientificRef, type ContentRef, type PreparationReceipt as DurablePreparationReceipt, type PlannerOutputReceipt, type PlannerReceipt, type RunReceipt, type RunReceiptState } from './workbench-receipts';
 import { globalPhysicalReceiptKey, RECEIPT_KEYS, WorkbenchReceiptStore, type ReceiptStorage } from './workbench-receipt-store';
 import { OperationCoordinator, aggregateArmMatches, canonicalJson, chemistryEvidenceFrom, chemistryEvidenceView, exactOperationBindingMatches, executionEligibilityFrom, isPotentialEzBond, sameExactRef, type ExactAggregateArm, type ExactOperationBinding, type ExactRunBinding, type OperationScope } from './workbench-state';
@@ -64,8 +64,8 @@ const writeCampaignCache=campaignState.writeCache;
 const archiveCampaignCache=campaignState.archiveCache;
 function archiveDetachedRun(receiptOrId:RunReceipt|string,reason:string,runSnapshot?:Record<string,unknown>):void { const runId=typeof receiptOrId==='string'?receiptOrId:receiptOrId.run_id; if (!runId||!fullJobId(runId)) return; const context=activeCampaignContext(),receipt=typeof receiptOrId==='string'?null:receiptOrId; receiptStore.archiveRun({ ...(receipt||{}),run_id: runId,detached_at: new Date().toISOString(),reason,edge_id: receipt?.edge_id||selectedEdge?.edge_id||null,campaign_scientific_ref: receipt?.campaign_scientific_ref||(context?.campaign_id?{ kind: 'rbfe_campaign',id: context.campaign_id,version: context.campaign_scientific_generation,sha256: context.campaign_scientific_digest }:null),...(runSnapshot?{ run_snapshot: runSnapshot }: {}) }); }
 const workbenchLabel = () => auditCopyId === 'main' ? 'MOTIF WORKBENCH · FEP' : `MOTIF WORKBENCH · FEP · COPY ${auditCopyId.toUpperCase()}`;
-const DefaultNetworkJobId = 'b1a4ddf3-8663-4fa1-87d0-8c6a137702c5';
-function currentNetworkJobId():string { return copyStorage.get('dirac.rbfe.active_network_job_id')||DefaultNetworkJobId; }
+const DefaultNetworkJobId = '';
+function currentNetworkJobId():string { const id=copyStorage.get('dirac.rbfe.active_network_job_id')||''; return fullJobId(id)?id:DefaultNetworkJobId; }
 type CampaignContext = { network_job_id:string; name:string; receptor_label:string; ligand_count:number; prepared_system_id:string; campaign_id?:string; campaign_scientific_generation?:number; campaign_scientific_digest?:string };
 let authoritativeCampaignContextState:CampaignContext|null=null;
 function persistedCampaignContextHint():CampaignContext|null { try { const parsed=JSON.parse(copyStorage.get('dirac.rbfe.active_campaign_context')||'null') as CampaignContext|null; return parsed?.network_job_id===currentNetworkJobId()?parsed:null; } catch { return null; } }
@@ -191,7 +191,7 @@ async function enrichMappingEvidence(target:Network): Promise<void> {
     }
 }
 
-async function mappingHighlights(edge: Edge,target:Network=network): Promise<{ left: AtomHighlight[]; right: AtomHighlight[]; summary: string; ledger: Array<{label:string;value:string;state:'confirmed'|'changed'|'unverified'}> }> {
+async function mappingHighlights(edge: Edge,target:Network=network) {
     const evidenceView=chemistryEvidenceView(edge.chemistry_evidence),left=compoundIn(target,edge.left_id),right=compoundIn(target,edge.right_id);
     if (!edge.depiction_contract) return { left: [],right: [],summary: evidenceView.summary,ledger: evidenceView.ledger };
     const leftView=left.depiction_smiles||left.canonical_smiles,rightView=right.depiction_smiles||right.canonical_smiles,li=await atomInfo(leftView),ri=await atomInfo(rightView);
@@ -253,7 +253,7 @@ async function renderSelected(): Promise<void> {
     const [leftSvg,rightSvg]=await Promise.all([moleculeSvg(left.depiction_smiles || left.canonical_smiles, 340, 180, highlights.left),moleculeSvg(right.depiction_smiles || right.canonical_smiles, 340, 180, highlights.right)]);
     if (!operations.current(scope)||network!==targetNetwork||selectedEdge!==edge) return;
     text('transform-name', `${edge.left_id} → ${edge.right_id}`); text('left-name', left.id); text('right-name', right.id); text('mapped-atoms', String(edge.mapped_heavy_atom_count ?? '—')); text('mapping-score', value(edge.mapping_score)); text('mapping-disagreement', value(heavyDelta)); text('chemical-change',highlights.summary);
-    const ledger=document.getElementById('change-ledger'); if (ledger)ledger.innerHTML=highlights.ledger.map(row=>`<span class="${row.state}"><b>${escapeHtml(row.label)}</b>${escapeHtml(row.value)}</span>`).join('');
+    const ledger=document.getElementById('change-ledger'); if (ledger)ledger.innerHTML=highlights.ledger.map(row=>`<span class="${row.state}" title="${escapeHtml(row.detail)}"><b>${escapeHtml(row.label)}</b>${escapeHtml(row.value)}</span>`).join('');
     const gateLabel=hasGovernedMapping(edge)?'POSED-SYSTEM MAP · RUN-READY':`${bandLabel(edge)} PRELIMINARY · QUALIFY IN SYSTEM`;
     text('edge-gate', gateLabel); text('edge-title', `${edge.left_id} → ${edge.right_id}`); text('edge-id', edge.edge_id); text('inspect-score', value(edge.mapping_score)); text('inspect-atoms', `${edge.mapped_atom_count} / ${edge.mapped_heavy_atom_count ?? '—'}`); text('inspect-tanimoto', value(diagnostic.tanimoto)); text('inspect-jaccard', value(heavyDelta));
     const l = diagnostic.left_heavy_atom_fraction, r = diagnostic.right_heavy_atom_fraction; const li = document.getElementById('left-coverage'); const ri = document.getElementById('right-coverage'); if (li) li.style.setProperty('--p', `${(l ?? 0) * 100}%`); if (ri) ri.style.setProperty('--p', `${(r ?? 0) * 100}%`);
@@ -312,6 +312,7 @@ function benchmarkEdge(target:Network=network): Edge {
 async function loadDurableNetwork(requestedNetworkJobId=currentNetworkJobId(),ownerScope:OperationScope=operations.begin('network-load'),preserveRun=false): Promise<boolean> {
     let scope=ownerScope; const metadataHint=persistedCampaignContextHint(),current=()=>operations.current(scope,{ edits: true });
     try {
+        if (!requestedNetworkJobId) throw new Error();
         const env=await client.jobGet(requestedNetworkJobId),loaded=env.ok?networkFromJob(env):null; if (!loaded) throw new Error(env.error?.message||'network job unavailable');
         if (!current()) return false;
         const provisional=campaignContextFromNetwork(loaded,requestedNetworkJobId,metadataHint),job=env.data as Record<string,any>,artifact=job.artifacts?.find((a:Record<string,any>)=>a.role==='rbfe.network'),durableRef=artifactRef(artifact);
@@ -486,7 +487,7 @@ async function validateExecutionContract():Promise<void> {
         if (!chemistryEvidence||!executionEligibility) throw new Error('server build returned missing or malformed chemistry evidence / execution eligibility');
         const candidateEdge:Edge={ ...selectedEdge,preliminary_mapping_score: selectedEdge.preliminary_mapping_score??selectedEdge.mapping_score,mapping_score: Number(build.mapping_score||0),mapped_atom_count: Number(build.mapped_atom_count||0),mapped_heavy_atom_count: Number(build.mapped_heavy_atom_count||0),selected_atom_mapping: build.selected_atom_mapping||[],mapping_source: 'openfe_system_builder.reviewed_receptor_frame',mapping_method: String(build.mapping_method||'LomapAtomMapper'),chemistry_evidence: chemistryEvidence,execution_eligibility: executionEligibility,...(depiction?{ depiction_contract: depiction }:{}) }; if (!hasGovernedMapping(candidateEdge)) throw new Error(`posed-system mapping / server execution eligibility did not pass the governed gate (score ${candidateEdge.mapping_score.toFixed(3)}, eligibility ${executionEligibility.verdict})`); if (!current()) return;
         Object.assign(selectedEdge,candidateEdge); if (depiction) { compound(selectedEdge.left_id).depiction_smiles=depiction.parent_smiles; compound(selectedEdge.right_id).depiction_smiles=depiction.proposal_smiles; }preflightData=candidatePreflight; edgeNetworkRef=candidateEdgeNetworkRef; edgeSpecRef=candidateEdgeSpecRef; complexTransformationRef=candidateComplexRef; solventTransformationRef=candidateSolventRef; executionContract.validated=true; text('contract-gate','2 LEGS + POSED MAP SERVER-ATTESTED · READY'); text('contract-detail',`LoMap ${selectedEdge.mapping_score.toFixed(3)} · ${selectedEdge.mapped_heavy_atom_count||'—'} heavy / ${selectedEdge.mapped_atom_count||'—'} all atoms · REPEX ${build.protocol?.lambda_windows||11} λ`); text('protocol-state','OPENFE 1.11.1 · STANDARD V1'); text('status','SYSTEM QUALIFIED · 6 PHYSICAL JOBS READY'); const decisions=document.querySelectorAll<HTMLElement>('.decision-lines>span'); if (decisions[0]) { decisions[0].innerHTML='<b>ENGINEERING NEXT</b>'; decisions[0].append(document.createTextNode(`${selectedEdge.left_id}→${selectedEdge.right_id} · review protocol + 6-job manifest`)); } const boundaryCopy=document.querySelector<HTMLElement>('.boundary>div:last-child span'); if (boundaryCopy)boundaryCopy.textContent='edge results · 6 jobs not started'; updateSummary(); await renderSelected(); renderRunJobs();
-    } catch (error) { if (!current()) return; const message=error instanceof Error?error.message:String(error); invalidatePreparedSystem(); contractFailure=preparationFailureCopy(message); text('status','EXECUTION REMAINS LOCKED'); } finally { if (current())syncExecutionContract(); }
+    } catch (error) { if (!current()) return; const message=error instanceof Error?error.message:String(error); invalidatePreparedSystem(); contractFailure=preparationFailureCopy(message); text('status','EXECUTION REMAINS LOCKED'); syncExecutionContract(); } finally { if (current())syncExecutionContract(); }
 }
 
 function renderRunJobs():void { if (currentMainMode==='runs') { renderRunHistory(); return; } const matrix=document.getElementById('job-matrix'); if (!matrix) return; const view=runJobsViewFrom(runJobs,executionContract.validated); renderRunJobsDom(document,matrix,view); if (view.executionMeta!==null)text('execution-meta',view.executionMeta); if (view.resultCount!==null)text('result-count',view.resultCount); if (view.boundary!==null)text('run-boundary',view.boundary); }
@@ -627,9 +628,9 @@ function setBuilderGuideStep(step:BuilderGuideStep,focus=true):void {
 }
 function setBuilderOpen(open:boolean):void {
     if (!campaignBuilder) return;
-    if (open) { builderReturnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null; if (!campaignBuilder.open)campaignBuilder.showModal(); campaignBuilder.classList.add('open'); const blank=!receptorInputReady&&!currentLigandSignature(); setBuilderGuideStep(blank?'start':builderGuideStep==='start'?'target':builderGuideStep); updateBuilderReadiness(); } else { campaignBuilder.classList.remove('open'); if (campaignBuilder.open)campaignBuilder.close(); builderReturnFocus?.focus(); }
+    if (open) { if (!campaignBuilder.open) { builderReturnFocus=dialogReturnTarget(document,'main-build'); campaignBuilder.showModal(); } campaignBuilder.classList.add('open'); const blank=!receptorInputReady&&!currentLigandSignature(); setBuilderGuideStep(blank?'start':builderGuideStep==='start'?'target':builderGuideStep); updateBuilderReadiness(); } else { campaignBuilder.classList.remove('open'); if (campaignBuilder.open)campaignBuilder.close(); builderReturnFocus?.focus(); }
 }
-campaignBuilder?.addEventListener('cancel',event=>{ event.preventDefault(); setBuilderOpen(false); });
+bindDialogEscape(campaignBuilder,()=>setBuilderOpen(false));
 function updateBuilderReadiness(validLigands=validatedLigandSignature===currentLigandSignature()?validatedLigandCount:0):void {
     const strategy=document.querySelector<HTMLButtonElement>('[data-choice-group="network"] button.active')?.dataset.choice||'balanced',estimate=campaignEstimate(validLigands,strategy),decision=validateDecisionInputs(builderValues(),estimate),decisionReady=decision.ready;
     const validationCurrent=validatedLigandSignature===currentLigandSignature(),allLigandsReady=validationCurrent&&validatedLigandErrorCount===0&&validLigands>=2&&validLigands===validatedLigandRowCount;

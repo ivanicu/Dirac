@@ -32,7 +32,9 @@ function finite(value:unknown):number|null { const number=Number(value); return 
 function words(value:string):string[] { return value.toLowerCase().match(/[a-z0-9]+/g)||[]; }
 
 export function buildProteinSearchRequest(name:string):Record<string,unknown> {
-    const tokens=words(name);
+    const normalized=name.trim().replace(/\s+/g,' ');
+    if (normalized.length>160) throw new Error('Protein search is limited to 160 characters');
+    const tokens=words(normalized);
     if (!tokens.length) throw new Error('Enter a protein name or gene symbol');
     return {
         query: { type: 'terminal',service: 'full_text',parameters: { value: tokens.join(' + ') } },
@@ -105,9 +107,9 @@ export async function fetchPdbExperimentalRecord(pdb:string):Promise<{record:Jso
 export function inspectBoundLigands(pdbText:string):BoundLigandCandidate[] {
     const excluded=new Set(['HOH','WAT','DOD','NA','CL','K','CA','MG','MN','ZN','FE','CU','CO','NI','CD','HG','BR','IOD','SO4','PO4','GOL','EDO']);
     const cofactors=new Set(['HEM','HEC','FAD','FMN','NAD','NAP','SAM','SAH','COA','PLP','TPP','ATP','ADP','AMP','ANP','ACP','GTP','GDP','GMP','GNP']);
-    const groups=new Map<string,{resname:string;chain:string;residue_number:string;atoms:number}>();
-    pdbText.split(/\r?\n/).forEach(line=>{ if (!line.startsWith('HETATM')||line.length<54) return; const resname=line.slice(17,20).trim().toUpperCase(),chain=line.slice(21,22).trim(),residue_number=line.slice(22,27).trim(),element=(line.length>=78?line.slice(76,78):line.slice(12,14)).trim().toUpperCase(); if (excluded.has(resname)||element==='H'||element==='D') return; const key=`${resname}|${chain}|${residue_number}`,row=groups.get(key)||{ resname,chain,residue_number,atoms: 0 }; row.atoms++; groups.set(key,row); });
-    return [...groups.values()].sort((a,b)=>Number(cofactors.has(a.resname))-Number(cofactors.has(b.resname))||b.atoms-a.atoms||a.resname.localeCompare(b.resname)).map(row=>({ ...row,heavy_atom_count: row.atoms,role: cofactors.has(row.resname)?'cofactor':'ligand',label: `${cofactors.has(row.resname)?'COFACTOR · ':''}${row.resname} · CHAIN ${row.chain||'—'} · RES ${row.residue_number} · ${row.atoms} HEAVY ATOMS` }));
+    const groups=new Map<string,{resname:string;chain:string;residue_number:string;atomNames:Set<string>}>();
+    pdbText.split(/\r?\n/).forEach(line=>{ if (!line.startsWith('HETATM')||line.length<54) return; const atomName=line.slice(12,16).trim().toUpperCase(),resname=line.slice(17,20).trim().toUpperCase(),chain=line.slice(21,22).trim(),residue_number=line.slice(22,27).trim(),element=(line.length>=78?line.slice(76,78):line.slice(12,14)).trim().toUpperCase(); if (excluded.has(resname)||element==='H'||element==='D'||!atomName) return; const key=`${resname}|${chain}|${residue_number}`,row=groups.get(key)||{ resname,chain,residue_number,atomNames: new Set<string>() }; row.atomNames.add(atomName); groups.set(key,row); });
+    return [...groups.values()].map(row=>({ ...row,atoms: row.atomNames.size })).sort((a,b)=>Number(cofactors.has(a.resname))-Number(cofactors.has(b.resname))||b.atoms-a.atoms||a.resname.localeCompare(b.resname)).map(({ atomNames: _atomNames,...row })=>({ ...row,heavy_atom_count: row.atoms,role: cofactors.has(row.resname)?'cofactor':'ligand',label: `${cofactors.has(row.resname)?'COFACTOR · ':''}${row.resname} · CHAIN ${row.chain||'—'} · RES ${row.residue_number} · ${row.atoms} HEAVY ATOMS` }));
 }
 
 export function receptorChainIds(pdbText:string):string[] {
@@ -118,7 +120,7 @@ function renderCandidates(document:Document,candidates:ProteinStructureCandidate
     const container=document.getElementById('protein-search-results'); if (!container) return;
     container.replaceChildren(); container.hidden=false;
     if (!candidates.length) { const empty=document.createElement('p'); empty.className='protein-search-empty'; empty.textContent='No experimental structures found. Try a gene symbol, protein family name, or upload a PDB file.'; container.append(empty); return; }
-    const loadCandidate=async(candidate:ProteinStructureCandidate,button:HTMLButtonElement)=>{ const input=document.getElementById('campaign-pdb') as HTMLInputElement|null; if (input)input.value=candidate.pdbId; button.disabled=true; const prior=button.textContent||`USE ${candidate.pdbId}`; button.textContent='LOADING…'; const loaded=await load(candidate.pdbId); if (loaded)button.textContent='LOADED ✓'; else { button.disabled=false; button.textContent=prior; } };
+    const loadCandidate=async(candidate:ProteinStructureCandidate,button:HTMLButtonElement)=>{ const input=document.getElementById('campaign-pdb') as HTMLInputElement|null; if (input)input.value=candidate.pdbId; button.disabled=true; const prior=button.textContent||`USE ${candidate.pdbId}`; button.textContent='LOADING…'; try { const loaded=await load(candidate.pdbId); if (loaded)button.textContent='LOADED ✓'; else { button.disabled=false; button.textContent=prior; } } catch { button.disabled=false; button.textContent=prior; } };
     const recommended=document.createElement('button'); recommended.type='button'; recommended.className='use-recommended-structure'; recommended.textContent=`USE RECOMMENDED STRUCTURE · ${candidates[0].pdbId}`; recommended.addEventListener('click',()=>void loadCandidate(candidates[0],recommended)); container.append(recommended);
     candidates.forEach((candidate,index)=>{
         const card=document.createElement('article'); card.className=`protein-result${index===0?' recommended':''}`;
@@ -147,5 +149,5 @@ export function bindTargetStructureControls(document:Document,options:TargetSear
         const request=++generation; button.disabled=true; button.textContent='SEARCHING…'; status.textContent=`Searching experimental PDB structures for “${name}”…`; status.setAttribute('aria-busy','true');
         try { const candidates=await searchProteinStructures(name,fetch,options.referenceSmiles?.()||'',options.similarity); if (request!==generation) return; renderCandidates(document,candidates,options.loadStructure); status.textContent=candidates.length?`${candidates.length} candidates compared · mutations, missing residues, construct coverage and co-crystal ligands included`:'No candidates found'; } catch (error) { if (request!==generation) return; renderCandidates(document,[],options.loadStructure); status.textContent=`Search unavailable · ${error instanceof Error?error.message:String(error)}`; } finally { if (request===generation) { button.disabled=false; button.textContent='FIND STRUCTURES'; status.removeAttribute('aria-busy'); } }
     };
-    button.addEventListener('click',()=>void run()); input.addEventListener('keydown',event=>{ if (event.key==='Enter') { event.preventDefault(); void run(); } }); input.addEventListener('input',()=>{ generation+=1; });
+    button.addEventListener('click',()=>void run()); input.addEventListener('keydown',event=>{ if (event.key==='Enter') { event.preventDefault(); void run(); } }); input.addEventListener('input',()=>{ generation+=1; const results=document.getElementById('protein-search-results'); results?.replaceChildren(); if (results)results.hidden=true; button.disabled=false; button.textContent='FIND STRUCTURES'; status.removeAttribute('aria-busy'); status.textContent='Search the edited protein name to compare fresh PDB candidates.'; });
 }

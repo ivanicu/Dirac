@@ -267,7 +267,9 @@ dialog.campaign-builder::backdrop{background:#000b;backdrop-filter:blur(3px)}
 .source-tabs,.ligand-actions{height:44px}.builder-actionbar button{height:44px}.builder-actionbar{min-height:66px}
 .decision-row{grid-template-columns:repeat(3,minmax(0,1fr))}.inline-policy.ligand-policy{grid-template-columns:repeat(5,minmax(0,1fr))}
 .file-button{min-width:0;display:flex;flex-direction:column;justify-content:center;gap:3px;padding:4px 7px;overflow:hidden}
-.file-button input,.source-drop input,.molecule-file input{position:static;width:100%;height:auto;opacity:1;pointer-events:auto;color:#91a9af;background:#031017;font:8px DiracMono}
+.system-picker select{height:36px}
+.file-button input,.source-drop input,.molecule-file input{position:static;width:100%;height:32px;opacity:1;pointer-events:auto;color:#91a9af;background:#031017;font:8px DiracMono}
+.ligand-actions{height:auto;min-height:76px}.ligand-actions .file-button input{min-height:32px;flex:none;box-sizing:border-box}
 .file-button input::file-selector-button,.source-drop input::file-selector-button,.molecule-file input::file-selector-button{border:1px solid #2c7485;background:#08222b;color:#6ee4f7;font:8px DiracMono;padding:5px;cursor:pointer}
 .builder-actionbar .file-button.compact{flex:0 1 185px;min-height:44px;border:1px solid #2a505b;background:#07151b;color:#8da2a8}
 .portfolio-card{margin-top:11px;border:1px solid #2a5662;background:#031016}.portfolio-card .readiness-head span{color:var(--gold)}

@@ -59,7 +59,7 @@ export async function recommendEight(rows:ReadonlyArray<AcceleratorLigandRow>,pa
 
 export function applyRecommendedSetup(document:Document,nodeCount:number):string[] {
     const values:Readonly<Record<string,string>>={
-        'assembly-select': 'deposited_asymmetric_unit','site-role-filter': 'ligand','prep-missing-atoms': 'auto_repair_report','prep-missing-residues': 'block','prep-altloc': 'highest_occupancy','prep-occupancy': 'reject_zero','prep-protonation': 'server_assign_review','prep-waters': 'remove_all','prep-cofactors': 'keep_parameter_gate','prep-metals': 'keep_parameter_gate','ligand-ph': 'enumerate_at_ph','ligand-tautomers': 'enumerate','ligand-stereo': 'enumerate_unknown','ligand-state-cutoff': '0.1','ligand-charge-policy': 'block_changes','protocol-select': 'openfe-rfe-standard-v1',
+        'assembly-select': 'deposited_asymmetric_unit','site-role-filter': 'ligand','prep-missing-atoms': 'auto_repair_report','prep-missing-residues': 'auto_repair_report','prep-altloc': 'highest_occupancy','prep-occupancy': 'reject_zero','prep-protonation': 'server_assign_review','prep-waters': 'remove_all','prep-cofactors': 'remove','prep-metals': 'remove','ligand-ph': 'enumerate_at_ph','ligand-tautomers': 'enumerate','ligand-stereo': 'enumerate_unknown','ligand-state-cutoff': '0.1','ligand-charge-policy': 'block_changes','protocol-select': 'openfe-rfe-standard-v1',
     };
     const applied:string[]=[];
     for (const [id,value] of Object.entries(values)) { const element=document.getElementById(id) as HTMLSelectElement|null; if (!element||![...element.options].some(option=>option.value===value)) continue; if (element.value!==value) { element.value=value; element.dispatchEvent(new Event('change',{ bubbles: true })); }applied.push(id); }

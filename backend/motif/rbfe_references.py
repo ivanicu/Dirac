@@ -42,6 +42,11 @@ def _canonical(document: dict) -> bytes:
                       allow_nan=False).encode()
 
 
+def _receipt_snapshot(response: dict) -> dict:
+    """Detach persisted receipt data from the mutable command response."""
+    return json.loads(json.dumps(response, allow_nan=False))
+
+
 def _sha(data: bytes | str) -> str:
     if isinstance(data, str):
         data = data.encode()
@@ -2003,7 +2008,7 @@ class PostgresRbfeReferenceResolver:
                 "prepared_scientific_ref": prepared_scientific_ref,
             })
             state.pop("pending_changed_domains", None)
-            receipt_response = dict(response)
+            receipt_response = _receipt_snapshot(response)
             receipt = {
                 "request_digest": request_digest,
                 "input_version": expected_version,
@@ -2254,6 +2259,7 @@ class PostgresRbfeReferenceResolver:
                     "Human-reviewed reference-constrained poses. This acceptance does not "
                     "constitute an FEP result or validate the pose-generation method."),
             }
+            receipt_response = _receipt_snapshot(response)
             state = dict(current["state"])
             state.update({
                 "version": output_version, "status": "poses_reviewed",
@@ -2264,7 +2270,7 @@ class PostgresRbfeReferenceResolver:
                     "request_digest": request_digest,
                     "input_version": expected_version,
                     "output_version": output_version,
-                    "response": response, "verdict": "CONFIRMED",
+                    "response": receipt_response, "verdict": "CONFIRMED",
                 },
             })
             state = _advance_scientific_state(

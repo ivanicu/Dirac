@@ -325,8 +325,8 @@
           "campaign_scientific_digest": ["campaign_id", "campaign_scientific_generation", "prepared_system_id"],
           "prepared_system_id": ["campaign_id", "campaign_scientific_generation", "campaign_scientific_digest"]
         }, "properties": {
-        "compounds": {"type": "array", "minItems": 2, "items": {"type": "object", "additionalProperties": false,
-          "required": ["id", "smiles"], "properties": {"id": {"type": "string", "minLength": 1}, "smiles": {"type": "string", "minLength": 1}}}},
+        "compounds": {"type": "array", "minItems": 2, "maxItems": 64, "items": {"type": "object", "additionalProperties": false,
+          "required": ["id", "smiles"], "properties": {"id": {"type": "string", "minLength": 1, "maxLength": 128}, "smiles": {"type": "string", "minLength": 1, "maxLength": 4096}}}},
         "extra_edge_fraction": {"type": "number", "minimum": 0, "maximum": 5},
         "minimum_similarity": {"type": "number", "minimum": 0, "maximum": 1},
         "campaign_id": {"type": "string", "format": "uuid"}, "campaign_scientific_generation": {"type": "integer", "minimum": 1},
@@ -522,7 +522,7 @@
       }},
       "output_schema": {"type": "object", "additionalProperties": false,
         "required": ["request_key", "job"], "properties": {
-          "request_key": {"type": "string", "minLength": 1, "maxLength": 256},
+          "request_key": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": ".*[^\\s\\u00A0\\u2007\\u202F\\uFEFF].*"},
           "job": {"type": "object"}
         }
       }
@@ -592,7 +592,7 @@
       "input_schema": {"type": "object", "additionalProperties": false,
         "required": ["request_key", "campaign_id", "campaign_scientific_generation", "campaign_scientific_digest", "edge_spec_ref", "edge_network_ref", "complex_transformation_ref", "solvent_transformation_ref"],
         "properties": {
-          "request_key": {"type": "string", "minLength": 1, "maxLength": 256},
+          "request_key": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": ".*[^\\s\\u00A0\\u2007\\u202F\\uFEFF].*"},
           "campaign_id": {"type": "string", "format": "uuid"},
           "campaign_scientific_generation": {"type": "integer", "minimum": 1},
           "campaign_scientific_digest": {"type": "string", "format": "sha256-digest"},
@@ -617,7 +617,7 @@
       "idempotency_policy": "none", "job_policy": "forbidden", "provenance_policy": "required",
       "input_object_kinds": ["run"], "output_object_kinds": ["run", "job"],
       "errors": ["NOT_FOUND", "DB_UNAVAILABLE", "INTERNAL"], "handler": "handlers:physics_rbfe_run_get",
-      "input_schema": {"type": "object", "additionalProperties": false, "required": ["run_ref"], "properties": {"run_ref": {"type": "object", "required": ["kind", "id"], "properties": {"kind": {"const": "run"}, "id": {"type": "string", "format": "uuid"}}}}},
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["run_ref"], "properties": {"run_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"const": "run"}, "id": {"type": "string", "format": "uuid"}}}}},
       "output_schema": {"type": "object", "required": ["ref", "state", "jobs", "edge_id", "edge_spec_ref", "edge_network_ref", "complex_transformation_ref", "solvent_transformation_ref", "campaign_scientific_ref"], "properties": {
         "edge_id": {"type": "string", "minLength": 1},
         "edge_spec_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id", "sha256"], "properties": {"kind": {"const": "artifact"}, "id": {"type": "string", "format": "uuid"}, "sha256": {"type": "string", "format": "sha256-digest"}}},
@@ -633,7 +633,7 @@
       "idempotency_policy": "content-digest", "job_policy": "forbidden", "provenance_policy": "required",
       "input_object_kinds": ["run"], "output_object_kinds": ["run", "job"],
       "errors": ["NOT_FOUND", "DB_UNAVAILABLE", "INTERNAL"], "handler": "handlers:physics_rbfe_run_cancel",
-      "input_schema": {"type": "object", "additionalProperties": false, "required": ["run_ref"], "properties": {"run_ref": {"type": "object", "required": ["kind", "id"], "properties": {"kind": {"const": "run"}, "id": {"type": "string", "format": "uuid"}}}}},
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["run_ref"], "properties": {"run_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"const": "run"}, "id": {"type": "string", "format": "uuid"}}}}},
       "output_schema": {"type": "object", "required": ["ref", "state", "jobs", "edge_id", "edge_spec_ref", "edge_network_ref", "complex_transformation_ref", "solvent_transformation_ref", "campaign_scientific_ref"], "properties": {
         "edge_id": {"type": "string", "minLength": 1},
         "edge_spec_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id", "sha256"], "properties": {"kind": {"const": "artifact"}, "id": {"type": "string", "format": "uuid"}, "sha256": {"type": "string", "format": "sha256-digest"}}},
@@ -650,7 +650,7 @@
       "invokes_methods": [{"method_id": "physics.motif.openfe_edge", "multiplicity": 6, "cost_units": 100}, {"method_id": "physics.motif.rbfe_aggregate", "multiplicity": 1, "cost_units": 10}],
       "input_object_kinds": ["run"], "output_object_kinds": ["run", "job"],
       "errors": ["INVALID_PARAMETERS", "NOT_FOUND", "DB_UNAVAILABLE", "INTERNAL"], "handler": "handlers:physics_rbfe_run_retry",
-      "input_schema": {"type": "object", "additionalProperties": false, "required": ["run_ref"], "properties": {"run_ref": {"type": "object", "required": ["kind", "id"], "properties": {"kind": {"const": "run"}, "id": {"type": "string", "format": "uuid"}}}}},
+      "input_schema": {"type": "object", "additionalProperties": false, "required": ["run_ref"], "properties": {"run_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id"], "properties": {"kind": {"const": "run"}, "id": {"type": "string", "format": "uuid"}}}}},
       "output_schema": {"type": "object", "required": ["ref", "state", "jobs", "edge_id", "edge_spec_ref", "edge_network_ref", "complex_transformation_ref", "solvent_transformation_ref", "campaign_scientific_ref"], "properties": {
         "edge_id": {"type": "string", "minLength": 1},
         "edge_spec_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "id", "sha256"], "properties": {"kind": {"const": "artifact"}, "id": {"type": "string", "format": "uuid"}, "sha256": {"type": "string", "format": "sha256-digest"}}},

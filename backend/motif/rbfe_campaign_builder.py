@@ -570,6 +570,29 @@ def _validate_forcefield_contract(contract: dict) -> dict:
     }
 
 
+def _missing_atom_names(atoms) -> list[str]:
+    return sorted(str(getattr(atom, "name", atom)) for atom in atoms)
+
+
+def _missing_residue_segment_witnesses(missing_residues, chain_lengths) -> list[dict]:
+    witnesses = []
+    for (chain, index), names in sorted(missing_residues.items()):
+        chain_index, insertion_index = int(chain), int(index)
+        modeled_count = int(chain_lengths.get(chain_index, 0))
+        terminal = insertion_index == 0 or insertion_index == modeled_count
+        witnesses.append({
+            "chain_index": chain_index,
+            "insertion_index": insertion_index,
+            "residue_names": list(names),
+            "location": ("n_terminal" if insertion_index == 0 else
+                         "c_terminal" if insertion_index == modeled_count else
+                         "internal"),
+            "modeled_residue_count": modeled_count,
+            "terminal_omission": terminal,
+        })
+    return witnesses
+
+
 def _prepare_receptor(pdb_text: str, *, ph: float, keep_waters: bool,
                       chain_ids: list[str] | None = None,
                       missing_atoms_policy: str = "auto_repair_report",
@@ -636,22 +659,29 @@ def _prepare_receptor(pdb_text: str, *, ph: float, keep_waters: bool,
             f"tautomer/protonation decisions were supplied; witnesses "
             f"{histidine_input_witnesses[:10]}")
     fixer.findMissingResidues()
-    unresolved_residues = [
-        {"chain_index": int(chain), "insertion_index": int(index),
-         "residue_names": list(names)}
-        for (chain, index), names in sorted(fixer.missingResidues.items())
-    ]
+    modeled_chain_lengths = {
+        index: len(list(chain.residues()))
+        for index, chain in enumerate(fixer.topology.chains())
+    }
+    missing_residue_segments = _missing_residue_segment_witnesses(
+        fixer.missingResidues, modeled_chain_lengths)
     if missing_residues_policy not in {"auto_repair_report", "review_each", "block"}:
         raise ValueError(
             f"unsupported receptor_policy.missing_residues={missing_residues_policy!r}")
-    if unresolved_residues:
+    internal_missing_residues = [
+        row for row in missing_residue_segments if not row["terminal_omission"]]
+    if missing_residue_segments and (
+            missing_residues_policy != "auto_repair_report" or
+            internal_missing_residues):
         raise ValueError(
             f"receptor_policy.missing_residues={missing_residues_policy} is UNVERIFIED: "
-            f"the structure has {len(unresolved_residues)} absent residue segments; "
-            "PDBFixer loop coordinates are deliberately not invented; first witnesses "
-            f"{unresolved_residues[:10]}")
+            f"the structure has {len(missing_residue_segments)} absent residue segments "
+            f"({len(internal_missing_residues)} internal); PDBFixer loop coordinates are "
+            "deliberately not invented; first witnesses "
+            f"{missing_residue_segments[:10]}")
     # Building absent loops would invent coordinates. Existing-residue heavy atoms
-    # are repairable; absent residues stay explicitly unresolved.
+    # are repairable. Under auto_repair_report, absent terminal tails are retained
+    # as explicit omissions; internal gaps remain fail-closed.
     fixer.missingResidues = {}
     fixer.findNonstandardResidues()
     nonstandard = [{"residue": str(residue), "replacement": replacement}
@@ -668,12 +698,14 @@ def _prepare_receptor(pdb_text: str, *, ph: float, keep_waters: bool,
     missing_atom_witnesses = [{
         "chain_id": str(residue.chain.id), "residue_name": str(residue.name),
         "residue_number": str(residue.id),
-        "atom_names": sorted(str(atom.name) for atom in atoms),
+        "atom_names": _missing_atom_names(atoms),
     } for residue, atoms in fixer.missingAtoms.items()]
     missing_terminal_witnesses = [{
         "chain_id": str(residue.chain.id), "residue_name": str(residue.name),
         "residue_number": str(residue.id),
-        "atom_names": sorted(str(atom.name) for atom in atoms),
+        # PDBFixer 1.12 exposes internal missing atoms as template Atom
+        # objects but terminal atoms as names. Preserve either API shape.
+        "atom_names": _missing_atom_names(atoms),
     } for residue, atoms in fixer.missingTerminals.items()]
     if missing_atoms_policy not in {"auto_repair_report", "review_each", "block"}:
         raise ValueError(
@@ -735,7 +767,8 @@ def _prepare_receptor(pdb_text: str, *, ph: float, keep_waters: bool,
         "missing_residues_policy": missing_residues_policy,
         "missing_existing_residue_atoms_added": missing_atom_count,
         "missing_terminal_atoms_added": missing_terminal_count,
-        "unresolved_missing_residues": unresolved_residues,
+        "unresolved_missing_residues": internal_missing_residues,
+        "omitted_terminal_residue_segments": missing_residue_segments,
         "nonstandard_residue_replacements": nonstandard,
         "policy_execution": {
             "missing_atoms": {
@@ -748,8 +781,13 @@ def _prepare_receptor(pdb_text: str, *, ph: float, keep_waters: bool,
             },
             "missing_residues": {
                 "verdict": "CONFIRMED", "policy": missing_residues_policy,
-                "observed_action": "not_applicable_no_missing_residue_segments",
+                "observed_action": (
+                    "terminal_absent_segments_omitted_and_reported"
+                    if missing_residue_segments else
+                    "not_applicable_no_missing_residue_segments"),
                 "unresolved_segment_count": 0,
+                "omitted_terminal_segment_count": len(missing_residue_segments),
+                "omitted_terminal_witnesses": missing_residue_segments,
             },
             "histidines": {
                 "verdict": "CONFIRMED", "policy": histidines_policy,

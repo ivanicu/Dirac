@@ -134,9 +134,9 @@ export function runJobsViewFrom(jobs: readonly RunJob[], validated: boolean): Ru
             ? 'Complex + solvent × repeats 1–3. Start only after reviewing the bound system and protocol above.'
             : 'Six physical jobs will appear here: complex/solvent × repeats 1–3.',
         rows: [],
-        executionMeta: null,
-        resultCount: null,
-        boundary: null,
+        executionMeta: validated ? 'SYSTEM QUALIFIED · 6 JOBS READY' : null,
+        resultCount: validated ? '0 · NOT STARTED' : null,
+        boundary: validated ? 'SYSTEM QUALIFIED · PHYSICAL EXECUTION NOT STARTED' : null,
     };
     const done = jobs.filter(job => job.state === 'done').length;
     const active = jobs.some(job => ['queued', 'running', 'pending'].includes(job.state));

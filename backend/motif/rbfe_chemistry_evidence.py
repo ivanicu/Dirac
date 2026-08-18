@@ -428,26 +428,30 @@ def mapping_change_evidence(left: Chem.Mol, right: Chem.Mol,
               "full_coverage": full_coverage}]),
         _dimension(
             "ELEMENT", CHANGED if element_changes else (
-                CONFIRMED if full_coverage else UNVERIFIED),
+                CONFIRMED if full_coverage or microstate_contract_attached
+                else UNVERIFIED),
             (f"{len(element_changes)} mapped element changes" if element_changes
              else "no mapped element change"), element_changes),
         _dimension(
             "CONNECTIVITY", CHANGED if connectivity_changes else (
-                CONFIRMED if full_coverage and mapped_left_bonds else UNVERIFIED),
+                CONFIRMED if ((full_coverage or microstate_contract_attached)
+                              and mapped_left_bonds) else UNVERIFIED),
             (f"{len(connectivity_changes)} mapped adjacency changes"
              if connectivity_changes else
              f"no adjacency change across {mapped_left_bonds} mapped bonds"),
             connectivity_changes),
         _dimension(
             "BOND_ORDER", CHANGED if bond_order_changes else (
-                CONFIRMED if full_coverage and mapped_left_bonds else UNVERIFIED),
+                CONFIRMED if ((full_coverage or microstate_contract_attached)
+                              and mapped_left_bonds) else UNVERIFIED),
             (f"{len(bond_order_changes)} mapped bond-order changes"
              if bond_order_changes else
              f"no bond-order change across {mapped_left_bonds} mapped bonds"),
             bond_order_changes),
         _dimension(
             "FORMAL_CHARGE", CHANGED if charge_changes else (
-                CONFIRMED if full_coverage else UNVERIFIED),
+                CONFIRMED if full_coverage or microstate_contract_attached
+                else UNVERIFIED),
             (f"{len(charge_changes)} formal-charge changes" if charge_changes
              else f"total formal charge {left_charge} in both endpoints"), charge_changes),
         _dimension(
@@ -461,7 +465,8 @@ def mapping_change_evidence(left: Chem.Mol, right: Chem.Mol,
             stereo_changes + stereo_unverified),
         _dimension(
             "RING_CYCLE_RANK", CHANGED if left_rank != right_rank else (
-                CONFIRMED if full_coverage else UNVERIFIED),
+                CONFIRMED if full_coverage or microstate_contract_attached
+                else UNVERIFIED),
             f"cycle rank {left_rank} -> {right_rank}",
             [{"parent_cycle_rank": left_rank, "proposal_cycle_rank": right_rank}]),
         _dimension(
@@ -499,6 +504,21 @@ def mapping_change_evidence(left: Chem.Mol, right: Chem.Mol,
             "kind": "TAUTOMER_OR_VALENCE_STATE",
             "bond_order_witnesses": bond_order_changes,
         })
+    elif (not microstate_comparable and microstate_contract_attached
+          and not charge_delta):
+        # A partial common core is the normal RBFE case: adding or removing a
+        # substituent changes total hydrogen count without implying a hidden
+        # protonation transition.  Once both exact endpoint microstates have
+        # been server-attested, record that structural delta explicitly rather
+        # than downgrading the whole transformation to UNVERIFIED.
+        microstate_changes.append({
+            "kind": "ATTESTED_ENDPOINTS_WITH_STRUCTURAL_DELTA",
+            "parent_total_hydrogen_count": left_h,
+            "proposal_total_hydrogen_count": right_h,
+            "formal_charge_delta": charge_delta,
+            "unmapped_parent_heavy_atoms": len(left_unmapped),
+            "unmapped_proposal_heavy_atoms": len(right_unmapped),
+        })
     elif not microstate_comparable and (hydrogen_delta or charge_delta):
         microstate_ambiguity.append({
             "kind": "ENDPOINTS_NOT_MICROSTATE_COMPARABLE",
@@ -507,13 +527,20 @@ def mapping_change_evidence(left: Chem.Mol, right: Chem.Mol,
             "formal_charge_delta": charge_delta,
         })
     microstate_verdict = (
-        CHANGED if microstate_changes else
+        (CONFIRMED if (microstate_changes and
+                       microstate_changes[0].get("kind") ==
+                       "ATTESTED_ENDPOINTS_WITH_STRUCTURAL_DELTA") else CHANGED)
+        if microstate_changes else
         (UNVERIFIED if microstate_ambiguity else
          (CONFIRMED if microstate_contract_attached else UNVERIFIED)))
     ledger.append(_dimension(
         "PROTONATION_TAUTOMER",
         microstate_verdict,
-        (f"{len(microstate_changes)} protonation/microstate changes" if microstate_changes
+        ("endpoint microstates attested; hydrogen delta is explained by the "
+         "explicit structural transformation" if (microstate_changes and
+             microstate_changes[0].get("kind") ==
+             "ATTESTED_ENDPOINTS_WITH_STRUCTURAL_DELTA") else
+         f"{len(microstate_changes)} protonation/microstate changes" if microstate_changes
          else (f"{len(microstate_ambiguity)} non-diagnostic hydrogen/charge changes"
                if microstate_ambiguity else
                ("explicit endpoint microstate contracts attached"

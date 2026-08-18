@@ -259,6 +259,60 @@ def test_rbfe_network_campaign_context_is_strictly_all_or_none():
             assert list(validator_for(schema).iter_errors(partial)), field
 
 
+def test_rbfe_network_compound_bounds_match_at_command_and_method_surfaces():
+    command_schema = _commands()["physics.rbfe-network"]["input_schema"]
+    method_schema = _method(
+        "physics.motif.rbfe_network")["input"]["schema"]
+    boundary = {"compounds": [
+        {"id": f"L{i}", "smiles": "C"} for i in range(64)
+    ]}
+    for schema in (command_schema, method_schema):
+        assert list(validator_for(schema).iter_errors(boundary)) == []
+        assert list(validator_for(schema).iter_errors({
+            "compounds": boundary["compounds"] + [{"id": "L64", "smiles": "C"}],
+        }))
+        assert list(validator_for(schema).iter_errors({
+            "compounds": [
+                {"id": "A" * 129, "smiles": "C"},
+                {"id": "B", "smiles": "CC"},
+            ],
+        }))
+        assert list(validator_for(schema).iter_errors({
+            "compounds": [
+                {"id": "A", "smiles": "C" * 4097},
+                {"id": "B", "smiles": "CC"},
+            ],
+        }))
+
+
+def test_rbfe_run_inputs_reject_blank_keys_and_extra_ref_fields():
+    commands = _commands()
+    run_start = commands["physics.rbfe-run.start"]["input_schema"]
+    run_input = {
+        "request_key": "request-1",
+        "campaign_id": UUID,
+        "campaign_scientific_generation": 1,
+        "campaign_scientific_digest": DIGEST,
+        "edge_spec_ref": _artifact_ref(),
+        "edge_network_ref": _artifact_ref(),
+        "complex_transformation_ref": _artifact_ref(),
+        "solvent_transformation_ref": _artifact_ref(),
+    }
+    assert list(validator_for(run_start).iter_errors(run_input)) == []
+    for blank in (" ", "\t\n", "\u00a0\u2007\u202f\ufeff"):
+        invalid = {**run_input, "request_key": blank}
+        assert list(validator_for(run_start).iter_errors(invalid)), repr(blank)
+
+    for command_id in (
+            "physics.rbfe-run.get", "physics.rbfe-run.cancel",
+            "physics.rbfe-run.retry"):
+        schema = commands[command_id]["input_schema"]
+        valid = {"run_ref": {"kind": "run", "id": UUID}}
+        assert list(validator_for(schema).iter_errors(valid)) == []
+        invalid = {"run_ref": {**valid["run_ref"], "sha256": DIGEST}}
+        assert list(validator_for(schema).iter_errors(invalid)), command_id
+
+
 def test_system_list_items_have_one_exact_scientific_scope_contract():
     schema = _commands()["physics.rbfe-system.list"]["output_schema"]
     item = {

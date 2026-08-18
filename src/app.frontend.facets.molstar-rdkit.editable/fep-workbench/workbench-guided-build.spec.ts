@@ -10,6 +10,9 @@ describe('guided FEP campaign entry',()=>{
         expect(new Set(rows.map(([id])=>id)).size).toBe(8);
         expect(new Set(rows.map(([,smiles])=>smiles)).size).toBe(8);
         expect(T4L_EIGHT_LIGAND_EXAMPLE.fields['ligand-stereo']).toBe('enumerate_unknown');
+        expect(T4L_EIGHT_LIGAND_EXAMPLE.fields['prep-missing-residues']).toBe('auto_repair_report');
+        expect(T4L_EIGHT_LIGAND_EXAMPLE.fields['prep-cofactors']).toBe('remove');
+        expect(T4L_EIGHT_LIGAND_EXAMPLE.fields['prep-metals']).toBe('remove');
         for (const id of ['campaign-name','campaign-question','assay-anchor','portfolio-priority','cost-cap','next-action','stop-rule']) expect(T4L_EIGHT_LIGAND_EXAMPLE.fields[id]).toBeTruthy();
     });
 

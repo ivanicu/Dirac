@@ -1,5 +1,5 @@
-import { describe, expect, it } from '@jest/globals';
-import { escapeHtml, renderPreparationPolicyDom, renderRunJobsDom, safeElement, setSafeText } from './workbench-dom';
+import { describe, expect, it, jest } from '@jest/globals';
+import { bindDialogEscape, escapeHtml, renderPreparationPolicyDom, renderRunJobsDom, safeElement, setSafeText } from './workbench-dom';
 import { runJobsViewFrom } from './workbench-view-model';
 
 class FakeElement {
@@ -16,6 +16,18 @@ class FakeElement {
 }
 
 describe('safe workbench DOM helpers without a browser DOM',()=>{
+    it('closes a dialog on cancel or Escape but ignores other keys',()=>{
+        const listeners:Record<string,(event:Event)=>void>={};
+        const dialog={ addEventListener: (name:string,handler:(event:Event)=>void)=>{ listeners[name]=handler; } };
+        let closes=0;
+        bindDialogEscape(dialog as unknown as HTMLDialogElement,()=>{ closes++; });
+        const event=(type:string,key?:string)=>({ type,key,preventDefault: jest.fn() } as unknown as Event);
+        listeners.keydown(event('keydown','Enter'));
+        listeners.keydown(event('keydown','Escape'));
+        listeners.cancel(event('cancel'));
+        expect(closes).toBe(2);
+    });
+
     it('assigns hostile content as text rather than markup',()=>{
         const target={ textContent: null as string|null };
         setSafeText(target,'<img src=x onerror=alert(1)>');

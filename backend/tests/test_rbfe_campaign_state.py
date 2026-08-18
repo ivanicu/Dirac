@@ -300,6 +300,25 @@ assert all(pose["report"]["nearest_pair_witness"]["protein_residue_name"]
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
+def test_pdbfixer_missing_atom_shapes_and_terminal_residue_omissions_are_normalized():
+    script = r'''
+import sys
+from types import SimpleNamespace
+sys.path.insert(0, "backend/motif")
+import rbfe_campaign_builder as builder
+
+assert builder._missing_atom_names(["OXT", SimpleNamespace(name="H")]) == ["H", "OXT"]
+witnesses = builder._missing_residue_segment_witnesses(
+    {(0, 0): ["MET"], (0, 162): ["ASN", "LEU"], (0, 80): ["GLY"]},
+    {0: 162},
+)
+assert [row["location"] for row in witnesses] == ["n_terminal", "internal", "c_terminal"]
+assert [row["terminal_omission"] for row in witnesses] == [True, False, True]
+'''
+    completed = _openfe_probe(script)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
 def test_server_histidine_and_terminus_assignments_have_exact_atom_witnesses_manual_is_blocked():
     script = r'''
 import sys
@@ -583,6 +602,16 @@ def test_scientific_conflicts_do_not_masquerade_as_revision_conflicts():
     }
     assert "expected_version" not in payload
     assert "actual_version" not in payload
+
+
+def test_receipt_snapshot_cannot_be_mutated_by_later_response_enrichment():
+    from motif.rbfe_references import _receipt_snapshot
+
+    response = {"poses": [{"id": "pose-1"}]}
+    receipt = _receipt_snapshot(response)
+    response["campaign_ref"] = {"id": "campaign-1"}
+    response["poses"][0]["id"] = "mutated"
+    assert receipt == {"poses": [{"id": "pose-1"}]}
 
 
 def test_import_receipt_survives_metadata_revision_but_not_science_change():

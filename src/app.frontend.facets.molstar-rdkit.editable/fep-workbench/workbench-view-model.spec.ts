@@ -63,6 +63,9 @@ describe('aggregate and RunSet history view models',()=>{
         expect(active.rows[1]).toMatchObject({ jobId: '<job-2>',state: '<unsafe>',stateClass: 'blocked' });
         expect(runJobsViewFrom([],true)).toMatchObject({
             empty: true,ready: true,emptyHeading: 'SYSTEM READY · 6 JOBS NOT STARTED',
+            executionMeta: 'SYSTEM QUALIFIED · 6 JOBS READY',
+            resultCount: '0 · NOT STARTED',
+            boundary: 'SYSTEM QUALIFIED · PHYSICAL EXECUTION NOT STARTED',
         });
     });
 

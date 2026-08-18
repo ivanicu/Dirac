@@ -13,6 +13,23 @@ export function escapeHtml(value: unknown): string {
     }[character]!));
 }
 
+export function bindDialogEscape(dialog: HTMLDialogElement | null, close: () => void): void {
+    if (!dialog) return;
+    const handler = (event: Event) => {
+        if (event.type === 'keydown' && (event as KeyboardEvent).key !== 'Escape') return;
+        event.preventDefault();
+        close();
+    };
+    dialog.addEventListener('cancel', handler);
+    dialog.addEventListener('keydown', handler);
+}
+
+export function dialogReturnTarget(documentLike: Document, fallbackId: string): HTMLElement | null {
+    const active = documentLike.activeElement;
+    return active instanceof HTMLElement && active !== documentLike.body
+        ? active : documentLike.getElementById(fallbackId);
+}
+
 type SafeAttribute = 'aria-label' | 'role' | 'title';
 type SafeElementOptions = Readonly<{
     className?: string;

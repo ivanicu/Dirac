@@ -211,8 +211,15 @@ def plan(document: dict) -> dict:
         row["id"]: Chem.MolFromSmiles(row["smiles"]).GetNumHeavyAtoms()
         for row in compounds
     }
+    # These components are embedded independently only to satisfy GUFE's
+    # explicit-molecule contract.  LoMap still applies ``max3d`` trimming when
+    # ``threed`` is false, so its default 1 A cutoff can erase a chemically
+    # obvious 2-D MCS (for example benzene -> toluene) solely because the two
+    # arbitrary conformers are not superposed.  Disable the coordinate cutoff
+    # for this topology-only planning pass; posed-system preparation performs
+    # the later receptor-frame geometry check.
     lomap = openfe.LomapAtomMapper(time=int(document.get("lomap_timeout", 20)),
-                                  threed=False)
+                                  threed=False, max3d=0)
     kartograf = openfe.KartografAtomMapper(atom_map_hydrogens=False,
                                            allow_bond_breaks=False)
     network = ligand_network_planning.generate_minimal_redundant_network(
