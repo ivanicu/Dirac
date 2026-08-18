@@ -13,16 +13,16 @@ const check=(condition,message)=>{ if (!condition)failures.push(message); };
 
 try {
     let version;
-    for (let index=0;index<100&&!version;index++) { try { version=await fetch(`http://127.0.0.1:${port}/json/version`).then(response=>response.ok?response.json():null); } catch {} if (!version)await pause(100); }
-    if (!version)throw new Error('isolated Chrome CDP unavailable');
+    for (let index=0; index<100&&!version; index++) { try { version=await fetch(`http://127.0.0.1:${port}/json/version`).then(response=>response.ok?response.json():null); } catch {} if (!version) await pause(100); }
+    if (!version) throw new Error('isolated Chrome CDP unavailable');
     const socket=new WebSocket(version.webSocketDebuggerUrl); await new Promise((resolve,reject)=>{ socket.addEventListener('open',resolve,{ once: true }); socket.addEventListener('error',reject,{ once: true }); });
     let id=0; const pending=new Map();
-    socket.addEventListener('message',event=>{ const message=JSON.parse(String(event.data)); if (message.method==='Runtime.exceptionThrown')consoleErrors.push(message.params?.exceptionDetails?.text||'uncaught exception'); if (message.method==='Log.entryAdded'&&message.params?.entry?.level==='error')consoleErrors.push(`${message.params.entry.text} · ${message.params.entry.url||'no-url'}`); const request=pending.get(message.id); if (!request)return; pending.delete(message.id); message.error?request.reject(new Error(message.error.message)):request.resolve(message.result); });
+    socket.addEventListener('message',event=>{ const message=JSON.parse(String(event.data)); if (message.method==='Runtime.exceptionThrown')consoleErrors.push(message.params?.exceptionDetails?.text||'uncaught exception'); if (message.method==='Log.entryAdded'&&message.params?.entry?.level==='error')consoleErrors.push(`${message.params.entry.text} · ${message.params.entry.url||'no-url'}`); const request=pending.get(message.id); if (!request) return; pending.delete(message.id); message.error?request.reject(new Error(message.error.message)):request.resolve(message.result); });
     const send=(method,params={},sessionId)=>new Promise((resolve,reject)=>{ const requestId=++id; pending.set(requestId,{ resolve,reject }); socket.send(JSON.stringify({ id: requestId,method,params,...(sessionId?{ sessionId }: {}) })); });
     const copyId=`adversarial-${process.pid}`.slice(0,16),target=await send('Target.createTarget',{ url: `${baseUrl}?copy=${copyId}&new=1` }),attached=await send('Target.attachToTarget',{ targetId: target.targetId,flatten: true }),session=attached.sessionId;
     await send('Runtime.enable',{},session); await send('Log.enable',{},session); await send('Page.enable',{},session);
-    const evaluateAt=async(sessionId,expression)=>{ const result=await send('Runtime.evaluate',{ expression,awaitPromise: true,returnByValue: true },sessionId); if (result.exceptionDetails)throw new Error(result.exceptionDetails.exception?.description||result.exceptionDetails.text); return result.result?.value; },evaluate=expression=>evaluateAt(session,expression);
-    const waitFor=async(expression,timeout=30000)=>{ const started=Date.now(); while (Date.now()-started<timeout) { if (await evaluate(expression))return true; await pause(100); } return false; };
+    const evaluateAt=async(sessionId,expression)=>{ const result=await send('Runtime.evaluate',{ expression,awaitPromise: true,returnByValue: true },sessionId); if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description||result.exceptionDetails.text); return result.result?.value; },evaluate=expression=>evaluateAt(session,expression);
+    const waitFor=async(expression,timeout=30000)=>{ const started=Date.now(); while (Date.now()-started<timeout) { if (await evaluate(expression)) return true; await pause(100); } return false; };
     await send('Emulation.setDeviceMetricsOverride',{ width: 1600,height: 1000,deviceScaleFactor: 1,mobile: false },session);
     check(await waitFor(`document.readyState==='complete'&&!!document.querySelector('#main-build')`),'workbench did not bootstrap');
     observed.initialBodyText=await evaluate(`document.body.innerText.length`); check(observed.initialBodyText>1000,'page rendered as blank/near-empty');
@@ -55,7 +55,7 @@ try {
         check(observed.policySummary==='ALL AXES CONFIRMED',`preparation policy is not fully confirmed: ${observed.policySummary}`);
         observed.poseRows=await evaluate(`[...document.querySelectorAll('#pose-review-list [data-pose-index]')].map(row=>({label:row.querySelector('b')?.textContent?.trim(),status:row.querySelector('em')?.textContent?.trim(),className:row.className}))`);
         const poseEvidence=[];
-        for (let poseIndex=0;poseIndex<8;poseIndex++) {
+        for (let poseIndex=0; poseIndex<8; poseIndex++) {
             await evaluate(`document.querySelector('#pose-row-${poseIndex}').scrollIntoView({block:'nearest'});document.querySelector('#pose-row-${poseIndex}').click()`);
             await pause(80);
             poseEvidence.push(await evaluate(`({label:document.querySelector('#pose-review-name').textContent.trim(),rmsd:document.querySelector('#pose-review-rmsd').textContent.trim(),coverage:document.querySelector('#pose-review-coverage').textContent.trim(),distance:document.querySelector('#pose-review-distance').textContent.trim(),pairs:document.querySelector('#pose-pair-summary').textContent.trim(),firstPair:document.querySelector('#pose-pair-witnesses article b')?.textContent?.trim()||''})`));
@@ -133,7 +133,7 @@ try {
     await evaluate(`document.querySelector('#main-build').focus()`); await send('Input.dispatchKeyEvent',{ type: 'rawKeyDown',key: ' ',code: 'Space',windowsVirtualKeyCode: 32,nativeVirtualKeyCode: 32 },session); await send('Input.dispatchKeyEvent',{ type: 'keyUp',key: ' ',code: 'Space',windowsVirtualKeyCode: 32,nativeVirtualKeyCode: 32 },session);
     check(await waitFor(`document.querySelector('#campaign-builder').open`),'keyboard Space did not reopen campaign builder');
     observed.builderModal=await evaluate(`document.querySelector('#campaign-builder').matches(':modal')`); check(observed.builderModal,'campaign builder is not a modal dialog');
-    for (let index=0;index<40;index++) { await send('Input.dispatchKeyEvent',{ type: 'keyDown',key: 'Tab',code: 'Tab' },session); await send('Input.dispatchKeyEvent',{ type: 'keyUp',key: 'Tab',code: 'Tab' },session); }
+    for (let index=0; index<40; index++) { await send('Input.dispatchKeyEvent',{ type: 'keyDown',key: 'Tab',code: 'Tab' },session); await send('Input.dispatchKeyEvent',{ type: 'keyUp',key: 'Tab',code: 'Tab' },session); }
     observed.focusEscapedModal=await evaluate(`!document.activeElement?.closest('#campaign-builder')`); check(!observed.focusEscapedModal,'Tab focus escaped the campaign builder modal');
 
     const widths=[1600,1180,960,720]; observed.layouts=[];
@@ -145,7 +145,7 @@ try {
     check(observed.tinyTargets.length===0,`${observed.tinyTargets.length} active controls are smaller than 32px`);
     const secondTarget=await send('Target.createTarget',{ url: `${baseUrl}?copy=${copyId}` }),secondAttached=await send('Target.attachToTarget',{ targetId: secondTarget.targetId,flatten: true }),secondSession=secondAttached.sessionId;
     await send('Runtime.enable',{},secondSession);
-    const secondReadyStarted=Date.now(); while (Date.now()-secondReadyStarted<30000&&!await evaluateAt(secondSession,`document.readyState==='complete'&&!!document.querySelector('#main-build')`))await pause(100);
+    const secondReadyStarted=Date.now(); while (Date.now()-secondReadyStarted<30000&&!await evaluateAt(secondSession,`document.readyState==='complete'&&!!document.querySelector('#main-build')`)) await pause(100);
     await evaluateAt(secondSession,`localStorage.setItem(${JSON.stringify(`dirac.rbfe.active_network_job_id.copy.${copyId}`)},'00000000-0000-4000-8000-000000000099')`);
     observed.crossTabInvalidated=await waitFor(`document.querySelector('#status').textContent.includes('EXTERNAL TAB UPDATED')`);
     check(observed.crossTabInvalidated,'another tab changed execution state without invalidating this tab');
