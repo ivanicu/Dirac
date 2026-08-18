@@ -1,4 +1,4 @@
-import {DiracClient,type Envelope} from '../../app/services/dirac-client';
+import { DiracClient,type Envelope } from '../../app/services/dirac-client';
 import { LigandDepiction, type AtomHighlight } from '../../chemistry.backend.perception.rdkit-wasm.editable/ligand-depiction';
 import { getRDKit } from '../../chemistry.backend.perception.rdkit-wasm.editable/semantic-chemistry-rdkit';
 import { MoleculeSketcher, type SketchedMolecule } from './molecule-sketcher';
@@ -15,7 +15,7 @@ import { benchmarkEdgeResult,benchmarkResult } from './workbench-benchmark-resul
 import { renderResultShowcase } from './workbench-result-showcase';
 import { CAMPAIGN_CACHE_KEYS, createCampaignState, draftFromCampaignEnvelope } from './workbench-campaign-state';
 import { createStoredPreparationReceipt, exactPreparationResultFrom, preparationElapsedSeconds, preparationReceiptMatchesOpenCampaign, preparationResultMatchesOpenCampaign, preparationSubmissionLockName, preparedSystemFromPreparationResult, submitPreparationExactlyOnce } from './workbench-preparation';
-import {applyGuidedExample,builderReadinessCopy,campaignEstimate,clearGuidedCampaignForm,fetchPdbExperimentalRecord,ligandIdentityCardHtml,renderBuilderGuide,renderBuilderGuideProgress,renderCampaignEstimate,renderDecisionValidation,renderLigandAuditRows,renderParentCompoundOptions,restoreParentCompoundSelection,T4L_EIGHT_LIGAND_EXAMPLE,validateDecisionInputs,type BuilderGuideStep,type BuilderUxMode} from './workbench-guided-build';
+import { applyGuidedExample,builderReadinessCopy,campaignEstimate,clearGuidedCampaignForm,fetchPdbExperimentalRecord,ligandIdentityCardHtml,renderBuilderGuide,renderBuilderGuideProgress,renderCampaignEstimate,renderDecisionValidation,renderLigandAuditRows,renderParentCompoundOptions,restoreParentCompoundSelection,T4L_EIGHT_LIGAND_EXAMPLE,validateDecisionInputs,type BuilderGuideStep,type BuilderUxMode } from './workbench-guided-build';
 import type { AtomInfo, Bond, BuilderStage, CampaignDraftV2, Compound, DepictionContract, Edge, ExecutionContract, PreparedSystemOption, RunJob, Network } from './workbench-types';
 const query = new URLSearchParams(location.search);
 const resultShowcase=query.get('showcase')==='results';
@@ -814,7 +814,7 @@ async function inspectPdb(pdb:string,preferredReference=''):Promise<boolean> {
     if (!/^[0-9][A-Z0-9]{3}$/.test(pdb)) { showBuilderNotice('A PDB accession has four characters and starts with a number, for example 181L. You can also upload a PDB file.'); return false; }
     const requestId=++pdbFetchGeneration,epoch=draftEpoch,button=document.getElementById('inspect-pdb') as HTMLButtonElement; button.disabled=true; button.textContent='FETCHING…'; text('receptor-preview-title',`${pdb} · RETRIEVING EXPERIMENTAL RECORD`);
     try {
-        const {record,coordinates:downloadedPdb}=await fetchPdbExperimentalRecord(pdb);
+        const { record,coordinates: downloadedPdb }=await fetchPdbExperimentalRecord(pdb);
         if (requestId!==pdbFetchGeneration||epoch!==draftEpoch||(document.getElementById('campaign-pdb') as HTMLInputElement|null)?.value.trim().toUpperCase()!==pdb) return false;
         const title=String(record.struct?.title||record.rcsb_entry_info?.structure_determination_methodology||'EXPERIMENTAL STRUCTURE'); const method=String(record.exptl?.[0]?.method||'METHOD UNREPORTED'); const resolution=record.rcsb_entry_info?.resolution_combined?.[0];
         if (!invalidateScientificState('receptor',`PDB ${pdb} loaded`)) return false;
@@ -830,15 +830,14 @@ document.getElementById('inspect-pdb')?.addEventListener('click',async()=>{
 document.getElementById('start-own-campaign')?.addEventListener('click',()=>{ clearCampaign(); builderUxMode='guided'; setBuilderGuideStep('target'); updateBuilderReadiness(); });
 document.getElementById('load-t4l-example')?.addEventListener('click',async()=>{
     const button=document.getElementById('load-t4l-example') as HTMLButtonElement;
-    clearCampaign(); if (physicalRunActive()||readPlannerReceipt()||readPreparationReceipt())return;
+    clearCampaign(); if (physicalRunActive()||readPlannerReceipt()||readPreparationReceipt()) return;
     builderUxMode='guided'; setBuilderGuideStep('target',false); button.disabled=true; const prior=button.querySelector('em')?.textContent||'LOAD EXAMPLE →'; const label=button.querySelector('em'); if (label)label.textContent='LOADING STRUCTURE + 8 COMPOUNDS…';
     applyGuidedExample(document,T4L_EIGHT_LIGAND_EXAMPLE);
     invalidateLigandValidation();
     const loaded=await inspectPdb(T4L_EIGHT_LIGAND_EXAMPLE.pdb,T4L_EIGHT_LIGAND_EXAMPLE.referenceResname);
     const checked=loaded?await validateBuilderLigands():{ rows: [],valid: 0,charged: 0 };
     button.disabled=false; if (label)label.textContent=prior;
-    if (loaded&&checked.valid===8) { const parent=document.getElementById('parent-compound-select') as HTMLSelectElement|null; if (parent)parent.value='BEN'; setBuilderGuideStep('review'); updateBuilderReadiness(checked.valid); showBuilderNotice('T4L example ready: 1 reference + 7 analogues. Review the visible setup, then start receptor + pose preparation.'); }
-    else setBuilderGuideStep(loaded?'ligands':'target');
+    if (loaded&&checked.valid===8) { const parent=document.getElementById('parent-compound-select') as HTMLSelectElement|null; if (parent)parent.value='BEN'; setBuilderGuideStep('review'); updateBuilderReadiness(checked.valid); showBuilderNotice('T4L example ready: 1 reference + 7 analogues. Review the visible setup, then start receptor + pose preparation.'); } else setBuilderGuideStep(loaded?'ligands':'target');
 });
 document.getElementById('validate-ligands')?.addEventListener('click',()=>void validateBuilderLigands());
 document.getElementById('campaign-ligands')?.addEventListener('input',()=>{ ligandImportErrors.clear(); if (executionContextAttached()||builderStage!=='inputs')invalidateScientificState('ligands','ligand series edited'); else { advanceDraftEpoch(); invalidateLigandValidation(); }updateBuilderReadiness(); });

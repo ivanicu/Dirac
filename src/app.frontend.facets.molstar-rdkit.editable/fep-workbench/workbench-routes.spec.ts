@@ -38,6 +38,6 @@ describe('FEP navigation belongs to the deployable AppShell',()=>{
         expect(markup).toContain('WHY THIS COMPUTE IS WORTH RUNNING');
         const sketcher=readFileSync(resolve(appRoot,'fep-workbench/molecule-sketcher.ts'),'utf8');
         expect(sketcher).toContain('START A BLANK MOLECULE');
-        expect(sketcher).toContain("add.disabled=false");
+        expect(sketcher).toContain('add.disabled=false');
     });
 });
