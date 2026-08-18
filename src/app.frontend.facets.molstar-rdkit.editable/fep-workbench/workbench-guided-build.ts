@@ -78,7 +78,7 @@ export function restoreParentCompoundSelection(document:Document,desired:unknown
 
 export async function prepLigandsNext(document:Document,validate:()=>Promise<{rows:Array<{id:string;smiles:string}>;valid:number}>):Promise<boolean> {
     const checked=await validate();
-    if (checked.valid!==checked.rows.length||checked.valid<2)return false;
+    if (checked.valid!==checked.rows.length||checked.valid<2) return false;
     const select=document.getElementById('parent-compound-select') as HTMLSelectElement|null;
     if (select&&!select.value)select.value=checked.rows[0].id;
     return !!select?.value;
