@@ -15,7 +15,7 @@ import { benchmarkEdgeResult,benchmarkResult } from './workbench-benchmark-resul
 import { renderResultShowcase } from './workbench-result-showcase';
 import { CAMPAIGN_CACHE_KEYS, createCampaignState, draftFromCampaignEnvelope } from './workbench-campaign-state';
 import { createStoredPreparationReceipt, exactPreparationResultFrom, preparationElapsedSeconds, preparationReceiptMatchesOpenCampaign, preparationResultMatchesOpenCampaign, preparationSubmissionLockName, preparedSystemFromPreparationResult, submitPreparationExactlyOnce } from './workbench-preparation';
-import { applyGuidedExample,builderReadinessCopy,campaignEstimate,clearGuidedCampaignForm,ligandIdentityCardHtml,renderBuilderGuide,renderBuilderGuideProgress,renderCampaignEstimate,renderDecisionValidation,renderLigandAuditRows,renderParentCompoundOptions,restoreParentCompoundSelection,T4L_EIGHT_LIGAND_EXAMPLE,validateDecisionInputs,type BuilderGuideStep,type BuilderUxMode } from './workbench-guided-build';
+import { applyGuidedExample,builderReadinessCopy,campaignEstimate,clearGuidedCampaignForm,ligandIdentityCardHtml,prepLigandsNext,renderBuilderGuide,renderBuilderGuideProgress,renderCampaignEstimate,renderDecisionValidation,renderLigandAuditRows,renderParentCompoundOptions,restoreParentCompoundSelection,T4L_EIGHT_LIGAND_EXAMPLE,validateDecisionInputs,type BuilderGuideStep,type BuilderUxMode } from './workbench-guided-build';
 import { bindTargetStructureControls,fetchPdbExperimentalRecord,inspectBoundLigands,receptorChainIds,type BoundLigandCandidate } from './workbench-target-search';
 import { bindCompoundWorkflow,morganSimilarity,type CompoundCandidate } from './workbench-compound-tools';
 import { applyRecommendedSetup,bindWorkflowAccelerators,duplicateCampaignInputs,workbenchUuid } from './workbench-accelerators';
@@ -637,10 +637,10 @@ function updateBuilderReadiness(validLigands=validatedLigandSignature===currentL
     const review=document.getElementById('review-inputs') as HTMLButtonElement|null;
     if (review) {
         const guidedInput=builderStage==='inputs'&&builderUxMode==='guided';
-        review.disabled=guidedInput&&builderGuideStep==='target'?!structureReady:guidedInput&&builderGuideStep==='ligands'?!parentReady:guidedInput&&builderGuideStep==='setup'?false:!ready;
+        review.disabled=guidedInput&&builderGuideStep==='target'?!structureReady:guidedInput&&builderGuideStep==='ligands'?textLigandRows().length<2:guidedInput&&builderGuideStep==='setup'?false:!ready;
     }
     renderBuilderGuideProgress(document,structureReady,parentReady,decisionReady);
-    if (review&&builderStage==='inputs')review.textContent=builderUxMode==='guided'&&builderGuideStep==='target'?'NEXT · ADD COMPOUNDS →':builderUxMode==='guided'&&builderGuideStep==='ligands'?'NEXT · CONFIRM SETUP →':builderUxMode==='guided'&&builderGuideStep==='setup'?'NEXT · REVIEW PROJECT →':builderUxMode==='guided'&&builderGuideStep==='review'&&ready?'REVIEW PROJECT SUMMARY →':ready?'REVIEW PROJECT SUMMARY →':'COMPLETE REQUIRED INPUTS';
+    if (review&&builderStage==='inputs')review.textContent=builderUxMode==='guided'&&builderGuideStep==='target'?'NEXT · ADD COMPOUNDS →':builderUxMode==='guided'&&builderGuideStep==='ligands'?(parentReady?'NEXT · CONFIRM SETUP →':'VALIDATE & SUGGEST REFERENCE →'):builderUxMode==='guided'&&builderGuideStep==='setup'?'NEXT · REVIEW PROJECT →':builderUxMode==='guided'&&builderGuideStep==='review'&&ready?'REVIEW PROJECT SUMMARY →':ready?'REVIEW PROJECT SUMMARY →':'COMPLETE REQUIRED INPUTS';
     const readinessCopy=builderReadinessCopy(builderStage,ready,receptorInputReady,!!reference,allLigandsReady,parentReady,validatedLigandErrorCount,decision.missing.length+decision.invalid.length); text('draft-readiness',readinessCopy.draft); text('builder-next-label',readinessCopy.next);
     text('proposed-system-title',`${receptorSourceLabel} · ${validLigands} LIGANDS · ${validLigands>=2?'REFERENCE ALIGNMENT SELECTED':'NOT PLANNED'}`); text('campaign-state-label',validLigands||receptorInputReady?'DRAFT':'EMPTY');
     renderCampaignEstimate(document,estimate);
@@ -700,7 +700,7 @@ function invalidateScientificState(scope:string,reason:string):boolean {
     if (scope==='receptor') { receptorInputReady=false; receptorPdbText=''; boundLigands=[]; populateBoundLigands(); }
     currentScientificInputs=null; copyStorage.remove(plannerOutputReceiptKey);
     detachExecutionContext(); resetBuilderProgress(); text('execution-meta','NO CURRENT-CAMPAIGN RUN DATA'); text('result-count','0 · NONE'); text('run-boundary','PLAN ONLY · INPUTS CHANGED');
-    updateBuilderReadiness(); showBuilderNotice(`Downstream artifacts invalidated atomically · ${reason}. Saved server artifacts remain immutable but are no longer bound to this draft.`);
+    updateBuilderReadiness(); showBuilderNotice(`Downstream artifacts detached · ${reason}. Server artifacts remain immutable and unbound.`);
     return true;
 }
 function textLigandRows():LigandInputRow[] {
@@ -777,7 +777,7 @@ function clearCampaign():void {
     if (pdb)pdb.value=''; if (ligands)ligands.value=''; if (name)name.value='UNTITLED FEP CAMPAIGN';
     clearGuidedCampaignForm(document);
     draftCampaignId=workbenchUuid(); draftExpectedVersion=0; draftCampaignStateDigest=''; draftCampaignScientificGeneration=0; draftCampaignScientificDigest=''; draftServerStatus='draft'; currentScientificInputs=null; receptorInputReady=false; receptorSourceLabel='NO RECEPTOR'; receptorPdbText=''; receptorRecord={ title: '',method: 'model',resolution: null }; boundLigands=[]; ligandImportErrors.clear(); invalidateLigandValidation(); populateBoundLigands(); resetBuilderProgress(); void campaignStateAdapter.clear();
-    text('receptor-preview-title','NO RECEPTOR SELECTED'); text('receptor-preview-detail','Enter a PDB ID or upload fixed-column PDB coordinates.'); text('ligand-valid-count','0'); text('ligand-charge-count','0'); text('ligand-count-label','0 VALID'); text('ligand-heavy-median','—'); updateBuilderReadiness(0); showBuilderNotice('Blank campaign ready. Prior offline inputs were archived locally; no old receptor, ligand, network, or transformation was reused.');
+    text('receptor-preview-title','NO RECEPTOR SELECTED'); text('receptor-preview-detail','Enter a PDB ID or upload fixed-column PDB coordinates.'); text('ligand-valid-count','0'); text('ligand-charge-count','0'); text('ligand-count-label','0 VALID'); text('ligand-heavy-median','—'); updateBuilderReadiness(0); showBuilderNotice('Blank campaign ready. Prior inputs were archived; no scientific context was reused.');
 }
 document.getElementById('main-build')?.addEventListener('click',()=>{ setMainMode('build'); setBuilderOpen(true); });
 document.getElementById('main-review')?.addEventListener('click',()=>{ setMainMode('review'); setBuilderOpen(false); renderRunJobs(); });
@@ -825,7 +825,7 @@ document.getElementById('load-t4l-example')?.addEventListener('click',async()=>{
     const loaded=await inspectPdb(T4L_EIGHT_LIGAND_EXAMPLE.pdb,T4L_EIGHT_LIGAND_EXAMPLE.referenceResname);
     const checked=loaded?await validateBuilderLigands():{ rows: [],valid: 0,charged: 0 };
     button.disabled=false; if (label)label.textContent=prior;
-    if (loaded&&checked.valid===8) { const parent=document.getElementById('parent-compound-select') as HTMLSelectElement|null; if (parent)parent.value='BEN'; setBuilderGuideStep('review'); updateBuilderReadiness(checked.valid); showBuilderNotice('T4L example ready: 1 reference + 7 analogues. Review the visible setup, then start receptor + pose preparation.'); } else setBuilderGuideStep(loaded?'ligands':'target');
+    if (loaded&&checked.valid===8) { const parent=document.getElementById('parent-compound-select') as HTMLSelectElement|null; if (parent)parent.value='BEN'; setBuilderGuideStep('review'); updateBuilderReadiness(checked.valid); showBuilderNotice('T4L ready · review setup and prepare poses.'); } else setBuilderGuideStep(loaded?'ligands':'target');
 });
 document.getElementById('validate-ligands')?.addEventListener('click',()=>void validateBuilderLigands());
 document.getElementById('campaign-ligands')?.addEventListener('input',()=>{ ligandImportErrors.clear(); if (executionContextAttached()||builderStage!=='inputs')invalidateScientificState('ligands','ligand series edited'); else { advanceDraftEpoch(); invalidateLigandValidation(); }updateBuilderReadiness(); });
@@ -1110,7 +1110,7 @@ function getPoseReviewer():PoseReviewer|null {
 document.getElementById('review-inputs')?.addEventListener('click',async()=>{
     if (builderStage==='accepted') { await createCampaignNetwork(); return; } if (builderStage==='prepared') { if (preparedCampaignSystem) { const parentId=String(currentScientificInputs?.parent_id||''); await getPoseReviewer()?.open({ ...preparedCampaignSystem,parent_id: parentId } as ReviewSystem); } return; } if (builderStage==='reviewed') { if (!window.confirm('Start the durable receptor and pose preparation job now? This prepares structures and poses; it does not start FEP simulations.')) return; await prepareCampaignSources(); return; }
     if (builderUxMode==='guided'&&builderGuideStep==='target') { setBuilderGuideStep('ligands'); updateBuilderReadiness(); return; }
-    if (builderUxMode==='guided'&&builderGuideStep==='ligands') { setBuilderGuideStep('setup'); updateBuilderReadiness(); return; }
+    if (builderUxMode==='guided'&&builderGuideStep==='ligands') { if (await prepLigandsNext(document,validateBuilderLigands))setBuilderGuideStep('setup'); updateBuilderReadiness(); return; }
     if (builderUxMode==='guided'&&builderGuideStep==='setup') { setBuilderGuideStep('review'); updateBuilderReadiness(); return; }
     const checked=await validateBuilderLigands(); if (checked.valid!==checked.rows.length||checked.valid<2) return;
     if (!selectedReferenceLigand()||!receptorPdbText||!scientificInputsFromUi(checked.rows)) { updateBuilderReadiness(checked.valid); return; }builderStage='reviewed'; reflectBuilderStage(); text('builder-next-label','INPUTS REVIEWED · NEXT ACTION CREATES A DURABLE PREPARATION JOB'); (document.getElementById('review-inputs') as HTMLButtonElement).textContent='START PREPARATION JOB →'; showBuilderNotice('Project summary accepted. The next action submits receptor + pose preparation only; no FEP simulation starts.');

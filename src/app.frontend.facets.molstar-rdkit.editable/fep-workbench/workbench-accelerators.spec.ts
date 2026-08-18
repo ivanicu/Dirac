@@ -1,5 +1,5 @@
 import { describe,expect,it,jest } from '@jest/globals';
-import { applyRecommendedSetup,bindWorkflowAccelerators,recommendEight,repairLigandSeries,setExceptionView } from './workbench-accelerators';
+import { applyDecisionBrief,applyRecommendedSetup,bindWorkflowAccelerators,recommendEight,repairLigandSeries,setExceptionView,suggestDecisionBrief } from './workbench-accelerators';
 
 describe('FEP workflow accelerators',()=>{
     it('repairs only deterministic formatting and duplicate issues',()=>{
@@ -32,5 +32,12 @@ describe('FEP workflow accelerators',()=>{
         const document={ getElementById: (id:string)=>id==='use-recommended-setup'?button:null } as unknown as Document,replaceSeries=jest.fn<(rows:Array<{id:string;smiles:string}>,context:{parentId?:string})=>Promise<void>>(async()=>undefined),applyRecommended=jest.fn();
         bindWorkflowAccelerators(document,{ locked: ()=>false,notify: jest.fn(),getRawSeries: ()=>'',getRows: ()=>[{ id: 'BEN',smiles: 'c1ccccc1' }],getParent: ()=>'BEN',replaceSeries,similarity: async()=>null,duplicateCampaign: async()=>undefined,applyRecommended });
         await recommended?.(); expect(applyRecommended).toHaveBeenCalledTimes(1); expect(replaceSeries).toHaveBeenCalledWith([{ id: 'BEN',smiles: 'c1ccccc1' }],{ parentId: 'BEN' });
+    });
+
+    it('drafts routine decision fields without inventing or overwriting assay evidence',()=>{
+        const brief=suggestDecisionBrief('181l',[{ id: 'BEN',smiles: 'c1ccccc1' },{ id: 'TOL',smiles: 'Cc1ccccc1' }],'BEN');
+        expect(brief.assayRequired).toBe(true); expect(brief.values['campaign-question']).toContain('181L'); expect(brief.values['cost-cap']).toBe('60 GPU hours'); expect(brief.values['assay-anchor']).toBeUndefined();
+        const nodes=new Map<string,any>([['campaign-name',{ value: 'UNTITLED FEP CAMPAIGN',dispatchEvent: jest.fn() }],['campaign-question',{ value: '',dispatchEvent: jest.fn() }],['cost-cap',{ value: '120 GPU hours',dispatchEvent: jest.fn() }]]),document={ getElementById: (id:string)=>nodes.get(id)||null } as unknown as Document;
+        expect(applyDecisionBrief(document,brief)).toContain('campaign-question'); expect(nodes.get('campaign-name').value).toBe('181L · 2-compound RBFE campaign'); expect(nodes.get('campaign-question').value).toContain('BEN'); expect(nodes.get('cost-cap').value).toBe('120 GPU hours');
     });
 });

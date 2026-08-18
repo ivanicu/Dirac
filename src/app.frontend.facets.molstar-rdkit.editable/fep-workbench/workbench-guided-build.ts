@@ -76,6 +76,14 @@ export function restoreParentCompoundSelection(document:Document,desired:unknown
     if (select&&[...select.options].some(option=>option.value===value))select.value=value;
 }
 
+export async function prepLigandsNext(document:Document,validate:()=>Promise<{rows:Array<{id:string;smiles:string}>;valid:number}>):Promise<boolean> {
+    const checked=await validate();
+    if (checked.valid!==checked.rows.length||checked.valid<2)return false;
+    const select=document.getElementById('parent-compound-select') as HTMLSelectElement|null;
+    if (select&&!select.value)select.value=checked.rows[0].id;
+    return !!select?.value;
+}
+
 export function ligandIdentityCardHtml(row:{id:string;sourceLine:number;error:string;depiction:string;input:string;canonical:string;charge:string;stereo:string;protonation:string;tautomer:string;outcome:string}):string {
     const escape=(value:string)=>value.replace(/[&<>"']/g,char=>({ '&': '&amp;','<': '&lt;','>': '&gt;','"': '&quot;',"'": '&#39;' })[char]!);
     const fields=[['Input SMILES',row.input],['Canonical isomeric SMILES',row.canonical],['Formal charge',row.charge],['CIP / E-Z',row.stereo],['Protonation policy',row.protonation],['Tautomer policy',row.tautomer],['Policy outcome',row.outcome]];

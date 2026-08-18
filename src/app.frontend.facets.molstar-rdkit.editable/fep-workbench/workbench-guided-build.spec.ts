@@ -1,5 +1,5 @@
 import { describe,expect,it } from '@jest/globals';
-import { campaignEstimate,parseGpuHourCap,restoreParentCompoundSelection,T4L_EIGHT_LIGAND_EXAMPLE,suggestedGuideStep,validateDecisionInputs } from './workbench-guided-build';
+import { campaignEstimate,parseGpuHourCap,prepLigandsNext,restoreParentCompoundSelection,T4L_EIGHT_LIGAND_EXAMPLE,suggestedGuideStep,validateDecisionInputs } from './workbench-guided-build';
 
 describe('guided FEP campaign entry',()=>{
     it('ships a complete, unique eight-ligand example',()=>{
@@ -49,5 +49,13 @@ describe('guided FEP campaign entry',()=>{
         const select={ value: '',options: [{ value: '' },{ value: 'BEN' }] },fakeDocument={ getElementById: ()=>select } as unknown as Document;
         restoreParentCompoundSelection(fakeDocument,'BEN'); expect(select.value).toBe('BEN');
         restoreParentCompoundSelection(fakeDocument,'MISSING'); expect(select.value).toBe('BEN');
+    });
+
+    it('turns next into validation plus a reversible first-reference suggestion',async()=>{
+        const select={ value: '',options: [{ value: '' },{ value: 'BEN' },{ value: 'TOL' }] },document={ getElementById: ()=>select } as unknown as Document;
+        await expect(prepLigandsNext(document,async()=>({ rows: [{ id: 'BEN',smiles: 'c1ccccc1' },{ id: 'TOL',smiles: 'Cc1ccccc1' }],valid: 2 }))).resolves.toBe(true);
+        expect(select.value).toBe('BEN');
+        select.value='TOL'; await prepLigandsNext(document,async()=>({ rows: [{ id: 'BEN',smiles: 'c1ccccc1' },{ id: 'TOL',smiles: 'Cc1ccccc1' }],valid: 2 })); expect(select.value).toBe('TOL');
+        await expect(prepLigandsNext(document,async()=>({ rows: [{ id: 'BAD',smiles: '?' },{ id: 'TOL',smiles: 'Cc1ccccc1' }],valid: 1 }))).resolves.toBe(false);
     });
 });

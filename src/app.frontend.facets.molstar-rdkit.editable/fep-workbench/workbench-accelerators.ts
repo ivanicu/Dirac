@@ -1,6 +1,7 @@
 export type AcceleratorLigandRow={id:string;smiles:string};
 export type SeriesRepair={rows:AcceleratorLigandRow[];fixes:string[];blockers:string[]};
 export type RecommendedSeries={rows:AcceleratorLigandRow[];parentId:string;scores:ReadonlyArray<{id:string;similarity:number|null}>};
+export type DecisionBrief={values:Readonly<Record<string,string>>;assayRequired:boolean};
 
 export function workbenchUuid():string {
     if (typeof globalThis.crypto?.randomUUID==='function') return globalThis.crypto.randomUUID();
@@ -68,15 +69,38 @@ export function applyRecommendedSetup(document:Document,nodeCount:number):string
     return applied;
 }
 
+export function suggestDecisionBrief(target:string,rows:ReadonlyArray<AcceleratorLigandRow>,parentId:string):DecisionBrief {
+    const cleanTarget=target.trim().toUpperCase()||'THIS TARGET',parent=parentId||rows[0]?.id||'THE REFERENCE',analogues=rows.filter(row=>row.id!==parent).map(row=>row.id),count=rows.length;
+    const edges=count<2?0:Math.min(count*(count-1)/2,Math.ceil(count*1.5)),hours=Math.max(60,edges*30);
+    return { assayRequired: true,values: {
+        'campaign-name': `${cleanTarget} · ${count}-compound RBFE campaign`,
+        'campaign-question': `Which ${cleanTarget} analogue should advance relative to ${parent} after balancing predicted affinity with structural risk?`,
+        'portfolio-priority': 'MEDIUM · SUPPORTING',
+        'compound-priorities': [parent?`${parent} | REFERENCE | bound-pose anchor | IN HAND`:'',...analogues.map(id=>`${id} | UNRANKED | compare against ${parent} | STATUS NEEDED`)].filter(Boolean).join('\n'),
+        'pose-hypothesis': `Preserve the bound ${parent} core and review every analogue for clashes and lost pocket contacts.`,
+        'cost-cap': `${hours} GPU hours`,
+        'next-action': 'Advance supported compounds to the nominated assay and compare them with the reference.',
+        'stop-rule': 'Stop if pose evidence, mapping chemistry, or convergence remains unresolved.',
+    } };
+}
+
+export function applyDecisionBrief(document:Document,brief:DecisionBrief):string[] {
+    const applied:string[]=[];
+    for (const [id,value] of Object.entries(brief.values)) { const element=document.getElementById(id) as HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement|null; if (!element||(element.value.trim()&&element.value!=='UNTITLED FEP CAMPAIGN')) continue; element.value=value; element.dispatchEvent(new Event('input',{ bubbles: true })); applied.push(id); }
+    return applied;
+}
+
 export function setExceptionView(document:Document,enabled:boolean):void {
     document.getElementById('campaign-builder')?.setAttribute('data-only-exceptions',String(enabled));
     const button=document.getElementById('show-only-exceptions'); if (button) { button.setAttribute('aria-pressed',String(enabled)); button.textContent=enabled?'SHOW ALL CHECKS':'SHOW ONLY EXCEPTIONS'; }
 }
 
 export function bindWorkflowAccelerators(document:Document,options:AcceleratorOptions):void {
+    document.getElementById('assay-anchor')?.setAttribute('list','assay-anchor-options');
     document.getElementById('use-recommended-setup')?.addEventListener('click',async()=>{ if (options.locked()) return options.notify('Recommended setup is locked while a physical RunSet is attached.'); const rows=options.getRows(),parent=options.getParent(); options.applyRecommended(); if (rows.length) await options.replaceSeries(rows,{ parentId: parent||rows[0].id }); options.notify('Recommended receptor, ligand-state, pose, network and protocol settings applied. Only project-specific decisions remain.'); });
     document.getElementById('fix-safe-issues')?.addEventListener('click',async()=>{ if (options.locked()) return options.notify('Series repair is locked while a physical RunSet is attached.'); const repaired=repairLigandSeries(options.getRawSeries()); if (repaired.blockers.length) return options.notify(`Safe repair stopped · ${repaired.blockers.join(' · ')}`); if (!repaired.rows.length) return options.notify('Add compounds before running safe repair.'); const parent=repaired.rows.some(row=>row.id===options.getParent())?options.getParent():repaired.rows[0].id; options.applyRecommended(); await options.replaceSeries(repaired.rows,{ parentId: parent }); options.notify(repaired.fixes.length?`Fixed ${repaired.fixes.length} safe issue${repaired.fixes.length===1?'':'s'} · ${repaired.fixes.join(' · ')}`:'Series is already normalized · reference and recommended settings confirmed.'); });
     document.getElementById('select-recommended-eight')?.addEventListener('click',async event=>{ const button=event.currentTarget as HTMLButtonElement; if (options.locked()) return options.notify('Series selection is locked while a physical RunSet is attached.'); button.disabled=true; button.textContent='RANKING SERIES…'; try { const selected=await recommendEight(options.getRows(),options.getParent(),options.similarity); await options.replaceSeries(selected.rows,{ parentId: selected.parentId }); const scoreCopy=selected.scores.map(row=>`${row.id} ${row.similarity===null?'UNSCORED':row.similarity.toFixed(2)}`).join(' · '); options.notify(`Recommended ${selected.rows.length}: ${selected.parentId} reference + closest network-compatible candidates · ${scoreCopy||'reference only'}`); } catch (error) { options.notify(`Recommended-series selection refused · ${error instanceof Error?error.message:String(error)}`); } finally { button.disabled=false; button.textContent='SELECT RECOMMENDED 8'; } });
+    document.getElementById('draft-decision-brief')?.addEventListener('click',()=>{ if (options.locked()) return options.notify('Decision editing is locked while a physical RunSet is attached.'); const target=(document.getElementById('campaign-pdb') as HTMLInputElement|null)?.value||'',brief=suggestDecisionBrief(target,options.getRows(),options.getParent()),applied=applyDecisionBrief(document,brief); (document.getElementById('assay-anchor') as HTMLInputElement|null)?.focus(); options.notify(applied.length?`Drafted ${applied.length} project-decision fields from the target and series. Add the assay endpoint and units, then edit any assumption.`:'Decision brief already contains user-entered values; nothing was overwritten.'); });
     document.getElementById('show-only-exceptions')?.addEventListener('click',event=>setExceptionView(document,(event.currentTarget as HTMLButtonElement).getAttribute('aria-pressed')!=='true'));
     document.getElementById('duplicate-campaign')?.addEventListener('click',()=>void options.duplicateCampaign());
 }

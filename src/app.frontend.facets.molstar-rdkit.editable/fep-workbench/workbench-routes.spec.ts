@@ -36,6 +36,10 @@ describe('FEP navigation belongs to the deployable AppShell',()=>{
         expect(markup).toContain('aria-label="Simulation protocol"');
         expect(markup).toContain('id="pose-choice-dock" class="choice-card" data-choice="dock" data-availability="unavailable" disabled');
         expect(markup).toContain('WHY THIS COMPUTE IS WORTH RUNNING');
+        expect(markup).toContain('data-accelerator-step="ligands"');
+        expect(markup).toContain('class="ligand-alternatives"');
+        expect(markup).toContain('id="draft-decision-brief"');
+        expect(markup).toContain('id="assay-anchor-options"');
         const sketcher=readFileSync(resolve(appRoot,'fep-workbench/molecule-sketcher.ts'),'utf8');
         expect(sketcher).toContain('START A BLANK MOLECULE');
         expect(sketcher).toContain('add.disabled=false');
