@@ -30,5 +30,14 @@ describe('FEP navigation belongs to the deployable AppShell',()=>{
         expect(markup).toContain(`href="${WORKBENCH_ROUTES.fepWorkbench}"`);
         expect(markup).toContain(`href="${WORKBENCH_ROUTES.fieldWorkbench}"`);
         expect(markup).not.toContain('?mock=1');
+        expect(markup).toContain('id="parent-compound-select"');
+        expect(markup).toContain('id="campaign-state-label"');
+        expect(markup).toContain('id="setup-job-count"');
+        expect(markup).toContain('aria-label="Simulation protocol"');
+        expect(markup).toContain('id="pose-choice-dock" class="choice-card" data-choice="dock" data-availability="unavailable" disabled');
+        expect(markup).toContain('WHY THIS COMPUTE IS WORTH RUNNING');
+        const sketcher=readFileSync(resolve(appRoot,'fep-workbench/molecule-sketcher.ts'),'utf8');
+        expect(sketcher).toContain('START A BLANK MOLECULE');
+        expect(sketcher).toContain("add.disabled=false");
     });
 });
