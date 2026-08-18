@@ -8,6 +8,10 @@ export type ProteinStructureCandidate={
     relevance:number;
     score:number;
     reasons:string[];
+    mutationCount:number|null;
+    mutationLabels:string[];
+    missingResidues:number|null;
+    ligandSimilarity:number|null;
 };
 export type BoundLigandCandidate={resname:string;chain:string;residue_number:string;heavy_atom_count:number;label:string;role:'ligand'|'cofactor'};
 
@@ -17,6 +21,8 @@ type TargetSearchOptions={
     loadStructure:(pdbId:string)=>Promise<boolean>;
     locked:()=>boolean;
     notify:(message:string)=>void;
+    referenceSmiles?:()=>string;
+    similarity?:(left:string,right:string)=>Promise<number|null>;
 };
 
 const SearchEndpoint='https://search.rcsb.org/rcsbsearch/v2/query';
@@ -51,23 +57,37 @@ export function proteinStructureCandidate(hit:SearchHit,record:JsonRecord,query=
         resolution!==null?`${resolution.toFixed(2)} Å ${method.replace(' DIFFRACTION','').toLowerCase()}`:method.toLowerCase(),
         completeness!==null?`${Math.round(completeness*100)}% polymer residues modeled`:'model completeness not reported',
     ];
-    return { pdbId,title,method,resolutionAngstrom: resolution,boundComponents,completeness,relevance,score,reasons };
+    return { pdbId,title,method,resolutionAngstrom: resolution,boundComponents,completeness,relevance,score,reasons,mutationCount: null,mutationLabels: [],missingResidues: finite(info.deposited_unmodeled_polymer_monomer_count),ligandSimilarity: null };
 }
 
 export function rankProteinStructures(candidates:ProteinStructureCandidate[]):ProteinStructureCandidate[] {
     return [...candidates].sort((left,right)=>right.score-left.score||left.pdbId.localeCompare(right.pdbId));
 }
 
-export async function searchProteinStructures(name:string,fetcher:typeof fetch=fetch):Promise<ProteinStructureCandidate[]> {
+async function enrichProteinStructure(candidate:ProteinStructureCandidate,record:JsonRecord,query:string,referenceSmiles:string,similarity:((left:string,right:string)=>Promise<number|null>)|undefined,fetcher:typeof fetch):Promise<ProteinStructureCandidate> {
+    const identifiers=record.rcsb_entry_container_identifiers||{},entityIds:string[]=Array.isArray(identifiers.polymer_entity_ids)?identifiers.polymer_entity_ids.map(String):[];
+    const entities=await Promise.all(entityIds.map(async entityId=>{ try { const response=await fetcher(`https://data.rcsb.org/rest/v1/core/polymer_entity/${candidate.pdbId}/${encodeURIComponent(entityId)}`); return response.ok?await response.json() as JsonRecord:null; } catch { return null; } }));
+    const mutationCount=entities.reduce((sum,entity)=>sum+(finite(entity?.entity_poly?.rcsb_mutation_count)||0),0),mutationLabels=entities.map(entity=>String(entity?.entity_poly?.pdbx_mutation||'').trim()).filter(Boolean),targetTerms=words(query).filter(term=>term.length>2&&!['protein','kinase','domain','human','mutant','receptor'].includes(term)),entityText=entities.map(entity=>JSON.stringify([entity?.entity_src_gen,entity?.entity_src_nat])).join(' ').toLowerCase(),entityMatch=targetTerms.length?targetTerms.filter(term=>entityText.includes(term)).length/targetTerms.length:0,decoy=/\b(?:antibod(?:y|ies)|nanobod(?:y|ies)|scfv|fab)\b/i.test(candidate.title)&&entityMatch===0;
+    let ligandSimilarity:number|null=null;
+    if (referenceSmiles&&similarity&&candidate.boundComponents.length) {
+        const scores=await Promise.all(candidate.boundComponents.slice(0,8).map(async compId=>{ try { const response=await fetcher(`https://data.rcsb.org/rest/v1/core/chemcomp/${encodeURIComponent(compId)}`); if (!response.ok) return null; const payload=await response.json() as JsonRecord,smiles=String(payload.rcsb_chem_comp_descriptor?.SMILES_stereo||payload.rcsb_chem_comp_descriptor?.SMILES||''); return smiles?await similarity(referenceSmiles,smiles):null; } catch { return null; } }));
+        const finiteScores=scores.filter((score):score is number=>typeof score==='number'&&Number.isFinite(score)); ligandSimilarity=finiteScores.length?Math.max(...finiteScores):null;
+    }
+    const reasons=[...candidate.reasons]; reasons.unshift(entityMatch?`${Math.round(entityMatch*100)}% target identity in polymer entity`:decoy?'binder protein, not target identity':'polymer target identity not reported'); reasons.push(mutationCount?`${mutationCount} construct mutation${mutationCount===1?'':'s'}${mutationLabels.length?` · ${mutationLabels.join(', ')}`:''}`:'no construct mutation reported'); reasons.push(`${candidate.missingResidues??'—'} unmodeled polymer residues`); reasons.push(referenceSmiles?(ligandSimilarity===null?'co-crystal similarity unavailable':`best co-crystal similarity ${ligandSimilarity.toFixed(2)}`):'select a reference compound to score co-crystal similarity');
+    return { ...candidate,score: candidate.score+entityMatch*55-(decoy?45:0),mutationCount,mutationLabels,ligandSimilarity,reasons };
+}
+
+export async function searchProteinStructures(name:string,fetcher:typeof fetch=fetch,referenceSmiles='',similarity?:((left:string,right:string)=>Promise<number|null>)):Promise<ProteinStructureCandidate[]> {
     const response=await fetcher(SearchEndpoint,{ method: 'POST',headers: { 'content-type': 'application/json' },body: JSON.stringify(buildProteinSearchRequest(name)) });
     if (response.status===204) return [];
     if (!response.ok) throw new Error(`RCSB search returned HTTP ${response.status}`);
     const payload=await response.json() as JsonRecord,hits=(Array.isArray(payload.result_set)?payload.result_set:[]) as SearchHit[];
     const unique=[...new Map(hits.filter(hit=>/^[0-9][A-Z0-9]{3}$/i.test(String(hit.identifier||''))).map(hit=>{ const identifier=String(hit.identifier).toUpperCase(); return [identifier,{ ...hit,identifier }]; })).values()];
     const records=await Promise.all(unique.map(async hit=>{
-        try { const metadata=await fetcher(`${EntryEndpoint}${encodeURIComponent(String(hit.identifier))}`); return metadata.ok?proteinStructureCandidate(hit,await metadata.json() as JsonRecord,name):null; } catch { return null; }
+        try { const metadata=await fetcher(`${EntryEndpoint}${encodeURIComponent(String(hit.identifier))}`); if (!metadata.ok) return null; const record=await metadata.json() as JsonRecord,candidate=proteinStructureCandidate(hit,record,name); return candidate?{ candidate,record }:null; } catch { return null; }
     }));
-    return rankProteinStructures(records.filter((candidate):candidate is ProteinStructureCandidate=>candidate!==null)).slice(0,6);
+    const valid=records.filter((row):row is {candidate:ProteinStructureCandidate;record:JsonRecord}=>row!==null),ranked=rankProteinStructures(valid.map(row=>row.candidate)).slice(0,6);
+    return rankProteinStructures(await Promise.all(ranked.map(candidate=>enrichProteinStructure(candidate,valid.find(row=>row.candidate.pdbId===candidate.pdbId)!.record,name,referenceSmiles,similarity,fetcher))));
 }
 
 export async function fetchPdbExperimentalRecord(pdb:string):Promise<{record:JsonRecord;coordinates:string}> {
@@ -119,7 +139,7 @@ export function bindTargetStructureControls(document:Document,options:TargetSear
         if (options.locked()) { options.notify('Structure search is locked while a physical RunSet is attached.'); return; }
         const name=input.value.trim(); if (!words(name).length) { status.textContent='Enter a protein name or gene symbol, such as EGFR or CDK2.'; input.focus(); return; }
         const request=++generation; button.disabled=true; button.textContent='SEARCHING…'; status.textContent=`Searching experimental PDB structures for “${name}”…`; status.setAttribute('aria-busy','true');
-        try { const candidates=await searchProteinStructures(name); if (request!==generation) return; renderCandidates(document,candidates,options.loadStructure); status.textContent=candidates.length?`${candidates.length} candidates ranked · review the evidence, then choose one`:'No candidates found'; } catch (error) { if (request!==generation) return; renderCandidates(document,[],options.loadStructure); status.textContent=`Search unavailable · ${error instanceof Error?error.message:String(error)}`; } finally { if (request===generation) { button.disabled=false; button.textContent='FIND STRUCTURES'; status.removeAttribute('aria-busy'); } }
+        try { const candidates=await searchProteinStructures(name,fetch,options.referenceSmiles?.()||'',options.similarity); if (request!==generation) return; renderCandidates(document,candidates,options.loadStructure); status.textContent=candidates.length?`${candidates.length} candidates compared · mutations, missing residues, construct coverage and co-crystal ligands included`:'No candidates found'; } catch (error) { if (request!==generation) return; renderCandidates(document,[],options.loadStructure); status.textContent=`Search unavailable · ${error instanceof Error?error.message:String(error)}`; } finally { if (request===generation) { button.disabled=false; button.textContent='FIND STRUCTURES'; status.removeAttribute('aria-busy'); } }
     };
     button.addEventListener('click',()=>void run()); input.addEventListener('keydown',event=>{ if (event.key==='Enter') { event.preventDefault(); void run(); } }); input.addEventListener('input',()=>{ generation+=1; });
 }

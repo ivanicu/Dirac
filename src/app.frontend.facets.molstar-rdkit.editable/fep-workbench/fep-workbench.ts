@@ -17,6 +17,7 @@ import { CAMPAIGN_CACHE_KEYS, createCampaignState, draftFromCampaignEnvelope } f
 import { createStoredPreparationReceipt, exactPreparationResultFrom, preparationElapsedSeconds, preparationReceiptMatchesOpenCampaign, preparationResultMatchesOpenCampaign, preparationSubmissionLockName, preparedSystemFromPreparationResult, submitPreparationExactlyOnce } from './workbench-preparation';
 import { applyGuidedExample,builderReadinessCopy,campaignEstimate,clearGuidedCampaignForm,ligandIdentityCardHtml,renderBuilderGuide,renderBuilderGuideProgress,renderCampaignEstimate,renderDecisionValidation,renderLigandAuditRows,renderParentCompoundOptions,restoreParentCompoundSelection,T4L_EIGHT_LIGAND_EXAMPLE,validateDecisionInputs,type BuilderGuideStep,type BuilderUxMode } from './workbench-guided-build';
 import { bindTargetStructureControls,fetchPdbExperimentalRecord,inspectBoundLigands,type BoundLigandCandidate } from './workbench-target-search';
+import { bindCompoundWorkflow,morganSimilarity,type CompoundCandidate } from './workbench-compound-tools';
 import type { AtomInfo, Bond, BuilderStage, CampaignDraftV2, Compound, DepictionContract, Edge, ExecutionContract, PreparedSystemOption, RunJob, Network } from './workbench-types';
 const query = new URLSearchParams(location.search);
 const resultShowcase=query.get('showcase')==='results';
@@ -756,7 +757,7 @@ async function validateBuilderLigands():Promise<{rows:Array<{id:string;smiles:st
                 if (stereoState.unavailable)rowError='Browser could not produce a CIP/E-Z witness';
                 else if (stereoState.unknown&&policy.stereo==='preserve_block_unknown')rowError='Unknown stereochemistry is blocked by PRESERVE SPECIFIED · BLOCK UNKNOWN';
                 else { valid++; outcome=stereoState.unknown?'VALID · UNKNOWN STEREO WILL BE SERVER-ENUMERATED':'VALID · READY FOR SERVER MICROSTATE PREPARATION'; }
-            } catch (error) { const raw=error instanceof Error?error.message:String(error); rowError=/could not parse/i.test(raw)?`“${row.smiles}” is not valid SMILES. Chemical names are not accepted here; use a SMILES string, Draw, or Upload SDF/MOL.`:raw; }
+            } catch (error) { const raw=error instanceof Error?error.message:String(error); rowError=/could not parse/i.test(raw)?`“${row.smiles}” is not valid SMILES. Search, draw, or upload it instead.`:raw; }
         }
         if (rowError) { errors++; outcome=`ERROR · ${rowError}`; }
         rendered.push(ligandIdentityCardHtml({ id: row.id,sourceLine: row.sourceLine,error: rowError,depiction,input: row.smiles||row.raw,canonical,charge,stereo,protonation: policy.protonation,tautomer: policy.tautomer,outcome }));
@@ -766,8 +767,20 @@ async function validateBuilderLigands():Promise<{rows:Array<{id:string;smiles:st
     const priorParent=(document.getElementById('parent-compound-select') as HTMLSelectElement|null)?.value||''; renderParentCompoundOptions(document,errors?[]:inputRows.map(row=>row.id),priorParent);
     validatedLigandSignature=capturedSignature; validatedLigandCount=valid; validatedLigandRowCount=inputRows.length; validatedLigandErrorCount=errors; text('ligand-valid-count',String(valid)); text('ligand-charge-count',String(charged)); text('ligand-count-label',errors?`${errors} ERROR${errors===1?'':'S'}`:`${valid} VALID`); heavy.sort((a,b)=>a-b); text('ligand-heavy-median',heavy.length?String(heavy[Math.floor(heavy.length/2)]):'—');
     updateBuilderReadiness(valid);
-    showBuilderNotice(errors===0&&valid===inputRows.length&&valid>=2?`${valid} complete ligand identities are browser-audited. Server protonation/tautomer work remains explicitly unverified until preparation.`:`${errors} explicit ligand row/policy error${errors===1?'':'s'} · review is blocked until every non-empty row is VALID.`);
+    showBuilderNotice(errors===0&&valid===inputRows.length&&valid>=2?`${valid} ligand identities validated; preparation will resolve microstates.`:`${errors} ligand error${errors===1?'':'s'} · fix every row before review.`);
     return { rows: inputRows.map(({ id,smiles })=>({ id,smiles })),valid,charged };
+}
+async function appendResolvedCompound(candidate:CompoundCandidate):Promise<void> {
+    if (!invalidateScientificState('ligands',`${candidate.sourceId} added`)) throw new Error('campaign locked');
+    const textarea=document.getElementById('campaign-ligands') as HTMLTextAreaElement|null; if (!textarea) throw new Error('editor unavailable');
+    const used=new Set(textLigandRows().map(row=>row.id)),base=candidate.id; let id=base,suffix=2; while (used.has(id))id=`${base}-${suffix++}`;
+    textarea.value=[textarea.value.trim(),`${id}  ${candidate.smiles}`].filter(Boolean).join('\n'); invalidateLigandValidation(); await validateBuilderLigands(); showBuilderNotice(`${id} added from ${candidate.sourceId}; confirm its identity below.`);
+}
+async function replaceImportedSeries(rows:Array<{id:string;smiles:string}>,context:{parentId?:string}):Promise<void> {
+    if (!rows.length) throw new Error('empty'); if (!invalidateScientificState('ligands','series import')) throw new Error('locked');
+    const textarea=document.getElementById('campaign-ligands') as HTMLTextAreaElement|null; if (!textarea) throw new Error('ligand editor is unavailable'); textarea.value=rows.map(row=>`${row.id}  ${row.smiles}`).join('\n');
+    invalidateLigandValidation(); const checked=await validateBuilderLigands(); if (checked.valid!==rows.length) throw new Error(`${rows.length-checked.valid} structures need correction`);
+    if (context.parentId) { restoreParentCompoundSelection(document,context.parentId); document.getElementById('parent-compound-select')?.dispatchEvent(new Event('change')); } updateBuilderReadiness(checked.valid);
 }
 function clearCampaign():void {
     if (physicalRunActive()) { showBuilderNotice(`Campaign clear refused while RunSet ${activeRunId||'creation receipt'} may be creating or physically active. No browser state or durable receipt was removed.`); return; }
@@ -810,7 +823,8 @@ async function inspectPdb(pdb:string,preferredReference=''):Promise<boolean> {
         const reference=selectedReferenceLigand(); text('pose-reference-state',reference?.label||'NO REFERENCE · ALIGNMENT UNAVAILABLE'); text('receptor-preview-title',`${pdb} · ${title}`); text('receptor-preview-detail',`${method}${Number.isFinite(resolution)?` · ${Number(resolution).toFixed(2)} Å`:''} · ${boundLigands.length} bound organic candidate${boundLigands.length===1?'':'s'} found`); updateBuilderReadiness(); showBuilderNotice(reference?`${pdb} loaded · ${reference.resname} selected as the drug-like bound reference · verify identity before preparation.`:`${pdb} coordinates loaded. Choose the bound ligand that corresponds to your reference compound.`); return true;
     } catch { if (requestId!==pdbFetchGeneration||epoch!==draftEpoch) return false; text('receptor-preview-title',`${pdb} · STRUCTURE NOT FOUND`); text('receptor-preview-detail',receptorPdbText?'Existing receptor was preserved; the failed response was not applied.':'No structure was loaded. Check the PDB accession at RCSB, or upload a PDB file.'); updateBuilderReadiness(); showBuilderNotice(`RCSB could not load ${pdb}. Check the accession or upload the structure file.`); return false; } finally { if (requestId===pdbFetchGeneration) { button.disabled=false; button.textContent='FETCH & INSPECT'; } }
 }
-bindTargetStructureControls(document,{ loadStructure: pdb=>inspectPdb(pdb),locked: runContextLocked,notify: showBuilderNotice });
+bindTargetStructureControls(document,{ loadStructure: pdb=>inspectPdb(pdb),locked: runContextLocked,notify: showBuilderNotice,referenceSmiles: ()=>{ const parent=(document.getElementById('parent-compound-select') as HTMLSelectElement|null)?.value||''; return textLigandRows().find(row=>row.id===parent)?.smiles||''; },similarity: morganSimilarity });
+bindCompoundWorkflow(document,{ locked: runContextLocked,notify: showBuilderNotice,getRows: ()=>textLigandRows().map(({ id,smiles })=>({ id,smiles })),getParent: ()=>(document.getElementById('parent-compound-select') as HTMLSelectElement|null)?.value||'',appendLigand: appendResolvedCompound,replaceSeries: replaceImportedSeries });
 document.getElementById('inspect-pdb')?.addEventListener('click',async()=>{
     const pdb=(document.getElementById('campaign-pdb') as HTMLInputElement|null)?.value.trim().toUpperCase()||'';
     await inspectPdb(pdb);

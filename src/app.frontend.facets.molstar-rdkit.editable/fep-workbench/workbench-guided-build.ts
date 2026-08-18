@@ -64,7 +64,7 @@ export function renderDecisionValidation(document:Document,decision:DecisionVali
 export function renderParentCompoundOptions(document:Document,ids:ReadonlyArray<string>,prior=''):void {
     const select=document.getElementById('parent-compound-select') as HTMLSelectElement|null; if (!select) return;
     const escape=(value:string)=>value.replace(/[&<>"']/g,char=>({ '&': '&amp;','<': '&lt;','>': '&gt;','"': '&quot;',"'": '&#39;' })[char]!);
-    select.disabled=ids.length<2; select.innerHTML=ids.length?'<option value="">CHOOSE THE REFERENCE COMPOUND…</option>'+ids.map(id=>`<option value="${escape(id)}">${escape(id)}</option>`).join(''):'<option value="">FIX AND REVALIDATE THE SERIES</option>'; if (ids.includes(prior))select.value=prior;
+    select.disabled=!ids.length; select.innerHTML=ids.length?'<option value="">CHOOSE THE REFERENCE COMPOUND…</option>'+ids.map(id=>`<option value="${escape(id)}">${escape(id)}</option>`).join(''):'<option value="">FIX AND REVALIDATE THE SERIES</option>'; if (ids.includes(prior))select.value=prior;
 }
 
 export function renderLigandAuditRows(document:Document,markup:string):void {
