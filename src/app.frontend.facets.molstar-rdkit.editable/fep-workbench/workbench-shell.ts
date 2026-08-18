@@ -38,6 +38,38 @@ export function workbenchShellMarkup(): string {
       <div class="prototype-boundary" id="campaign-builder-boundary"><i></i><span><b>NETWORK PLANNER CONNECTED</b><small>PHYSICAL RUNS REMAIN GATED</small></span></div>
     </header>
     <div class="builder-body">
+      <section id="builder-welcome" class="builder-welcome" aria-labelledby="builder-welcome-title">
+        <div class="builder-welcome-copy">
+          <small>START HERE</small>
+          <h2 id="builder-welcome-title">WHAT DO YOU WANT TO DESIGN?</h2>
+          <p>Open a complete example immediately, or bring your own target and compound series. Dirac supplies safe defaults and asks only for decisions it cannot make for you.</p>
+        </div>
+        <div class="builder-start-options">
+          <button id="load-t4l-example" class="builder-start-card primary">
+            <span><small>READY-MADE PROJECT</small><b>T4L · 8-LIGAND FEP EXAMPLE</b></span>
+            <p>Loads 181L, the crystallographic benzene parent, eight analogues, recommended preparation settings and a complete decision brief.</p>
+            <em>LOAD EXAMPLE →</em>
+          </button>
+          <button id="start-own-campaign" class="builder-start-card">
+            <span><small>NEW DESIGN</small><b>USE MY TARGET + COMPOUNDS</b></span>
+            <p>Start with a PDB structure or upload, then paste, draw or import the molecules you want to compare.</p>
+            <em>START WITH TARGET →</em>
+          </button>
+        </div>
+        <div class="builder-how-it-works" aria-label="Campaign workflow">
+          <span><i>1</i><b>Choose target</b><small>Structure + measured parent</small></span>
+          <span><i>2</i><b>Add compounds</b><small>Paste, draw or upload</small></span>
+          <span><i>3</i><b>Confirm setup</b><small>Recommended defaults included</small></span>
+          <span><i>4</i><b>Review &amp; build</b><small>Inspect before any run</small></span>
+        </div>
+      </section>
+      <nav id="builder-guide" class="builder-guide" aria-label="New FEP campaign steps" hidden>
+        <button data-guide-step="target"><i>1</i><span><b>TARGET</b><small>Structure + parent</small></span></button>
+        <button data-guide-step="ligands"><i>2</i><span><b>COMPOUNDS</b><small>Your design series</small></span></button>
+        <button data-guide-step="setup"><i>3</i><span><b>SETUP</b><small>Pose + protocol</small></span></button>
+        <button data-guide-step="review"><i>4</i><span><b>REVIEW</b><small>Decision + build</small></span></button>
+        <button id="toggle-all-controls" class="builder-guide-all" aria-pressed="false">SHOW ALL CONTROLS</button>
+      </nav>
       <main class="builder-inputs">
         <div class="zone-heading"><span><small>YOU CONTROL THESE</small><b>INPUTS &amp; SCIENTIFIC DECISIONS</b></span><em>EDITABLE</em></div>
         <div class="builder-grid">

@@ -1,4 +1,4 @@
-import { DiracClient, type Envelope } from '../../app/services/dirac-client';
+import {DiracClient,type Envelope} from '../../app/services/dirac-client';
 import { LigandDepiction, type AtomHighlight } from '../../chemistry.backend.perception.rdkit-wasm.editable/ligand-depiction';
 import { getRDKit } from '../../chemistry.backend.perception.rdkit-wasm.editable/semantic-chemistry-rdkit';
 import { MoleculeSketcher, type SketchedMolecule } from './molecule-sketcher';
@@ -15,9 +15,8 @@ import { benchmarkEdgeResult,benchmarkResult } from './workbench-benchmark-resul
 import { renderResultShowcase } from './workbench-result-showcase';
 import { CAMPAIGN_CACHE_KEYS, createCampaignState, draftFromCampaignEnvelope } from './workbench-campaign-state';
 import { createStoredPreparationReceipt, exactPreparationResultFrom, preparationElapsedSeconds, preparationReceiptMatchesOpenCampaign, preparationResultMatchesOpenCampaign, preparationSubmissionLockName, preparedSystemFromPreparationResult, submitPreparationExactlyOnce } from './workbench-preparation';
+import {applyGuidedExample,clearGuidedCampaignForm,fetchPdbExperimentalRecord,renderBuilderGuide,renderBuilderGuideProgress,T4L_EIGHT_LIGAND_EXAMPLE,type BuilderGuideStep,type BuilderUxMode} from './workbench-guided-build';
 import type { AtomInfo, Bond, BuilderStage, CampaignDraftV2, Compound, DepictionContract, Edge, ExecutionContract, PreparedSystemOption, RunJob, Network } from './workbench-types';
-
-
 const query = new URLSearchParams(location.search);
 const resultShowcase=query.get('showcase')==='results';
 const apiBase = query.get('api') || `http://${location.hostname}:8901`;
@@ -600,6 +599,8 @@ let validatedLigandCount=0;
 let validatedLigandRowCount=0;
 let validatedLigandErrorCount=0;
 const ligandImportErrors=new Map<string,string>();
+let builderGuideStep:BuilderGuideStep='start';
+let builderUxMode:BuilderUxMode='guided';
 function reflectBuilderStage():void { campaignBuilder?.setAttribute('data-stage',builderStage); }
 function currentLigandSignature():string { return ((document.getElementById('campaign-ligands') as HTMLTextAreaElement|null)?.value||'').replace(/\r\n/g,'\n').trim(); }
 
@@ -641,9 +642,12 @@ function showBuilderNotice(message:string):void {
     notice.textContent=message; notice.classList.add('visible'); window.clearTimeout(builderNoticeTimer); const blocking=/refused|failed|conflict|unknown|receipt|preserved|unavailable|blocked|locked|mismatch|cannot|could not/i.test(message); notice.dataset.persistent=String(blocking); if (!blocking)builderNoticeTimer=window.setTimeout(()=>notice.classList.remove('visible'),4200);
 }
 function syncPlannerRecoveryControl():void { const button=document.getElementById('archive-planner-receipt') as HTMLButtonElement|null,receipt=readPlannerReceipt(); if (!button) return; button.hidden=!receipt; button.disabled=!receipt||plannerInFlight; button.textContent=receipt?.job_id?'ARCHIVE DETACHED PLANNER RECEIPT':'ARCHIVE UNKNOWN PLANNER SUBMISSION'; }
+function setBuilderGuideStep(step:BuilderGuideStep,focus=true):void {
+    builderGuideStep=step; renderBuilderGuide(document,campaignBuilder,step,builderUxMode,focus);
+}
 function setBuilderOpen(open:boolean):void {
     if (!campaignBuilder) return;
-    if (open) { builderReturnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null; if (!campaignBuilder.open)campaignBuilder.showModal(); campaignBuilder.classList.add('open'); requestAnimationFrame(()=>(document.getElementById('campaign-name') as HTMLInputElement|null)?.focus()); } else { campaignBuilder.classList.remove('open'); if (campaignBuilder.open)campaignBuilder.close(); builderReturnFocus?.focus(); }
+    if (open) { builderReturnFocus=document.activeElement instanceof HTMLElement?document.activeElement:null; if (!campaignBuilder.open)campaignBuilder.showModal(); campaignBuilder.classList.add('open'); const blank=!receptorInputReady&&!currentLigandSignature(); setBuilderGuideStep(blank?'start':builderGuideStep==='start'?'target':builderGuideStep); updateBuilderReadiness(); } else { campaignBuilder.classList.remove('open'); if (campaignBuilder.open)campaignBuilder.close(); builderReturnFocus?.focus(); }
 }
 campaignBuilder?.addEventListener('cancel',event=>{ event.preventDefault(); setBuilderOpen(false); });
 function updateBuilderReadiness(validLigands=validatedLigandSignature===currentLigandSignature()?validatedLigandCount:0):void {
@@ -652,7 +656,13 @@ function updateBuilderReadiness(validLigands=validatedLigandSignature===currentL
     const decisionReady=missingPortfolio.length===0;
     const validationCurrent=validatedLigandSignature===currentLigandSignature(),allLigandsReady=validationCurrent&&validatedLigandErrorCount===0&&validLigands>=2&&validLigands===validatedLigandRowCount;
     const reference=selectedReferenceLigand(); const structureReady=receptorInputReady&&!!receptorPdbText&&!!reference; const ready=structureReady&&allLigandsReady&&decisionReady;
-    const review=document.getElementById('review-inputs') as HTMLButtonElement|null; if (review)review.disabled=!ready;
+    const review=document.getElementById('review-inputs') as HTMLButtonElement|null;
+    if (review) {
+        const guidedInput=builderStage==='inputs'&&builderUxMode==='guided';
+        review.disabled=guidedInput&&builderGuideStep==='target'?!structureReady:guidedInput&&builderGuideStep==='ligands'?!allLigandsReady:guidedInput&&builderGuideStep==='setup'?false:!ready;
+    }
+    renderBuilderGuideProgress(document,structureReady,allLigandsReady,decisionReady);
+    if (review&&builderStage==='inputs')review.textContent=builderUxMode==='guided'&&builderGuideStep==='target'?'NEXT · ADD COMPOUNDS →':builderUxMode==='guided'&&builderGuideStep==='ligands'?'NEXT · CONFIRM SETUP →':builderUxMode==='guided'&&builderGuideStep==='setup'?'NEXT · REVIEW PROJECT →':ready?'PREPARE RECEPTOR + POSES →':'COMPLETE REQUIRED INPUTS';
     text('draft-readiness',builderStage==='accepted'?'POSES REVIEWED · READY TO PLAN':builderStage==='prepared'?'POSE + POLICY REVIEW REQUIRED':ready?'READY FOR INPUT REVIEW':!receptorInputReady?'ADD A RECEPTOR':!reference?'CHOOSE A BOUND REFERENCE LIGAND':!allLigandsReady?(validatedLigandErrorCount?`FIX ${validatedLigandErrorCount} LIGAND ERROR${validatedLigandErrorCount===1?'':'S'}`:'VALIDATE AT LEAST 2 LIGANDS'):`ADD DECISION CONTEXT · ${missingPortfolio.length} MISSING`);
     text('builder-next-label',builderStage==='accepted'?'NEXT · PLAN OPENFE NETWORK':builderStage==='prepared'?'NEXT · REVIEW POLICY + EVERY POSE':builderStage==='reviewed'?'NEXT · PREPARE RECEPTOR + POSES':ready?'NEXT · REVIEW NEW CAMPAIGN':!receptorInputReady?'NEXT · ADD A NEW RECEPTOR':!reference?'NEXT · CHOOSE THE CRYSTALLOGRAPHIC PARENT':!allLigandsReady?(validatedLigandErrorCount?'NEXT · FIX EVERY LIGAND ERROR':'NEXT · VALIDATE AT LEAST 2 NEW MOLECULES'):'NEXT · STATE WHY THIS CHANGES A PROJECT DECISION');
     text('proposed-system-title',`${receptorSourceLabel} · ${validLigands} LIGANDS · ${validLigands>=2?'POSE STRATEGY PENDING':'NOT PLANNED'}`);
@@ -772,7 +782,9 @@ function clearCampaign():void {
     if (pending&&preparationReceiptBinding(pending).campaignScientificRef.id===draftCampaignId) { const binding=preparationReceiptBinding(pending); showBuilderNotice(`Campaign clear refused while durable preparation ${binding.jobId||binding.requestKey||'submission receipt'} is attached. Detach the browser wait if needed, then resume it to a terminal state; the submitted scientific inputs are preserved.`); return; }
     if (pending&&!archiveDetachedPreparationReceipt(pending)) { showBuilderNotice('Campaign clear refused because the preparation receipt changed ownership in another tab; no campaign state was removed.'); return; }archiveCampaignCache(readCampaignCache(),'interactive_clear_before_new_campaign'); copyStorage.remove(plannerOutputReceiptKey);
     if (!detachExecutionContext()) return; const pdb=document.getElementById('campaign-pdb') as HTMLInputElement|null,ligands=document.getElementById('campaign-ligands') as HTMLTextAreaElement|null,name=document.getElementById('campaign-name') as HTMLInputElement|null;
-    if (pdb)pdb.value=''; if (ligands)ligands.value=''; if (name)name.value='UNTITLED FEP CAMPAIGN'; draftCampaignId=workbenchUuid(); draftExpectedVersion=0; draftCampaignStateDigest=''; draftCampaignScientificGeneration=0; draftCampaignScientificDigest=''; draftServerStatus='draft'; currentScientificInputs=null; receptorInputReady=false; receptorSourceLabel='NO RECEPTOR'; receptorPdbText=''; receptorRecord={ title: '',method: 'model',resolution: null }; boundLigands=[]; ligandImportErrors.clear(); invalidateLigandValidation(); populateBoundLigands(); resetBuilderProgress(); void campaignStateAdapter.clear();
+    if (pdb)pdb.value=''; if (ligands)ligands.value=''; if (name)name.value='UNTITLED FEP CAMPAIGN';
+    clearGuidedCampaignForm(document);
+    draftCampaignId=workbenchUuid(); draftExpectedVersion=0; draftCampaignStateDigest=''; draftCampaignScientificGeneration=0; draftCampaignScientificDigest=''; draftServerStatus='draft'; currentScientificInputs=null; receptorInputReady=false; receptorSourceLabel='NO RECEPTOR'; receptorPdbText=''; receptorRecord={ title: '',method: 'model',resolution: null }; boundLigands=[]; ligandImportErrors.clear(); invalidateLigandValidation(); populateBoundLigands(); resetBuilderProgress(); void campaignStateAdapter.clear();
     text('receptor-preview-title','NO RECEPTOR SELECTED'); text('receptor-preview-detail','Enter a PDB ID or upload fixed-column PDB coordinates.'); text('ligand-valid-count','0'); text('ligand-charge-count','0'); text('ligand-count-label','0 VALID'); text('ligand-heavy-median','—'); updateBuilderReadiness(0); showBuilderNotice('Blank campaign ready. Prior offline inputs were archived locally; no old receptor, ligand, network, or transformation was reused.');
 }
 document.getElementById('main-build')?.addEventListener('click',()=>{ setMainMode('build'); setBuilderOpen(true); });
@@ -789,19 +801,43 @@ document.querySelectorAll<HTMLButtonElement>('[data-target-source]').forEach(but
     showBuilderNotice(mode==='pdb'?'Enter a PDB accession; Dirac will retrieve and inspect the experimental structure.':mode==='upload'?'Upload fixed-column PDB coordinates. mmCIF is not accepted in this release. Protein preparation remains a generated backend job, not a prerequisite.':'Reuse a versioned receptor only when it is scientifically the same system.');
 }));
 document.querySelectorAll<HTMLButtonElement>('[data-choice-group] button').forEach(button=>button.addEventListener('click',()=>selectChoice(button)));
-document.querySelectorAll<HTMLButtonElement>('[data-advanced]').forEach(button=>button.addEventListener('click',()=>showBuilderNotice(button.dataset.advanced==='receptor'?'Advanced receptor decisions: missing residues, alternate locations, waters, cofactors, metals, termini, histidines, protonation pH, and preparation release.':'Advanced ligand decisions: pH, formal-charge policy, tautomer/protonation enumeration, stereochemistry, and state-population cutoff.')));
-document.getElementById('inspect-pdb')?.addEventListener('click',async()=>{
-    if (runContextLocked()) { showBuilderNotice(`Receptor fetch refused while RunSet ${activeRunId||'creation receipt'} is attached.`); return; }
-    const pdb=(document.getElementById('campaign-pdb') as HTMLInputElement|null)?.value.trim().toUpperCase()||'';
-    if (!/^[0-9][A-Z0-9]{3}$/.test(pdb)) { showBuilderNotice('A PDB accession starts with a digit and contains four alphanumeric characters. Upload PDB coordinates for private or unpublished structures.'); return; }
+document.querySelectorAll<HTMLButtonElement>('[data-advanced]').forEach(button=>{
+    button.setAttribute('aria-expanded','false');
+    button.addEventListener('click',()=>{ const expanded=button.getAttribute('aria-expanded')==='true'; button.setAttribute('aria-expanded',String(!expanded)); const icon=button.querySelector('span'); if (icon)icon.textContent=expanded?'＋':'−'; });
+});
+document.querySelectorAll<HTMLButtonElement>('[data-guide-step]').forEach(button=>button.addEventListener('click',()=>{ setBuilderGuideStep(button.dataset.guideStep as BuilderGuideStep); updateBuilderReadiness(); }));
+document.getElementById('toggle-all-controls')?.addEventListener('click',()=>{ builderUxMode=builderUxMode==='guided'?'all':'guided'; setBuilderGuideStep(builderGuideStep,false); updateBuilderReadiness(); });
+
+async function inspectPdb(pdb:string,preferredReference=''):Promise<boolean> {
+    if (runContextLocked()) { showBuilderNotice(`Receptor fetch refused while RunSet ${activeRunId||'creation receipt'} is attached.`); return false; }
+    if (!/^[0-9][A-Z0-9]{3}$/.test(pdb)) { showBuilderNotice('Enter a four-character PDB accession, or upload a PDB file.'); return false; }
     const requestId=++pdbFetchGeneration,epoch=draftEpoch,button=document.getElementById('inspect-pdb') as HTMLButtonElement; button.disabled=true; button.textContent='FETCHING…'; text('receptor-preview-title',`${pdb} · RETRIEVING EXPERIMENTAL RECORD`);
     try {
-        const [response,coordinates]=await Promise.all([fetch(`https://data.rcsb.org/rest/v1/core/entry/${encodeURIComponent(pdb)}`),fetch(`https://files.rcsb.org/download/${encodeURIComponent(pdb)}.pdb`)]); if (!response.ok) throw new Error(`RCSB metadata returned HTTP ${response.status}`); if (!coordinates.ok) throw new Error(`RCSB coordinates returned HTTP ${coordinates.status}`); const record=await response.json() as Record<string,any>,downloadedPdb=await coordinates.text(); if (!downloadedPdb.includes('\nATOM  ')&&!downloadedPdb.startsWith('ATOM  ')) throw new Error('downloaded record contains no PDB ATOM coordinates');
-        if (requestId!==pdbFetchGeneration||epoch!==draftEpoch||(document.getElementById('campaign-pdb') as HTMLInputElement|null)?.value.trim().toUpperCase()!==pdb) return;
+        const {record,coordinates:downloadedPdb}=await fetchPdbExperimentalRecord(pdb);
+        if (requestId!==pdbFetchGeneration||epoch!==draftEpoch||(document.getElementById('campaign-pdb') as HTMLInputElement|null)?.value.trim().toUpperCase()!==pdb) return false;
         const title=String(record.struct?.title||record.rcsb_entry_info?.structure_determination_methodology||'EXPERIMENTAL STRUCTURE'); const method=String(record.exptl?.[0]?.method||'METHOD UNREPORTED'); const resolution=record.rcsb_entry_info?.resolution_combined?.[0];
-        if (!invalidateScientificState('receptor',`PDB ${pdb} loaded`)) return;
-        const normalized=method.toUpperCase(); receptorPdbText=downloadedPdb; receptorRecord={ title,method: normalized.includes('X-RAY')?'xray':normalized.includes('ELECTRON')?'cryoem':normalized.includes('NMR')?'nmr':'model',resolution: Number.isFinite(resolution)?Number(resolution):null }; receptorInputReady=true; receptorSourceLabel=pdb; resetBuilderProgress(); populateBoundLigands(); text('receptor-preview-title',`${pdb} · ${title}`); text('receptor-preview-detail',`${method}${Number.isFinite(resolution)?` · ${Number(resolution).toFixed(2)} Å`:''} · ${boundLigands.length} bound organic candidate${boundLigands.length===1?'':'s'} found`); updateBuilderReadiness(); showBuilderNotice(`${pdb} coordinates loaded. Choose the bound ligand that corresponds to Parent; Dirac will preserve that measured pose and align the Proposal core to it.`);
-    } catch (error) { if (requestId!==pdbFetchGeneration||epoch!==draftEpoch) return; text('receptor-preview-title',`${pdb} · RETRIEVAL FAILED`); text('receptor-preview-detail',receptorPdbText?'Existing receptor was preserved; the failed response was not applied.':'No receptor was accepted. Check the accession or upload raw PDB coordinates.'); updateBuilderReadiness(); showBuilderNotice(`Could not inspect ${pdb}: ${error instanceof Error?error.message:String(error)}`); } finally { if (requestId===pdbFetchGeneration) { button.disabled=false; button.textContent='FETCH & INSPECT'; } }
+        if (!invalidateScientificState('receptor',`PDB ${pdb} loaded`)) return false;
+        const normalized=method.toUpperCase(); receptorPdbText=downloadedPdb; receptorRecord={ title,method: normalized.includes('X-RAY')?'xray':normalized.includes('ELECTRON')?'cryoem':normalized.includes('NMR')?'nmr':'model',resolution: Number.isFinite(resolution)?Number(resolution):null }; receptorInputReady=true; receptorSourceLabel=pdb; resetBuilderProgress(); populateBoundLigands();
+        if (preferredReference) { const index=boundLigands.findIndex(row=>row.resname===preferredReference); const select=document.getElementById('site-select') as HTMLSelectElement|null; if (select&&index>=0)select.value=String(index); }
+        text('pose-reference-state',selectedReferenceLigand()?.label||'NO REFERENCE · ALIGNMENT UNAVAILABLE'); text('receptor-preview-title',`${pdb} · ${title}`); text('receptor-preview-detail',`${method}${Number.isFinite(resolution)?` · ${Number(resolution).toFixed(2)} Å`:''} · ${boundLigands.length} bound organic candidate${boundLigands.length===1?'':'s'} found`); updateBuilderReadiness(); showBuilderNotice(preferredReference&&selectedReferenceLigand()?`${pdb} loaded · ${preferredReference} selected as the measured parent.`:`${pdb} coordinates loaded. Choose the bound ligand that corresponds to Parent.`); return true;
+    } catch (error) { if (requestId!==pdbFetchGeneration||epoch!==draftEpoch) return false; text('receptor-preview-title',`${pdb} · RETRIEVAL FAILED`); text('receptor-preview-detail',receptorPdbText?'Existing receptor was preserved; the failed response was not applied.':'No receptor was accepted. Check the accession or upload raw PDB coordinates.'); updateBuilderReadiness(); showBuilderNotice(`Could not inspect ${pdb}: ${error instanceof Error?error.message:String(error)}`); return false; } finally { if (requestId===pdbFetchGeneration) { button.disabled=false; button.textContent='FETCH & INSPECT'; } }
+}
+document.getElementById('inspect-pdb')?.addEventListener('click',async()=>{
+    const pdb=(document.getElementById('campaign-pdb') as HTMLInputElement|null)?.value.trim().toUpperCase()||'';
+    await inspectPdb(pdb);
+});
+document.getElementById('start-own-campaign')?.addEventListener('click',()=>{ clearCampaign(); builderUxMode='guided'; setBuilderGuideStep('target'); updateBuilderReadiness(); });
+document.getElementById('load-t4l-example')?.addEventListener('click',async()=>{
+    const button=document.getElementById('load-t4l-example') as HTMLButtonElement;
+    clearCampaign(); if (physicalRunActive()||readPlannerReceipt()||readPreparationReceipt())return;
+    builderUxMode='guided'; setBuilderGuideStep('target',false); button.disabled=true; const prior=button.querySelector('em')?.textContent||'LOAD EXAMPLE →'; const label=button.querySelector('em'); if (label)label.textContent='LOADING STRUCTURE + 8 COMPOUNDS…';
+    applyGuidedExample(document,T4L_EIGHT_LIGAND_EXAMPLE);
+    invalidateLigandValidation();
+    const loaded=await inspectPdb(T4L_EIGHT_LIGAND_EXAMPLE.pdb,T4L_EIGHT_LIGAND_EXAMPLE.referenceResname);
+    const checked=loaded?await validateBuilderLigands():{ rows: [],valid: 0,charged: 0 };
+    button.disabled=false; if (label)label.textContent=prior;
+    if (loaded&&checked.valid===8) { setBuilderGuideStep('review'); updateBuilderReadiness(checked.valid); showBuilderNotice('8-ligand T4L example ready. Review setup, then prepare receptor + poses.'); }
+    else setBuilderGuideStep(loaded?'ligands':'target');
 });
 document.getElementById('validate-ligands')?.addEventListener('click',()=>void validateBuilderLigands());
 document.getElementById('campaign-ligands')?.addEventListener('input',()=>{ ligandImportErrors.clear(); if (executionContextAttached()||builderStage!=='inputs')invalidateScientificState('ligands','ligand series edited'); else { advanceDraftEpoch(); invalidateLigandValidation(); }updateBuilderReadiness(); });
@@ -1080,10 +1116,13 @@ function getPoseReviewer():PoseReviewer|null {
 }
 document.getElementById('review-inputs')?.addEventListener('click',async()=>{
     if (builderStage==='accepted') { await createCampaignNetwork(); return; } if (builderStage==='prepared') { if (preparedCampaignSystem) { const parentId=String(currentScientificInputs?.parent_id||''); await getPoseReviewer()?.open({ ...preparedCampaignSystem,parent_id: parentId } as ReviewSystem); } return; } if (builderStage==='reviewed') { await prepareCampaignSources(); return; }
+    if (builderUxMode==='guided'&&builderGuideStep==='target') { setBuilderGuideStep('ligands'); updateBuilderReadiness(); return; }
+    if (builderUxMode==='guided'&&builderGuideStep==='ligands') { setBuilderGuideStep('setup'); updateBuilderReadiness(); return; }
+    if (builderUxMode==='guided'&&builderGuideStep==='setup') { setBuilderGuideStep('review'); updateBuilderReadiness(); return; }
     const checked=await validateBuilderLigands(); if (checked.valid!==checked.rows.length||checked.valid<2) return;
-    if (!selectedReferenceLigand()||!receptorPdbText) { updateBuilderReadiness(checked.valid); return; }builderStage='reviewed'; reflectBuilderStage(); text('builder-next-label','NEXT · PREPARE RECEPTOR + POSES'); (document.getElementById('review-inputs') as HTMLButtonElement).textContent='PREPARE RECEPTOR + POSES →';
+    if (!selectedReferenceLigand()||!receptorPdbText) { updateBuilderReadiness(checked.valid); return; }builderStage='reviewed'; reflectBuilderStage(); text('builder-next-label','PREPARING VERSIONED RECEPTOR + POSES'); (document.getElementById('review-inputs') as HTMLButtonElement).textContent='PREPARING RECEPTOR + POSES…';
     const boundary=document.querySelector('.prototype-boundary b'); if (boundary)boundary.textContent='PREPARATION ENGINE CONNECTED'; const boundaryDetail=document.querySelector('.prototype-boundary small'); if (boundaryDetail)boundaryDetail.textContent='RAW INPUTS · SERVER-BUILT SCIENCE · PHYSICAL RUNS GATED';
-    showBuilderNotice(`Review: ${receptorSourceLabel} · reference ${selectedReferenceLigand()!.resname} · Parent ${(checked.rows.find(row=>/^parent(?:-|$)/i.test(row.id))||checked.rows[0]).id} · ${checked.rows.length-1} analogue${checked.rows.length===2?'':'s'}. Next creates versioned receptor and pose hypotheses; no FEP job starts.`);
+    await prepareCampaignSources();
 });
 function showBlankCampaignShell():void {
     networkWorkspaceVisible=false;
