@@ -174,15 +174,3 @@ export function clearGuidedCampaignForm(document:Document):void {
     for (const id of ['campaign-question','assay-anchor','selectivity-context','adme-context','compound-priorities','pose-hypothesis','cost-cap','next-action','stop-rule']) { const element=document.getElementById(id) as HTMLInputElement|HTMLTextAreaElement|null; if (element)element.value=''; }
     for (const id of ['synthesis-status','portfolio-priority']) { const element=document.getElementById(id) as HTMLSelectElement|null; if (element)element.value=''; }
 }
-
-export async function fetchPdbExperimentalRecord(pdb:string):Promise<{record:Record<string,any>;coordinates:string}> {
-    const [metadata,coordinates]=await Promise.all([
-        fetch(`https://data.rcsb.org/rest/v1/core/entry/${encodeURIComponent(pdb)}`),
-        fetch(`https://files.rcsb.org/download/${encodeURIComponent(pdb)}.pdb`),
-    ]);
-    if (!metadata.ok) throw new Error(`RCSB metadata returned HTTP ${metadata.status}`);
-    if (!coordinates.ok) throw new Error(`RCSB coordinates returned HTTP ${coordinates.status}`);
-    const record=await metadata.json() as Record<string,any>,pdbText=await coordinates.text();
-    if (!pdbText.includes('\nATOM  ')&&!pdbText.startsWith('ATOM  ')) throw new Error('downloaded record contains no PDB ATOM coordinates');
-    return { record,coordinates: pdbText };
-}

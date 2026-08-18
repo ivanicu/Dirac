@@ -15,7 +15,8 @@ import { benchmarkEdgeResult,benchmarkResult } from './workbench-benchmark-resul
 import { renderResultShowcase } from './workbench-result-showcase';
 import { CAMPAIGN_CACHE_KEYS, createCampaignState, draftFromCampaignEnvelope } from './workbench-campaign-state';
 import { createStoredPreparationReceipt, exactPreparationResultFrom, preparationElapsedSeconds, preparationReceiptMatchesOpenCampaign, preparationResultMatchesOpenCampaign, preparationSubmissionLockName, preparedSystemFromPreparationResult, submitPreparationExactlyOnce } from './workbench-preparation';
-import { applyGuidedExample,builderReadinessCopy,campaignEstimate,clearGuidedCampaignForm,fetchPdbExperimentalRecord,ligandIdentityCardHtml,renderBuilderGuide,renderBuilderGuideProgress,renderCampaignEstimate,renderDecisionValidation,renderLigandAuditRows,renderParentCompoundOptions,restoreParentCompoundSelection,T4L_EIGHT_LIGAND_EXAMPLE,validateDecisionInputs,type BuilderGuideStep,type BuilderUxMode } from './workbench-guided-build';
+import { applyGuidedExample,builderReadinessCopy,campaignEstimate,clearGuidedCampaignForm,ligandIdentityCardHtml,renderBuilderGuide,renderBuilderGuideProgress,renderCampaignEstimate,renderDecisionValidation,renderLigandAuditRows,renderParentCompoundOptions,restoreParentCompoundSelection,T4L_EIGHT_LIGAND_EXAMPLE,validateDecisionInputs,type BuilderGuideStep,type BuilderUxMode } from './workbench-guided-build';
+import { bindTargetStructureControls,fetchPdbExperimentalRecord,inspectBoundLigands,type BoundLigandCandidate } from './workbench-target-search';
 import type { AtomInfo, Bond, BuilderStage, CampaignDraftV2, Compound, DepictionContract, Edge, ExecutionContract, PreparedSystemOption, RunJob, Network } from './workbench-types';
 const query = new URLSearchParams(location.search);
 const resultShowcase=query.get('showcase')==='results';
@@ -584,7 +585,6 @@ let builderNoticeTimer=0;
 let builderReturnFocus:HTMLElement|null=null;
 let receptorInputReady=false;
 let receptorSourceLabel='NO RECEPTOR';
-type BoundLigandCandidate={resname:string;chain:string;residue_number:string;heavy_atom_count:number;label:string;role:'ligand'|'cofactor'};
 type LigandInputRow={id:string;smiles:string;sourceLine:number;raw:string;parseError?:string};
 let builderStage:BuilderStage='inputs';
 let receptorPdbText='';
@@ -604,13 +604,6 @@ let builderUxMode:BuilderUxMode='guided';
 function reflectBuilderStage():void { campaignBuilder?.setAttribute('data-stage',builderStage); }
 function currentLigandSignature():string { return ((document.getElementById('campaign-ligands') as HTMLTextAreaElement|null)?.value||'').replace(/\r\n/g,'\n').trim(); }
 
-function inspectBoundLigands(pdbText:string):BoundLigandCandidate[] {
-    const excluded=new Set(['HOH','WAT','DOD','NA','CL','K','CA','MG','MN','ZN','FE','CU','CO','NI','CD','HG','BR','IOD','SO4','PO4','GOL','EDO']);
-    const cofactors=new Set(['HEM','HEC','FAD','FMN','NAD','NAP','SAM','SAH','COA','PLP','TPP']);
-    const groups=new Map<string,{resname:string;chain:string;residue_number:string;atoms:number}>();
-    pdbText.split(/\r?\n/).forEach(line=>{ if (!line.startsWith('HETATM')||line.length<54) return; const resname=line.slice(17,20).trim().toUpperCase(),chain=line.slice(21,22).trim(),residue_number=line.slice(22,27).trim(),element=(line.length>=78?line.slice(76,78):line.slice(12,14)).trim().toUpperCase(); if (excluded.has(resname)||element==='H'||element==='D') return; const key=`${resname}|${chain}|${residue_number}`,row=groups.get(key)||{ resname,chain,residue_number,atoms: 0 }; row.atoms++; groups.set(key,row); });
-    return [...groups.values()].sort((a,b)=>Number(cofactors.has(a.resname))-Number(cofactors.has(b.resname))||b.atoms-a.atoms||a.resname.localeCompare(b.resname)).map(row=>({ ...row,heavy_atom_count: row.atoms,role: cofactors.has(row.resname)?'cofactor':'ligand',label: `${cofactors.has(row.resname)?'COFACTOR · ':''}${row.resname} · CHAIN ${row.chain||'—'} · RES ${row.residue_number} · ${row.atoms} HEAVY ATOMS` }));
-}
 function selectedReferenceLigand():BoundLigandCandidate|null {
     const value=(document.getElementById('site-select') as HTMLSelectElement|null)?.value||''; return value===''?null:boundLigands[Number(value)]||null;
 }
@@ -623,7 +616,7 @@ function populateBoundLigands():void {
     boundLigands=inspectBoundLigands(receptorPdbText); const select=document.getElementById('site-select') as HTMLSelectElement|null; if (!select) return;
     const role=(document.getElementById('site-role-filter') as HTMLSelectElement|null)?.value||'ligand';
     const visible=boundLigands.map((row,index)=>({ row,index })).filter(({ row })=>role==='all'||row.role==='ligand');
-    select.disabled=!visible.length; select.innerHTML=visible.length?'<option value="">SELECT THE BOUND CRYSTAL LIGAND…</option>'+visible.map(({ row,index },position)=>`<option value="${index}">${position===0?'START HERE · VERIFY IDENTITY · ':''}${escapeHtml(row.label)}</option>`).join(''):'<option value="">NO DRUG-LIKE BOUND LIGAND FOUND</option>';
+    select.disabled=!visible.length; select.innerHTML=visible.length?'<option value="">SELECT THE BOUND CRYSTAL LIGAND…</option>'+visible.map(({ row,index },position)=>`<option value="${index}">${position===0?'START HERE · VERIFY IDENTITY · ':''}${escapeHtml(row.label)}</option>`).join(''):'<option value="">NO DRUG-LIKE BOUND LIGAND FOUND</option>'; if (role==='ligand'&&visible.length===1)select.value=String(visible[0].index);
     const selected=selectedReferenceLigand(); text('pose-reference-state',selected?selected.label:'NO REFERENCE · ALIGNMENT UNAVAILABLE');
 }
 function resetBuilderProgress():void {
@@ -795,12 +788,6 @@ document.getElementById('builder-build')?.addEventListener('click',()=>{ setMain
 document.getElementById('close-builder')?.addEventListener('click',()=>{ setMainMode('review'); setBuilderOpen(false); });
 document.getElementById('builder-review')?.addEventListener('click',()=>{ setMainMode('review'); setBuilderOpen(false); renderRunJobs(); });
 document.getElementById('builder-runs')?.addEventListener('click',showRunsWorkspace);
-document.querySelectorAll<HTMLButtonElement>('[data-target-source]').forEach(button=>button.addEventListener('click',()=>{
-    document.querySelectorAll<HTMLButtonElement>('[data-target-source]').forEach(item=>{ item.classList.toggle('active',item===button); item.setAttribute('aria-pressed',String(item===button)); });
-    const mode=button.dataset.targetSource;
-    (['pdb','upload','existing'] as const).forEach(source=>{ const panel=document.getElementById(`source-${source}-panel`); if (panel)panel.hidden=source!==mode; });
-    showBuilderNotice(mode==='pdb'?'Enter a PDB accession; Dirac will retrieve and inspect the experimental structure.':mode==='upload'?'Upload fixed-column PDB coordinates. mmCIF is not accepted in this release. Protein preparation remains a generated backend job, not a prerequisite.':'Reuse a versioned receptor only when it is scientifically the same system.');
-}));
 document.querySelectorAll<HTMLButtonElement>('[data-choice-group] button').forEach(button=>button.addEventListener('click',()=>selectChoice(button)));
 document.querySelectorAll<HTMLButtonElement>('[data-advanced]').forEach(button=>{
     button.setAttribute('aria-expanded','false');
@@ -820,9 +807,10 @@ async function inspectPdb(pdb:string,preferredReference=''):Promise<boolean> {
         if (!invalidateScientificState('receptor',`PDB ${pdb} loaded`)) return false;
         const normalized=method.toUpperCase(); receptorPdbText=downloadedPdb; receptorRecord={ title,method: normalized.includes('X-RAY')?'xray':normalized.includes('ELECTRON')?'cryoem':normalized.includes('NMR')?'nmr':'model',resolution: Number.isFinite(resolution)?Number(resolution):null }; receptorInputReady=true; receptorSourceLabel=pdb; resetBuilderProgress(); populateBoundLigands();
         if (preferredReference) { const index=boundLigands.findIndex(row=>row.resname===preferredReference); const select=document.getElementById('site-select') as HTMLSelectElement|null; if (select&&index>=0)select.value=String(index); }
-        text('pose-reference-state',selectedReferenceLigand()?.label||'NO REFERENCE · ALIGNMENT UNAVAILABLE'); text('receptor-preview-title',`${pdb} · ${title}`); text('receptor-preview-detail',`${method}${Number.isFinite(resolution)?` · ${Number(resolution).toFixed(2)} Å`:''} · ${boundLigands.length} bound organic candidate${boundLigands.length===1?'':'s'} found`); updateBuilderReadiness(); showBuilderNotice(preferredReference&&selectedReferenceLigand()?`${pdb} loaded · ${preferredReference} selected as the bound reference.`:`${pdb} coordinates loaded. Choose the bound ligand that corresponds to your reference compound.`); return true;
+        const reference=selectedReferenceLigand(); text('pose-reference-state',reference?.label||'NO REFERENCE · ALIGNMENT UNAVAILABLE'); text('receptor-preview-title',`${pdb} · ${title}`); text('receptor-preview-detail',`${method}${Number.isFinite(resolution)?` · ${Number(resolution).toFixed(2)} Å`:''} · ${boundLigands.length} bound organic candidate${boundLigands.length===1?'':'s'} found`); updateBuilderReadiness(); showBuilderNotice(reference?`${pdb} loaded · ${reference.resname} selected as the drug-like bound reference · verify identity before preparation.`:`${pdb} coordinates loaded. Choose the bound ligand that corresponds to your reference compound.`); return true;
     } catch { if (requestId!==pdbFetchGeneration||epoch!==draftEpoch) return false; text('receptor-preview-title',`${pdb} · STRUCTURE NOT FOUND`); text('receptor-preview-detail',receptorPdbText?'Existing receptor was preserved; the failed response was not applied.':'No structure was loaded. Check the PDB accession at RCSB, or upload a PDB file.'); updateBuilderReadiness(); showBuilderNotice(`RCSB could not load ${pdb}. Check the accession or upload the structure file.`); return false; } finally { if (requestId===pdbFetchGeneration) { button.disabled=false; button.textContent='FETCH & INSPECT'; } }
 }
+bindTargetStructureControls(document,{ loadStructure: pdb=>inspectPdb(pdb),locked: runContextLocked,notify: showBuilderNotice });
 document.getElementById('inspect-pdb')?.addEventListener('click',async()=>{
     const pdb=(document.getElementById('campaign-pdb') as HTMLInputElement|null)?.value.trim().toUpperCase()||'';
     await inspectPdb(pdb);
