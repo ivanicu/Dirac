@@ -22,6 +22,7 @@ export type AssayRow={
     reference:boolean;
     priority:string;
 };
+export type SmartImportResult={rows:Array<{id:string;smiles:string}>;resolved:number;duplicates:number};
 
 type JsonRecord=Record<string,any>;
 type CompoundToolOptions={
@@ -40,6 +41,11 @@ const propertyFields='Title,IUPACName,CanonicalSMILES,IsomericSMILES,MolecularFo
 function text(value:unknown):string { return typeof value==='string'?value.trim():String(value??'').trim(); }
 function safeId(value:string,fallback:string):string { const normalized=value.toUpperCase().replace(/[^A-Z0-9_.:+-]+/g,'-').replace(/^[^A-Z0-9]+/,'').slice(0,100); return normalized||fallback; }
 function smilesFromProperty(row:JsonRecord):string { return text(row.SMILES||row.IsomericSMILES||row.ConnectivitySMILES||row.CanonicalSMILES); }
+
+async function canonicalizeSmiles(value:string):Promise<string|null> {
+    const RDKit=await getRDKit(); let mol:ReturnType<typeof RDKit.get_mol>|null=null;
+    try { mol=RDKit.get_mol(value); return mol?.is_valid()?mol.get_smiles()||null:null; } catch { return null; } finally { mol?.delete(); }
+}
 
 export function pubChemCandidates(payload:unknown):CompoundCandidate[] {
     const rows=(payload as JsonRecord)?.PropertyTable?.Properties;
@@ -69,6 +75,22 @@ export async function resolveCompoundQuery(query:string,fetcher:typeof fetch=fet
     if (chembl) { const id=`CHEMBL${chembl[1]}`,candidate=chemblCandidate(await getJson(`${ChEMBL}/molecule/${id}.json`,fetcher)); return candidate?[candidate]:[]; }
     const cid=normalized.match(/^(?:CID\s*)?(\d+)$/i),namespace=cid?'cid':'name',identifier=cid?cid[1]:normalized;
     return pubChemCandidates(await getJson(`${PubChem}/${namespace}/${encodeURIComponent(identifier)}/property/${propertyFields}/JSON`,fetcher)).slice(0,6);
+}
+
+export async function resolveSmartImport(raw:string,fetcher:typeof fetch=fetch,canonicalize:(value:string)=>Promise<string|null>=canonicalizeSmiles):Promise<SmartImportResult> {
+    const lines=raw.split(/\r?\n/).map(line=>line.trim()).filter(Boolean); if (!lines.length) throw new Error('Paste at least one compound name, database ID, SMILES, or ID + SMILES');
+    if (lines.length>50) throw new Error('Smart import accepts at most 50 rows at a time');
+    const rows:Array<{id:string;smiles:string}>=[],usedIds=new Set<string>(),usedSmiles=new Set<string>(); let resolved=0,duplicates=0;
+    for (let index=0; index<lines.length; index++) {
+        const line=lines[index]; let id='',smiles=await canonicalize(line);
+        if (smiles)id=`CMPD-${String(index+1).padStart(3,'0')}`;
+        if (!smiles) { const match=line.match(/^(\S+)\s{1,}(.+)$/),candidate=match?await canonicalize(match[2]):null; if (match&&candidate) { id=safeId(match[1],`CMPD-${index+1}`); smiles=candidate; } }
+        if (!smiles) { const candidates=await resolveCompoundQuery(line,fetcher),candidate=candidates[0]; if (!candidate) throw new Error(`Row ${index+1}: no exact structure found for “${line}”`); id=candidate.id; smiles=candidate.smiles; resolved++; }
+        if (usedSmiles.has(smiles)) { duplicates++; continue; }
+        const base=safeId(id,`CMPD-${String(index+1).padStart(3,'0')}`); let unique=base,suffix=2; while (usedIds.has(unique))unique=`${base}-${suffix++}`;
+        usedIds.add(unique); usedSmiles.add(smiles); rows.push({ id: unique,smiles });
+    }
+    return { rows,resolved,duplicates };
 }
 
 function parseCsvRecords(raw:string):string[][] {
@@ -141,6 +163,7 @@ export function bindCompoundWorkflow(document:Document,options:CompoundToolOptio
     const searchInput=document.getElementById('compound-name-search') as HTMLInputElement|null,searchButton=document.getElementById('search-compounds') as HTMLButtonElement|null,status=document.getElementById('compound-search-status');
     const runSearch=async()=>{ if (!searchInput||!searchButton||!status) return; if (options.locked()) return options.notify('Compound editing is locked while a physical RunSet is attached.'); const query=searchInput.value.trim(); searchButton.disabled=true; searchButton.textContent='SEARCHING…'; status.textContent=`Resolving “${query}” to a database structure…`; try { const candidates=await resolveCompoundQuery(query); renderCompoundResults(document,candidates,options.appendLigand); status.textContent=candidates.length?`${candidates.length} exact identity record${candidates.length===1?'':'s'} · confirm before adding`:'No exact structure found'; } catch (error) { renderCompoundResults(document,[],options.appendLigand); status.textContent=`Search unavailable · ${error instanceof Error?error.message:String(error)}`; } finally { searchButton.disabled=false; searchButton.textContent='FIND COMPOUND'; } };
     searchButton?.addEventListener('click',()=>void runSearch()); searchInput?.addEventListener('keydown',event=>{ if (event.key==='Enter') { event.preventDefault(); void runSearch(); } });
+    document.getElementById('smart-import-series')?.addEventListener('click',async event=>{ const button=event.currentTarget as HTMLButtonElement,input=document.getElementById('smart-import-input') as HTMLTextAreaElement|null; if (!input) return; if (options.locked()) return options.notify('Smart import is locked while a physical RunSet is attached.'); button.disabled=true; button.textContent='RESOLVING…'; try { const result=await resolveSmartImport(input.value); if (options.getRows().length&&!window.confirm(`Replace the current series with ${result.rows.length} resolved compounds?`)) return; await options.replaceSeries(result.rows,{ parentId: result.rows[0]?.id }); input.value=''; options.notify(`Smart import ready · ${result.rows.length} unique structures · ${result.resolved} database name/ID lookup${result.resolved===1?'':'s'} · ${result.duplicates} duplicate${result.duplicates===1?'':'s'} removed.`); } catch (error) { options.notify(`Smart import refused · ${error instanceof Error?error.message:String(error)}`); } finally { button.disabled=false; button.textContent='RESOLVE & IMPORT'; } });
     document.getElementById('assay-file')?.addEventListener('change',async event=>{ const input=event.target as HTMLInputElement,file=input.files?.[0]; if (!file) return; try { if (options.locked()) throw new Error('campaign is locked by a physical RunSet'); const assay=await resolveAssayRows(parseAssayCsv(await file.text())); if (options.getRows().length&&!window.confirm(`Replace the current series with ${assay.length} assay compounds?`)) return; applyAssayContext(document,assay); await options.replaceSeries(assay.map(row=>({ id: row.id,smiles: row.smiles })),{ parentId: assay.find(row=>row.reference)?.id,assay }); options.notify(`${file.name}: ${assay.length} compounds imported with assay context, reference and priorities.`); } catch (error) { options.notify(`Assay import refused · ${error instanceof Error?error.message:String(error)}`); } finally { input.value=''; } });
     const parent=document.getElementById('parent-compound-select') as HTMLSelectElement|null,generator=document.getElementById('build-analogue-series') as HTMLButtonElement|null;
     parent?.addEventListener('change',()=>{ if (generator)generator.disabled=!parent.value; });

@@ -16,23 +16,15 @@ import { renderResultShowcase } from './workbench-result-showcase';
 import { CAMPAIGN_CACHE_KEYS, createCampaignState, draftFromCampaignEnvelope } from './workbench-campaign-state';
 import { createStoredPreparationReceipt, exactPreparationResultFrom, preparationElapsedSeconds, preparationReceiptMatchesOpenCampaign, preparationResultMatchesOpenCampaign, preparationSubmissionLockName, preparedSystemFromPreparationResult, submitPreparationExactlyOnce } from './workbench-preparation';
 import { applyGuidedExample,builderReadinessCopy,campaignEstimate,clearGuidedCampaignForm,ligandIdentityCardHtml,renderBuilderGuide,renderBuilderGuideProgress,renderCampaignEstimate,renderDecisionValidation,renderLigandAuditRows,renderParentCompoundOptions,restoreParentCompoundSelection,T4L_EIGHT_LIGAND_EXAMPLE,validateDecisionInputs,type BuilderGuideStep,type BuilderUxMode } from './workbench-guided-build';
-import { bindTargetStructureControls,fetchPdbExperimentalRecord,inspectBoundLigands,type BoundLigandCandidate } from './workbench-target-search';
+import { bindTargetStructureControls,fetchPdbExperimentalRecord,inspectBoundLigands,receptorChainIds,type BoundLigandCandidate } from './workbench-target-search';
 import { bindCompoundWorkflow,morganSimilarity,type CompoundCandidate } from './workbench-compound-tools';
+import { applyRecommendedSetup,bindWorkflowAccelerators,duplicateCampaignInputs,workbenchUuid } from './workbench-accelerators';
 import type { AtomInfo, Bond, BuilderStage, CampaignDraftV2, Compound, DepictionContract, Edge, ExecutionContract, PreparedSystemOption, RunJob, Network } from './workbench-types';
 const query = new URLSearchParams(location.search);
 const resultShowcase=query.get('showcase')==='results';
 const apiBase = query.get('api') || `http://${location.hostname}:8901`;
 const client = new DiracClient({ baseUrl: apiBase, timeoutMs: 600_000 });
 const auditCopyId = (query.get('copy') || 'main').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 16) || 'main';
-function workbenchUuid():string {
-    if (typeof globalThis.crypto?.randomUUID==='function') return globalThis.crypto.randomUUID();
-    const bytes=new Uint8Array(16);
-    if (typeof globalThis.crypto?.getRandomValues==='function')globalThis.crypto.getRandomValues(bytes);
-    else for (let index=0; index<bytes.length; index++)bytes[index]=Math.floor(Math.random()*256);
-    bytes[6]=(bytes[6]&0x0f)|0x40; bytes[8]=(bytes[8]&0x3f)|0x80;
-    const hex=[...bytes].map(value=>value.toString(16).padStart(2,'0')).join('');
-    return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
-}
 const tabOwnerId=workbenchUuid();
 const operations=new OperationCoordinator(tabOwnerId);
 const copyStorageKey = (key:string) => auditCopyId === 'main' ? key : `${key}.copy.${auditCopyId}`;
@@ -206,8 +198,6 @@ async function mappingHighlights(edge: Edge,target:Network=network): Promise<{ l
     const pairs=(Array.isArray(edge.depiction_contract.selected_heavy_atom_mapping)?edge.depiction_contract.selected_heavy_atom_mapping:[]).filter(pair=>Array.isArray(pair)&&pair.length===2&&Number.isInteger(pair[0])&&Number.isInteger(pair[1])&&pair[0]>=0&&pair[1]>=0&&pair[0]<li.symbols.length&&pair[1]<ri.symbols.length);
     const leftMapped=new Set<number>(),rightMapped=new Set<number>(),leftHighlights:AtomHighlight[]=[],rightHighlights:AtomHighlight[]=[];
     pairs.forEach(([parent,proposal])=>{ leftMapped.add(parent); rightMapped.add(proposal); leftHighlights.push({ atomIndex: parent,color: '#58dff4',alpha: .55 }); rightHighlights.push({ atomIndex: proposal,color: '#58dff4',alpha: .55 }); });
-    // Mapping gaps are colored only when the backend ledger attests UNMAPPED=CHANGED.
-    // All chemistry verdicts and witness text remain server-owned.
     const unmappedChanged=evidenceView.evidence?.ledger.find(row=>row.dimension==='UNMAPPED')?.verdict==='CHANGED';
     if (unmappedChanged) {
         li.symbols.forEach((_,index)=>{ if (!leftMapped.has(index))leftHighlights.push({ atomIndex: index,color: '#ff6476',alpha: .5 }); });
@@ -608,11 +598,6 @@ function currentLigandSignature():string { return ((document.getElementById('cam
 function selectedReferenceLigand():BoundLigandCandidate|null {
     const value=(document.getElementById('site-select') as HTMLSelectElement|null)?.value||''; return value===''?null:boundLigands[Number(value)]||null;
 }
-function receptorChainIds():string[] {
-    const ids=new Set<string>();
-    receptorPdbText.split(/\r?\n/).forEach(line=>{ if (line.startsWith('ATOM  ')&&line.length>21)ids.add(line.slice(21,22).trim()||'_'); });
-    return [...ids].sort();
-}
 function populateBoundLigands():void {
     boundLigands=inspectBoundLigands(receptorPdbText); const select=document.getElementById('site-select') as HTMLSelectElement|null; if (!select) return;
     const role=(document.getElementById('site-role-filter') as HTMLSelectElement|null)?.value||'ligand';
@@ -825,6 +810,7 @@ async function inspectPdb(pdb:string,preferredReference=''):Promise<boolean> {
 }
 bindTargetStructureControls(document,{ loadStructure: pdb=>inspectPdb(pdb),locked: runContextLocked,notify: showBuilderNotice,referenceSmiles: ()=>{ const parent=(document.getElementById('parent-compound-select') as HTMLSelectElement|null)?.value||''; return textLigandRows().find(row=>row.id===parent)?.smiles||''; },similarity: morganSimilarity });
 bindCompoundWorkflow(document,{ locked: runContextLocked,notify: showBuilderNotice,getRows: ()=>textLigandRows().map(({ id,smiles })=>({ id,smiles })),getParent: ()=>(document.getElementById('parent-compound-select') as HTMLSelectElement|null)?.value||'',appendLigand: appendResolvedCompound,replaceSeries: replaceImportedSeries });
+bindWorkflowAccelerators(document,{ locked: runContextLocked,notify: showBuilderNotice,getRawSeries: ()=>currentLigandSignature(),getRows: ()=>textLigandRows().map(({ id,smiles })=>({ id,smiles })),getParent: ()=>(document.getElementById('parent-compound-select') as HTMLSelectElement|null)?.value||'',replaceSeries: replaceImportedSeries,similarity: morganSimilarity,duplicateCampaign,applyRecommended: ()=>{ applyRecommendedSetup(document,textLigandRows().length); updateBuilderReadiness(); } });
 document.getElementById('inspect-pdb')?.addEventListener('click',async()=>{
     const pdb=(document.getElementById('campaign-pdb') as HTMLInputElement|null)?.value.trim().toUpperCase()||'';
     await inspectPdb(pdb);
@@ -899,7 +885,7 @@ function assertStrictImportedDraft(draft:CampaignDraftV2):void {
 }
 function receptorPolicyFromUi():Record<string,unknown> {
     const protonation=(document.getElementById('prep-protonation') as HTMLSelectElement).value;
-    return { assembly_id: (document.getElementById('assembly-select') as HTMLSelectElement).value,chain_ids: receptorChainIds(),missing_atoms: (document.getElementById('prep-missing-atoms') as HTMLSelectElement).value,missing_residues: (document.getElementById('prep-missing-residues') as HTMLSelectElement).value,altloc: (document.getElementById('prep-altloc') as HTMLSelectElement).value,occupancy: (document.getElementById('prep-occupancy') as HTMLSelectElement).value,waters: (document.getElementById('prep-waters') as HTMLSelectElement).value,water_site_decisions: [],cofactors: (document.getElementById('prep-cofactors') as HTMLSelectElement).value,metals: (document.getElementById('prep-metals') as HTMLSelectElement).value,histidines: protonation,termini: protonation,ph: 7.4,forcefield_contract: { protein: 'AMBER ff14SB',ligand: 'OpenFF 2.2.1',water: 'TIP3P',ionic_strength_molar: .15,release: 'openfe-rfe-standard-v1' } };
+    return { assembly_id: (document.getElementById('assembly-select') as HTMLSelectElement).value,chain_ids: receptorChainIds(receptorPdbText),missing_atoms: (document.getElementById('prep-missing-atoms') as HTMLSelectElement).value,missing_residues: (document.getElementById('prep-missing-residues') as HTMLSelectElement).value,altloc: (document.getElementById('prep-altloc') as HTMLSelectElement).value,occupancy: (document.getElementById('prep-occupancy') as HTMLSelectElement).value,waters: (document.getElementById('prep-waters') as HTMLSelectElement).value,water_site_decisions: [],cofactors: (document.getElementById('prep-cofactors') as HTMLSelectElement).value,metals: (document.getElementById('prep-metals') as HTMLSelectElement).value,histidines: protonation,termini: protonation,ph: 7.4,forcefield_contract: { protein: 'AMBER ff14SB',ligand: 'OpenFF 2.2.1',water: 'TIP3P',ionic_strength_molar: .15,release: 'openfe-rfe-standard-v1' } };
 }
 function ligandPolicyFromUi():Record<string,unknown> { return { formal_charge: (document.getElementById('ligand-charge-policy') as HTMLSelectElement).value,tautomer: (document.getElementById('ligand-tautomers') as HTMLSelectElement).value,protonation: (document.getElementById('ligand-ph') as HTMLSelectElement).value,stereochemistry: (document.getElementById('ligand-stereo') as HTMLSelectElement).value,state_population_cutoff: Number((document.getElementById('ligand-state-cutoff') as HTMLSelectElement).value) }; }
 function scientificInputsFromUi(rows:Array<{id:string;smiles:string}>):Record<string,unknown>|null {
@@ -917,6 +903,11 @@ async function restoreDraft(draft:CampaignDraftV2,explicitImport=false,ownerScop
     invalidateLigandValidation(); reflectBuilderStage(); updateBuilderReadiness(); if (draft.ligands) { await validateBuilderLigands(); restoreParentCompoundSelection(document,draft.values?.['parent-compound-select']||draft.scientific_inputs?.parent_id); updateBuilderReadiness(); } if (restoreEpoch!==draftEpoch||!operations.current(restoreScope,{ edits: true })) throw new Error('Draft restore superseded'); text('receptor-preview-title',receptorInputReady?`${receptorSourceLabel} · RESTORED RAW STRUCTURE`:'NO RECEPTOR SELECTED'); text('receptor-preview-detail',receptorInputReady?'Draft coordinates restored; generated evidence must be requalified.':'Draft has no receptor coordinates.');
     showBuilderNotice(`${explicitImport?'Cross-campaign inputs imported into NEW campaign':'Draft resume'} complete · ${explicitImport?`${sourceCampaignId} → ${draftCampaignId}`:draftCampaignId} · generated evidence was not silently rebound.`);
     return restoreScope;
+}
+async function duplicateCampaign():Promise<void> {
+    if (runContextLocked()) return showBuilderNotice('Finish RunSet, then duplicate.');
+    const draft=duplicateCampaignInputs(draftFromUi('cross-campaign-import'));
+    const restored=await restoreDraft(draft,true,operations.begin('duplicate-campaign')); if (restored)setBuilderGuideStep('review',false);
 }
 document.getElementById('save-draft')?.addEventListener('click',async event=>{
     const button=event.currentTarget as HTMLButtonElement; if (button.disabled) return; const scope=operations.begin('save-draft'); button.disabled=true; button.textContent='SAVING…';
@@ -1029,7 +1020,7 @@ async function prepareCampaignSources():Promise<void> {
             if (saved.durability!=='server'||!saved.stateDigest) throw new Error('A server-durable campaign is required before scientific preparation');
             draftExpectedVersion=saved.version; draftCampaignStateDigest=saved.stateDigest; draftCampaignScientificGeneration=saved.scientificGeneration||0; draftCampaignScientificDigest=saved.scientificDigest||''; draftServerStatus=saved.status||'draft';
         }
-        const chains=receptorChainIds(); if (!chains.length) throw new Error('receptor contains no polymer chain identifiers');
+        const chains=receptorChainIds(receptorPdbText); if (!chains.length) throw new Error('receptor contains no polymer chain identifiers');
         snapshot=draftIdentitySnapshot(); operationId=++preparationOperationId; preparationScope=scope; preparationInFlight=true;
         const submitted=await withCampaignPreparationLock(snapshot.campaign_id,async()=>{ if (!operations.current(scope,{ edits: true })||preparationScope?.id!==scope.id||operationId!==preparationOperationId||!snapshot||!draftIdentityMatches(snapshot)||inputSignature!==preparationInputSignature(currentScientificInputs)) return null; const concurrent=readPreparationReceipt(); if (concurrent) throw new Error(`another tab already owns preparation ${preparationReceiptBinding(concurrent).jobId||preparationReceiptBinding(concurrent).requestKey||'receipt'}`); receipt=createStoredPreparationReceipt(receiptStore,{ campaignId: snapshot.campaign_id,auditVersion: snapshot.audit_version,scientificGeneration: snapshot.scientific_generation,scientificDigest: snapshot.scientific_digest },inputSignature,scope.id,workbenchUuid()); return submitPreparationExactlyOnce(client,receiptStore,receipt,frozenInputs,()=>operations.current(scope,{ edits: true })&&preparationScope?.id===scope.id&&operationId===preparationOperationId&&!!snapshot&&draftIdentityMatches(snapshot)&&inputSignature===preparationInputSignature(currentScientificInputs)); }); if (!submitted) { if (preparationScope?.id===scope.id) { preparationInFlight=false; preparationScope=null; const pending=readPreparationReceipt(); button.disabled=false; button.textContent=pending?'RESUME PREPARATION JOB':'RETRY RECEPTOR + POSES →'; updateBuilderReadiness(checked.valid); } return; }receipt=submitted.receipt; await waitForPreparation(submitted.accepted,submitted.receipt,operationId,scope);
     } catch (error) { if (operationId&&(operationId!==preparationOperationId||preparationScope?.id!==scope.id||!operations.current(scope,{ edits: true }))) return; const pending=readPreparationReceipt(); builderStage='reviewed'; reflectBuilderStage(); text('builder-next-label',pending?'PREPARATION ACK UNKNOWN · EXACT RECEIPT PRESERVED':'PREPARATION SUBMISSION REFUSED · INPUTS PRESERVED'); text('pose-review-state','NOT GENERATED'); showBuilderNotice(`Preparation submission ${pending?'needs exact-key reconciliation':'was refused'}: ${error instanceof Error?error.message:String(error)}${pending?' · RESUME replays the same request key; it does not create a new logical attempt.':''}`); button.textContent=pending?'RESUME PREPARATION JOB':'RETRY RECEPTOR + POSES →'; button.disabled=false; preparationInFlight=false; preparationScope=null; updateBuilderReadiness(checked.valid); }

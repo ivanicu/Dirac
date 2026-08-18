@@ -70,6 +70,13 @@ export function workbenchShellMarkup(): string {
         <button data-guide-step="review"><i>4</i><span><b>DECISION &amp; REVIEW</b><small>Confirm before preparation</small></span></button>
         <button id="toggle-all-controls" class="builder-guide-all" aria-pressed="false">SHOW ALL CONTROLS</button>
       </nav>
+      <section class="campaign-accelerators" aria-label="Campaign shortcuts">
+        <span><small>ONE-CLICK WORKFLOW</small><b>LET DIRAC HANDLE THE ROUTINE SETUP</b></span>
+        <button id="use-recommended-setup">USE RECOMMENDED SETUP</button>
+        <button id="fix-safe-issues">FIX SAFE ISSUES</button>
+        <button id="show-only-exceptions" aria-pressed="false">SHOW ONLY EXCEPTIONS</button>
+        <button id="duplicate-campaign">DUPLICATE CAMPAIGN</button>
+      </section>
       <main class="builder-inputs">
         <div class="zone-heading"><span><small>YOU CONTROL THESE</small><b>INPUTS &amp; SCIENTIFIC DECISIONS</b></span><em>EDITABLE</em></div>
         <div class="builder-grid">
@@ -90,10 +97,11 @@ export function workbenchShellMarkup(): string {
           <section class="build-card ligand-card">
             <div class="build-card-head"><span><small>02</small><b>LIGAND SERIES</b></span><em id="ligand-count-label">0 VALID</em></div>
             <div class="ligand-actions"><button id="paste-smiles" class="active">PASTE SMILES</button><button id="draw-ligand">DRAW A MOLECULE</button><label class="file-button" for="ligand-file">UPLOAD SDF / MOL<input id="ligand-file" type="file" accept=".sdf,.sd,.mol" data-invalidate="ligands"></label><label class="file-button assay-file-button" for="assay-file">IMPORT ASSAY CSV<input id="assay-file" type="file" accept=".csv,text/csv"></label></div>
+            <section class="smart-import"><label><span>SMART IMPORT · NAMES, CID, CHEMBL, SMILES, OR ID + SMILES</span><textarea id="smart-import-input" placeholder="Aspirin&#10;CID 2244&#10;CHEMBL25&#10;LEAD-04  CC(=O)Oc1ccccc1C(=O)O" spellcheck="false"></textarea></label><button id="smart-import-series">RESOLVE &amp; IMPORT</button></section>
             <section class="compound-search"><label class="hero-input"><span>FIND A COMPOUND BY NAME OR DATABASE ID</span><div><input id="compound-name-search" placeholder="Aspirin, CID 2244, CHEMBL25…" autocomplete="off" spellcheck="false"><button id="search-compounds">FIND COMPOUND</button></div></label><p>Names and database IDs are resolved to an exact structure before addition. You confirm the identity card; chemical names are never treated as SMILES.</p><div id="compound-search-status" role="status" aria-live="polite">ENTER A NAME, PUBCHEM CID, OR CHEMBL ID</div><div id="compound-search-results" class="compound-search-results" hidden></div></section>
             <label class="series-editor"><span><b>ID</b><b>SMILES</b><b>STATE</b></span><textarea id="campaign-ligands" placeholder="One molecule per line, for example: BEN  c1ccccc1" spellcheck="false"></textarea></label>
             <p class="series-format-help"><b>FORMAT</b> <code>COMPOUND_ID&nbsp;&nbsp;SMILES</code> &middot; search a name above, import an assay table, draw, upload, or paste an exact structure.</p>
-            <div class="ligand-summary"><span><b id="ligand-valid-count">0</b><small>POLICY-READY MOLECULES</small></span><span><b id="ligand-charge-count">0</b><small>NONZERO FORMAL CHARGE</small></span><span><b id="ligand-heavy-median">—</b><small>HEAVY ATOMS · MEDIAN</small></span><button id="validate-ligands">VALIDATE SERIES</button></div>
+            <div class="ligand-summary"><span><b id="ligand-valid-count">0</b><small>POLICY-READY MOLECULES</small></span><span><b id="ligand-charge-count">0</b><small>NONZERO FORMAL CHARGE</small></span><span><b id="ligand-heavy-median">—</b><small>HEAVY ATOMS · MEDIAN</small></span><button id="validate-ligands">VALIDATE SERIES</button><button id="select-recommended-eight">SELECT RECOMMENDED 8</button></div>
             <label class="parent-compound-picker"><span>REFERENCE COMPOUND <b>REQUIRED</b></span><select id="parent-compound-select" data-invalidate="reference" disabled><option value="">VALIDATE THE SERIES FIRST</option></select><small>This is the compound whose measured bound pose anchors all analogue coordinates.</small></label><button id="build-analogue-series" class="series-generator" disabled>ADD 7 SIMILAR ANALOGUES</button><div id="series-generation-results" class="series-generation-results" role="status" aria-live="polite" hidden></div>
             <section class="ligand-identity-audit" aria-labelledby="ligand-identity-title"><div><b id="ligand-identity-title">MOLECULAR IDENTITY AUDIT</b><span>EVERY NON-EMPTY ROW GETS A VERDICT</span></div><div id="ligand-identity-rows"><p>NO LIGAND ROWS · NOTHING VALIDATED</p></div></section>
             <button class="advanced-trigger" data-advanced="ligands">MICROSTATES &amp; CHARGE POLICY <span>＋</span></button>
@@ -124,7 +132,7 @@ export function workbenchShellMarkup(): string {
             <div class="system-orbit"><span class="protein-mark"></span><i class="ligand-mark one"></i><i class="ligand-mark two"></i><i class="ligand-mark three"></i></div>
             <div><small>PROPOSED SYSTEM</small><b id="proposed-system-title">NO RECEPTOR · 0 LIGANDS · NOT PLANNED</b><span>Coordinates must share one receptor frame. Dirac versions every generated artifact and records its digest.</span></div>
           </div>
-          <section class="preparation-policy-audit" aria-labelledby="preparation-policy-title"><div><b id="preparation-policy-title">PREPARATION POLICY EXECUTION</b><span id="preparation-policy-summary">NOT GENERATED</span></div><div id="preparation-policy-rows"><p>Backend evidence appears here after receptor and pose preparation.</p></div></section>
+          <section class="preparation-policy-audit" aria-labelledby="preparation-policy-title"><header><b id="preparation-policy-title">PREPARATION POLICY EXECUTION</b><em id="preparation-policy-summary">NOT GENERATED</em></header><div id="preparation-policy-rows"><p>Backend evidence appears here after receptor and pose preparation.</p></div></section>
           <ol class="artifact-pipeline">
             <li data-pipeline="receptor"><span>1</span><div><b>PREPARED RECEPTOR STATE</b><small>Repair · protonate · retain reviewed waters · freeze coordinate frame</small></div><em>WILL BUILD</em></li>
             <li data-pipeline="states"><span>2</span><div><b>LIGAND STATE ENSEMBLE</b><small>Canonical identities · protonation · tautomer · stereo · formal charge</small></div><em>WILL BUILD</em></li>

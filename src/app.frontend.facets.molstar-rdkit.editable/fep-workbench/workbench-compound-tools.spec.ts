@@ -1,5 +1,5 @@
 import { describe,expect,it,jest } from '@jest/globals';
-import { chemblCandidate,parseAssayCsv,pubChemCandidates,resolveAssayRows,resolveCompoundQuery,transformationRisk } from './workbench-compound-tools';
+import { chemblCandidate,parseAssayCsv,pubChemCandidates,resolveAssayRows,resolveCompoundQuery,resolveSmartImport,transformationRisk } from './workbench-compound-tools';
 
 describe('novice compound workflow',()=>{
     it('turns PubChem identity records into exact visible structures',()=>{
@@ -31,6 +31,12 @@ describe('novice compound workflow',()=>{
         expect(transformationRisk('CCO',{ id: 'A',name: 'A',smiles: 'CCCO',formula: '',charge: 0,source: 'PUBCHEM',sourceId: 'CID 1',sourceUrl: '',similarity: .9 })).toBe('LOW');
         expect(transformationRisk('CCO',{ id: 'A',name: 'A',smiles: 'CC[C@H](O)C',formula: '',charge: 0,source: 'PUBCHEM',sourceId: 'CID 1',sourceUrl: '',similarity: .9 })).toBe('HIGH');
         expect(transformationRisk('CCO',{ id: 'A',name: 'A',smiles: 'CC[NH3+]',formula: '',charge: 1,source: 'PUBCHEM',sourceId: 'CID 1',sourceUrl: '',similarity: .9 })).toBe('HIGH');
+    });
+
+    it('accepts names, IDs, SMILES and ID + SMILES through one import surface',async()=>{
+        const fetcher=jest.fn(async()=>new Response(JSON.stringify({ PropertyTable: { Properties: [{ CID: 2244,Title: 'Aspirin',SMILES: 'ASP',Charge: 0 }] } }),{ status: 200 })) as unknown as typeof fetch;
+        const canonicalize=jest.fn(async(value:string)=>({ CCO: 'CCO','LEAD CCC': null,CCC: 'CCC' } as Record<string,string|null>)[value]??null);
+        await expect(resolveSmartImport('Aspirin\nCCO\nLEAD CCC\nAspirin',fetcher,canonicalize)).resolves.toEqual({ rows: [{ id: 'ASPIRIN',smiles: 'ASP' },{ id: 'CMPD-002',smiles: 'CCO' },{ id: 'LEAD',smiles: 'CCC' }],resolved: 2,duplicates: 1 });
     });
 
 });

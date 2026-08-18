@@ -110,17 +110,23 @@ export function inspectBoundLigands(pdbText:string):BoundLigandCandidate[] {
     return [...groups.values()].sort((a,b)=>Number(cofactors.has(a.resname))-Number(cofactors.has(b.resname))||b.atoms-a.atoms||a.resname.localeCompare(b.resname)).map(row=>({ ...row,heavy_atom_count: row.atoms,role: cofactors.has(row.resname)?'cofactor':'ligand',label: `${cofactors.has(row.resname)?'COFACTOR · ':''}${row.resname} · CHAIN ${row.chain||'—'} · RES ${row.residue_number} · ${row.atoms} HEAVY ATOMS` }));
 }
 
+export function receptorChainIds(pdbText:string):string[] {
+    const ids=new Set<string>(); pdbText.split(/\r?\n/).forEach(line=>{ if (line.startsWith('ATOM  ')&&line.length>21)ids.add(line.slice(21,22).trim()||'_'); }); return [...ids].sort();
+}
+
 function renderCandidates(document:Document,candidates:ProteinStructureCandidate[],load:(pdbId:string)=>Promise<boolean>):void {
     const container=document.getElementById('protein-search-results'); if (!container) return;
     container.replaceChildren(); container.hidden=false;
     if (!candidates.length) { const empty=document.createElement('p'); empty.className='protein-search-empty'; empty.textContent='No experimental structures found. Try a gene symbol, protein family name, or upload a PDB file.'; container.append(empty); return; }
+    const loadCandidate=async(candidate:ProteinStructureCandidate,button:HTMLButtonElement)=>{ const input=document.getElementById('campaign-pdb') as HTMLInputElement|null; if (input)input.value=candidate.pdbId; button.disabled=true; const prior=button.textContent||`USE ${candidate.pdbId}`; button.textContent='LOADING…'; const loaded=await load(candidate.pdbId); if (loaded)button.textContent='LOADED ✓'; else { button.disabled=false; button.textContent=prior; } };
+    const recommended=document.createElement('button'); recommended.type='button'; recommended.className='use-recommended-structure'; recommended.textContent=`USE RECOMMENDED STRUCTURE · ${candidates[0].pdbId}`; recommended.addEventListener('click',()=>void loadCandidate(candidates[0],recommended)); container.append(recommended);
     candidates.forEach((candidate,index)=>{
         const card=document.createElement('article'); card.className=`protein-result${index===0?' recommended':''}`;
         const summary=document.createElement('div'),header=document.createElement('header'),id=document.createElement('b'),badge=document.createElement('em'),title=document.createElement('p'),facts=document.createElement('ul'),button=document.createElement('button');
         id.textContent=candidate.pdbId; badge.textContent=index===0?'BEST STARTING POINT':'CANDIDATE'; header.append(id,badge); title.textContent=candidate.title;
         candidate.reasons.forEach(reason=>{ const item=document.createElement('li'); item.textContent=reason; facts.append(item); });
         summary.append(header,title,facts); button.type='button'; button.textContent=`USE ${candidate.pdbId}`; button.setAttribute('aria-label',`Use PDB ${candidate.pdbId}: ${candidate.title}`);
-        button.addEventListener('click',async()=>{ const input=document.getElementById('campaign-pdb') as HTMLInputElement|null; if (input)input.value=candidate.pdbId; button.disabled=true; button.textContent='LOADING…'; const loaded=await load(candidate.pdbId); if (loaded)button.textContent='LOADED ✓'; else { button.disabled=false; button.textContent=`USE ${candidate.pdbId}`; } });
+        button.addEventListener('click',()=>void loadCandidate(candidate,button));
         card.append(summary,button); container.append(card);
     });
 }
