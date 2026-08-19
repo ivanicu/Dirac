@@ -82,7 +82,11 @@ def request(number: int, *, image: str, cpu: float = 1, memory: int = 256 << 20,
         "execution_digest": "sha256:" + f"{number % 16:x}" * 64,
         "created_at": "2026-08-13T00:00:00Z",
     })
-    value["placement"] = {"backend": "kubernetes", "topology": "single_process"}
+    value["placement"] = {
+        "backend": "kubernetes",
+        "topology": "single_process",
+        "workload_priority_class": "motif-standard",
+    }
     value["resource_request"] = {
         "cpu_cores": cpu,
         "memory_bytes": memory,
@@ -233,6 +237,8 @@ def request_boundaries() -> dict[str, Any]:
         ("unknown_field", lambda value: value.update(escape=True)),
         ("bad_attempt_uuid", lambda value: value.update(attempt_id="../../escape")),
         ("bad_environment_type", lambda value: value.update(environment={"OK": 3})),
+        ("unknown_priority", lambda value: value["placement"].update(
+            workload_priority_class="motif-unknown")),
     ]
     for name, mutate in mutations:
         candidate = copy.deepcopy(base)
