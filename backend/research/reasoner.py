@@ -42,6 +42,13 @@ GOAL_INTERPRETER_PROMPT_PATH = (
 MANIFEST_PATH = PROMPT_DIRECTORY / f"{PROMPT_RELEASE_ID}.manifest.json"
 CONTEXT_SCHEMA_PATH = ROOT / "contracts/domain/research/context-snapshot.schema.json"
 PROPOSAL_SCHEMA_PATH = ROOT / "contracts/domain/research/proposal.schema.json"
+GOAL_AUTHORITY_MARKERS = (
+    "revision v2 [current", "what i actually mean now is:",
+    "current human request", "final operative objective",
+    "latest human decision", "authoritative request",
+    "最终有效目标", "最新人工决定", "权威请求",
+    "objectif final", "dernière décision humaine", "verbindliche anfrage",
+)
 
 
 def _raw_digest(path: pathlib.Path) -> str:
@@ -102,8 +109,26 @@ def build_goal_interpretation_schema(
 def build_goal_interpretation_messages(
     context: Mapping[str, Any], *, system_prompt: str,
 ) -> tuple[str, str]:
+    goal_intent = str(context["goal"]["intent"])
+    folded = goal_intent.casefold()
+    authority_hints: list[str] = []
+    for marker in GOAL_AUTHORITY_MARKERS:
+        cursor = 0
+        while len(authority_hints) < 8:
+            index = folded.find(marker.casefold(), cursor)
+            if index < 0:
+                break
+            end_marker = folded.find("end final objective", index + len(marker))
+            end = min(len(goal_intent), index + 768)
+            if 0 <= end_marker < end:
+                end = min(len(goal_intent), end_marker + len("end final objective"))
+            snippet = goal_intent[index:end].strip()
+            if snippet and snippet not in authority_hints:
+                authority_hints.append(snippet)
+            cursor = index + len(marker)
     request = {
-        "goal_intent": context["goal"]["intent"],
+        "goal_intent": goal_intent,
+        "operative_attention_windows": authority_hints,
         "available_actions": [
             {
                 "template_id": item["template_id"],

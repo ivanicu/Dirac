@@ -50,11 +50,11 @@
       "response_mode": "json_schema",
       "stream": false,
       "static_request_fields": {
-        "temperature": 1.0,
+        "temperature": 0.0,
         "top_p": 1.0,
-        "top_k": 20,
+        "top_k": -1,
         "min_p": 0.0,
-        "presence_penalty": 2.0,
+        "presence_penalty": 0.0,
         "repetition_penalty": 1.0
       },
       "classifier_request_fields": {
@@ -70,7 +70,7 @@
         "max_request_bytes": 262144,
         "max_response_bytes": 262144,
         "max_provider_attempts": 3,
-        "max_schema_regenerations": 1
+        "max_schema_regenerations": 2
       },
       "data_policy": {
         "allowed_classifications": ["public", "internal", "partner_confidential", "restricted"],

@@ -21,7 +21,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["intent", "constraints", "success_definition", "revised_at"],
       "properties": {
-        "intent": {"$ref": "#/$defs/text4096"},
+        "intent": {"$ref": "#/$defs/text16384"},
         "constraints": {"$ref": "#/$defs/textList64"},
         "success_definition": {"$ref": "#/$defs/textList64"},
         "revised_at": {"type": ["string", "null"], "format": "date-time"}
@@ -138,6 +138,7 @@
   },
   "$defs": {
     "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "text16384": {"type": "string", "minLength": 1, "maxLength": 16384},
     "text4096": {"type": "string", "minLength": 1, "maxLength": 4096},
     "textList64": {
       "type": "array", "maxItems": 64,

@@ -213,6 +213,7 @@ class ResearchReasonerMethodTests(unittest.TestCase):
         request = json.loads(user.removeprefix(
             "JSON goal interpretation input:\n"))
         self.assertEqual(request["goal_intent"], context["goal"]["intent"])
+        self.assertEqual(request["operative_attention_windows"], [])
         interpreted, result = interpret_goal(
             OpenAICompatibleChatProvider(), self.profile, context)
         self.assertEqual(interpreted["selected_template_id"],
@@ -228,6 +229,23 @@ class ResearchReasonerMethodTests(unittest.TestCase):
                          {"const": "fep.run_selected_edge.v1"})
         self.assertEqual(self.server.last_payload["temperature"], 0)
 
+    def test_goal_interpreter_attention_window_copies_current_revision_verbatim(self):
+        context = copy.deepcopy(self.context)
+        context["goal"]["intent"] = (
+            "REVISION v1 [OBSOLETE]: stop. "
+            "REVISION v2 [CURRENT, supersedes v1] — 继续研究 C2→C7. "
+            "DISCARDED: stop stop stop."
+        )
+        _system, user = build_goal_interpretation_messages(
+            context, system_prompt="Return JSON only.")
+        request = json.loads(user.removeprefix(
+            "JSON goal interpretation input:\n"))
+        self.assertEqual(len(request["operative_attention_windows"]), 1)
+        self.assertTrue(request["operative_attention_windows"][0].startswith(
+            "REVISION v2 [CURRENT"))
+        self.assertNotIn(
+            "REVISION v1", request["operative_attention_windows"][0])
+
     def test_invalid_first_proposal_regenerates_once_with_bounded_error(self):
         self.server.mode = "invalid-then-valid"
         _, job = self.run_job(self.payload("reasoner-regenerate"))
@@ -240,7 +258,7 @@ class ResearchReasonerMethodTests(unittest.TestCase):
         _, job = self.run_job(self.payload("reasoner-invalid"))
         self.assertEqual(job["state"], "failed", job)
         self.assertEqual(job["error_code"], "MODEL_OUTPUT_INVALID")
-        self.assertEqual(self.server.attempts, 2)
+        self.assertEqual(self.server.attempts, 3)
 
     def test_same_request_key_replays_job_without_second_provider_call(self):
         payload = self.payload("reasoner-idempotent")

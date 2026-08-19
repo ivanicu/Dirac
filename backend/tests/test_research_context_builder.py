@@ -72,6 +72,17 @@ def domain() -> dict:
 
 
 class ResearchContextBuilderTests(unittest.TestCase):
+    def test_goal_intent_accepts_16384_characters_and_rejects_16385(self):
+        at_limit = loop()
+        at_limit["intent"] = "x" * 16_384
+        built = ContextBuilder().build(at_limit, domain())
+        self.assertEqual(len(built.document["goal"]["intent"]), 16_384)
+
+        over_limit = loop()
+        over_limit["intent"] = "x" * 16_385
+        with self.assertRaises(failures.DiracInternal):
+            ContextBuilder().build(over_limit, domain())
+
     def test_same_frozen_state_is_byte_identical_and_digest_is_self_consistent(self):
         builder = ContextBuilder()
         frozen_loop = loop()
