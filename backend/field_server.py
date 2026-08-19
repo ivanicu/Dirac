@@ -2641,6 +2641,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         if not self._authenticate() or not self._authorize():
             return
+        if self.path == '/metrics':
+            from research.metrics import render_prometheus
+            self._send_bytes(
+                200, render_prometheus().encode('utf-8'),
+                'text/plain; version=0.0.4; charset=utf-8')
+            return
         # Ops surface. ONE dispatch line by design: handle_admin returns None
         # for a path it does not own, so this daemon's routing table stays
         # readable here while the query bodies live in one auditable module.

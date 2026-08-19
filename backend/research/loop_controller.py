@@ -13,6 +13,7 @@ from research.action_catalog import default_action_catalog
 from research.action_compiler import ActionCompiler
 from research.context_builder import ContextBuilder
 from research.loop_repository import LoopClaim, ResearchLoopRepository, stage_request_key
+from research.metrics import METRICS
 from research.provider_registry import AiProviderConfigurationError
 from research.reasoner import _prompt_release
 
@@ -111,6 +112,7 @@ class ResearchLoopController:
                 "iterations": int(budget["max_iterations"]),
             },
         )
+        self._record_loop_state(state)
         self.wake()
         return {
             "mission_ref": {"kind": "mission", "id": state["mission_id"]},
@@ -169,6 +171,8 @@ class ResearchLoopController:
             actor=actor, rationale=str(payload["rationale"]),
             acknowledgements=list(payload["acknowledgements"]),
         )
+        self._record_decision_metrics(state, preview, "approved")
+        self._record_loop_state(result, previous_stage=str(state["stage"]))
         self.wake()
         return {"run_ref": {"kind": "run", "id": run_id},
                 "state": result["state"], "stage": result["stage"],
@@ -193,6 +197,8 @@ class ResearchLoopController:
             source_versions=preview["source_versions"], decision="rejected",
             actor=actor, rationale=str(payload["rationale"]),
         )
+        self._record_decision_metrics(state, preview, "rejected")
+        self._record_loop_state(result, previous_stage=str(state["stage"]))
         self.wake()
         return {"run_ref": {"kind": "run", "id": run_id},
                 "state": result["state"], "stage": result["stage"],
@@ -202,9 +208,9 @@ class ResearchLoopController:
         action = str(payload["action"])
         provider_id = payload.get("provider_profile_id")
         provider_digest = None
+        loop = self.repository.get(payload["run_ref"]["id"], actor=actor)
         if action == "change_provider":
             try:
-                loop = self.repository.get(payload["run_ref"]["id"], actor=actor)
                 profile = self.providers.resolve(str(provider_id))
                 witness = self.providers.attest(
                     profile.profile_id, profile.profile_digest,
@@ -227,6 +233,7 @@ class ResearchLoopController:
             provider_profile_id=provider_id,
             provider_profile_digest=provider_digest,
         )
+        self._record_loop_state(state, previous_stage=str(loop["stage"]))
         self.wake()
         return {"run_ref": {"kind": "run", "id": state["run_id"]},
                 "state": state["state"], "stage": state["stage"],
@@ -260,6 +267,7 @@ class ResearchLoopController:
                     self._advance(claim)
                 except Exception as error:  # noqa: BLE001
                     self._block_claim(claim, error)
+                self._refresh_metrics(claim)
         finally:
             delay = self.repository.next_wake_delay(maximum_seconds=30)
             with self._lock:
@@ -435,6 +443,7 @@ class ResearchLoopController:
             raise failures.DiracStalePreview("proposal context digest is stale")
         current = self.fep.snapshot(claim.state)["campaign_binding"]
         if current != context["campaign_binding"]:
+            METRICS.counter("dirac_research_loop_stale_proposal_total")
             self.repository.transition(
                 claim, expected_version=claim.version, stage="snapshot_context",
                 event_type="proposal_stale", actor=self._automation_actor(),
@@ -493,6 +502,10 @@ class ResearchLoopController:
             "command_input": compiled.command_input,
         }
         approval = compiled.preview["consequence"]["approval"]
+        METRICS.counter("dirac_research_loop_action_total", {
+            "template_id": compiled.preview["template_id"], "result": "previewed",
+            "risk_class": compiled.preview["consequence"]["risk_class"],
+        })
         state = "waiting_approval" if approval == "per_action" else "active"
         stage = "await_approval" if approval == "per_action" else "dispatch"
         self.repository.transition(
@@ -557,6 +570,10 @@ class ResearchLoopController:
                      "executed_under": claim.state["actor_id"],
                      "automation_actor": self.instance_id},
             updates={"stage_jobs": jobs}, next_wake_seconds=1)
+        METRICS.counter("dirac_research_loop_action_total", {
+            "template_id": preview["template_id"], "result": "dispatched",
+            "risk_class": preview["consequence"]["risk_class"],
+        })
 
     def _stage_observe(self, claim: LoopClaim) -> None:
         active = claim.state["stage_jobs"]["active"]
@@ -578,6 +595,11 @@ class ResearchLoopController:
             payload=dict(active),
             updates={"outputs": outputs, "budget_remaining": remaining,
                      "budget_spent": spent, "pending_action": None})
+        preview = (claim.state.get("pending_action") or {}).get("preview") or {}
+        METRICS.counter("dirac_research_loop_action_total", {
+            "template_id": active.get("template_id", "unknown"), "result": "completed",
+            "risk_class": (preview.get("consequence") or {}).get("risk_class", "unknown"),
+        })
 
     def _stage_refresh(self, claim: LoopClaim) -> None:
         remaining = dict(claim.state["budget_remaining"])
@@ -616,6 +638,9 @@ class ResearchLoopController:
         if retry_stage == "wait_job":
             retry_stage = "reason" if active.get("kind") == "reason" else "dispatch"
         detail["retry_stage"] = retry_stage
+        METRICS.counter("dirac_research_loop_blocked_total", {
+            "reason_code": detail["code"],
+        })
         try:
             self.repository.transition(
                 claim, expected_version=claim.version, state="blocked",
@@ -624,6 +649,58 @@ class ResearchLoopController:
                 updates={"attention": detail})
         except Exception:
             pass
+
+    def _refresh_metrics(self, claim: LoopClaim) -> None:
+        getter = getattr(self.repository, "get", None)
+        if not callable(getter):
+            return
+        try:
+            current = getter(claim.run_id)
+        except Exception:  # observability cannot change controller semantics
+            return
+        self._record_loop_state(current, previous_stage=str(claim.state["stage"]))
+
+    @staticmethod
+    def _record_loop_state(state: Mapping[str, Any],
+                           previous_stage: str | None = None) -> None:
+        run_id = str(state.get("run_id") or "")
+        if not run_id:
+            return
+        METRICS.remove_contributions("dirac_research_loop_total", run_id)
+        METRICS.contribute("dirac_research_loop_total", run_id, 1, {
+            "state": state["state"], "stage": state["stage"],
+        })
+        if previous_stage is not None and previous_stage != state["stage"]:
+            METRICS.counter("dirac_research_loop_transition_total", {
+                "from_stage": previous_stage, "to_stage": state["stage"],
+            })
+        for resource, value in (state.get("budget_remaining") or {}).items():
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                identity = f"{run_id}:{resource}"
+                METRICS.contribute("dirac_research_loop_budget_remaining", identity,
+                                   float(value), {"resource": resource})
+
+    def _record_decision_metrics(self, state: Mapping[str, Any],
+                                 preview: Mapping[str, Any], decision: str) -> None:
+        consequence = preview.get("consequence") or {}
+        template_id = str(preview.get("template_id") or "unknown")
+        METRICS.counter("dirac_research_loop_action_total", {
+            "template_id": template_id, "result": decision,
+            "risk_class": str(consequence.get("risk_class") or "unknown"),
+        })
+        try:
+            events = self.repository.events(
+                str(state["run_id"]), actor=self._initiating_actor(state))
+            requested = next(
+                event for event in reversed(events)
+                if event.get("event_type") == "approval_requested")
+            started = datetime.fromisoformat(str(requested["occurred_at"]))
+            seconds = max(0.0, (datetime.now(timezone.utc) - started).total_seconds())
+            METRICS.observe("dirac_research_loop_approval_seconds", seconds, {
+                "template_id": template_id,
+            })
+        except Exception:
+            return
 
     def _store_artifact(self, state: Mapping[str, Any], raw: bytes,
                         role: str) -> dict[str, str]:

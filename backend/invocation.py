@@ -306,6 +306,14 @@ class InvocationService:
                 'state': ai_health,
                 'profiles': ai_profiles,
             },
+            'research_loop': {
+                'ready': getattr(self, 'research_loop_controller', None) is not None,
+                'durability': getattr(
+                    getattr(self, 'research_loop_controller', None),
+                    'durability', 'unavailable'),
+                'provider_configured': ai_health == 'configured',
+                'physical_fep_execution': gpu_execution,
+            },
             'cancellation': ('route-specific' if callable(getattr(
                 self.executor, 'cancellation_capability_for', None))
                 else 'queued-only'),

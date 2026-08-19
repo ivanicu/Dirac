@@ -7,6 +7,9 @@ export default defineConfig([{
     ignores: [
         "node_modules/*",
         "build/*",
+        ".runtime/*",
+        "backups/*",
+        "tmp/*",
         "deploy/*",
         "docs/site/*",
         "lib/*",

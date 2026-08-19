@@ -12,6 +12,7 @@ from .provider_registry import (
     ResolvedProviderProfile,
     validate_provider_url,
 )
+from .metrics import METRICS, model_family, status_class
 
 
 RETRYABLE_HTTP_STATUS = frozenset({429, 500, 502, 503, 504})
@@ -158,6 +159,35 @@ class OpenAICompatibleChatProvider:
         system_prompt: str,
         context_json: str,
     ) -> ProviderChatResult:
+        started = self._monotonic()
+        attempts = 0
+        try:
+            result = self._complete_json(
+                profile, system_prompt=system_prompt, context_json=context_json)
+            attempts = result.attempts
+            return result
+        except (ProviderUnavailable, ModelOutputInvalid) as error:
+            attempts = error.attempts
+            raise
+        finally:
+            METRICS.observe(
+                "dirac_research_loop_reasoner_seconds",
+                max(0.0, self._monotonic() - started),
+                {"profile_id": profile.profile_id,
+                 "model_family": model_family(profile.configured_model)},
+            )
+            METRICS.observe(
+                "dirac_research_loop_provider_attempts", attempts,
+                {"profile_id": profile.profile_id},
+            )
+
+    def _complete_json(
+        self,
+        profile: ResolvedProviderProfile,
+        *,
+        system_prompt: str,
+        context_json: str,
+    ) -> ProviderChatResult:
         endpoint = self._endpoint(profile)
         payload = self._request_body(profile, system_prompt, context_json)
         max_request = int(profile.document["bounds"]["max_request_bytes"])
@@ -192,6 +222,11 @@ class OpenAICompatibleChatProvider:
                             "response_bytes": len(body),
                         }
                     )
+                    METRICS.counter(
+                        "dirac_research_loop_provider_http_total",
+                        {"profile_id": profile.profile_id,
+                         "status_class": status_class(int(response.status))},
+                    )
                     if len(body) > max_response:
                         raise ModelOutputInvalid(
                             "provider_response_exceeds_profile_bound", attempts=attempt
@@ -211,6 +246,11 @@ class OpenAICompatibleChatProvider:
                         "duration_seconds": duration,
                         "response_bytes": 0,
                     }
+                )
+                METRICS.counter(
+                    "dirac_research_loop_provider_http_total",
+                    {"profile_id": profile.profile_id,
+                     "status_class": status_class(status)},
                 )
                 if status in {301, 302, 303, 307, 308}:
                     raise ProviderUnavailable("provider_redirect_refused", attempts=attempt) from None
@@ -232,6 +272,11 @@ class OpenAICompatibleChatProvider:
                         "response_bytes": 0,
                         "exception": type(error).__name__,
                     }
+                )
+                METRICS.counter(
+                    "dirac_research_loop_provider_http_total",
+                    {"profile_id": profile.profile_id,
+                     "status_class": "transport_error"},
                 )
                 if attempt >= maximum_attempts:
                     raise ProviderUnavailable(

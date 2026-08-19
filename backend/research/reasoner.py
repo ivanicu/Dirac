@@ -28,6 +28,7 @@ from .provider_registry import (
     canonical_json,
     sha256_digest,
 )
+from .metrics import METRICS
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -254,6 +255,9 @@ def propose_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
                 details={"reason": error.reason, "attempts": error.attempts},
             ) from None
         except ModelOutputInvalid as error:
+            METRICS.counter("dirac_research_loop_proposal_validation_total", {
+                "result": "transport_invalid",
+            })
             validation_error = {
                 "reason": error.reason,
                 "pointer": [],
@@ -272,6 +276,9 @@ def propose_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
                 result.content, context=context, action_catalog=catalog
             )
         except ProposalValidationError as error:
+            METRICS.counter("dirac_research_loop_proposal_validation_total", {
+                "result": "schema_invalid",
+            })
             validation_error = error.bounded_summary()
             if validation_attempt <= maximum_regenerations:
                 continue
@@ -280,6 +287,9 @@ def propose_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
                 details={"validation": validation_error, "attempts": validation_attempt},
             ) from None
 
+        METRICS.counter("dirac_research_loop_proposal_validation_total", {
+            "result": "accepted",
+        })
         return HandlerResult(
             result={
                 "context_digest": payload["context_digest"],
