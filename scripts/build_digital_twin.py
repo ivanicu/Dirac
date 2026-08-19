@@ -506,6 +506,8 @@ def add_system_and_flows(twin: Twin) -> None:
         ('system:invocation', 'system', 'InvocationService', 'application'),
         ('system:kernel', 'system', 'DiracKernel', 'application'),
         ('system:executor', 'system', 'Executor boundary', 'execution'),
+        ('system:research-loop-controller', 'system', 'Durable FEP Research Loop Controller', 'application'),
+        ('system:research-proposal-validator', 'system', 'Bounded Proposal Validator', 'application'),
         ('store:jobs', 'store', 'Durable JobStore', 'persistence'),
         ('store:result-cache', 'store', 'Method-current ResultCache', 'persistence'),
         ('store:artifacts', 'store', 'Content-addressed ArtifactStore', 'persistence'),
@@ -515,6 +517,7 @@ def add_system_and_flows(twin: Twin) -> None:
         ('external:rdkit', 'external-system', 'RDKit chemistry', 'external'),
         ('external:pyscf', 'external-system', 'PySCF quantum chemistry', 'external'),
         ('external:xtb', 'external-system', 'xTB quantum chemistry', 'external'),
+        ('external:openai-compatible-provider', 'external-system', 'Qwen / OpenAI-compatible inference provider', 'external'),
         ('service:fields', 'service', 'dirac-fields.service :8901', 'runtime'),
         ('service:web', 'service', 'dirac-web.service :1360', 'runtime'),
         ('service:twin-watcher', 'service', 'dirac-digital-twin.service', 'runtime'),
@@ -538,6 +541,13 @@ def add_system_and_flows(twin: Twin) -> None:
     twin.edge('system:executor', 'store:jobs', 'updates')
     twin.edge('system:invocation', 'store:result-cache', 'reads-writes')
     twin.edge('system:invocation', 'store:artifacts', 'writes')
+    twin.edge('system:research-loop-controller', 'system:dispatcher', 'uses-governed-commands')
+    twin.edge('system:research-loop-controller', 'store:jobs', 'waits-without-blocking')
+    twin.edge('system:research-loop-controller', 'store:artifacts', 'freezes-context-and-proposals')
+    twin.edge('system:research-loop-controller', 'store:postgres', 'checkpoints-state-events-approvals')
+    twin.edge('system:research-loop-controller', 'external:openai-compatible-provider', 'requests-bounded-inference')
+    twin.edge('external:openai-compatible-provider', 'system:research-proposal-validator', 'returns-untrusted-json')
+    twin.edge('system:research-proposal-validator', 'system:research-loop-controller', 'returns-proposal-not-command')
     twin.edge('store:jobs', 'store:postgres', 'persists-in')
     twin.edge('store:result-cache', 'store:postgres', 'persists-in')
     twin.edge('store:artifacts', 'store:postgres', 'indexes-in')
@@ -563,6 +573,19 @@ def add_system_and_flows(twin: Twin) -> None:
                   ('system:invocation', 'identifies request + method version'), ('store:result-cache', 'checks current result'),
                   ('store:jobs', 'creates durable job'), ('system:executor', 'runs workload'),
                   ('store:artifacts', 'stores content by hash'), ('store:jobs', 'records terminal summary')])
+    twin.flow('ai-fep-evidence-loop', 'AI-guided FEP evidence acquisition · governed closed loop',
+              'The model proposes from a frozen context; Dirac resolves and governs every action, and only new durable evidence opens the next reasoning iteration.', [
+                  ('actor:human', 'states intent and freezes budget + egress policy'),
+                  ('system:research-loop-controller', 'snapshots typed source facts with claim boundaries'),
+                  ('store:artifacts', 'persists the bounded context'),
+                  ('external:openai-compatible-provider', 'returns JSON proposal without execution authority'),
+                  ('system:research-proposal-validator', 'rejects invented refs, tools and evidence promotion'),
+                  ('system:research-loop-controller', 'compiles exact server-owned FEP action preview'),
+                  ('actor:human', 'approves exact R3 physical consequence'),
+                  ('system:dispatcher', 'submits one idempotent governed RunSet'),
+                  ('store:jobs', 'survives browser and backend restart'),
+                  ('store:artifacts', 'records completed-unvalidated result'),
+                  ('system:research-loop-controller', 'refreshes context and reasons or stops explicitly')])
     twin.flow('cache-hit', 'Method-current cache hit',
               'Identity includes canonical input and method version; stale science cannot masquerade as current.', [
                   ('system:invocation', 'computes identity'), ('registry:methods', 'supplies method version'),

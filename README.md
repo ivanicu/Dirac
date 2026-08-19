@@ -71,6 +71,27 @@ identity, missing preparation witnesses, hard clashes and unverified mappings ke
 execution locked. Human review can accept a pose hypothesis; it cannot manufacture a
 scientific result or override missing machine evidence.
 
+#### AI-guided FEP research loop
+
+The Workbench Research Loop drawer closes one bounded evidence-acquisition cycle over an
+already governed, planned FEP Campaign. An OpenAI-compatible Qwen provider receives a
+frozen, size-bounded context and may return only a schema-validated proposal. Dirac—not the
+model—resolves server-owned references, compiles the exact action, enforces the frozen
+budget and policy, and requires a human decision for physical R3 execution. Durable Jobs,
+Artifacts, events, approvals and request keys allow the cycle to resume after browser or
+backend restart.
+
+The three completion claims remain separate:
+
+- **Workflow completion** means the controller reached an explicit stop or terminal state.
+- **Execution correctness** means the admitted Job/RunSet completed under its pinned inputs,
+  method and provenance contract.
+- **Scientific validity** requires the existing quality projection and typed Evidence path;
+  a model proposal and a `completed_unvalidated` FEP result are not scientific evidence.
+
+Provider failure degrades only this optional capability. It does not disable the FEP
+Workbench, existing Commands, Jobs or Artifacts, and no automatic provider fallback occurs.
+
 ### Motif Workbench · Field
 
 ![A computed electrostatic field rendered in Dirac's shared molecular scene](docs/screenshots/02_fields_electrostatic_well.png)

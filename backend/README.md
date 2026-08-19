@@ -41,6 +41,7 @@ scientific output.
 | `artifacts.py` | local and PostgreSQL content-addressed artifact stores |
 | `programs/` | durable Program aggregate and repository logic |
 | `motif/` | governed data, model, proposal, structure, physics and closed-loop workflows |
+| `research/` | bounded provider adapter and durable AI-guided FEP evidence-acquisition controller |
 | `execution_control/` | allocation, attempt identity, leases, retries, reconciliation and completion |
 | `executors/` | local process/GPU and Kubernetes/Kueue adapters |
 | `db/` | PostgreSQL schema, migrations, checks and operational views |
@@ -100,3 +101,24 @@ After changing any backend file on the canonical workstation, restart
 - A Job/transport parity test proves routing and persistence, not scientific validity.
 - GPU work is submitted through the configured execution boundary; repository users must
   not launch competing unmanaged CUDA work.
+- Research-loop completion is workflow state, not proof of execution correctness or
+  scientific validity. Model proposals remain non-evidence; completed FEP Method results
+  remain `completed_unvalidated` until the existing typed quality/evidence projection.
+
+## AI research-loop verification
+
+The provider is optional and OpenAI-compatible. Missing provider configuration leaves the
+core service healthy and reports the AI capability as degraded; shared-Dirac-GPU provider
+profiles are refused. The production loop requires forward migrations 049 and 050.
+
+```bash
+bash scripts/gates.sh research
+
+# Additional durable PostgreSQL and fake-provider acceptance:
+DIRAC_TEST_DSN='dbname=<isolated-test-db>' bash scripts/gates.sh research
+```
+
+The acceptance script replaces only the expensive OpenFE RunSet with an explicitly fake,
+deterministic implementation. Command dispatch, Method invocation, provider HTTP, Jobs,
+Artifacts, approvals, database checkpoints and reload are real. It refuses any database
+whose name does not contain `test`.

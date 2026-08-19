@@ -46,7 +46,7 @@ run_gate() {
 }
 
 # ---- gate selection -------------------------------------------------------
-ALL=(tsc build palette css migrations docs contracts physics commits portability layering golden parity security twin)
+ALL=(tsc build palette css migrations docs contracts physics commits portability layering golden parity security twin research)
 if [ "$#" -eq 0 ]; then
     WANT=("${ALL[@]}")
 else
@@ -177,6 +177,42 @@ if wanted security; then
         run_gate 'gate-15b-remote-security-pg' backend/env/bin/python backend/tests/test_security_pg.py
     else
         printf '%s\n' "${YEL:-}SKIP${OFF} gate-15b-remote-security-pg (no database reachable — UNVERIFIED, not clean)"
+    fi
+fi
+
+# Gate 16 · attachment-defined AI-guided FEP loop. The portable half proves the
+# provider, proposal, controller, FEP and no-GPU refusal contracts on every run.
+# PostgreSQL/restart/secret/acceptance evidence is required when and only when an
+# explicitly isolated DIRAC_TEST_DSN is supplied; absence is UNVERIFIED, never green.
+if wanted research; then
+    run_gate 'gate-16-research-loop-portable' env \
+        PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=backend:. \
+        backend/env/bin/python -m pytest -q \
+        backend/tests/test_ai_provider_registry.py \
+        backend/tests/test_openai_compatible_provider.py \
+        backend/tests/test_research_action_catalog.py \
+        backend/tests/test_research_action_compiler.py \
+        backend/tests/test_research_context_builder.py \
+        backend/tests/test_research_fep_adapter.py \
+        backend/tests/test_research_loop_controller.py \
+        backend/tests/test_research_loop_metrics.py \
+        backend/tests/test_research_proposal_adversarial.py \
+        backend/tests/test_research_reasoner_method.py \
+        backend/tests/test_rbfe_public_contracts.py
+    if [ -n "${DIRAC_TEST_DSN:-}" ] && \
+            test_db="$(psql "$DIRAC_TEST_DSN" -XtAc 'SELECT current_database()' 2>/dev/null)" && \
+            [[ "$test_db" == *test* ]]; then
+        run_gate 'gate-16b-research-loop-postgres' env \
+            DIRAC_TEST_DSN="$DIRAC_TEST_DSN" PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=backend:. \
+            backend/env/bin/python -m pytest -q \
+            backend/tests/test_research_loop_repository.py \
+            backend/tests/test_research_loop_restart.py \
+            backend/tests/test_research_loop_security.py
+        run_gate 'gate-16c-research-loop-acceptance' env \
+            DIRAC_TEST_DSN="$DIRAC_TEST_DSN" PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=backend:. \
+            backend/env/bin/python scripts/research_loop_acceptance.py
+    else
+        printf '%s\n' "${YEL:-}SKIP${OFF} gate-16b/c-research-loop-postgres (no isolated DIRAC_TEST_DSN — UNVERIFIED, not clean)"
     fi
 fi
 
