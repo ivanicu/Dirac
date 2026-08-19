@@ -15,7 +15,11 @@ from invocation import InvocationService
 from jobs import MemoryJobStore
 from research.action_catalog import default_action_catalog
 from research.provider_registry import FileAiProviderRegistry, canonical_json
-from research.reasoner import _prompt_release, build_messages
+from research.reasoner import (
+    _prompt_release,
+    build_generation_schema,
+    build_messages,
+)
 from scripts.research_loop_fake_provider import FakeProviderServer, Handler
 
 from backend.tests.test_research_proposal_adversarial import context as context_fixture
@@ -147,6 +151,42 @@ class ResearchReasonerMethodTests(unittest.TestCase):
         self.assertEqual(contract["properties"]["schema_version"]["const"], "1.0")
         self.assertEqual(wrapper["research_context"]["digest"], self.context["digest"])
         self.assertNotIn("command_id", json.dumps(wrapper["research_context"]))
+
+    def test_provider_generation_schema_is_bound_to_frozen_context_and_catalog(self):
+        schema = build_generation_schema(self.context, default_action_catalog())
+        self.assertEqual(
+            schema["properties"]["context_digest"], {"const": self.context["digest"]}
+        )
+        self.assertEqual(
+            schema["properties"]["scientific_questions"]["items"]["properties"][
+                "question_id"
+            ],
+            {"const": "q1"},
+        )
+        self.assertEqual(schema["properties"]["preferred_action_id"], {"const": "a1"})
+        self.assertEqual(
+            schema["properties"]["claim_assessments"]["items"]["properties"][
+                "interpretation"
+            ],
+            {"const": "unresolved"},
+        )
+        branches = schema["properties"]["candidate_actions"]["items"]["oneOf"]
+        self.assertEqual(len(branches), 1)
+        properties = branches[0]["properties"]
+        self.assertEqual(
+            properties["template_id"], {"const": "fep.run_selected_edge.v1"}
+        )
+        self.assertEqual(
+            properties["subject_ref"], {"const": self.context["objects"][0]["ref"]}
+        )
+        self.assertEqual(
+            properties["parameter_hints"]["properties"]["edge_id"],
+            {"const": "edge-c2-c7"},
+        )
+        self.assertEqual(
+            schema["$defs"]["factIds"]["items"],
+            {"enum": ["fact:edge:unvalidated"]},
+        )
 
     def test_invalid_first_proposal_regenerates_once_with_bounded_error(self):
         self.server.mode = "invalid-then-valid"

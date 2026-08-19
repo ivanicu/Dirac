@@ -5,7 +5,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
 from .provider_registry import (
     AiProviderConfigurationError,
@@ -17,6 +17,9 @@ from .metrics import METRICS, model_family, status_class
 
 RETRYABLE_HTTP_STATUS = frozenset({429, 500, 502, 503, 504})
 MAX_RETRY_AFTER_SECONDS = 10.0
+GENERATION_UNSUPPORTED_SCHEMA_KEYS = frozenset({"propertyNames", "uniqueItems"})
+GENERATION_MAX_ITEMS = 1
+GENERATION_MAX_TEXT_LENGTH = 512
 
 
 class ProviderUnavailable(RuntimeError):
@@ -40,6 +43,27 @@ class ModelOutputInvalid(RuntimeError):
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
         return None
+
+
+def _generation_schema(value: Any) -> Any:
+    """Keep grammar-expressible constraints; DIRAC still validates the frozen schema."""
+
+    if isinstance(value, Mapping):
+        result = {
+            key: _generation_schema(item)
+            for key, item in value.items()
+            if key not in GENERATION_UNSUPPORTED_SCHEMA_KEYS
+        }
+        if isinstance(result.get("maxItems"), int):
+            result["maxItems"] = min(result["maxItems"], GENERATION_MAX_ITEMS)
+        if isinstance(result.get("maxLength"), int):
+            result["maxLength"] = min(
+                result["maxLength"], GENERATION_MAX_TEXT_LENGTH
+            )
+        return result
+    if isinstance(value, list):
+        return [_generation_schema(item) for item in value]
+    return value
 
 
 @dataclass(frozen=True)
@@ -93,17 +117,32 @@ class OpenAICompatibleChatProvider:
 
     @staticmethod
     def _request_body(
-        profile: ResolvedProviderProfile, system_prompt: str, context_json: str
+        profile: ResolvedProviderProfile, system_prompt: str, context_json: str,
+        output_schema: Mapping[str, Any] | None,
     ) -> bytes:
         if "JSON" not in system_prompt.upper() or "JSON" not in context_json.upper():
             raise ModelOutputInvalid("messages_must_explicitly_request_json")
+        response_mode = str(profile.document["response_mode"])
+        if response_mode == "json_schema":
+            if not isinstance(output_schema, Mapping):
+                raise ModelOutputInvalid("json_schema_profile_requires_output_schema")
+            response_format: dict[str, Any] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "dirac_research_proposal",
+                    "strict": True,
+                    "schema": _generation_schema(output_schema),
+                },
+            }
+        else:
+            response_format = {"type": "json_object"}
         body: dict[str, Any] = {
             "model": profile.configured_model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": context_json},
             ],
-            "response_format": {"type": "json_object"},
+            "response_format": response_format,
             "stream": False,
         }
         body.update(dict(profile.document["static_request_fields"]))
@@ -158,12 +197,14 @@ class OpenAICompatibleChatProvider:
         *,
         system_prompt: str,
         context_json: str,
+        output_schema: Mapping[str, Any] | None = None,
     ) -> ProviderChatResult:
         started = self._monotonic()
         attempts = 0
         try:
             result = self._complete_json(
-                profile, system_prompt=system_prompt, context_json=context_json)
+                profile, system_prompt=system_prompt, context_json=context_json,
+                output_schema=output_schema)
             attempts = result.attempts
             return result
         except (ProviderUnavailable, ModelOutputInvalid) as error:
@@ -187,9 +228,11 @@ class OpenAICompatibleChatProvider:
         *,
         system_prompt: str,
         context_json: str,
+        output_schema: Mapping[str, Any] | None,
     ) -> ProviderChatResult:
         endpoint = self._endpoint(profile)
-        payload = self._request_body(profile, system_prompt, context_json)
+        payload = self._request_body(
+            profile, system_prompt, context_json, output_schema)
         max_request = int(profile.document["bounds"]["max_request_bytes"])
         max_response = int(profile.document["bounds"]["max_response_bytes"])
         if len(payload) > max_request:

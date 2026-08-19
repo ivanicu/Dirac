@@ -148,6 +148,23 @@ class ResearchProposalAdversarialTests(unittest.TestCase):
             with self.assertRaises(ProposalValidationError):
                 self.validate(item)
 
+    def test_catalogued_but_currently_unavailable_action_fails_closed(self):
+        catalog = copy.deepcopy(CATALOG)
+        catalog["fep.stop.v1"] = {
+            "model_hint_schema": {
+                "type": "object", "additionalProperties": False,
+                "required": ["reason_code"],
+                "properties": {"reason_code": {"type": "string"}},
+            }
+        }
+        item = proposal()
+        item["candidate_actions"][0]["template_id"] = "fep.stop.v1"
+        item["candidate_actions"][0]["parameter_hints"] = {"reason_code": "DONE"}
+        with self.assertRaisesRegex(
+            ProposalValidationError, "proposal_action_is_not_currently_available"
+        ):
+            validate_proposal(item, context=context(), action_catalog=catalog)
+
     def test_direct_execution_url_shell_sql_and_tool_fields_fail_closed(self):
         payloads = [
             "Run physics.rbfe-run.start now.",

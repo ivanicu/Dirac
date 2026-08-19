@@ -189,8 +189,12 @@ def validate_proposal(
     facts = {item["fact_id"]: item for item in context["facts"]}
     object_refs = {_ref_key(item["ref"]) for item in context["objects"]}
     object_refs.update(_ref_key(item["subject_ref"]) for item in context["facts"])
+    available_action_refs: set[tuple[str, tuple[str, str]]] = set()
     for action in context["available_actions"]:
         object_refs.update(_ref_key(ref) for ref in action["subject_refs"])
+        available_action_refs.update(
+            (action["template_id"], _ref_key(ref)) for ref in action["subject_refs"]
+        )
 
     stale_fact_ids = {key for key, fact in facts.items() if fact["freshness"]["stale"]}
     for fact_id, pointer, limitation_text in _fact_references(document):
@@ -237,6 +241,14 @@ def validate_proposal(
             raise ProposalValidationError(
                 "proposal_references_unknown_subject",
                 pointer=("candidate_actions", index, "subject_ref"),
+            )
+        action_availability_key = (
+            action["template_id"], _ref_key(action["subject_ref"])
+        )
+        if action_availability_key not in available_action_refs:
+            raise ProposalValidationError(
+                "proposal_action_is_not_currently_available",
+                pointer=("candidate_actions", index, "template_id"),
             )
         template = action_catalog.get(action["template_id"])
         if template is None:

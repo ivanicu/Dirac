@@ -76,6 +76,7 @@ class FakeProviderServer(ThreadingHTTPServer):
         super().__init__(address, handler)
         self.mode = mode
         self.attempts = 0
+        self.last_payload: dict | None = None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -106,6 +107,7 @@ class Handler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             self._send(400, b'{}')
             return
+        self.server.last_payload = payload
         if payload.get("stream") is not False or payload.get("tools") is not None:
             self._send(400, b'{}')
             return

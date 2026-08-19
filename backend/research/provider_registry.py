@@ -19,6 +19,7 @@ PROFILE_SCHEMA_PATH = (
 )
 CONFIG_ENV = "DIRAC_AI_PROVIDER_CONFIG"
 ALLOWLIST_ENV = "DIRAC_AI_PROVIDER_HOST_ALLOWLIST"
+SHARED_GPU_GRANT_ENV = "DIRAC_ALLOW_SHARED_GPU_AI"
 
 
 class AiProviderConfigurationError(ValueError):
@@ -215,13 +216,16 @@ class FileAiProviderRegistry:
             raise AiProviderConfigurationError(
                 "provider_profile_not_found", details={"profile_id": profile_id}
             )
-        if document["resource_isolation"] == "shared_dirac_gpu":
+        if (
+            document["resource_isolation"] == "shared_dirac_gpu"
+            and self._environ.get(SHARED_GPU_GRANT_ENV) != "1"
+        ):
             raise AiProviderConfigurationError(
-                "shared_gpu_provider_not_supported_in_v0",
+                "shared_gpu_provider_requires_explicit_grant",
                 details={
-                    "reason": "shared_gpu_provider_not_supported_in_v0",
+                    "reason": "shared_gpu_provider_requires_explicit_grant",
                     "recovery": (
-                        "use cloud inference or a separately isolated model endpoint"
+                        "use an isolated endpoint or set the host-scoped shared GPU grant"
                     ),
                 },
             )

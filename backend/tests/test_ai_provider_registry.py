@@ -62,14 +62,28 @@ class AiProviderRegistryTests(unittest.TestCase):
         self.assertFalse(public[0]["configured"])
         self.assertEqual(public[0]["reason"], "provider_profile_is_unconfigured")
 
-    def test_shared_gpu_profile_is_rejected_in_v0(self):
+    def test_shared_gpu_profile_is_rejected_without_explicit_host_grant(self):
         self.profile["resource_isolation"] = "shared_dirac_gpu"
         registry = _registry(self.profile, self.environ)
         with self.assertRaisesRegex(
-            AiProviderConfigurationError, "shared_gpu_provider_not_supported_in_v0"
+            AiProviderConfigurationError, "shared_gpu_provider_requires_explicit_grant"
         ) as caught:
             registry.resolve("qwen-local-isolated")
-        self.assertIn("separately isolated", caught.exception.details["recovery"])
+        self.assertIn("host-scoped", caught.exception.details["recovery"])
+
+    def test_shared_gpu_profile_resolves_only_with_exact_host_grant(self):
+        self.profile["resource_isolation"] = "shared_dirac_gpu"
+        denied = {**self.environ, "DIRAC_ALLOW_SHARED_GPU_AI": "true"}
+        with self.assertRaisesRegex(
+            AiProviderConfigurationError, "shared_gpu_provider_requires_explicit_grant"
+        ):
+            _registry(self.profile, denied).resolve("qwen-local-isolated")
+
+        granted = {**self.environ, "DIRAC_ALLOW_SHARED_GPU_AI": "1"}
+        resolved = _registry(self.profile, granted).resolve("qwen-local-isolated")
+        self.assertEqual(
+            resolved.to_provenance()["resource_isolation"], "shared_dirac_gpu"
+        )
 
     def test_profile_schema_rejects_arbitrary_static_request_fields(self):
         self.profile["static_request_fields"]["tools"] = []

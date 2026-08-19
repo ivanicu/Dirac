@@ -109,7 +109,10 @@ After changing any backend file on the canonical workstation, restart
 
 The provider is optional and OpenAI-compatible. Missing provider configuration leaves the
 core service healthy and reports the AI capability as degraded; shared-Dirac-GPU provider
-profiles are refused. The production loop requires forward migrations 049 and 050.
+profiles remain fail-closed unless the host operator sets the exact
+`DIRAC_ALLOW_SHARED_GPU_AI=1` grant. That grant records deployment authority only; model
+proposals still pass the frozen schema, current-action and scientific-evidence validators.
+The production loop requires forward migrations 049 and 050.
 
 ```bash
 bash scripts/gates.sh research

@@ -11,6 +11,7 @@ from research.openai_compatible import (
     ModelOutputInvalid,
     OpenAICompatibleChatProvider,
     ProviderUnavailable,
+    _generation_schema,
 )
 from research.provider_registry import FileAiProviderRegistry
 from scripts.research_loop_fake_provider import FakeProviderServer, Handler
@@ -19,6 +20,9 @@ from scripts.research_loop_fake_provider import FakeProviderServer, Handler
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 EXAMPLE = json.loads(
     (ROOT / "deploy/ai/providers.example.json").read_text(encoding="utf-8")
+)
+OUTPUT_SCHEMA = json.loads(
+    (ROOT / "contracts/domain/research/proposal.schema.json").read_text(encoding="utf-8")
 )
 
 
@@ -54,6 +58,7 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
             self.profile,
             system_prompt="Return one bounded JSON object and never call tools.",
             context_json='JSON context: {"facts":[]}',
+            output_schema=OUTPUT_SCHEMA,
         )
 
     def test_valid_response_returns_only_bounded_public_fields(self):
@@ -63,6 +68,22 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
         self.assertEqual(result.usage["total_tokens"], 30)
         self.assertNotIn("reasoning", repr(result))
         self.assertNotIn("test-secret-never-leak", repr(result))
+        response_format = self.server.last_payload["response_format"]
+        self.assertEqual(response_format["type"], "json_schema")
+        self.assertTrue(response_format["json_schema"]["strict"])
+        self.assertEqual(
+            response_format["json_schema"]["schema"], _generation_schema(OUTPUT_SCHEMA)
+        )
+        for keyword in ("propertyNames", "uniqueItems"):
+            self.assertIn(keyword, json.dumps(OUTPUT_SCHEMA))
+            self.assertNotIn(
+                keyword, json.dumps(response_format["json_schema"]["schema"])
+            )
+        generation = response_format["json_schema"]["schema"]
+        self.assertEqual(generation["properties"]["candidate_actions"]["maxItems"], 1)
+        self.assertEqual(generation["$defs"]["text4096"]["maxLength"], 512)
+        self.assertEqual(OUTPUT_SCHEMA["properties"]["candidate_actions"]["maxItems"], 12)
+        self.assertEqual(OUTPUT_SCHEMA["$defs"]["text4096"]["maxLength"], 4096)
 
     def test_action_mode_binds_to_the_request_context_digest(self):
         self.server.mode = "action"
@@ -81,6 +102,7 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
                     }],
                 },
             })),
+            output_schema=OUTPUT_SCHEMA,
         )
         proposal = json.loads(result.content)
         self.assertEqual(proposal["context_digest"], "sha256:" + "9" * 64)
@@ -147,6 +169,7 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
                 self.profile,
                 system_prompt="Return JSON.",
                 context_json="JSON context: {}",
+                output_schema=OUTPUT_SCHEMA,
             )
         self.assertEqual(caught.exception.attempts, 3)
         self.assertNotIn(str(self.server.server_port), repr(caught.exception))
@@ -161,6 +184,7 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
                 self.profile,
                 system_prompt="Return JSON.",
                 context_json="JSON " + "x" * 2000,
+                output_schema=OUTPUT_SCHEMA,
             )
         self.assertEqual(self.server.attempts, 0)
 

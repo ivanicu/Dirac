@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import pathlib
@@ -63,6 +64,97 @@ def _prompt_release() -> tuple[dict[str, Any], str, str]:
                 f"research prompt release {field} does not match its current source"
             )
     return manifest, sha256_digest(manifest), system_prompt
+
+
+def build_generation_schema(
+    context: Mapping[str, Any], catalog: Mapping[str, Mapping[str, Any]]
+) -> dict[str, Any]:
+    """Bind provider grammar to IDs and action shapes in the frozen context."""
+
+    try:
+        schema = json.loads(PROPOSAL_SCHEMA_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise failures.DiracInternal(
+            f"research proposal contract cannot be loaded: {type(error).__name__}"
+        ) from None
+
+    schema["properties"]["context_digest"] = {"const": context["digest"]}
+    singleton_ids = {
+        "hypothesis_drafts": ("hypothesis_id", "h1"),
+        "claim_assessments": ("claim_id", "c1"),
+        "scientific_questions": ("question_id", "q1"),
+        "candidate_actions": ("proposal_action_id", "a1"),
+    }
+    for section, (field, value) in singleton_ids.items():
+        section_schema = schema["properties"][section]
+        section_schema["minItems"] = 1
+        section_schema["items"]["properties"][field] = {"const": value}
+    schema["properties"]["candidate_actions"]["items"]["properties"][
+        "scientific_question_id"
+    ] = {"const": "q1"}
+    schema["properties"]["preferred_action_id"] = {"const": "a1"}
+
+    has_eligible_evidence = any(
+        item["source_class"] == "typed_evidence"
+        and item["claim_boundary"]["eligible_as_scientific_evidence"]
+        for item in context["facts"]
+    )
+    if not has_eligible_evidence:
+        schema["properties"]["claim_assessments"]["items"]["properties"][
+            "interpretation"
+        ] = {"const": "unresolved"}
+    fact_ids = sorted({str(item["fact_id"]) for item in context["facts"]})
+    fact_id_schema = schema["$defs"]["factIds"]
+    if fact_ids:
+        fact_id_schema["items"] = {"enum": fact_ids}
+    else:
+        fact_id_schema["maxItems"] = 0
+
+    refs: dict[tuple[str, str], dict[str, str]] = {}
+    for item in context["objects"]:
+        ref = item["ref"]
+        refs[(ref["kind"], ref["id"])] = dict(ref)
+    for item in context["facts"]:
+        ref = item["subject_ref"]
+        refs[(ref["kind"], ref["id"])] = dict(ref)
+    for available in context["available_actions"]:
+        for ref in available["subject_refs"]:
+            refs[(ref["kind"], ref["id"])] = dict(ref)
+    subject_refs = [refs[key] for key in sorted(refs)]
+    if subject_refs:
+        schema["properties"]["scientific_questions"]["items"]["properties"][
+            "subject_ref"
+        ] = {"enum": subject_refs}
+
+    candidate = schema["properties"]["candidate_actions"]["items"]
+    branches: list[dict[str, Any]] = []
+    for available in context["available_actions"]:
+        template_id = str(available["template_id"])
+        template = catalog.get(template_id)
+        if template is None:
+            raise failures.DiracInternal(
+                f"research context exposes unknown action template {template_id}"
+            )
+        for subject_ref in available["subject_refs"]:
+            branch = copy.deepcopy(candidate)
+            branch["properties"]["proposal_action_id"] = {"const": "a1"}
+            branch["properties"]["scientific_question_id"] = {"const": "q1"}
+            branch["properties"]["template_id"] = {"const": template_id}
+            branch["properties"]["subject_ref"] = {"const": dict(subject_ref)}
+            hints = copy.deepcopy(template["model_hint_schema"])
+            edge = hints.get("properties", {}).get("edge_id")
+            if (
+                isinstance(edge, dict)
+                and subject_ref["kind"] == "free_energy_transformation"
+            ):
+                hints["properties"]["edge_id"] = {"const": subject_ref["id"]}
+            branch["properties"]["parameter_hints"] = hints
+            branches.append(branch)
+    if not branches:
+        schema["properties"]["candidate_actions"]["maxItems"] = 0
+    else:
+        schema["properties"]["candidate_actions"]["items"] = {"oneOf": branches}
+    return schema
 
 
 def _read_context(payload: Mapping[str, Any], ctx: InvocationContext) -> dict[str, Any]:
@@ -244,6 +336,7 @@ def propose_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
             details={"reason": error.reason, **error.details},
         ) from None
     provider = OpenAICompatibleChatProvider()
+    output_schema = build_generation_schema(context, catalog)
     maximum_regenerations = int(profile.document["bounds"]["max_schema_regenerations"])
     validation_error: dict[str, Any] | None = None
     usage: dict[str, Any] = {}
@@ -257,7 +350,8 @@ def propose_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
         )
         try:
             result = provider.complete_json(
-                profile, system_prompt=system, context_json=user
+                profile, system_prompt=system, context_json=user,
+                output_schema=output_schema,
             )
         except ProviderUnavailable as error:
             raise failures.DiracProviderUnavailable(

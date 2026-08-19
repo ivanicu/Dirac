@@ -22,14 +22,19 @@
     "resource_isolation": {
       "enum": ["provider_managed", "separate_host_or_gpu", "shared_dirac_gpu"]
     },
-    "response_mode": {"const": "json_object"},
+    "response_mode": {"enum": ["json_object", "json_schema"]},
     "stream": {"const": false},
     "static_request_fields": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "enable_thinking": {"type": "boolean"},
-        "temperature": {"type": "number", "minimum": 0, "maximum": 2}
+        "temperature": {"type": "number", "minimum": 0, "maximum": 2},
+        "top_p": {"type": "number", "minimum": 0, "maximum": 1},
+        "top_k": {"type": "integer", "minimum": -1, "maximum": 1000},
+        "min_p": {"type": "number", "minimum": 0, "maximum": 1},
+        "presence_penalty": {"type": "number", "minimum": -2, "maximum": 2},
+        "repetition_penalty": {"type": "number", "minimum": 0, "maximum": 2}
       }
     },
     "timeouts": {

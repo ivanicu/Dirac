@@ -43,12 +43,19 @@
       "protocol": "openai_chat_completions",
       "base_url_env": "DIRAC_LOCAL_QWEN_BASE_URL",
       "api_key_env": "DIRAC_LOCAL_QWEN_API_KEY",
-      "model": "Qwen/Qwen3-Instruct",
+      "model": "Qwen3.5-2B",
       "locality": "local_network",
       "resource_isolation": "separate_host_or_gpu",
-      "response_mode": "json_object",
+      "response_mode": "json_schema",
       "stream": false,
-      "static_request_fields": {"temperature": 0.1},
+      "static_request_fields": {
+        "temperature": 1.0,
+        "top_p": 1.0,
+        "top_k": 20,
+        "min_p": 0.0,
+        "presence_penalty": 2.0,
+        "repetition_penalty": 1.0
+      },
       "timeouts": {"request_seconds": 180, "connect_seconds": 5},
       "bounds": {
         "max_request_bytes": 262144,
