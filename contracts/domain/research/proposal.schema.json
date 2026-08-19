@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.ivan.icu/schema/research/proposal.schema.json",
+  "title": "Bounded AI research proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "context_digest", "summary", "hypothesis_drafts",
+    "claim_assessments", "scientific_questions", "candidate_actions",
+    "preferred_action_id", "stop_recommendation", "unknowns", "conflicts", "warnings"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "context_digest": {"$ref": "#/$defs/sha256"},
+    "summary": {"$ref": "#/$defs/text4096"},
+    "hypothesis_drafts": {
+      "type": "array", "maxItems": 8,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "hypothesis_id", "statement", "testable_prediction", "falsifier",
+          "supporting_fact_ids", "contradicting_fact_ids", "assumptions", "confidence_band"
+        ],
+        "properties": {
+          "hypothesis_id": {"$ref": "#/$defs/localId"},
+          "statement": {"$ref": "#/$defs/text4096"},
+          "testable_prediction": {"$ref": "#/$defs/text4096"},
+          "falsifier": {"$ref": "#/$defs/text4096"},
+          "supporting_fact_ids": {"$ref": "#/$defs/factIds"},
+          "contradicting_fact_ids": {"$ref": "#/$defs/factIds"},
+          "assumptions": {"$ref": "#/$defs/textList32"},
+          "confidence_band": {"enum": ["low", "medium", "high"]}
+        }
+      }
+    },
+    "claim_assessments": {
+      "type": "array", "maxItems": 16,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "claim_id", "claim", "interpretation", "supporting_fact_ids",
+          "contradicting_fact_ids", "limitations"
+        ],
+        "properties": {
+          "claim_id": {"$ref": "#/$defs/localId"},
+          "claim": {"$ref": "#/$defs/text4096"},
+          "interpretation": {"enum": ["supported", "contradicted", "unresolved"]},
+          "supporting_fact_ids": {"$ref": "#/$defs/factIds"},
+          "contradicting_fact_ids": {"$ref": "#/$defs/factIds"},
+          "limitations": {"$ref": "#/$defs/textList32"}
+        }
+      }
+    },
+    "scientific_questions": {
+      "type": "array", "maxItems": 12,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["question_id", "question", "subject_ref", "decision_relevance"],
+        "properties": {
+          "question_id": {"$ref": "#/$defs/localId"},
+          "question": {"$ref": "#/$defs/text4096"},
+          "subject_ref": {"$ref": "#/$defs/objectRef"},
+          "decision_relevance": {"$ref": "#/$defs/text4096"}
+        }
+      }
+    },
+    "candidate_actions": {
+      "type": "array", "maxItems": 12,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "proposal_action_id", "template_id", "subject_ref", "scientific_question_id",
+          "rationale", "expected_observation", "falsifier", "supporting_fact_ids",
+          "contradicting_fact_ids", "parameter_hints", "qualitative_priority"
+        ],
+        "properties": {
+          "proposal_action_id": {"$ref": "#/$defs/localId"},
+          "template_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
+          "subject_ref": {"$ref": "#/$defs/objectRef"},
+          "scientific_question_id": {"$ref": "#/$defs/localId"},
+          "rationale": {"$ref": "#/$defs/text4096"},
+          "expected_observation": {"$ref": "#/$defs/text4096"},
+          "falsifier": {"$ref": "#/$defs/text4096"},
+          "supporting_fact_ids": {"$ref": "#/$defs/factIds"},
+          "contradicting_fact_ids": {"$ref": "#/$defs/factIds"},
+          "parameter_hints": {
+            "type": "object", "maxProperties": 16,
+            "propertyNames": {"pattern": "^[a-z][a-z0-9_]{0,63}$"}
+          },
+          "qualitative_priority": {"enum": ["low", "medium", "high"]}
+        }
+      }
+    },
+    "preferred_action_id": {"oneOf": [{"$ref": "#/$defs/localId"}, {"type": "null"}]},
+    "stop_recommendation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["recommended", "reason_codes"],
+      "properties": {
+        "recommended": {"type": "boolean"},
+        "reason_codes": {
+          "type": "array", "maxItems": 16, "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$"}
+        }
+      }
+    },
+    "unknowns": {"$ref": "#/$defs/textList32"},
+    "conflicts": {
+      "type": "array", "maxItems": 16,
+      "items": {"$ref": "#/$defs/text4096"}
+    },
+    "warnings": {"$ref": "#/$defs/textList32"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "localId": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,127}$"},
+    "text4096": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "objectRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+        "id": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "factIds": {
+      "type": "array", "maxItems": 32, "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 256}
+    },
+    "textList32": {
+      "type": "array", "maxItems": 32,
+      "items": {"$ref": "#/$defs/text4096"}
+    }
+  }
+}

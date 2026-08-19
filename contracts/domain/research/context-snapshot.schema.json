@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.ivan.icu/schema/research/context-snapshot.schema.json",
+  "title": "Bounded deterministic research context snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "run_ref", "program_ref", "campaign_ref", "loop_version",
+    "iteration", "goal", "campaign_binding", "budget", "objects", "facts",
+    "human_attestations", "action_history", "available_actions", "open_attention",
+    "truncation", "created_at", "digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "run_ref": {"$ref": "#/$defs/objectRef"},
+    "program_ref": {"$ref": "#/$defs/objectRef"},
+    "campaign_ref": {"$ref": "#/$defs/objectRef"},
+    "loop_version": {"type": "integer", "minimum": 1},
+    "iteration": {"type": "integer", "minimum": 0},
+    "goal": {
+      "type": "object", "additionalProperties": false,
+      "required": ["intent", "constraints", "success_definition", "revised_at"],
+      "properties": {
+        "intent": {"$ref": "#/$defs/text4096"},
+        "constraints": {"$ref": "#/$defs/textList64"},
+        "success_definition": {"$ref": "#/$defs/textList64"},
+        "revised_at": {"type": ["string", "null"], "format": "date-time"}
+      }
+    },
+    "campaign_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "campaign_scientific_generation", "campaign_scientific_digest",
+        "campaign_status", "state_digest"
+      ],
+      "properties": {
+        "campaign_scientific_generation": {"type": "integer", "minimum": 1},
+        "campaign_scientific_digest": {"$ref": "#/$defs/sha256"},
+        "campaign_status": {"type": "string", "minLength": 1, "maxLength": 64},
+        "state_digest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "budget": {
+      "type": "object", "additionalProperties": false,
+      "required": ["remaining", "spent"],
+      "properties": {
+        "remaining": {"$ref": "#/$defs/budgetValues"},
+        "spent": {"$ref": "#/$defs/budgetValues"}
+      }
+    },
+    "objects": {
+      "type": "array", "maxItems": 128,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["ref", "label", "state"],
+        "properties": {
+          "ref": {"$ref": "#/$defs/objectRef"},
+          "label": {"type": "string", "maxLength": 4096},
+          "state": {"type": "object", "maxProperties": 32},
+          "untrusted_content": {"type": "string", "maxLength": 4096}
+        }
+      }
+    },
+    "facts": {
+      "type": "array", "maxItems": 256,
+      "items": {"$ref": "#/$defs/fact"}
+    },
+    "human_attestations": {
+      "type": "array", "maxItems": 64,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["attestation_id", "actor_ref", "subject_ref", "status", "created_at"],
+        "properties": {
+          "attestation_id": {"type": "string", "minLength": 1, "maxLength": 256},
+          "actor_ref": {"$ref": "#/$defs/objectRef"},
+          "subject_ref": {"$ref": "#/$defs/objectRef"},
+          "status": {"type": "string", "minLength": 1, "maxLength": 128},
+          "created_at": {"type": "string", "format": "date-time"},
+          "untrusted_content": {"type": "string", "maxLength": 4096}
+        }
+      }
+    },
+    "action_history": {
+      "type": "array", "maxItems": 128,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["action_fingerprint", "template_id", "subject_ref", "result"],
+        "properties": {
+          "action_fingerprint": {"$ref": "#/$defs/sha256"},
+          "template_id": {"$ref": "#/$defs/templateId"},
+          "subject_ref": {"$ref": "#/$defs/objectRef"},
+          "result": {"type": "string", "minLength": 1, "maxLength": 128},
+          "human_rejected": {"type": "boolean"}
+        }
+      }
+    },
+    "available_actions": {
+      "type": "array", "maxItems": 64,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["template_id", "subject_refs", "intent", "risk_class"],
+        "properties": {
+          "template_id": {"$ref": "#/$defs/templateId"},
+          "subject_refs": {
+            "type": "array", "maxItems": 128, "items": {"$ref": "#/$defs/objectRef"}
+          },
+          "intent": {"$ref": "#/$defs/text4096"},
+          "risk_class": {"enum": ["R0", "R1", "R2", "R3", "R4"]}
+        }
+      }
+    },
+    "open_attention": {
+      "type": "array", "maxItems": 64,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["reason_code", "summary"],
+        "properties": {
+          "reason_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$"},
+          "summary": {"$ref": "#/$defs/text4096"}
+        }
+      }
+    },
+    "truncation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["applied", "omitted_fact_count", "policy"],
+      "properties": {
+        "applied": {"type": "boolean"},
+        "omitted_fact_count": {"type": "integer", "minimum": 0},
+        "policy": {"const": "research-context-v1"}
+      }
+    },
+    "created_at": {"type": "string", "format": "date-time"},
+    "digest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "text4096": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "textList64": {
+      "type": "array", "maxItems": 64,
+      "items": {"$ref": "#/$defs/text4096"}
+    },
+    "templateId": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
+    "objectRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+        "id": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "budgetValues": {
+      "type": "object", "additionalProperties": false,
+      "required": ["reasoner_calls", "fep_runsets", "gpu_hours", "external_cost"],
+      "properties": {
+        "reasoner_calls": {"type": "integer", "minimum": 0},
+        "fep_runsets": {"type": "integer", "minimum": 0},
+        "gpu_hours": {"type": ["number", "null"], "minimum": 0},
+        "external_cost": {"type": ["number", "null"], "minimum": 0}
+      }
+    },
+    "fact": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "fact_id", "category", "source_class", "source_ref", "subject_ref",
+        "condition_ref", "structured_value", "freshness", "claim_boundary"
+      ],
+      "properties": {
+        "fact_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "category": {"type": "string", "minLength": 1, "maxLength": 128},
+        "source_class": {
+          "enum": [
+            "typed_evidence", "method_result", "human_attestation",
+            "system_state", "unverified_external"
+          ]
+        },
+        "source_ref": {
+          "oneOf": [
+            {"$ref": "#/$defs/artifactRef"},
+            {"$ref": "#/$defs/objectRef"}
+          ]
+        },
+        "subject_ref": {"$ref": "#/$defs/objectRef"},
+        "condition_ref": {"oneOf": [{"$ref": "#/$defs/objectRef"}, {"type": "null"}]},
+        "structured_value": {"type": "object", "maxProperties": 32},
+        "untrusted_content": {"type": "string", "maxLength": 4096},
+        "freshness": {
+          "type": "object", "additionalProperties": false,
+          "required": ["stale", "source_generation"],
+          "properties": {
+            "stale": {"type": "boolean"},
+            "source_generation": {"type": ["integer", "null"], "minimum": 1}
+          }
+        },
+        "claim_boundary": {
+          "type": "object", "additionalProperties": false,
+          "required": ["status", "eligible_as_scientific_evidence", "reason_codes"],
+          "properties": {
+            "status": {"type": "string", "minLength": 1, "maxLength": 128},
+            "eligible_as_scientific_evidence": {"type": "boolean"},
+            "reason_codes": {
+              "type": "array", "maxItems": 32, "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1, "maxLength": 128}
+            }
+          }
+        }
+      }
+    },
+    "artifactRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "id", "sha256"],
+      "properties": {
+        "kind": {"const": "artifact"},
+        "id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

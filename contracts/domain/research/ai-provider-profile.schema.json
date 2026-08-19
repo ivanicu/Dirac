@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.ivan.icu/schema/research/ai-provider-profile.schema.json",
+  "title": "Dirac AI provider profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "profile_id", "label", "protocol", "base_url_env",
+    "api_key_env", "model", "locality", "resource_isolation",
+    "response_mode", "stream", "static_request_fields", "timeouts",
+    "bounds", "data_policy", "reproducibility", "pricing"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "profile_id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,127}$"},
+    "label": {"type": "string", "minLength": 1, "maxLength": 128},
+    "protocol": {"const": "openai_chat_completions"},
+    "base_url_env": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,127}$"},
+    "api_key_env": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,127}$"},
+    "model": {"type": "string", "minLength": 1, "maxLength": 256},
+    "locality": {"enum": ["external_cloud", "local_network"]},
+    "resource_isolation": {
+      "enum": ["provider_managed", "separate_host_or_gpu", "shared_dirac_gpu"]
+    },
+    "response_mode": {"const": "json_object"},
+    "stream": {"const": false},
+    "static_request_fields": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enable_thinking": {"type": "boolean"},
+        "temperature": {"type": "number", "minimum": 0, "maximum": 2}
+      }
+    },
+    "timeouts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_seconds", "connect_seconds"],
+      "properties": {
+        "request_seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 600},
+        "connect_seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 60}
+      }
+    },
+    "bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_request_bytes", "max_response_bytes", "max_provider_attempts",
+        "max_schema_regenerations"
+      ],
+      "properties": {
+        "max_request_bytes": {"type": "integer", "minimum": 1024, "maximum": 262144},
+        "max_response_bytes": {"type": "integer", "minimum": 1024, "maximum": 262144},
+        "max_provider_attempts": {"type": "integer", "minimum": 1, "maximum": 5},
+        "max_schema_regenerations": {"type": "integer", "minimum": 0, "maximum": 1}
+      }
+    },
+    "data_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed_classifications", "external_egress", "store_raw_provider_response"],
+      "properties": {
+        "allowed_classifications": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {
+            "enum": ["public", "internal", "partner_confidential", "restricted", "regulated"]
+          }
+        },
+        "external_egress": {"type": "boolean"},
+        "store_raw_provider_response": {"const": false}
+      }
+    },
+    "reproducibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_binding", "record_resolved_model"],
+      "properties": {
+        "model_binding": {"enum": ["provider_mutable_alias", "deployment_pinned"]},
+        "record_resolved_model": {"const": true}
+      }
+    },
+    "pricing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "currency", "input_per_million_tokens", "output_per_million_tokens",
+        "max_cost_per_call"
+      ],
+      "properties": {
+        "currency": {"type": "string", "pattern": "^[A-Z]{3}$"},
+        "input_per_million_tokens": {"type": ["number", "null"], "minimum": 0},
+        "output_per_million_tokens": {"type": ["number", "null"], "minimum": 0},
+        "max_cost_per_call": {"type": "number", "minimum": 0}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"locality": {"const": "external_cloud"}}},
+      "then": {
+        "properties": {
+          "resource_isolation": {"const": "provider_managed"},
+          "data_policy": {"properties": {"external_egress": {"const": true}}}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"locality": {"const": "local_network"}}},
+      "then": {
+        "properties": {
+          "data_policy": {"properties": {"external_egress": {"const": false}}}
+        }
+      }
+    }
+  ]
+}

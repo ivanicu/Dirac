@@ -4,6 +4,9 @@ build/
 deploy/*
 !deploy/systemd/
 !deploy/kubernetes/
+!deploy/ai/
+deploy/ai/*
+!deploy/ai/providers.example.json
 !deploy/README.md
 !deploy/Caddyfile.remote.example
 !deploy/dirac-tokens.example.json
