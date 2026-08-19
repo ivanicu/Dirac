@@ -19,6 +19,7 @@ from research.openai_compatible import OpenAICompatibleChatProvider
 from research.provider_registry import FileAiProviderRegistry, canonical_json
 from research.reasoner import (
     _prompt_release,
+    build_action_semantics_schema,
     build_generation_schema,
     build_goal_interpretation_messages,
     build_goal_interpretation_schema,
@@ -88,6 +89,18 @@ class ResearchReasonerMethodTests(unittest.TestCase):
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=2)
+
+    def test_local_qwen_semantics_are_bounded_below_completion_budget(self):
+        schema = build_action_semantics_schema()
+        self.assertEqual(
+            {field["maxLength"] for field in schema["properties"].values()},
+            {96},
+        )
+        profile = EXAMPLE["profiles"][1]
+        for request_fields in (
+                "static_request_fields", "classifier_request_fields"):
+            self.assertEqual(profile[request_fields]["chat_template_kwargs"],
+                             {"enable_thinking": False})
 
     def payload(self, request_key="reasoner-test-1"):
         manifest, prompt_digest, _ = _prompt_release()

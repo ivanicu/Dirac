@@ -478,7 +478,7 @@ def build_action_semantics_schema() -> dict[str, Any]:
         "type": "object", "additionalProperties": False,
         "required": list(fields),
         "properties": {
-            field: {"type": "string", "minLength": 1, "maxLength": 256}
+            field: {"type": "string", "minLength": 1, "maxLength": 96}
             for field in fields
         },
     }

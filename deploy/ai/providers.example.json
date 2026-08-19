@@ -51,6 +51,7 @@
       "stream": false,
       "static_request_fields": {
         "enable_thinking": false,
+        "chat_template_kwargs": {"enable_thinking": false},
         "max_tokens": 2048,
         "temperature": 0.0,
         "top_p": 1.0,
@@ -61,6 +62,7 @@
       },
       "classifier_request_fields": {
         "enable_thinking": false,
+        "chat_template_kwargs": {"enable_thinking": false},
         "max_tokens": 64,
         "temperature": 0.0,
         "top_p": 1.0,
