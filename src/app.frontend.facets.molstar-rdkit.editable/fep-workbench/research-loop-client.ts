@@ -31,6 +31,7 @@ export type ResearchLoopSnapshot = {
     budget: { remaining: Record<string, number>; spent: Record<string, number> };
     context_ref?: ResearchArtifactRef | null;
     proposal_ref?: ResearchArtifactRef | null;
+    summary_ref?: ResearchArtifactRef | null;
     pending_action?: Record<string, any> | null;
     attention: Record<string, any>;
     events: Array<Record<string, any>>;

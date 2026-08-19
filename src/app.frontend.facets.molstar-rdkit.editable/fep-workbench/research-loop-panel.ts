@@ -170,9 +170,10 @@ class ResearchLoopPanel {
         );
         live.append(status);
         this.renderGoal(live);
+        if (this.loop.state === 'waiting_approval') this.renderAction(live);
         this.renderFacts(live);
         this.renderHypotheses(live);
-        this.renderAction(live);
+        if (this.loop.state !== 'waiting_approval') this.renderAction(live);
         this.renderBudget(live);
         this.renderAttention(live);
         this.renderTimeline(live);
@@ -286,14 +287,15 @@ class ResearchLoopPanel {
         facts.forEach(fact => {
             const row = node('article', 'research-loop-fact');
             const stale = Boolean(fact.freshness?.stale);
+            const boundary = fact.claim_boundary || {};
             const sourceLabel = fact.source_class === 'method_result'
-                ? 'METHOD RESULT · COMPLETED UNVALIDATED'
+                ? (boundary.status === 'completed_unvalidated'
+                    ? 'METHOD RESULT · COMPLETED UNVALIDATED' : 'METHOD RESULT')
                 : (CLASS_LABEL[String(fact.source_class)] || 'SYSTEM STATE');
             const badge = node('b', `research-loop-badge ${fact.source_class || ''}`,
                 stale ? 'STALE' : sourceLabel);
             row.append(badge, node('span', '', String(fact.category || fact.fact_id || 'fact')),
                 node('p', '', stringify(fact.structured_value || fact.untrusted_content)));
-            const boundary = fact.claim_boundary || {};
             row.append(node('small', '', `${String(boundary.status || 'unclassified').toUpperCase()} · ${boundary.eligible_as_scientific_evidence ? 'ELIGIBLE EVIDENCE' : 'NOT ELIGIBLE AS EVIDENCE'}`));
             item.append(row);
         }); root.append(item);
@@ -351,6 +353,13 @@ class ResearchLoopPanel {
         const actions = node('div', 'research-loop-approval-actions');
         const approve = node('button', 'research-loop-primary', 'APPROVE EXACT ACTION');
         const reject = node('button', 'research-loop-danger', 'REJECT');
+        const synchronize = () => {
+            const hasRationale = Boolean(rationale.value.trim());
+            approve.disabled = !hasRationale || checks.some(check => !check.checked);
+            reject.disabled = !hasRationale;
+        };
+        checks.forEach(check => check.addEventListener('change', synchronize));
+        rationale.addEventListener('input', synchronize); synchronize();
         approve.addEventListener('click', () => void this.decide(true, preview, rationale.value,
             checks.filter(check => check.checked).map(check => check.value)));
         reject.addEventListener('click', () => void this.decide(false, preview, rationale.value, []));
@@ -408,6 +417,13 @@ class ResearchLoopPanel {
 
     private renderControls(root: HTMLElement): void {
         const item = section('LOOP CONTROL', 'HUMAN AUTHORITY');
+        if (['completed', 'cancelled', 'failed'].includes(this.loop!.state)) {
+            const review = node('button', 'research-loop-secondary', 'OPEN FEP REVIEW');
+            review.addEventListener('click', () => this.openReview());
+            item.append(node('p', 'research-loop-empty',
+                'This loop is terminal. Its timeline and Artifacts remain immutable.'), review);
+            root.append(item); return;
+        }
         const rationale = node('input') as HTMLInputElement;
         rationale.placeholder = 'Control rationale'; rationale.setAttribute('aria-label', 'Control rationale');
         const revised = node('textarea') as HTMLTextAreaElement;
