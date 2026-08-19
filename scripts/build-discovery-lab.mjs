@@ -35,6 +35,7 @@ for (const [from, to] of [
     ['discovery-lab/discovery-lab.css', 'discovery-lab.css'],
     ['fep-workbench/fep-workbench.html', 'fep-workbench.html'],
     ['fep-workbench/fep-workbench.css', 'fep-workbench.css'],
+    ['fep-workbench/research-loop-panel.css', 'research-loop-panel.css'],
     ['field-workbench/field-workbench.html', 'field-workbench.html'],
     ['field-workbench/field-workbench.css', 'field-workbench.css'],
 ]) await fs.copyFile(path.join(source, from), path.join(output, to));

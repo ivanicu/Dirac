@@ -10,6 +10,8 @@ import { globalPhysicalReceiptKey, RECEIPT_KEYS, WorkbenchReceiptStore, type Rec
 import { OperationCoordinator, aggregateArmMatches, canonicalJson, chemistryEvidenceFrom, chemistryEvidenceView, exactOperationBindingMatches, executionEligibilityFrom, isPotentialEzBond, sameExactRef, type ExactAggregateArm, type ExactOperationBinding, type ExactRunBinding, type OperationScope } from './workbench-state';
 import { aggregatePanelViewFrom, preparationPolicyGate, preparationPolicyViewFrom, runHistoryViewFrom, runJobsViewFrom } from './workbench-view-model';
 import { workbenchShellMarkup } from './workbench-shell';
+import { ResearchLoopClient } from './research-loop-client';
+import { mountResearchLoopPanel } from './research-loop-panel';
 import { DemoCompounds, FallbackEdges, FallbackNetwork } from './workbench-fixture';
 import { benchmarkEdgeResult,benchmarkResult } from './workbench-benchmark-results';
 import { renderResultShowcase } from './workbench-result-showcase';
@@ -1157,4 +1159,13 @@ async function bootReconciler():Promise<void> {
 addEventListener('storage',event=>{ if (event.storageArea!==localStorage||!event.key) return; const watched=[campaignCacheKey,RECEIPT_KEYS.preparation,plannerReceiptKey,plannerOutputReceiptKey,runReceiptKey,'dirac.rbfe.active_campaign_context','dirac.rbfe.active_network_job_id','dirac.rbfe.active_run_id'].map(copyStorageKey); if (!watched.includes(event.key)) return; operations.externalStorageWrite(); aggregateArm=null; aggregateArmPhysicalSnapshot=null; plannerWaitController?.abort(); plannerDetachWait?.(); preparationWaitController?.abort(); preparationDetachWait?.(); activeRunReceipt=readRunReceipt(); activeRunId=activeRunReceipt?.run_id||copyStorage.get('dirac.rbfe.active_run_id'); invalidatePreparedSystem(); text('status','EXTERNAL TAB UPDATED CAMPAIGN / RECEIPT STATE · LOCAL ASYNC COMMITS INVALIDATED'); syncPlannerRecoveryControl(); syncExecutionContract(); });
 reflectBuilderStage(); updateBuilderReadiness(0); syncPlannerRecoveryControl();
 addEventListener('resize',()=>{ if (!networkWorkspaceVisible) return; drawRisk(); void renderNetwork(); drawAgreement(); });
+mountResearchLoopPanel({
+    client: new ResearchLoopClient(client),
+    campaign: () => {
+        const context = activeCampaignContext();
+        return context?.campaign_id
+            ? { campaignId: context.campaign_id, label: context.name }
+            : null;
+    },
+});
 void sourceState; syncExecutionContract(); void bootReconciler();

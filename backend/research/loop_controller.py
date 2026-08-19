@@ -127,6 +127,10 @@ class ResearchLoopController:
             "state": state["state"], "stage": state["stage"],
             "version": state["version"], "iteration": state["iteration"],
             "goal": {"intent": state["intent"]},
+            "provider": {
+                "profile_id": state["provider_profile_id"],
+                "profile_digest": state["provider_profile_digest"],
+            },
             "budget": {"remaining": state["budget_remaining"],
                        "spent": state["budget_spent"]},
             "context_ref": self._state_artifact_ref(state, "context"),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import pathlib
 import unittest
@@ -202,3 +203,41 @@ class ResearchLoopRepositoryPostgresTests(unittest.TestCase):
         first = stage_request_key(str(uuid.uuid4()), 2, "reason", 0)
         self.assertTrue(first.endswith(":2:reason:0"))
         self.assertNotEqual(first, first[:-1] + "1")
+
+    def test_planned_rbfe_campaign_is_bound_to_selected_program_in_create_transaction(self):
+        campaign_id = str(uuid.uuid4())
+        scientific_digest = b"s" * 32
+        state = {
+            "scientific_generation": 1,
+            "scientific_digest": "sha256:" + scientific_digest.hex(),
+            "client_state": {"name": "Existing Workbench Campaign"},
+        }
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO app.rbfe_campaign "
+                "(id,status,state,state_digest,scientific_generation,scientific_digest,"
+                "created_by_kind,created_by_id) "
+                "VALUES (%s,'planned',%s::jsonb,%s,1,%s,'human',%s)",
+                (campaign_id, json.dumps(state), b"d" * 32,
+                 scientific_digest, self.actor["id"]),
+            )
+        created = self.repository.create(
+            request_key="adopt-existing-workbench-campaign",
+            program_id=self.program_id, campaign_id=campaign_id,
+            actor=self.actor, intent="Close the largest FEP ranking uncertainty",
+            autonomy_class="A2", provider_profile_id="qwen-test",
+            provider_profile_digest=b"p" * 32,
+            prompt_release_id="fep-action-proposal-v1",
+            prompt_release_digest=b"r" * 32,
+            action_catalog_digest=b"a" * 32,
+            data_classification="internal",
+            policy={"cloud_egress_approved": False},
+            budget_remaining={"reasoner_calls": 2, "fep_runsets": 1},
+        )
+        self.assertTrue(created["created"])
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT program_id::text,created_by_kind::text,created_by_id "
+                "FROM design.campaign WHERE id=%s", (campaign_id,))
+            self.assertEqual(cur.fetchone(),
+                             (self.program_id, "human", self.actor["id"]))

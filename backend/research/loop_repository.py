@@ -192,15 +192,48 @@ class ResearchLoopRepository:
                 return result
 
             cur.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
+                (f"research-loop-campaign:{campaign_id}",),
+            )
+            cur.execute(
                 "SELECT c.program_id,c.status,c.created_by_kind,c.created_by_id "
                 "FROM design.campaign c WHERE c.id=%s FOR SHARE", (campaign_id,))
             campaign = cur.fetchone()
             if campaign is None:
-                raise failures.DiracNotFound(
-                    "Campaign does not exist", details={"campaign_id": campaign_id})
+                cur.execute(
+                    "SELECT status,state,created_by_kind,created_by_id "
+                    "FROM app.rbfe_campaign WHERE id=%s FOR SHARE", (campaign_id,),
+                )
+                rbfe_campaign = cur.fetchone()
+                if rbfe_campaign is None or (
+                        str(rbfe_campaign[2]), str(rbfe_campaign[3])) != (kind, actor_id):
+                    raise failures.DiracNotFound(
+                        "Campaign does not exist", details={"campaign_id": campaign_id})
+                if str(rbfe_campaign[0]) != "planned":
+                    raise failures.DiracInvalidParameters(
+                        "research loop requires a planned FEP Campaign",
+                        details={"campaign_id": campaign_id,
+                                 "campaign_status": str(rbfe_campaign[0])})
+                cur.execute("SELECT id FROM design.project WHERE id=%s FOR SHARE", (program_id,))
+                if cur.fetchone() is None:
+                    raise failures.DiracNotFound(
+                        "Program does not exist", details={"program_id": program_id})
+                client_state = dict(rbfe_campaign[1]).get("client_state") or {}
+                label = str(client_state.get("name") or client_state.get("campaign_name")
+                            or f"FEP {campaign_id[:8]}").strip()
+                cur.execute(
+                    "INSERT INTO design.campaign "
+                    "(id,program_id,name,objective,status,created_by_kind,created_by_id) "
+                    "VALUES (%s,%s,%s,%s,'active',%s,%s)",
+                    (campaign_id, program_id, f"{label} · {campaign_id[:8]}",
+                     intent, kind, actor_id),
+                )
+                campaign = (program_id, "active", kind, actor_id)
             if str(campaign[0]) != str(program_id):
                 raise failures.DiracInvalidParameters(
                     "Campaign does not belong to the requested Program")
+            if (str(campaign[2]), str(campaign[3])) != (kind, actor_id):
+                raise failures.DiracNotFound("Campaign does not exist")
 
             cur.execute(
                 "INSERT INTO app.mission "
