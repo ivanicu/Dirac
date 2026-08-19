@@ -26,6 +26,61 @@
       "output_schema": {"type":"object"}
     },
     {
+      "id": "ai.provider.list", "version": 1, "category": "ai",
+      "mutability": "query", "execution_class": "instant", "executors": ["service"],
+      "idempotency_policy": "safe", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": [], "output_object_kinds": [],
+      "errors": ["UNSUPPORTED", "INTERNAL"], "handler": "handlers:ai_provider_list",
+      "input_schema": {"type":"object","additionalProperties":false},
+      "output_schema": {"type":"object","additionalProperties":false,"required":["profiles"],"properties":{"profiles":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["profile_id","label","configured_model","locality","external_egress","allowed_classifications","configured"],"properties":{"profile_id":{"type":"string","minLength":1},"profile_digest":{"type":"string","format":"sha256-digest"},"label":{"type":"string","minLength":1},"configured_model":{"type":"string","minLength":1},"locality":{"enum":["local_network","external_cloud"]},"external_egress":{"type":"boolean"},"allowed_classifications":{"type":"array","items":{"enum":["public","internal","partner_confidential","restricted","regulated"]},"uniqueItems":true},"configured":{"type":"boolean"},"reason":{"type":"string","minLength":1}}}}}}
+    },
+    {
+      "id": "research.loop.create", "version": 1, "category": "research",
+      "mutability": "mutation", "execution_class": "interactive", "executors": ["service"],
+      "idempotency_policy": "content-digest", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["program","campaign"], "output_object_kinds": ["mission","run"],
+      "errors": ["INVALID_PARAMETERS","NOT_FOUND","IDEMPOTENCY_CONFLICT","PROVIDER_UNAVAILABLE","UNSUPPORTED","DB_UNAVAILABLE","INTERNAL"],
+      "handler": "handlers:research_loop_create",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["request_key","program_ref","campaign_ref","intent","autonomy_class","provider_profile_id","data_classification","budget","policy"],"properties":{"request_key":{"type":"string","minLength":1,"maxLength":256},"program_ref":{"type":"object","additionalProperties":false,"required":["kind","id"],"properties":{"kind":{"const":"program"},"id":{"type":"string","format":"uuid"}}},"campaign_ref":{"type":"object","additionalProperties":false,"required":["kind","id"],"properties":{"kind":{"const":"campaign"},"id":{"type":"string","format":"uuid"}}},"intent":{"type":"string","minLength":1,"maxLength":4096},"autonomy_class":{"enum":["A0","A1","A2","A3"]},"provider_profile_id":{"type":"string","minLength":1,"maxLength":128},"data_classification":{"enum":["public","internal","partner_confidential","restricted","regulated"]},"budget":{"type":"object","additionalProperties":false,"required":["max_reasoner_calls","max_iterations","max_fep_runsets","max_gpu_hours","max_external_cost"],"properties":{"max_reasoner_calls":{"type":"integer","minimum":1,"maximum":128},"max_iterations":{"type":"integer","minimum":1,"maximum":128},"max_fep_runsets":{"type":"integer","minimum":0,"maximum":32},"max_gpu_hours":{"type":"number","minimum":0},"max_external_cost":{"type":"number","minimum":0}}},"policy":{"type":"object","additionalProperties":false,"required":["auto_risk_classes","per_action_risk_classes","human_only_risk_classes","stop_on_campaign_stale","stop_on_open_identity_conflict","max_same_subject_actions","cloud_egress_approved"],"properties":{"auto_risk_classes":{"type":"array","items":{"enum":["R0","R1","R2","R3","R4"]},"uniqueItems":true},"per_action_risk_classes":{"type":"array","items":{"enum":["R0","R1","R2","R3","R4"]},"uniqueItems":true},"human_only_risk_classes":{"type":"array","items":{"enum":["R0","R1","R2","R3","R4"]},"uniqueItems":true},"stop_on_campaign_stale":{"type":"boolean"},"stop_on_open_identity_conflict":{"type":"boolean"},"max_same_subject_actions":{"type":"integer","minimum":1,"maximum":32},"cloud_egress_approved":{"type":"boolean"}}}}},
+      "output_schema": {"type":"object","additionalProperties":false,"required":["mission_ref","run_ref","state","stage","version","created"],"properties":{"mission_ref":{"type":"object","additionalProperties":false,"required":["kind","id"],"properties":{"kind":{"const":"mission"},"id":{"type":"string","format":"uuid"}}},"run_ref":{"type":"object","additionalProperties":false,"required":["kind","id"],"properties":{"kind":{"const":"run"},"id":{"type":"string","format":"uuid"}}},"state":{"type":"string"},"stage":{"type":"string"},"version":{"type":"integer","minimum":1},"created":{"type":"boolean"}}}
+    },
+    {
+      "id": "research.loop.get", "version": 1, "category": "research",
+      "mutability": "query", "execution_class": "instant", "executors": ["service"],
+      "idempotency_policy": "safe", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["run"], "output_object_kinds": ["run","artifact"],
+      "errors": ["NOT_FOUND","UNSUPPORTED","DB_UNAVAILABLE","INTERNAL"], "handler": "handlers:research_loop_get",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["run_ref"],"properties":{"run_ref":{"type":"object","additionalProperties":false,"required":["kind","id"],"properties":{"kind":{"const":"run"},"id":{"type":"string","format":"uuid"}}}}},
+      "output_schema": {"type":"object","required":["run_ref","state","stage","version","iteration","goal","budget","pending_action","attention","events","deep_links","claim_boundary"],"properties":{"run_ref":{"type":"object"},"state":{"type":"string"},"stage":{"type":"string"},"version":{"type":"integer"},"iteration":{"type":"integer"},"goal":{"type":"object"},"budget":{"type":"object"},"context_ref":{"type":["object","null"]},"proposal_ref":{"type":["object","null"]},"pending_action":{"type":["object","null"]},"attention":{"type":"object"},"events":{"type":"array"},"deep_links":{"type":"object"},"claim_boundary":{"const":"model_proposal_not_scientific_evidence"}}}
+    },
+    {
+      "id": "research.loop.approve", "version": 1, "category": "research",
+      "mutability": "mutation", "execution_class": "instant", "executors": ["service"],
+      "idempotency_policy": "idempotent", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["run"], "output_object_kinds": ["run"],
+      "errors": ["INVALID_PARAMETERS","NOT_FOUND","STALE_PREVIEW","IDEMPOTENCY_CONFLICT","UNSUPPORTED","DB_UNAVAILABLE","INTERNAL"], "handler": "handlers:research_loop_approve",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["run_ref","expected_version","action_fingerprint","acknowledgements","rationale"],"properties":{"run_ref":{"type":"object","additionalProperties":false,"required":["kind","id"],"properties":{"kind":{"const":"run"},"id":{"type":"string","format":"uuid"}}},"expected_version":{"type":"integer","minimum":1},"action_fingerprint":{"type":"string","format":"sha256-digest"},"acknowledgements":{"type":"array","items":{"type":"string","minLength":1},"uniqueItems":true},"rationale":{"type":"string","minLength":1,"maxLength":4096}}},
+      "output_schema": {"type":"object","additionalProperties":false,"required":["run_ref","state","stage","version"],"properties":{"run_ref":{"type":"object"},"state":{"type":"string"},"stage":{"type":"string"},"version":{"type":"integer"}}}
+    },
+    {
+      "id": "research.loop.reject", "version": 1, "category": "research",
+      "mutability": "mutation", "execution_class": "instant", "executors": ["service"],
+      "idempotency_policy": "idempotent", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["run"], "output_object_kinds": ["run"],
+      "errors": ["INVALID_PARAMETERS","NOT_FOUND","STALE_PREVIEW","IDEMPOTENCY_CONFLICT","UNSUPPORTED","DB_UNAVAILABLE","INTERNAL"], "handler": "handlers:research_loop_reject",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["run_ref","expected_version","action_fingerprint","rationale"],"properties":{"run_ref":{"type":"object","additionalProperties":false,"required":["kind","id"],"properties":{"kind":{"const":"run"},"id":{"type":"string","format":"uuid"}}},"expected_version":{"type":"integer","minimum":1},"action_fingerprint":{"type":"string","format":"sha256-digest"},"rationale":{"type":"string","minLength":1,"maxLength":4096}}},
+      "output_schema": {"type":"object","additionalProperties":false,"required":["run_ref","state","stage","version"],"properties":{"run_ref":{"type":"object"},"state":{"type":"string"},"stage":{"type":"string"},"version":{"type":"integer"}}}
+    },
+    {
+      "id": "research.loop.control", "version": 1, "category": "research",
+      "mutability": "mutation", "execution_class": "instant", "executors": ["service"],
+      "idempotency_policy": "idempotent", "job_policy": "forbidden", "provenance_policy": "required",
+      "input_object_kinds": ["run"], "output_object_kinds": ["run"],
+      "errors": ["INVALID_PARAMETERS","NOT_FOUND","PROVIDER_UNAVAILABLE","UNSUPPORTED","DB_UNAVAILABLE","INTERNAL"], "handler": "handlers:research_loop_control",
+      "input_schema": {"type":"object","additionalProperties":false,"required":["run_ref","expected_version","action","rationale"],"properties":{"run_ref":{"type":"object","additionalProperties":false,"required":["kind","id"],"properties":{"kind":{"const":"run"},"id":{"type":"string","format":"uuid"}}},"expected_version":{"type":"integer","minimum":1},"action":{"enum":["pause","resume","retry","cancel","revise_intent","change_provider"]},"rationale":{"type":"string","minLength":1,"maxLength":4096},"revised_intent":{"type":"string","minLength":1,"maxLength":4096},"provider_profile_id":{"type":"string","minLength":1,"maxLength":128}}},
+      "output_schema": {"type":"object","additionalProperties":false,"required":["run_ref","state","stage","version"],"properties":{"run_ref":{"type":"object"},"state":{"type":"string"},"stage":{"type":"string"},"version":{"type":"integer"}}}
+    },
+    {
       "id": "method.list", "version": 1, "category": "method",
       "mutability": "query", "execution_class": "instant", "executors": ["service"],
       "idempotency_policy": "safe", "job_policy": "forbidden", "provenance_policy": "optional",

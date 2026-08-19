@@ -67,6 +67,42 @@ def attention_list(input: dict, ctx) -> dict:
         actor=ctx.actor, limit=input.get('limit', 100))}
 
 
+def ai_provider_list(_input: dict, ctx) -> dict:
+    registry = getattr(ctx.kernel, 'ai_provider_registry', None)
+    if registry is None:
+        raise failures.DiracUnsupported('AI provider registry is unavailable')
+    return {'profiles': registry.list_public()}
+
+
+def _research_loops(ctx):
+    controller = getattr(ctx.kernel, 'research_loop_controller', None)
+    if controller is None:
+        raise failures.DiracUnsupported(
+            'durable research loop controller is unavailable',
+            details={'required_migration': '049_research_loop.sql'})
+    return controller
+
+
+def research_loop_create(input: dict, ctx) -> dict:
+    return _research_loops(ctx).create(input, ctx.actor)
+
+
+def research_loop_get(input: dict, ctx) -> dict:
+    return _research_loops(ctx).get(input['run_ref']['id'], ctx.actor)
+
+
+def research_loop_approve(input: dict, ctx) -> dict:
+    return _research_loops(ctx).approve(input, ctx.actor)
+
+
+def research_loop_reject(input: dict, ctx) -> dict:
+    return _research_loops(ctx).reject(input, ctx.actor)
+
+
+def research_loop_control(input: dict, ctx) -> dict:
+    return _research_loops(ctx).control(input, ctx.actor)
+
+
 def job_wait(input: dict, ctx) -> dict:
     return _job_ref(ctx.kernel.wait_job(
         input['job_ref']['id'], actor=ctx.actor,

@@ -183,6 +183,12 @@ class ResearchLoopRepository:
                     raise failures.DiracIdempotencyConflict(
                         "request_key already identifies a different research loop",
                         details={"run_id": result["run_id"]})
+                cur.execute(
+                    "SELECT mission_id::text FROM app.run WHERE id=%s",
+                    (result["run_id"],),
+                )
+                result["mission_id"] = cur.fetchone()[0]
+                result["created"] = False
                 return result
 
             cur.execute(
@@ -232,7 +238,10 @@ class ResearchLoopRepository:
                 f"SELECT {_STATE_SELECT} FROM app.research_loop_state WHERE run_id=%s",
                 (run_id,),
             )
-            return _state(cur.fetchone())
+            result = _state(cur.fetchone())
+            result["mission_id"] = str(mission_id)
+            result["created"] = True
+            return result
 
     def get(self, run_id: str, *, actor: Mapping[str, Any] | None = None,
             for_update: bool = False) -> dict[str, Any]:
@@ -321,6 +330,7 @@ class ResearchLoopRepository:
         preview_artifact_id: str, command_input_digest: bytes,
         source_versions: Mapping[str, Any], decision: str,
         actor: Mapping[str, Any], rationale: str,
+        acknowledgements: list[str] | None = None,
     ) -> dict[str, Any]:
         kind, actor_id = _actor(actor)
         if kind != "human":
@@ -371,11 +381,15 @@ class ResearchLoopRepository:
                         "action fingerprint already has a different decision")
                 return current
             new_stage = "dispatch" if decision == "approved" else "refresh"
+            acknowledgement_json = json.dumps(sorted(set(acknowledgements or [])))
             cur.execute(
                 "UPDATE app.research_loop_state SET state='active',stage=%s,"
-                "version=version+1,updated_at=now(),next_wake_at=now() "
+                "version=version+1,updated_at=now(),next_wake_at=now(),"
+                "pending_action=CASE WHEN %s='approved' THEN "
+                "jsonb_set(coalesce(pending_action,'{}'::jsonb),"
+                "'{approved_acknowledgements}',%s::jsonb,true) ELSE pending_action END "
                 "WHERE run_id=%s AND version=%s RETURNING version",
-                (new_stage, run_id, expected_version),
+                (new_stage, decision, acknowledgement_json, run_id, expected_version),
             )
             if cur.fetchone() is None:
                 self._raise_stale(cur, run_id, expected_version)
@@ -383,7 +397,8 @@ class ResearchLoopRepository:
             self._append_event(
                 cur, run_id, f"action_{decision}", new_stage, kind, actor_id,
                 {"action_fingerprint": "sha256:" + fingerprint.hex(),
-                 "preview_artifact_id": preview_artifact_id, "rationale": rationale},
+                 "preview_artifact_id": preview_artifact_id, "rationale": rationale,
+                 "acknowledgements": sorted(set(acknowledgements or []))},
                 artifact_id=preview_artifact_id,
             )
             cur.execute(
@@ -439,6 +454,14 @@ class ResearchLoopRepository:
                     "proposal_artifact_id=NULL,proposal_context_digest=NULL,"
                     "pending_action=NULL")
                 params.extend((str(provider_profile_id).strip(), new_provider_digest))
+            elif action == "retry":
+                attempts = dict(current["stage_attempts"])
+                attempts[stage] = int(attempts.get(stage, 0)) + 1
+                jobs = dict(current["stage_jobs"])
+                jobs.pop("active", None)
+                mutable_sql = ",stage_attempts=%s,stage_jobs=%s,attention='{}'::jsonb"
+                params.extend((_json(attempts, "stage_attempts"),
+                               _json(jobs, "stage_jobs")))
             params.extend((run_id, expected_version))
             terminal = state in TERMINAL_STATES
             cur.execute(
@@ -504,6 +527,29 @@ class ResearchLoopRepository:
             "artifact_id": None if row[7] is None else str(row[7]),
             "occurred_at": row[8].isoformat(),
         } for row in rows]
+
+    def link_job(self, *, run_id: str, job_id: str, purpose: str) -> None:
+        if not str(purpose).strip():
+            raise ValueError("run Job purpose is required")
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s,0))", (run_id,))
+            cur.execute(
+                "INSERT INTO app.run_job(run_id,job_id,ordinal,purpose) "
+                "SELECT %s,%s,coalesce(max(ordinal)+1,0),%s FROM app.run_job "
+                "WHERE run_id=%s ON CONFLICT (run_id,job_id) DO NOTHING",
+                (run_id, job_id, str(purpose).strip(), run_id),
+            )
+
+    def next_wake_delay(self, *, maximum_seconds: float = 30.0) -> float | None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT greatest(0,extract(epoch FROM min(next_wake_at)-now())) "
+                "FROM app.research_loop_state WHERE state='active' "
+                "AND (lease_owner IS NULL OR lease_expires_at<now())")
+            row = cur.fetchone()
+        if row is None or row[0] is None:
+            return None
+        return min(maximum_seconds, max(0.0, float(row[0])))
 
     @staticmethod
     def _append_event(cur: Any, run_id: str, event_type: str, stage: str,
@@ -607,7 +653,8 @@ class ResearchLoopRepository:
         if action == "retry":
             if state != "blocked":
                 raise failures.DiracInvalidParameters("only a blocked loop can be retried")
-            return "active", stage, "loop_retried"
+            retry_stage = str((current.get("attention") or {}).get("retry_stage") or stage)
+            return "active", retry_stage, "loop_retried"
         if state in TERMINAL_STATES:
             raise failures.DiracInvalidParameters("terminal loop intent cannot be revised")
         if action == "change_provider":

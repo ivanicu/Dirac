@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.ivan.icu/schema/research/action-preview.schema.json",
+  "title": "Resolved governed research action preview",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "run_ref", "loop_version", "context_digest",
+    "template_id", "subject_ref", "scientific_question", "resolved_command",
+    "source_versions", "estimate", "consequence", "required_acknowledgements",
+    "expires_at", "action_fingerprint"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "run_ref": {"$ref": "#/$defs/objectRef"},
+    "loop_version": {"type": "integer", "minimum": 1},
+    "context_digest": {"$ref": "#/$defs/sha256"},
+    "template_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
+    "subject_ref": {"$ref": "#/$defs/objectRef"},
+    "scientific_question": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "resolved_command": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["command_id", "command_version", "input_digest"],
+          "properties": {
+            "command_id": {"type": "string", "minLength": 1, "maxLength": 128},
+            "command_version": {"type": "integer", "minimum": 1},
+            "input_digest": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      ]
+    },
+    "source_versions": {"type": "object", "minProperties": 1, "maxProperties": 32},
+    "estimate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["available", "gpu_hours_upper_bound", "external_cost_upper_bound"],
+      "properties": {
+        "available": {"type": "boolean"},
+        "gpu_hours_upper_bound": {"type": ["number", "null"], "minimum": 0},
+        "external_cost_upper_bound": {"type": ["number", "null"], "minimum": 0}
+      }
+    },
+    "consequence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["risk_class", "approval", "reversible", "summary"],
+      "properties": {
+        "risk_class": {"enum": ["R0", "R1", "R2", "R3", "R4"]},
+        "approval": {"enum": ["none", "session_grant", "per_action", "human_only"]},
+        "reversible": {"type": "boolean"},
+        "summary": {"type": "string", "minLength": 1, "maxLength": 4096}
+      }
+    },
+    "required_acknowledgements": {
+      "type": "array", "maxItems": 16, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,127}$"}
+    },
+    "expires_at": {"type": "string", "format": "date-time"},
+    "action_fingerprint": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "objectRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+        "id": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    }
+  }
+}

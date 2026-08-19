@@ -13,6 +13,12 @@ try:
     import psycopg2
 except ImportError:  # pragma: no cover - integration environment decides
     psycopg2 = None
+try:
+    import psycopg
+except ImportError:  # pragma: no cover - integration environment decides
+    psycopg = None
+
+PG_DRIVER = psycopg2 or psycopg
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -45,13 +51,13 @@ class ResearchLoopMigrationContractTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(normalized.encode()).hexdigest(), recorded)
 
 
-@unittest.skipUnless(os.environ.get("DIRAC_TEST_DSN") and psycopg2,
+@unittest.skipUnless(os.environ.get("DIRAC_TEST_DSN") and PG_DRIVER,
                      "requires isolated PostgreSQL DIRAC_TEST_DSN with migrations 000-049")
 class ResearchLoopRepositoryPostgresTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.dsn = os.environ["DIRAC_TEST_DSN"]
-        cls.connect = staticmethod(lambda: psycopg2.connect(cls.dsn))
+        cls.connect = staticmethod(lambda: PG_DRIVER.connect(cls.dsn))
         cls.repository = ResearchLoopRepository(cls.connect)
         cls.actor = {"kind": "human", "id": "chemist-loop-test"}
         with cls.connect() as conn, conn.cursor() as cur:
@@ -92,6 +98,9 @@ class ResearchLoopRepositoryPostgresTests(unittest.TestCase):
         created = self._create()
         replay = self._create()
         self.assertEqual(replay["run_id"], created["run_id"])
+        self.assertTrue(created["created"])
+        self.assertFalse(replay["created"])
+        self.assertEqual(replay["mission_id"], created["mission_id"])
         with self.assertRaises(failures.DiracIdempotencyConflict):
             self.repository.create(
                 request_key="repository-integration-create",

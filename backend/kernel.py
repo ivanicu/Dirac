@@ -25,6 +25,7 @@ difference instead of discovering it when a 404 arrives.
 from __future__ import annotations
 
 import contextlib
+import atexit
 import os
 from pathlib import Path
 import shutil
@@ -516,6 +517,38 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
               f'({type(error).__name__}: {error})', file=sys.stderr, flush=True)
         rbfe_runsets = None
     svc.rbfe_runset_controller = rbfe_runsets  # type: ignore[attr-defined]
+    try:
+        import psycopg
+        from research.fep_adapter import FepAdapter
+        from research.loop_controller import ResearchLoopController
+        from research.loop_repository import ResearchLoopRepository
+
+        if kind != 'postgres' or rbfe_references is None or rbfe_runsets is None:
+            raise RuntimeError(
+                'research loops require durable Artifacts and the existing RBFE repositories')
+        connect = lambda: psycopg.connect(dsn)
+        with connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT to_regclass('app.research_loop_state') IS NOT NULL, "
+                "to_regclass('app.research_loop_event') IS NOT NULL, "
+                "to_regclass('app.research_loop_approval') IS NOT NULL, "
+                "to_regclass('app.research_loop_artifact') IS NOT NULL")
+            loop_capability = cur.fetchone()
+        if loop_capability is None or not all(loop_capability):
+            raise RuntimeError('migration 049_research_loop.sql is not fully applied')
+        research_loops = ResearchLoopController(
+            repository=ResearchLoopRepository(connect), service=svc,
+            artifact_store=st, provider_registry=ai_providers,
+            fep_adapter=FepAdapter(rbfe_references, rbfe_runsets, connect),
+            kernel=svc,
+        )
+        atexit.register(research_loops.shutdown)
+        research_loops.wake()
+    except Exception as error:  # noqa: BLE001
+        print(f'[kernel] durable research loop controller unavailable '
+              f'({type(error).__name__}: {error})', file=sys.stderr, flush=True)
+        research_loops = None
+    svc.research_loop_controller = research_loops  # type: ignore[attr-defined]
     if getattr(js, 'durability', 'none') == 'durable':
         try:
             svc.recover_keyed_dispatches()
