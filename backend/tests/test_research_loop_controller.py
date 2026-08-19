@@ -15,13 +15,29 @@ class RecordingRepository:
     def __init__(self):
         self.transitions = []
         self.linked_artifacts = []
+        self.linked_jobs = []
 
     def link_artifact(self, **kwargs):
         self.linked_artifacts.append(kwargs)
 
+    def link_job(self, **kwargs):
+        self.linked_jobs.append(kwargs)
+
     def transition(self, claim, **kwargs):
         self.transitions.append((claim, kwargs))
         return kwargs
+
+
+class CrashOnceRepository(RecordingRepository):
+    def __init__(self):
+        super().__init__()
+        self.crash_next_transition = True
+
+    def transition(self, claim, **kwargs):
+        if self.crash_next_transition:
+            self.crash_next_transition = False
+            raise RuntimeError("simulated process death before state commit")
+        return super().transition(claim, **kwargs)
 
 
 def claim(state):
@@ -77,6 +93,101 @@ class ResearchLoopControllerStateMachineTests(unittest.TestCase):
         self.assertEqual(
             transition["updates"]["outputs"]["proposal_artifact_sha256"],
             "sha256:" + "2" * 64)
+
+    def test_restart_after_reason_submit_reuses_the_same_provider_request_key(self):
+        controller = self.controller()
+        controller.repository = CrashOnceRepository()
+
+        class IdempotentService:
+            def __init__(self):
+                self.calls = []
+                self.effects = {}
+
+            def submit(self, _method, _payload, *, request_id, **_kwargs):
+                self.calls.append(request_id)
+                self.effects.setdefault(request_id, str(len(self.effects) + 1))
+                return {"data": {"job": {
+                    "id": "00000000-0000-0000-0000-000000000010"}}}
+
+        controller.service = IdempotentService()
+        state = {
+            "run_id": "00000000-0000-0000-0000-000000000001",
+            "version": 4, "iteration": 2,
+            "actor_kind": "human", "actor_id": "chemist",
+            "context_artifact_id": "00000000-0000-0000-0000-000000000002",
+            "context_digest": "sha256:" + "1" * 64,
+            "provider_profile_id": "fake-provider",
+            "provider_profile_digest": "sha256:" + "2" * 64,
+            "prompt_release_id": "fep-action-proposal-v1",
+            "prompt_release_digest": "sha256:" + "3" * 64,
+            "action_catalog_digest": "sha256:" + "4" * 64,
+            "data_classification": "internal",
+            "stage_attempts": {"reason": 0}, "stage_jobs": {},
+            "outputs": {
+                "context_size_bytes": 512,
+                "context_artifact_sha256": "sha256:" + "5" * 64,
+            },
+            "budget_remaining": {"reasoner_calls": 2},
+            "budget_spent": {"reasoner_calls": 0},
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "simulated process death"):
+            controller._stage_reason(claim(state))
+        controller._stage_reason(claim(state))
+
+        expected = "research-loop:00000000-0000-0000-0000-000000000001:2:reason:0"
+        self.assertEqual(controller.service.calls, [expected, expected])
+        self.assertEqual(len(controller.service.effects), 1)
+        transition = controller.repository.transitions[-1][1]
+        self.assertEqual(transition["stage"], "wait_job")
+        self.assertEqual(
+            transition["updates"]["stage_jobs"]["active"]["request_key"], expected)
+
+    def test_restart_after_provider_success_reuses_the_terminal_proposal_artifact(self):
+        controller = self.controller()
+        controller.repository = CrashOnceRepository()
+        proposal = {
+            "context_digest": "sha256:" + "1" * 64,
+            "candidate_actions": [], "preferred_action_id": None,
+        }
+        reads = []
+        controller.service = SimpleNamespace(get_job=lambda *_args, **_kwargs: {
+            "state": "done",
+            "artifacts": [{
+                "id": "00000000-0000-0000-0000-000000000099",
+                "role": "research.proposal", "sha256": "2" * 64,
+            }],
+        })
+
+        def read(identifier):
+            reads.append(identifier)
+            return (SimpleNamespace(role="research.proposal"),
+                    json.dumps(proposal).encode("utf-8"))
+
+        controller.store = SimpleNamespace(read=read)
+        state = {
+            "version": 7, "actor_kind": "human", "actor_id": "chemist",
+            "data_classification": "internal", "outputs": {},
+            "stage_jobs": {"active": {
+                "kind": "reason",
+                "job_id": "00000000-0000-0000-0000-000000000010",
+            }},
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "simulated process death"):
+            controller._stage_wait_job(claim(state))
+        controller._stage_wait_job(claim(state))
+
+        self.assertEqual(reads, [
+            "00000000-0000-0000-0000-000000000099",
+            "00000000-0000-0000-0000-000000000099",
+        ])
+        self.assertEqual({row["artifact_id"] for row in controller.repository.linked_artifacts},
+                         {"00000000-0000-0000-0000-000000000099"})
+        transition = controller.repository.transitions[-1][1]
+        self.assertEqual(transition["stage"], "validate_proposal")
+        self.assertEqual(transition["updates"]["proposal_artifact_id"],
+                         "00000000-0000-0000-0000-000000000099")
 
     def test_failed_reason_job_blocks_with_reason_retry_stage(self):
         controller = self.controller()
@@ -201,6 +312,167 @@ class ResearchLoopControllerStateMachineTests(unittest.TestCase):
         self.assertEqual(transition["event_type"], "proposal_stale")
         self.assertEqual(transition["payload"]["reason"],
                          "campaign_binding_changed")
+
+    def test_restart_after_preview_artifact_write_reuses_the_exact_preview(self):
+        controller = self.controller()
+        controller.repository = CrashOnceRepository()
+        preview = {
+            "template_id": "fep.stop.v1",
+            "action_fingerprint": "sha256:" + "f" * 64,
+            "consequence": {"approval": "session_grant", "risk_class": "R0"},
+        }
+        controller._read_state_artifact = lambda _state, which: {
+            "context": {"digest": "sha256:" + "1" * 64},
+            "proposal": {"preferred_action_id": "stop"},
+        }[which]
+        controller.compiler = SimpleNamespace(compile=lambda **_kwargs: SimpleNamespace(
+            preview=preview, preview_bytes=b'{"bounded":"preview"}',
+            command_input=None,
+        ))
+        puts = []
+
+        def put(raw, **_kwargs):
+            puts.append(raw)
+            return SimpleNamespace(
+                id="00000000-0000-0000-0000-000000000088",
+                sha256="8" * 64,
+            )
+
+        controller.store = SimpleNamespace(put=put)
+        state = {
+            "run_id": "00000000-0000-0000-0000-000000000001",
+            "version": 6, "data_classification": "internal", "outputs": {},
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "simulated process death"):
+            controller._stage_prepare_action(claim(state))
+        controller._stage_prepare_action(claim(state))
+
+        self.assertEqual(puts, [b'{"bounded":"preview"}', b'{"bounded":"preview"}'])
+        self.assertEqual({row["artifact_id"] for row in controller.repository.linked_artifacts},
+                         {"00000000-0000-0000-0000-000000000088"})
+        transition = controller.repository.transitions[-1][1]
+        self.assertEqual((transition["state"], transition["stage"]),
+                         ("active", "dispatch"))
+        self.assertEqual(
+            transition["updates"]["pending_action"]["preview_artifact_sha256"],
+            "sha256:" + "8" * 64)
+
+    def test_restart_after_physical_dispatch_deduplicates_the_runset(self):
+        controller = self.controller()
+        controller.repository = CrashOnceRepository()
+
+        class IdempotentDispatcher:
+            def __init__(self):
+                self.calls = []
+                self.effects = {}
+
+            def execute(self, command_id, command_input, *, request_id, **_kwargs):
+                self.calls.append((command_id, dict(command_input), request_id))
+                self.effects.setdefault(
+                    request_id,
+                    {"ok": True, "data": {"ref": {
+                        "kind": "rbfe_runset",
+                        "id": "00000000-0000-0000-0000-000000000055"}}},
+                )
+                return self.effects[request_id]
+
+        controller.dispatcher = IdempotentDispatcher()
+        controller.compiler = SimpleNamespace(revalidate=lambda *_args, **_kwargs: None)
+        controller.fep = SimpleNamespace(
+            current_source_versions=lambda *_args, **_kwargs: {"campaign_version": 4})
+        request_key = (
+            "research-loop:00000000-0000-0000-0000-000000000001:3:dispatch:0")
+        pending = {
+            "preview": {
+                "template_id": "fep.run_selected_edge.v1",
+                "action_fingerprint": "sha256:" + "f" * 64,
+                "subject_ref": {"kind": "free_energy_transformation", "id": "edge-a-b"},
+                "resolved_command": {"command_id": "physics.rbfe-run.start"},
+                "consequence": {"risk_class": "R3"},
+            },
+            "command_input": {"request_key": request_key},
+            "approved_acknowledgements": ["physical_fep_compute"],
+        }
+        state = {
+            "run_id": "00000000-0000-0000-0000-000000000001",
+            "version": 9, "iteration": 3,
+            "actor_kind": "human", "actor_id": "chemist",
+            "context_digest": "sha256:" + "1" * 64,
+            "stage_attempts": {"dispatch": 0}, "stage_jobs": {},
+            "pending_action": pending,
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "simulated process death"):
+            controller._stage_dispatch(claim(state))
+        controller._stage_dispatch(claim(state))
+
+        self.assertEqual(len(controller.dispatcher.calls), 2)
+        self.assertEqual(len(controller.dispatcher.effects), 1)
+        self.assertEqual({call[2] for call in controller.dispatcher.calls}, {request_key})
+        self.assertEqual({call[1]["request_key"] for call in controller.dispatcher.calls},
+                         {request_key})
+        transition = controller.repository.transitions[-1][1]
+        self.assertEqual(transition["stage"], "wait_job")
+        self.assertEqual(
+            transition["updates"]["stage_jobs"]["active"]["runset_id"],
+            "00000000-0000-0000-0000-000000000055")
+
+    def test_restart_after_command_dispatch_reuses_job_before_link_persist(self):
+        controller = self.controller()
+        controller.repository = CrashOnceRepository()
+
+        class IdempotentDispatcher:
+            def __init__(self):
+                self.calls = []
+                self.effects = {}
+
+            def execute(self, command_id, command_input, *, request_id, **_kwargs):
+                self.calls.append(request_id)
+                self.effects.setdefault(
+                    request_id,
+                    {"ok": True, "data": {"job": {
+                        "id": "00000000-0000-0000-0000-000000000066"}}},
+                )
+                return self.effects[request_id]
+
+        controller.dispatcher = IdempotentDispatcher()
+        controller.compiler = SimpleNamespace(revalidate=lambda *_args, **_kwargs: None)
+        controller.fep = SimpleNamespace(
+            current_source_versions=lambda *_args, **_kwargs: {"campaign_version": 4})
+        state = {
+            "run_id": "00000000-0000-0000-0000-000000000001",
+            "version": 9, "iteration": 3,
+            "actor_kind": "human", "actor_id": "chemist",
+            "context_digest": "sha256:" + "1" * 64,
+            "stage_attempts": {"dispatch": 0}, "stage_jobs": {},
+            "pending_action": {
+                "preview": {
+                    "template_id": "fep.prepare_selected_edge.v1",
+                    "action_fingerprint": "sha256:" + "e" * 64,
+                    "subject_ref": {
+                        "kind": "free_energy_transformation", "id": "edge-a-b"},
+                    "resolved_command": {"command_id": "physics.rbfe-system.prepare"},
+                    "consequence": {"risk_class": "R2"},
+                },
+                "command_input": {"edge_id": "edge-a-b"},
+            },
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "simulated process death"):
+            controller._stage_dispatch(claim(state))
+        controller._stage_dispatch(claim(state))
+
+        expected = (
+            "research-loop:00000000-0000-0000-0000-000000000001:3:dispatch:0")
+        self.assertEqual(controller.dispatcher.calls, [expected, expected])
+        self.assertEqual(len(controller.dispatcher.effects), 1)
+        self.assertEqual({row["job_id"] for row in controller.repository.linked_jobs},
+                         {"00000000-0000-0000-0000-000000000066"})
+        self.assertEqual(
+            controller.repository.transitions[-1][1]["updates"]["stage_jobs"]
+            ["active"]["job_id"],
+            "00000000-0000-0000-0000-000000000066")
 
     def test_cancel_does_not_cancel_an_already_dispatched_physical_runset(self):
         controller = self.controller()

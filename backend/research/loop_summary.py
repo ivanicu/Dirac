@@ -56,7 +56,7 @@ class LoopSummaryBuilder:
                         key=lambda error: list(error.path))
         if errors:
             first = errors[0]
-            raise failures.DiracInternal(
-                "research loop summary violates its frozen schema",
-                details={"path": list(first.path), "message": first.message})
+            raise failures.DiracInternal(ValueError(
+                "research loop summary violates its frozen schema at "
+                f"{list(first.path)}: {first.message}"))
         return canonical_bytes(document)

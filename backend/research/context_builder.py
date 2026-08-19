@@ -61,9 +61,9 @@ class ContextBuilder:
         }
         missing = sorted(required_domain - set(domain))
         if missing:
-            raise failures.DiracInternal(
-                "FEP adapter returned an incomplete research context",
-                details={"missing": missing})
+            raise failures.DiracInternal(ValueError(
+                "FEP adapter returned an incomplete research context; missing="
+                + ",".join(missing)))
         facts = self._ordered_facts(domain["facts"])
         base = {
             "schema_version": "1.0",
@@ -128,9 +128,9 @@ class ContextBuilder:
         errors = sorted(self.validator.iter_errors(document), key=lambda error: list(error.path))
         if errors:
             first = errors[0]
-            raise failures.DiracInternal(
-                "deterministic FEP context violates its frozen schema",
-                details={"path": list(first.path), "message": first.message})
+            raise failures.DiracInternal(ValueError(
+                "deterministic FEP context violates its frozen schema at "
+                f"{list(first.path)}: {first.message}"))
 
     @staticmethod
     def _ordered_facts(value: Any) -> list[dict[str, Any]]:

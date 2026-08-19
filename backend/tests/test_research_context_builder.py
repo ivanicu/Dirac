@@ -5,6 +5,8 @@ import unittest
 from copy import deepcopy
 from uuid import uuid4
 
+import failures
+
 from research.context_builder import ContextBuilder
 
 
@@ -115,3 +117,42 @@ class ResearchContextBuilderTests(unittest.TestCase):
         row = next(item for item in built.document["facts"] if item["fact_id"] == "high")
         self.assertFalse(row["claim_boundary"]["eligible_as_scientific_evidence"])
         self.assertNotIn("command_id", json.dumps(built.document["available_actions"]))
+
+    def test_negative_and_human_refused_actions_survive_context_construction(self):
+        source = domain()
+        source["action_history"] = [
+            {
+                "action_fingerprint": "sha256:" + "4" * 64,
+                "template_id": "fep.run_selected_edge.v1",
+                "subject_ref": ref("free_energy_transformation", "edge-negative"),
+                "result": "failed_negative_result",
+                "human_rejected": False,
+            },
+            {
+                "action_fingerprint": "sha256:" + "5" * 64,
+                "template_id": "fep.defer_for_experiment.v1",
+                "subject_ref": ref("free_energy_transformation", "edge-refused"),
+                "result": "rejected",
+                "human_rejected": True,
+            },
+        ]
+
+        built = ContextBuilder().build(loop(), source)
+
+        self.assertEqual(built.document["action_history"], source["action_history"])
+
+    def test_unverified_or_stale_fact_cannot_be_marked_eligible_evidence(self):
+        for source_class, stale in (
+            ("unverified_external", False),
+            ("method_result", False),
+            ("typed_evidence", True),
+        ):
+            with self.subTest(source_class=source_class, stale=stale):
+                source = domain()
+                unsafe = fact("unsafe")
+                unsafe["source_class"] = source_class
+                unsafe["freshness"]["stale"] = stale
+                unsafe["claim_boundary"]["eligible_as_scientific_evidence"] = True
+                source["facts"] = [unsafe]
+                with self.assertRaises(failures.DiracInternal):
+                    ContextBuilder().build(loop(), source)

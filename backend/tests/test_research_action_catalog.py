@@ -25,6 +25,18 @@ class ResearchActionCatalogTests(unittest.TestCase):
         projection = json.dumps(catalog.to_model_catalog())
         self.assertNotIn("command_id", projection)
         self.assertNotIn("physics.rbfe", projection)
+        resolved_commands = {
+            template["execution"]["command_id"]
+            for template in catalog.values()
+            if template["execution"]["command_id"] is not None
+        }
+        self.assertEqual(resolved_commands, {
+            "physics.rbfe-run.start",
+            "physics.rbfe-system.prepare",
+            "physics.rbfe-network",
+        })
+        self.assertFalse(any(command.startswith("program.")
+                             for command in resolved_commands))
 
     def test_registry_refuses_unlisted_or_id_mismatched_templates(self):
         with tempfile.TemporaryDirectory() as temporary:

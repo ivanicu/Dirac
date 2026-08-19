@@ -96,6 +96,7 @@ class ResearchActionCompilerTests(unittest.TestCase):
             loop=current_loop, context={"digest": "sha256:" + "e" * 64},
             proposal=proposal(), now=datetime(2026, 8, 18, 1, tzinfo=timezone.utc))
         pending = {"preview": dict(compiled.preview),
+                   "preview_artifact_sha256": compiled.preview_digest,
                    "command_input": dict(compiled.command_input)}
         awaiting = {**current_loop, "version": 8}
         compiler.revalidate(
@@ -121,6 +122,60 @@ class ResearchActionCompilerTests(unittest.TestCase):
                     current_source_versions=sources,
                     acknowledgements=list(compiled.preview["required_acknowledgements"]),
                     actor={"kind": "human", "id": "chemist"}, now=clock)
+
+    def test_persisted_preview_cannot_be_rewritten_into_a_program_mutation(self):
+        resolver = Resolver()
+        compiler = ActionCompiler(resolver)
+        current_loop = loop()
+        compiled = compiler.compile(
+            loop=current_loop, context={"digest": "sha256:" + "e" * 64},
+            proposal=proposal(), now=datetime(2026, 8, 18, 1, tzinfo=timezone.utc))
+        awaiting = {**current_loop, "version": 8}
+        pending = {
+            "preview": deepcopy(dict(compiled.preview)),
+            "preview_artifact_sha256": compiled.preview_digest,
+            "command_input": dict(compiled.command_input),
+        }
+        pending["preview"]["resolved_command"]["command_id"] = (
+            "program.hypothesis.create")
+
+        with self.assertRaises(failures.DiracStalePreview) as caught:
+            compiler.revalidate(
+                pending, loop=awaiting,
+                current_context_digest="sha256:" + "e" * 64,
+                current_source_versions=resolver.source_versions,
+                acknowledgements=list(compiled.preview["required_acknowledgements"]),
+                actor={"kind": "human", "id": "chemist"},
+                now=datetime(2026, 8, 18, 1, 1, tzinfo=timezone.utc))
+        witnesses = caught.exception.details["stale_witnesses"]
+        self.assertIn("preview_artifact_digest", witnesses)
+        self.assertIn("resolved_command", witnesses)
+        self.assertIn("command_contract", witnesses)
+
+    def test_budget_reduction_invalidates_a_previously_affordable_preview(self):
+        resolver = Resolver()
+        compiler = ActionCompiler(resolver)
+        current_loop = loop()
+        compiled = compiler.compile(
+            loop=current_loop, context={"digest": "sha256:" + "e" * 64},
+            proposal=proposal(), now=datetime(2026, 8, 18, 1, tzinfo=timezone.utc))
+        pending = {
+            "preview": dict(compiled.preview),
+            "preview_artifact_sha256": compiled.preview_digest,
+            "command_input": dict(compiled.command_input),
+        }
+        awaiting = deepcopy({**current_loop, "version": 8})
+        awaiting["budget_remaining"]["fep_runsets"] = 0
+
+        with self.assertRaises(failures.DiracStalePreview) as caught:
+            compiler.revalidate(
+                pending, loop=awaiting,
+                current_context_digest="sha256:" + "e" * 64,
+                current_source_versions=resolver.source_versions,
+                acknowledgements=list(compiled.preview["required_acknowledgements"]),
+                actor={"kind": "human", "id": "chemist"},
+                now=datetime(2026, 8, 18, 1, 1, tzinfo=timezone.utc))
+        self.assertIn("budget", caught.exception.details["stale_witnesses"])
 
     def test_template_outside_frozen_grant_cannot_compile(self):
         current = loop()

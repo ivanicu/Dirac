@@ -162,9 +162,9 @@ class ActionCompiler:
             self.preview_validator.iter_errors(preview), key=lambda error: list(error.path))
         if errors:
             error = errors[0]
-            raise failures.DiracInternal(
-                "compiled ActionPreview violates its frozen contract",
-                details={"path": list(error.path), "message": error.message})
+            raise failures.DiracInternal(ValueError(
+                "compiled ActionPreview violates its frozen contract at "
+                f"{list(error.path)}: {error.message}"))
         encoded = canonical_bytes(preview)
         return CompiledAction(
             preview=preview, preview_bytes=encoded,
@@ -184,6 +184,16 @@ class ActionCompiler:
         clock = now or datetime.now(timezone.utc)
         expected_acks = set(preview.get("required_acknowledgements") or [])
         failures_seen = []
+        preview_errors = sorted(
+            self.preview_validator.iter_errors(preview),
+            key=lambda error: list(error.path),
+        )
+        if preview_errors:
+            failures_seen.append("preview_contract")
+        expected_preview_digest = compiled.get("preview_artifact_sha256")
+        if (not isinstance(expected_preview_digest, str)
+                or canonical_digest(dict(preview)) != expected_preview_digest):
+            failures_seen.append("preview_artifact_digest")
         preview_version = int(preview.get("loop_version", -1))
         loop_version = int(loop["version"])
         approved_per_action = (
@@ -205,9 +215,56 @@ class ActionCompiler:
             if actor.get("kind") != "human" or not str(actor.get("id") or "").strip():
                 failures_seen.append("human_actor")
         resolved = preview.get("resolved_command")
-        if resolved and canonical_digest(dict(compiled.get("command_input") or {})) != resolved.get(
-                "input_digest"):
-            failures_seen.append("command_input_digest")
+        template = self.actions.get(str(preview.get("template_id") or ""))
+        if template is None:
+            failures_seen.append("action_template")
+        else:
+            expected_command_id = template["execution"]["command_id"]
+            actual_command_id = (
+                resolved.get("command_id") if isinstance(resolved, Mapping) else None)
+            if actual_command_id != expected_command_id:
+                failures_seen.append("resolved_command")
+            consequence = preview.get("consequence") or {}
+            expected_consequence = template["consequence"]
+            if any(consequence.get(key) != expected_consequence[key]
+                   for key in ("risk_class", "approval", "reversible")):
+                failures_seen.append("consequence_policy")
+            expected_required_acks = (
+                {"physical_fep_compute", "completed_unvalidated_claim_boundary"}
+                if expected_consequence["risk_class"] == "R3" else set())
+            if expected_acks != expected_required_acks:
+                failures_seen.append("required_acknowledgements")
+            try:
+                self._check_budget(
+                    loop, preview.get("estimate") or {}, str(preview["template_id"]))
+            except failures.DiracBudgetExceeded:
+                failures_seen.append("budget")
+        command_input = dict(compiled.get("command_input") or {})
+        if resolved:
+            if canonical_digest(command_input) != resolved.get("input_digest"):
+                failures_seen.append("command_input_digest")
+            try:
+                definition = self.commands.get(str(resolved.get("command_id") or ""))
+                self.commands.validate_input(definition, command_input)
+                if definition.version != resolved.get("command_version"):
+                    failures_seen.append("command_version")
+            except failures.DiracFailure:
+                failures_seen.append("command_contract")
+        elif command_input:
+            failures_seen.append("non_executing_command_input")
+        fingerprint_payload = {
+            "template_id": preview.get("template_id"),
+            "subject_ref": preview.get("subject_ref"),
+            "scientific_question": preview.get("scientific_question"),
+            "command_version": (
+                resolved.get("command_version") if isinstance(resolved, Mapping) else None),
+            "input_digest": (
+                resolved.get("input_digest") if isinstance(resolved, Mapping)
+                else canonical_digest({})),
+            "source_versions": dict(preview.get("source_versions") or {}),
+        }
+        if canonical_digest(fingerprint_payload) != preview.get("action_fingerprint"):
+            failures_seen.append("action_fingerprint")
         if failures_seen:
             raise failures.DiracStalePreview(
                 "scientific context changed after the action preview was created",

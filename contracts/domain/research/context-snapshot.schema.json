@@ -207,7 +207,46 @@
             }
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_class": {"not": {"const": "typed_evidence"}}
+            },
+            "required": ["source_class"]
+          },
+          "then": {
+            "properties": {
+              "claim_boundary": {
+                "properties": {
+                  "eligible_as_scientific_evidence": {"const": false}
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "freshness": {
+                "properties": {"stale": {"const": true}},
+                "required": ["stale"]
+              }
+            },
+            "required": ["freshness"]
+          },
+          "then": {
+            "properties": {
+              "claim_boundary": {
+                "properties": {
+                  "eligible_as_scientific_evidence": {"const": false}
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "artifactRef": {
       "type": "object", "additionalProperties": false,
