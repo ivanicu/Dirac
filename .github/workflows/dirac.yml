@@ -174,10 +174,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-      - name: PostgreSQL client and Python
+      - name: PostgreSQL client positive control
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          command -v psql
+          psql --version
+          psql "$DIRAC_DSN" -X -v ON_ERROR_STOP=1 -Atc \
+            "SELECT current_database(), current_setting('server_version_num')::int >= 180000"
       - name: Clean migration 000 through current
         run: |
           for file in backend/db/migrations/*.sql; do
