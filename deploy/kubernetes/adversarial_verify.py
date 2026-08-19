@@ -299,7 +299,10 @@ echo DIRAC_SECURITY_BOUNDARY_OK
 def hard_walltime(verify: Verification) -> dict[str, Any]:
     instance = adapter(["/bin/sh", "-c", "echo WALLTIME_STARTED; sleep 30"], BUSYBOX)
     status = verify.submit(instance, request(20, image=BUSYBOX, walltime=7))
-    final = wait_status(instance, status.allocation_id, timeout=30)
+    # The walltime starts only after Kueue resumes the Pod.  Keep the execution
+    # deadline at seven seconds while allowing independent queue/start/terminal
+    # observation latency in the acceptance harness.
+    final = wait_status(instance, status.allocation_id, timeout=60)
     assert final.state == "failed"
     reasons = [item.get("reason") for item in final.scheduler_summary["conditions"]]
     reasons.extend(item.get("reason")
@@ -428,8 +431,17 @@ def gpu_exclusive(verify: Verification, round_number: int) -> dict[str, Any]:
         "--loop=1",
     ]
     instances = [adapter(command, GPU_OPERATOR), adapter(command, GPU_OPERATOR)]
-    statuses = [verify.submit(instances[index], request(
-        base + index, image=GPU_OPERATOR, gpus=1, walltime=6
+    gpu = instances[0].health()["gpu"]
+
+    def bound_gpu_request(number: int, *, walltime: int) -> dict[str, Any]:
+        value = request(number, image=GPU_OPERATOR, gpus=1, walltime=walltime)
+        value["resource_request"]["gpu_arch"] = [gpu["arch"]]
+        value["determinism"]["numeric_mode"] = gpu["numeric_mode"]
+        value["placement"]["node_constraints"] = gpu["node_selector"]
+        return value
+
+    statuses = [verify.submit(instances[index], bound_gpu_request(
+        base + index, walltime=6
     )) for index in range(2)]
     max_reserved = 0
     saw_second_waiting = False
@@ -472,8 +484,7 @@ def gpu_exclusive(verify: Verification, round_number: int) -> dict[str, Any]:
     assert all(postmortem_logs)
 
     smoke = adapter(command[:-1], GPU_OPERATOR)
-    smoke_status = verify.submit(smoke, request(base + 2, image=GPU_OPERATOR,
-                                                gpus=1, walltime=30))
+    smoke_status = verify.submit(smoke, bound_gpu_request(base + 2, walltime=30))
     smoke_final = wait_status(smoke, smoke_status.allocation_id, timeout=30)
     smoke_logs = smoke.logs(smoke_status.allocation_id).strip()
     assert smoke_final.state == "succeeded" and "RTX 5080" in smoke_logs
