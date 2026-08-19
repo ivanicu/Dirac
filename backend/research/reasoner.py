@@ -178,8 +178,18 @@ def build_messages(
     system_prompt: str,
     validation_error: Mapping[str, Any] | None = None,
 ) -> tuple[str, str]:
+    try:
+        proposal_contract = json.loads(PROPOSAL_SCHEMA_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise failures.DiracInternal(
+            f"research proposal contract cannot be loaded: {type(error).__name__}"
+        ) from None
     wrapper: dict[str, Any] = {
-        "instruction": "Return the complete bounded proposal as one JSON object.",
+        "instruction": (
+            "Return the complete bounded proposal object itself as the JSON root. "
+            "Do not wrap it and do not repeat proposal_contract."
+        ),
+        "proposal_contract": proposal_contract,
         "research_context": context,
     }
     if validation_error is not None:

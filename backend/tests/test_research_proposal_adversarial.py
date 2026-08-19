@@ -126,6 +126,18 @@ class ResearchProposalAdversarialTests(unittest.TestCase):
             with self.assertRaises(ProposalValidationError):
                 parse_and_validate_proposal(raw, context=context(), action_catalog=CATALOG)
 
+    def test_schema_regeneration_summary_is_bounded_but_actionable(self):
+        with self.assertRaises(ProposalValidationError) as caught:
+            self.validate({"proposal": proposal()})
+        summary = caught.exception.bounded_summary()
+        self.assertEqual(summary["reason"], "proposal_schema_invalid")
+        self.assertIn(summary["schema_keyword"],
+                      {"required", "additionalProperties"})
+        self.assertIn("schema_pointer", summary)
+        self.assertTrue(summary.get("expected") or summary.get("unexpected_keys"))
+        self.assertLessEqual(len(summary.get("expected") or []), 32)
+        self.assertLessEqual(len(summary.get("unexpected_keys") or []), 16)
+
     def test_invented_fact_subject_template_and_question_fail_closed(self):
         mutations = []
         item = proposal(); item["candidate_actions"][0]["supporting_fact_ids"] = ["invented"]; mutations.append(item)

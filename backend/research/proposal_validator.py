@@ -46,21 +46,60 @@ class ValidatedProposal:
 
 
 class ProposalValidationError(ValueError):
-    def __init__(self, reason: str, *, pointer: Iterable[Any] = ()):
+    def __init__(
+        self, reason: str, *, pointer: Iterable[Any] = (),
+        schema_keyword: str | None = None,
+        schema_pointer: Iterable[Any] = (),
+        expected: Iterable[Any] = (),
+        unexpected_keys: Iterable[str] = (),
+    ):
         super().__init__(reason)
         self.reason = reason
         self.pointer = tuple(pointer)
+        self.schema_keyword = schema_keyword
+        self.schema_pointer = tuple(schema_pointer)
+        self.expected = tuple(expected)
+        self.unexpected_keys = tuple(unexpected_keys)
 
     def bounded_summary(self) -> dict[str, Any]:
-        return {"reason": self.reason, "pointer": list(self.pointer)[:16]}
+        summary: dict[str, Any] = {
+            "reason": self.reason,
+            "pointer": list(self.pointer)[:16],
+        }
+        if self.schema_keyword:
+            summary["schema_keyword"] = self.schema_keyword[:64]
+        if self.schema_pointer:
+            summary["schema_pointer"] = list(self.schema_pointer)[:16]
+        if self.expected:
+            summary["expected"] = list(self.expected)[:32]
+        if self.unexpected_keys:
+            summary["unexpected_keys"] = [
+                str(key)[:128] for key in self.unexpected_keys[:16]
+            ]
+        return summary
 
 
 def _validate_schema(document: Any, schema: Mapping[str, Any], name: str) -> None:
     try:
         jsonschema.Draft202012Validator(schema).validate(document)
     except jsonschema.ValidationError as error:
+        keyword = str(error.validator or "") or None
+        expected: tuple[Any, ...] = ()
+        unexpected_keys: tuple[str, ...] = ()
+        if keyword == "required" and isinstance(error.validator_value, list):
+            expected = tuple(error.validator_value)
+        if (keyword == "additionalProperties"
+                and isinstance(error.instance, Mapping)
+                and isinstance(error.schema.get("properties"), Mapping)):
+            allowed = set(error.schema["properties"])
+            unexpected_keys = tuple(sorted(str(key) for key in error.instance
+                                           if key not in allowed))
         raise ProposalValidationError(
-            f"{name}_schema_invalid", pointer=error.absolute_path
+            f"{name}_schema_invalid", pointer=error.absolute_path,
+            schema_keyword=keyword,
+            schema_pointer=error.absolute_schema_path,
+            expected=expected,
+            unexpected_keys=unexpected_keys,
         ) from None
 
 

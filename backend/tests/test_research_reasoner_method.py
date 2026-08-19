@@ -15,7 +15,7 @@ from invocation import InvocationService
 from jobs import MemoryJobStore
 from research.action_catalog import default_action_catalog
 from research.provider_registry import FileAiProviderRegistry, canonical_json
-from research.reasoner import _prompt_release
+from research.reasoner import _prompt_release, build_messages
 from scripts.research_loop_fake_provider import FakeProviderServer, Handler
 
 from backend.tests.test_research_proposal_adversarial import context as context_fixture
@@ -136,6 +136,17 @@ class ResearchReasonerMethodTests(unittest.TestCase):
         self.assertNotIn(b"reasoning_content", raw)
         self.assertNotIn(b"reasoner-test-secret", raw)
         self.assertEqual(submitted["meta"]["execution_mode"], "job")
+
+    def test_model_message_contains_the_exact_frozen_proposal_contract(self):
+        _manifest, _prompt_digest, system_prompt = _prompt_release()
+        _system, user = build_messages(self.context, system_prompt=system_prompt)
+        wrapper = json.loads(user.removeprefix("JSON research context:\n"))
+        contract = wrapper["proposal_contract"]
+        self.assertEqual(contract["$id"],
+                         "https://dirac.ivan.icu/schema/research/proposal.schema.json")
+        self.assertEqual(contract["properties"]["schema_version"]["const"], "1.0")
+        self.assertEqual(wrapper["research_context"]["digest"], self.context["digest"])
+        self.assertNotIn("command_id", json.dumps(wrapper["research_context"]))
 
     def test_invalid_first_proposal_regenerates_once_with_bounded_error(self):
         self.server.mode = "invalid-then-valid"
