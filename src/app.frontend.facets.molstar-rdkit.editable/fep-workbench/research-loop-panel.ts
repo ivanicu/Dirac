@@ -84,6 +84,10 @@ class ResearchLoopPanel {
         this.host.hidden = false;
         this.host.setAttribute('aria-hidden', 'false');
         this.toggle.setAttribute('aria-expanded', 'true');
+        const loading = this.frame('CHECKING CAPABILITY');
+        loading.append(node('p', 'research-loop-loading',
+            'Reading provider admission and durable loop state…'));
+        this.host.querySelector<HTMLElement>('button')?.focus();
         await this.refresh();
         this.host.querySelector<HTMLElement>('button,select,input,textarea')?.focus();
     }

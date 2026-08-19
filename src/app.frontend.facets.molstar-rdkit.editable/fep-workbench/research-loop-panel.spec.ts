@@ -67,6 +67,8 @@ describe('Research Loop Drawer contract', () => {
         for (const cta of [
             'APPROVE EXACT ACTION', 'REJECT', 'REVISE GOAL', 'CHANGE PROVIDER', 'OPEN FEP REVIEW',
         ]) expect(panel).toContain(cta);
+        expect(panel).toContain('CHECKING CAPABILITY');
+        expect(panel).toContain('Reading provider admission and durable loop state…');
         expect(panel).toContain("['resume', 'cancel']");
         expect(panel).toContain("['retry', 'pause', 'cancel']");
         expect(panel).not.toContain('.innerHTML');

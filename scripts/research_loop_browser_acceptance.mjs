@@ -322,6 +322,9 @@ async function scenario(cdp, name, configured) {
     await evaluate(`(()=>{const button=document.querySelector('#research-loop-toggle');button.focus();button.click();})()`);
     check(await waitFor(`!document.querySelector('#research-loop-drawer').hidden`),
         `${name}: drawer did not open`);
+    const readyText = configured ? 'START BOUNDED RESEARCH LOOP' : 'PROVIDER UNCONFIGURED';
+    check(await waitFor(`document.querySelector('#research-loop-drawer').innerText.includes('${readyText}')`),
+        `${name}: asynchronous capability state did not settle`);
     const base = await evaluate(`({
         text: document.querySelector('#research-loop-drawer').innerText,
         overflow: document.documentElement.scrollWidth-innerWidth,
