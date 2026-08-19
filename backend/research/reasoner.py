@@ -6,6 +6,8 @@ import json
 import pathlib
 from typing import Any, Mapping
 
+import jsonschema
+
 import failures
 from invocation import HandlerResult, InvocationContext
 
@@ -21,7 +23,6 @@ from .proposal_validator import (
     MAX_PROPOSAL_BYTES,
     ProposalValidationError,
     ValidatedProposal,
-    parse_and_validate_proposal,
     validate_proposal as _validate_proposal,
 )
 from .provider_registry import (
@@ -39,6 +40,7 @@ PROMPT_PATH = PROMPT_DIRECTORY / f"{PROMPT_RELEASE_ID}.system.txt"
 GOAL_INTERPRETER_PROMPT_PATH = (
     PROMPT_DIRECTORY / "fep-goal-interpreter-v1.system.txt"
 )
+GOAL_MODE_PROMPT_PATH = PROMPT_DIRECTORY / "fep-goal-mode-v1.system.txt"
 MANIFEST_PATH = PROMPT_DIRECTORY / f"{PROMPT_RELEASE_ID}.manifest.json"
 CONTEXT_SCHEMA_PATH = ROOT / "contracts/domain/research/context-snapshot.schema.json"
 PROPOSAL_SCHEMA_PATH = ROOT / "contracts/domain/research/proposal.schema.json"
@@ -48,6 +50,7 @@ GOAL_AUTHORITY_MARKERS = (
     "latest human decision", "authoritative request",
     "最终有效目标", "最新人工决定", "权威请求",
     "objectif final", "dernière décision humaine", "verbindliche anfrage",
+    "decision-relevant next step",
 )
 
 
@@ -67,6 +70,7 @@ def _prompt_release() -> tuple[dict[str, Any], str, str]:
         "system_prompt_sha256": _raw_digest(PROMPT_PATH),
         "goal_interpreter_prompt_sha256": _raw_digest(
             GOAL_INTERPRETER_PROMPT_PATH),
+        "goal_mode_prompt_sha256": _raw_digest(GOAL_MODE_PROMPT_PATH),
         "context_schema_sha256": _raw_digest(CONTEXT_SCHEMA_PATH),
         "proposal_schema_sha256": _raw_digest(PROPOSAL_SCHEMA_PATH),
     }
@@ -88,22 +92,101 @@ def _goal_interpreter_prompt() -> str:
         ) from None
 
 
+def _goal_mode_prompt() -> str:
+    try:
+        return GOAL_MODE_PROMPT_PATH.read_text(encoding="utf-8")
+    except OSError as error:
+        raise failures.DiracInternal(
+            "research goal mode prompt cannot be loaded: "
+            f"{type(error).__name__}") from None
+
+
 def build_goal_interpretation_schema(
     context: Mapping[str, Any],
 ) -> dict[str, Any]:
-    templates = sorted({
-        str(item["template_id"]) for item in context["available_actions"]
-    })
-    if not templates:
+    choices = _goal_action_choices(context)
+    if not choices:
         raise failures.DiracInternal(
             "goal interpreter requires at least one available action")
     return {
         "type": "object", "additionalProperties": False,
-        "required": ["selected_template_id"],
+        "required": ["selected_action_id"],
         "properties": {
-            "selected_template_id": {"enum": templates},
+            "selected_action_id": {
+                "enum": [item["action_id"] for item in choices]},
         },
     }
+
+
+def _goal_action_choices(context: Mapping[str, Any]) -> list[dict[str, Any]]:
+    operation_kinds = {
+        "fep.run_selected_edge.v1": "physical_fep_execution",
+        "fep.prepare_selected_edge.v1": "computational_edge_system_preparation",
+        "fep.replan_network.v1": "computational_network_planning",
+        "fep.defer_for_experiment.v1": "wet_lab_followup_draft",
+        "fep.stop.v1": "close_research_loop",
+    }
+    choices: list[dict[str, Any]] = []
+    for action in context["available_actions"]:
+        for subject in action["subject_refs"]:
+            choices.append({
+                "action_id": f"action_{len(choices) + 1:04d}",
+                "template_id": str(action["template_id"]),
+                "operation_kind": operation_kinds.get(
+                    str(action["template_id"]), "unknown"),
+                "intent": str(action["intent"]),
+                "subject_ref": dict(subject),
+            })
+    return choices
+
+
+def _narrow_acquisition_choices(
+    context: Mapping[str, Any], choices: list[dict[str, Any]], operative_text: str,
+) -> list[dict[str, Any]]:
+    """Bind explicit Campaign entities before asking the model to pick an edge."""
+    folded = operative_text.casefold()
+    cut_points = [folded.find(marker) for marker in (
+        "discarded", "作废", "annulé", "archived", "[quoted:",
+        "quoted appendix", "quoted noise") if folded.find(marker) >= 0]
+    if cut_points:
+        folded = folded[:min(cut_points)]
+    project = next((item["structured_value"] for item in context["facts"]
+                    if item["category"] == "project_decision_context"), {})
+    priorities = list(project.get("compound_priorities") or [])
+    compound_ids = [str(row.get("compound_id") or "") for row in priorities]
+    mention_counts = {compound: folded.count(compound.casefold())
+                      for compound in compound_ids if compound}
+    ranked_mentions = sorted(
+        ((count, compound) for compound, count in mention_counts.items() if count > 0),
+        reverse=True)
+    mentioned = {compound for _count, compound in ranked_mentions[:2]}
+    if ("high-priority" in folded or "high priority" in folded
+            or "高优先" in folded):
+        high_ready = [str(row.get("compound_id")) for row in priorities
+                      if str(row.get("priority") or "").casefold() == "high"
+                      and "ready" in str(row.get("synthesis_status") or "").casefold()]
+        if len(high_ready) == 1:
+            mentioned.add(high_ready[0])
+    reference = str(project.get("reference_ligand") or "")
+    if reference and (reference.casefold() in folded or len(mentioned) == 1):
+        mentioned.add(reference)
+    if len(mentioned) < 2:
+        return choices
+    objects = {(item["ref"]["kind"], item["ref"]["id"]): item
+               for item in context["objects"]}
+    narrowed = []
+    for choice in choices:
+        item = objects.get((choice["subject_ref"]["kind"],
+                            choice["subject_ref"]["id"]), {})
+        state = item.get("state") or {}
+        endpoints = {str(state.get("left_id") or ""),
+                     str(state.get("right_id") or "")}
+        if not all(endpoints) and item.get("label"):
+            endpoints.update(compound for compound in mentioned
+                             if compound in str(item["label"]))
+        if mentioned.issubset(endpoints):
+            narrowed.append(choice)
+    return narrowed or choices
 
 
 def build_goal_interpretation_messages(
@@ -119,23 +202,42 @@ def build_goal_interpretation_messages(
             if index < 0:
                 break
             end_marker = folded.find("end final objective", index + len(marker))
-            end = min(len(goal_intent), index + 768)
+            end = min(len(goal_intent), index + 512)
             if 0 <= end_marker < end:
                 end = min(len(goal_intent), end_marker + len("end final objective"))
             snippet = goal_intent[index:end].strip()
             if snippet and snippet not in authority_hints:
                 authority_hints.append(snippet)
             cursor = index + len(marker)
+    objects = {
+        (item["ref"]["kind"], item["ref"]["id"]): item
+        for item in context["objects"]
+    }
+    choices = _goal_action_choices(context)
+    project_context = next((
+        item["structured_value"] for item in context["facts"]
+        if item["category"] == "project_decision_context"
+    ), {})
     request = {
-        "goal_intent": goal_intent,
+        "goal_intent": ("\n".join(authority_hints)
+                        if authority_hints else goal_intent),
+        "goal_intent_sha256": sha256_digest(goal_intent),
         "operative_attention_windows": authority_hints,
+        "project_decision_context": project_context,
         "available_actions": [
             {
-                "template_id": item["template_id"],
-                "intent": item["intent"],
-                "subject_refs": item["subject_refs"],
+                **item,
+                "subject": {
+                    "ref": item["subject_ref"],
+                    "label": objects.get((item["subject_ref"]["kind"],
+                                          item["subject_ref"]["id"]), {}).get(
+                                              "label"),
+                    "state": objects.get((item["subject_ref"]["kind"],
+                                          item["subject_ref"]["id"]), {}).get(
+                                              "state", {}),
+                },
             }
-            for item in context["available_actions"]
+            for item in choices
         ],
     }
     return system_prompt, "JSON goal interpretation input:\n" + canonical_json(
@@ -147,41 +249,129 @@ def interpret_goal(
     profile: Any,
     context: Mapping[str, Any],
 ) -> tuple[dict[str, Any], ProviderChatResult | None]:
-    templates = sorted({
-        str(item["template_id"]) for item in context["available_actions"]
-    })
-    if len(templates) == 1:
+    choices = _goal_action_choices(context)
+    if len(choices) == 1:
         return {
-            "selected_template_id": templates[0],
+            **choices[0],
+            "selected_template_id": choices[0]["template_id"],
             "source": "single_available_template",
         }, None
-    system, user = build_goal_interpretation_messages(
-        context, system_prompt=_goal_interpreter_prompt())
-    result = provider.complete_json(
-        profile, system_prompt=system, context_json=user,
-        output_schema=build_goal_interpretation_schema(context),
+    templates = {item["template_id"] for item in choices}
+    classes = {
+        "acquire_fep": {"fep.run_selected_edge.v1",
+                        "fep.prepare_selected_edge.v1"},
+        "replan_network": {"fep.replan_network.v1"},
+        "defer_for_experiment": {"fep.defer_for_experiment.v1"},
+        "stop": {"fep.stop.v1"},
+    }
+    available_classes = [name for name, members in classes.items()
+                         if templates & members]
+    _, action_user = build_goal_interpretation_messages(
+        context, system_prompt="Return JSON only.")
+    mode_request = json.loads(action_user.removeprefix(
+        "JSON goal interpretation input:\n"))
+    mode_request["intent_classes"] = {
+        "acquire_fep": "Acquire FEP evidence; exact edge state later decides prepare versus run.",
+        "replan_network": "Construct or revise the computational RBFE network.",
+        "defer_for_experiment": "Request synthesis, assay, wet-lab work, or an external observation.",
+        "stop": "Close the loop and start no new action.",
+    }
+    external_verbs = (
+        "synthesize", "synthesise", "measure", "wet-lab", "wet lab",
+        "合成", "测定", "測定", "synthét", "mesur", "synthetis", "miss zuerst",
+        "sintet", "medir", "합성", "측정",
+    )
+    mode_request["external_action_predicate_hits"] = [
+        verb for verb in external_verbs
+        if verb in str(mode_request["goal_intent"]).casefold()]
+    mode_request.pop("available_actions", None)
+    mode_result = provider.complete_json(
+        profile, system_prompt=_goal_mode_prompt(),
+        context_json="JSON goal mode input:\n" + canonical_json(
+            mode_request).decode("utf-8"),
+        output_schema={
+            "type": "object", "additionalProperties": False,
+            "required": ["selected_intent_class"],
+            "properties": {"selected_intent_class": {
+                "enum": available_classes}},
+        },
         request_profile_fields="classifier_request_fields",
     )
     try:
-        document = json.loads(result.content)
+        mode_document = json.loads(mode_result.content)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise ModelOutputInvalid("goal_mode_is_not_json") from None
+    if (not isinstance(mode_document, dict)
+            or set(mode_document) != {"selected_intent_class"}
+            or mode_document["selected_intent_class"] not in available_classes):
+        raise ModelOutputInvalid("goal_mode_shape_invalid")
+    selected_class = str(mode_document["selected_intent_class"])
+    eligible_templates = classes[selected_class]
+    eligible_choices = [item for item in choices
+                        if item["template_id"] in eligible_templates]
+    if selected_class == "acquire_fep":
+        eligible_choices = _narrow_acquisition_choices(
+            context, eligible_choices, str(mode_request["goal_intent"]))
+    if len(eligible_choices) == 1:
+        choice = eligible_choices[0]
+        return {**choice, "selected_template_id": choice["template_id"],
+                "intent_class": selected_class,
+                "source": "bounded_hierarchical_model_interpretation"}, mode_result
+    filtered_context = copy.deepcopy(context)
+    eligible_keys = {(item["template_id"], item["subject_ref"]["kind"],
+                      item["subject_ref"]["id"]) for item in eligible_choices}
+    filtered_context["available_actions"] = []
+    for item in context["available_actions"]:
+        refs = [ref for ref in item["subject_refs"]
+                if (item["template_id"], ref["kind"], ref["id"]) in eligible_keys]
+        if refs:
+            filtered_context["available_actions"].append({**item, "subject_refs": refs})
+    system, user = build_goal_interpretation_messages(
+        filtered_context, system_prompt=_goal_interpreter_prompt())
+    action_result = provider.complete_json(
+        profile, system_prompt=system, context_json=user,
+        output_schema=build_goal_interpretation_schema(filtered_context),
+        request_profile_fields="classifier_request_fields")
+    try:
+        document = json.loads(action_result.content)
     except (UnicodeDecodeError, json.JSONDecodeError):
         raise ModelOutputInvalid("goal_interpretation_is_not_json") from None
-    if not isinstance(document, dict) or set(document) != {
-        "selected_template_id",
-    }:
+    if not isinstance(document, dict) or set(document) != {"selected_action_id"}:
         raise ModelOutputInvalid("goal_interpretation_shape_invalid")
-    selected = document.get("selected_template_id")
-    if selected not in templates:
+    filtered_choices = _goal_action_choices(filtered_context)
+    selected = document.get("selected_action_id")
+    filtered_choice = next((item for item in filtered_choices
+                            if item["action_id"] == selected), None)
+    if filtered_choice is None:
         raise ModelOutputInvalid("goal_interpretation_value_invalid")
+    choice = next((item for item in choices
+                   if item["template_id"] == filtered_choice["template_id"]
+                   and item["subject_ref"] == filtered_choice["subject_ref"]), None)
+    if choice is None:
+        raise ModelOutputInvalid("goal_interpretation_value_invalid")
+    combined_usage: dict[str, Any] = {}
+    _sum_usage(combined_usage, mode_result.usage)
+    _sum_usage(combined_usage, action_result.usage)
+    result = ProviderChatResult(
+        content=action_result.content,
+        configured_model=action_result.configured_model,
+        resolved_model=action_result.resolved_model,
+        provider_request_id=action_result.provider_request_id,
+        usage=combined_usage,
+        attempts=mode_result.attempts + action_result.attempts,
+        transport_events=mode_result.transport_events + action_result.transport_events)
     return {
-        "selected_template_id": selected,
-        "source": "bounded_model_interpretation",
+        **choice,
+        "selected_template_id": choice["template_id"],
+        "intent_class": selected_class,
+        "source": "bounded_hierarchical_model_interpretation",
     }, result
 
 
 def build_generation_schema(
     context: Mapping[str, Any], catalog: Mapping[str, Mapping[str, Any]],
     *, selected_template_id: str | None = None,
+    selected_subject_ref: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Bind provider grammar to IDs and action shapes in the frozen context."""
 
@@ -239,6 +429,10 @@ def build_generation_schema(
         schema["properties"]["scientific_questions"]["items"]["properties"][
             "subject_ref"
         ] = {"enum": subject_refs}
+    if selected_subject_ref is not None:
+        schema["properties"]["scientific_questions"]["items"]["properties"][
+            "subject_ref"
+        ] = {"const": dict(selected_subject_ref)}
 
     candidate = schema["properties"]["candidate_actions"]["items"]
     branches: list[dict[str, Any]] = []
@@ -252,6 +446,9 @@ def build_generation_schema(
                 f"research context exposes unknown action template {template_id}"
             )
         for subject_ref in available["subject_refs"]:
+            if (selected_subject_ref is not None
+                    and dict(subject_ref) != dict(selected_subject_ref)):
+                continue
             branch = copy.deepcopy(candidate)
             branch["properties"]["proposal_action_id"] = {"const": "a1"}
             branch["properties"]["scientific_question_id"] = {"const": "q1"}
@@ -271,6 +468,84 @@ def build_generation_schema(
     else:
         schema["properties"]["candidate_actions"]["items"] = {"oneOf": branches}
     return schema
+
+
+def build_action_semantics_schema() -> dict[str, Any]:
+    """Small model-owned WHY surface; IDs and governance stay server-owned."""
+    fields = ("summary", "scientific_question", "rationale",
+              "expected_observation", "falsifier")
+    return {
+        "type": "object", "additionalProperties": False,
+        "required": list(fields),
+        "properties": {
+            field: {"type": "string", "minLength": 1, "maxLength": 256}
+            for field in fields
+        },
+    }
+
+
+def _proposal_from_semantics(
+    semantics: Mapping[str, Any], *, context: Mapping[str, Any],
+    goal_interpretation: Mapping[str, Any],
+    catalog: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    template_id = str(goal_interpretation["selected_template_id"])
+    subject_ref = dict(goal_interpretation["subject_ref"])
+    template = catalog[template_id]
+    hint_schema = template["model_hint_schema"]
+    parameter_hints: dict[str, Any] = {}
+    if ("edge_id" in (hint_schema.get("properties") or {})
+            and subject_ref["kind"] == "free_energy_transformation"):
+        parameter_hints["edge_id"] = subject_ref["id"]
+    if template_id == "fep.stop.v1":
+        parameter_hints["reason_code"] = "HUMAN_GOAL_REQUESTS_STOP"
+    elif template_id == "fep.defer_for_experiment.v1":
+        parameter_hints["reason"] = str(semantics["rationale"])
+    project_fact = next((
+        item["fact_id"] for item in context["facts"]
+        if item["category"] == "project_decision_context"
+    ), None)
+    supporting = [project_fact] if project_fact else []
+    stop = template_id == "fep.stop.v1"
+    return {
+        "schema_version": "1.0", "context_digest": context["digest"],
+        "summary": str(semantics["summary"]),
+        "hypothesis_drafts": [{
+            "hypothesis_id": "h1", "statement": str(semantics["summary"]),
+            "testable_prediction": str(semantics["expected_observation"]),
+            "falsifier": str(semantics["falsifier"]),
+            "supporting_fact_ids": supporting, "contradicting_fact_ids": [],
+            "assumptions": [
+                "The frozen Campaign context remains current through approval."],
+            "confidence_band": "low",
+        }],
+        "claim_assessments": [{
+            "claim_id": "c1", "claim": str(semantics["summary"]),
+            "interpretation": "unresolved", "supporting_fact_ids": [],
+            "contradicting_fact_ids": [],
+            "limitations": ["This is a model proposal, not scientific evidence."],
+        }],
+        "scientific_questions": [{
+            "question_id": "q1", "question": str(semantics["scientific_question"]),
+            "subject_ref": subject_ref,
+            "decision_relevance": str(semantics["rationale"]),
+        }],
+        "candidate_actions": [{
+            "proposal_action_id": "a1", "template_id": template_id,
+            "subject_ref": subject_ref, "scientific_question_id": "q1",
+            "rationale": str(semantics["rationale"]),
+            "expected_observation": str(semantics["expected_observation"]),
+            "falsifier": str(semantics["falsifier"]),
+            "supporting_fact_ids": supporting, "contradicting_fact_ids": [],
+            "parameter_hints": parameter_hints, "qualitative_priority": "high",
+        }],
+        "preferred_action_id": "a1",
+        "stop_recommendation": {
+            "recommended": stop,
+            "reason_codes": ["HUMAN_GOAL_REQUESTS_STOP"] if stop else [],
+        },
+        "unknowns": [], "conflicts": [], "warnings": [],
+    }
 
 
 def _read_context(payload: Mapping[str, Any], ctx: InvocationContext) -> dict[str, Any]:
@@ -387,19 +662,61 @@ def build_messages(
     validation_error: Mapping[str, Any] | None = None,
     goal_interpretation: Mapping[str, Any] | None = None,
 ) -> tuple[str, str]:
-    try:
-        proposal_contract = json.loads(PROPOSAL_SCHEMA_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise failures.DiracInternal(
-            f"research proposal contract cannot be loaded: {type(error).__name__}"
-        ) from None
+    selected_template = str(
+        (goal_interpretation or {}).get("selected_template_id") or "")
+    selected_subject = (goal_interpretation or {}).get("subject_ref")
+    selected_actions = [
+        item for item in context["available_actions"]
+        if not selected_template or item["template_id"] == selected_template
+        if selected_subject is None or any(
+            dict(ref) == dict(selected_subject) for ref in item["subject_refs"])
+    ]
+    selected_refs = {
+        (ref["kind"], ref["id"])
+        for action in selected_actions for ref in action["subject_refs"]
+    }
+    campaign_ref = context["campaign_ref"]
+    model_objects = []
+    for item in context["objects"]:
+        if ((item["ref"]["kind"], item["ref"]["id"]) not in selected_refs
+                and item["ref"] != campaign_ref):
+            continue
+        projected = copy.deepcopy(item)
+        if item["ref"] == campaign_ref:
+            projected["state"].pop("project_context", None)
+        model_objects.append(projected)
+    # The response_format already carries the complete strict JSON Schema.  The
+    # user message carries the scientific decision projection once, rather than
+    # repeating the schema and every unrelated object until local-model context
+    # is exhausted.  Final validation still runs against the full frozen context.
+    model_facts = [
+        {key: item[key] for key in (
+            "fact_id", "category", "source_class", "subject_ref",
+            "structured_value", "freshness", "claim_boundary")}
+        for item in context["facts"]
+        if item["category"] == "project_decision_context"
+    ]
+    reasoning_context = {
+        "schema_version": context["schema_version"],
+        "context_digest": context["digest"],
+        "goal": context["goal"],
+        "campaign_ref": campaign_ref,
+        "campaign_binding": context["campaign_binding"],
+        "budget": context["budget"],
+        "objects": model_objects,
+        "facts": model_facts,
+        "available_actions": selected_actions,
+        "open_attention": context["open_attention"],
+    }
     wrapper: dict[str, Any] = {
         "instruction": (
-            "Return the complete bounded proposal object itself as the JSON root. "
-            "Do not wrap it and do not repeat proposal_contract."
+            "Return only the compact scientific action semantics requested by "
+            "response_format. The server owns all identifiers, references, "
+            "governance fields, and the final proposal envelope."
         ),
-        "proposal_contract": proposal_contract,
-        "research_context": context,
+        "output_mode": "compact_action_semantics_v1",
+        "proposal_contract_sha256": _raw_digest(PROPOSAL_SCHEMA_PATH),
+        "research_context_projection": reasoning_context,
     }
     if goal_interpretation is not None:
         wrapper["goal_interpretation"] = dict(goal_interpretation)
@@ -471,7 +788,9 @@ def propose_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
             details={"reason": error.reason, "attempts": error.attempts},
         ) from None
     interpreter_metadata: dict[str, Any] = {
+        "selected_action_id": goal_interpretation["action_id"],
         "selected_template_id": goal_interpretation["selected_template_id"],
+        "selected_subject_ref": goal_interpretation["subject_ref"],
         "source": goal_interpretation["source"],
         "raw_provider_response_stored": False,
     }
@@ -480,10 +799,7 @@ def propose_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
             interpreter_result)
         provider_http_attempts += interpreter_result.attempts
         _sum_usage(usage, interpreter_result.usage)
-    output_schema = build_generation_schema(
-        context, catalog,
-        selected_template_id=str(goal_interpretation["selected_template_id"]),
-    )
+    output_schema = build_action_semantics_schema()
     maximum_regenerations = int(profile.document["bounds"]["max_schema_regenerations"])
     validation_error: dict[str, Any] | None = None
     latest_metadata: dict[str, Any] = {}
@@ -515,21 +831,30 @@ def propose_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
             if validation_attempt <= maximum_regenerations:
                 continue
             raise failures.DiracModelOutputInvalid(
-                "provider response remained invalid after bounded regeneration",
+                "provider response remained invalid after bounded regeneration: "
+                f"{error.reason}",
                 details={"validation": validation_error, "attempts": validation_attempt},
             ) from None
         latest_metadata = redact_provider_response(result)
         provider_http_attempts += result.attempts
         _sum_usage(usage, result.usage)
         try:
-            validated = parse_and_validate_proposal(
-                result.content, context=context, action_catalog=catalog
-            )
-        except ProposalValidationError as error:
+            semantics = json.loads(result.content)
+            jsonschema.Draft202012Validator(output_schema).validate(semantics)
+            proposal = _proposal_from_semantics(
+                semantics, context=context,
+                goal_interpretation=goal_interpretation, catalog=catalog)
+            validated = _validate_proposal(
+                proposal, context=context, action_catalog=catalog)
+        except (json.JSONDecodeError, jsonschema.ValidationError,
+                ProposalValidationError) as error:
             METRICS.counter("dirac_research_loop_proposal_validation_total", {
                 "result": "schema_invalid",
             })
-            validation_error = error.bounded_summary()
+            validation_error = (error.bounded_summary()
+                                if isinstance(error, ProposalValidationError)
+                                else {"reason": "action_semantics_schema_invalid",
+                                      "pointer": []})
             if validation_attempt <= maximum_regenerations:
                 continue
             raise failures.DiracModelOutputInvalid(

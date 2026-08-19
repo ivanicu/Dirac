@@ -74,7 +74,7 @@
         "resolved_model": {"type": ["string", "null"]},
         "provider_request_id": {"type": ["string", "null"]},
         "usage": {"type": "object"},
-        "validation_attempts": {"type": "integer", "minimum": 1, "maximum": 2},
+        "validation_attempts": {"type": "integer", "minimum": 1, "maximum": 3},
         "claim_boundary": {"const": "model_proposal_not_scientific_evidence"}
       }
     },

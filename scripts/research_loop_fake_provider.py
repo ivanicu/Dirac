@@ -29,8 +29,10 @@ def _proposal_for_request(payload: dict) -> dict:
     user = messages[-1].get("content", "") if messages else ""
     marker = "JSON research context:\n"
     wrapper = json.loads(user.split(marker, 1)[1]) if marker in user else {}
-    context = wrapper.get("research_context") or {}
-    digest = context.get("digest", VALID_PROPOSAL["context_digest"])
+    context = (wrapper.get("research_context_projection")
+               or wrapper.get("research_context") or {})
+    digest = (context.get("context_digest") or context.get("digest")
+              or VALID_PROPOSAL["context_digest"])
     actions = context.get("available_actions") or []
     selected = next((row for row in actions
                      if row.get("template_id") == "fep.run_selected_edge.v1"), None)
@@ -81,13 +83,42 @@ def _goal_interpretation_for_request(payload: dict) -> dict:
     goal = str(request.get("goal_intent") or "").casefold().strip()
     stop_markers = ("stop now", "stop the loop now", "start no new", "do not run")
     if "fep.stop.v1" in templates and goal.startswith(stop_markers):
-        selected = "fep.stop.v1"
+        selected = next(item for item in actions
+                        if item.get("template_id") == "fep.stop.v1")
     else:
-        selected = next(
-            (item for item in templates if item != "fep.stop.v1"),
-            "fep.stop.v1" if "fep.stop.v1" in templates else templates[0],
-        )
-    return {"selected_template_id": selected}
+        selected = next((item for item in actions
+                         if item.get("template_id") != "fep.stop.v1"), actions[0])
+    return {"selected_action_id": selected["action_id"]}
+
+
+def _semantics_for_request(_payload: dict) -> dict:
+    return {
+        "summary": "The selected governed action addresses the current decision.",
+        "scientific_question": "Would the selected comparison change the lead decision?",
+        "rationale": "It is the exact current action selected from the frozen Campaign.",
+        "expected_observation": "A bounded observation that updates the next decision.",
+        "falsifier": "The action fails its gates or leaves the decision unresolved.",
+    }
+
+
+def _goal_mode_for_request(payload: dict) -> dict:
+    messages = payload.get("messages") or []
+    user = messages[-1].get("content", "") if messages else ""
+    marker = "JSON goal mode input:\n"
+    request = json.loads(user.split(marker, 1)[1]) if marker in user else {}
+    goal = str(request.get("goal_intent") or "").casefold()
+    if any(word in goal for word in ("synthesize", "assay", "wet-lab", "合成")):
+        selected = "defer_for_experiment"
+    elif any(word in goal for word in ("build", "network", "网络")):
+        selected = "replan_network"
+    elif goal.startswith(("stop", "close", "停止")):
+        selected = "stop"
+    else:
+        selected = "acquire_fep"
+    available = set((request.get("intent_classes") or {}).keys())
+    if selected not in available:
+        selected = sorted(available)[0]
+    return {"selected_intent_class": selected}
 
 
 class FakeProviderServer(ThreadingHTTPServer):
@@ -161,10 +192,16 @@ class Handler(BaseHTTPRequestHandler):
 
         messages = payload.get("messages") or []
         user = messages[-1].get("content", "") if messages else ""
-        if "JSON goal interpretation input:\n" in user:
+        if "JSON goal mode input:\n" in user:
+            content: object = _goal_mode_for_request(payload)
+        elif "JSON goal interpretation input:\n" in user:
             content: object = _goal_interpretation_for_request(payload)
         else:
-            content = (_proposal_for_request(payload)
+            schema = (((payload.get("response_format") or {}).get("json_schema")
+                       or {}).get("schema") or {})
+            content = (_semantics_for_request(payload)
+                       if "scientific_question" in (schema.get("properties") or {})
+                       else _proposal_for_request(payload)
                        if mode == "action" else VALID_PROPOSAL)
         message: dict[str, object] = {"role": "assistant"}
         finish_reason = "stop"

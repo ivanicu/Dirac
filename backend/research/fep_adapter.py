@@ -15,6 +15,80 @@ _JOB_METHODS = (
     "physics.motif.rbfe_network", "physics.motif.rbfe_system_prepare",
 )
 
+_PROJECT_CONTEXT_FIELDS = {
+    "campaign-question": "research_question",
+    "assay-anchor": "assay_anchor",
+    "portfolio-priority": "portfolio_priority",
+    "pose-hypothesis": "pose_hypothesis",
+    "cost-cap": "cost_cap",
+    "next-action": "human_next_action",
+    "stop-rule": "human_stop_rule",
+    "target": "target",
+    "target-name": "target",
+    "campaign-name": "campaign_name",
+    "reference-ligand": "reference_ligand",
+    "reference-ligand-id": "reference_ligand",
+}
+
+
+def _bounded_text(value: Any, limit: int = 2048) -> str:
+    """Keep user-owned decision context useful without copying raw large inputs."""
+    if value is None:
+        return ""
+    if isinstance(value, (dict, list)):
+        text = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    else:
+        text = str(value)
+    return text.strip()[:limit]
+
+
+def _compound_priorities(value: Any) -> list[dict[str, str]]:
+    """Parse the Workbench's durable pipe-delimited priority table."""
+    rows: list[dict[str, str]] = []
+    if isinstance(value, list):
+        candidates = value
+    else:
+        candidates = str(value or "").splitlines()
+    for item in candidates[:64]:
+        if isinstance(item, Mapping):
+            compound_id = _bounded_text(
+                item.get("compound_id") or item.get("id"), 256)
+            if not compound_id:
+                continue
+            rows.append({
+                "compound_id": compound_id,
+                "priority": _bounded_text(item.get("priority"), 64),
+                "rationale": _bounded_text(item.get("rationale"), 512),
+                "synthesis_status": _bounded_text(
+                    item.get("synthesis_status") or item.get("status"), 128),
+            })
+            continue
+        parts = [part.strip() for part in str(item).split("|")]
+        if not parts or not parts[0]:
+            continue
+        parts += [""] * (4 - len(parts))
+        rows.append({
+            "compound_id": parts[0][:256], "priority": parts[1][:64],
+            "rationale": parts[2][:512], "synthesis_status": parts[3][:128],
+        })
+    return rows
+
+
+def _project_context(campaign: Mapping[str, Any]) -> dict[str, Any]:
+    """Extract only bounded decision fields already saved by the FEP Workbench."""
+    state = campaign.get("state") or {}
+    client = ((state.get("client_state") or {}).get("values") or {})
+    result: dict[str, Any] = {}
+    for source, target in _PROJECT_CONTEXT_FIELDS.items():
+        if source in client and target not in result:
+            text = _bounded_text(client[source])
+            if text:
+                result[target] = text
+    priorities = _compound_priorities(client.get("compound-priorities"))
+    if priorities:
+        result["compound_priorities"] = priorities
+    return result
+
 
 def _ref(kind: str, identifier: Any) -> dict[str, str]:
     return {"kind": kind, "id": str(identifier)}
@@ -72,6 +146,11 @@ class FepAdapter:
         systems = durable["systems"]
         campaign_id = str(loop["campaign_id"])
         campaign_source = _ref("campaign", campaign_id)
+        project_context = _project_context(campaign)
+        priority_by_compound = {
+            row["compound_id"]: row
+            for row in project_context.get("compound_priorities", [])
+        }
         objects: list[dict[str, Any]] = [{
             "ref": campaign_source,
             "label": str(campaign["state"].get("label") or f"FEP Campaign {campaign_id[:8]}"),
@@ -79,6 +158,7 @@ class FepAdapter:
                 "status": campaign["status"], "version": campaign["version"],
                 "scientific_generation": campaign["campaign_scientific_generation"],
                 "scientific_digest": campaign["campaign_scientific_digest"],
+                "project_context": project_context,
             },
         }]
         facts: list[dict[str, Any]] = [self._fact(
@@ -89,6 +169,14 @@ class FepAdapter:
             status="server_current", eligible=False,
             reasons=["SYSTEM_STATE_NOT_SCIENTIFIC_EVIDENCE"], priority=1000,
         )]
+        if project_context:
+            facts.append(self._fact(
+                "campaign-project-context", "project_decision_context", "system_state",
+                campaign_source, campaign_source, project_context,
+                campaign["campaign_scientific_generation"],
+                status="human_authored_project_context", eligible=False,
+                reasons=["PROJECT_CONTEXT_NOT_SCIENTIFIC_EVIDENCE"], priority=990,
+            ))
         for system in systems:
             receptor_ref = dict(system["prepared_receptor_state_ref"])
             objects.append({
@@ -113,19 +201,30 @@ class FepAdapter:
                 edge_id = str(edge["edge_id"])
                 subject = _ref("free_energy_transformation", edge_id)
                 prepared = prepared_edges.get(edge_id)
+                endpoint_context = {
+                    endpoint: priority_by_compound[compound_id]
+                    for endpoint, compound_id in (
+                        ("left", str(edge.get("left_id") or "")),
+                        ("right", str(edge.get("right_id") or "")),
+                    ) if compound_id in priority_by_compound
+                }
                 objects.append({
                     "ref": subject, "label": f"{edge.get('left_id')} → {edge.get('right_id')}",
                     "state": {
+                        "left_id": edge.get("left_id"),
+                        "right_id": edge.get("right_id"),
                         "prepared": prepared is not None,
                         "mapping_score": edge.get("mapping_score"),
                         "mapping_warnings": edge.get("mapping_warnings") or [],
+                        "endpoint_project_context": endpoint_context,
                     },
                 })
                 facts.append(self._fact(
                     f"network-edge:{edge_id}", "network_edge", "method_result",
                     network_ref, subject,
                     {key: edge.get(key) for key in (
-                        "left_id", "right_id", "mapping_score", "mapping_warnings")},
+                        "left_id", "right_id", "mapping_score", "mapping_warnings")} | {
+                            "endpoint_project_context": endpoint_context},
                     campaign["campaign_scientific_generation"],
                     status="governed_execution_plan", eligible=False,
                     reasons=["NETWORK_PLAN_NOT_SCIENTIFIC_EVIDENCE"], priority=700,

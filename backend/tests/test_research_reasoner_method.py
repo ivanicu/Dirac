@@ -146,16 +146,17 @@ class ResearchReasonerMethodTests(unittest.TestCase):
         self.assertNotIn(b"reasoner-test-secret", raw)
         self.assertEqual(submitted["meta"]["execution_mode"], "job")
 
-    def test_model_message_contains_the_exact_frozen_proposal_contract(self):
+    def test_model_message_uses_a_digest_bound_decision_projection(self):
         _manifest, _prompt_digest, system_prompt = _prompt_release()
         _system, user = build_messages(self.context, system_prompt=system_prompt)
         wrapper = json.loads(user.removeprefix("JSON research context:\n"))
-        contract = wrapper["proposal_contract"]
-        self.assertEqual(contract["$id"],
-                         "https://dirac.ivan.icu/schema/research/proposal.schema.json")
-        self.assertEqual(contract["properties"]["schema_version"]["const"], "1.0")
-        self.assertEqual(wrapper["research_context"]["digest"], self.context["digest"])
-        self.assertNotIn("command_id", json.dumps(wrapper["research_context"]))
+        self.assertRegex(wrapper["proposal_contract_sha256"],
+                         r"^sha256:[0-9a-f]{64}$")
+        projection = wrapper["research_context_projection"]
+        self.assertEqual(projection["context_digest"], self.context["digest"])
+        self.assertEqual(projection["goal"], self.context["goal"])
+        self.assertNotIn("command_id", json.dumps(projection))
+        self.assertNotIn("proposal_contract", wrapper)
 
     def test_provider_generation_schema_is_bound_to_frozen_context_and_catalog(self):
         schema = build_generation_schema(self.context, default_action_catalog())
@@ -204,10 +205,8 @@ class ResearchReasonerMethodTests(unittest.TestCase):
             "intent": "Stop with a governed receipt.", "risk_class": "R0",
         })
         schema = build_goal_interpretation_schema(context)
-        self.assertEqual(
-            schema["properties"]["selected_template_id"]["enum"],
-            ["fep.run_selected_edge.v1", "fep.stop.v1"],
-        )
+        self.assertEqual(schema["properties"]["selected_action_id"]["enum"],
+                         ["action_0001", "action_0002"])
         _system, user = build_goal_interpretation_messages(
             context, system_prompt="Return JSON only.")
         request = json.loads(user.removeprefix(
@@ -218,6 +217,8 @@ class ResearchReasonerMethodTests(unittest.TestCase):
             OpenAICompatibleChatProvider(), self.profile, context)
         self.assertEqual(interpreted["selected_template_id"],
                          "fep.run_selected_edge.v1")
+        self.assertEqual(interpreted["subject_ref"],
+                         context["available_actions"][0]["subject_refs"][0])
         self.assertNotIn("ambiguous", interpreted)
         self.assertIsNotNone(result)
         constrained = build_generation_schema(

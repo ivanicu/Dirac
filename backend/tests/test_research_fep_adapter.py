@@ -45,7 +45,17 @@ def fixture() -> dict:
             "campaign_scientific_digest": "sha256:" + "2" * 64,
             "state": {"label": "Lead optimization FEP", "inputs": {
                 "compounds": [{"id": "c2", "smiles": "CCO"},
-                              {"id": "c7", "smiles": "CCN"}]}},
+                              {"id": "c7", "smiles": "CCN"}]},
+                "client_state": {"values": {
+                    "campaign-question": "Can c7 displace c2 as the lead?",
+                    "assay-anchor": "cellular IC50",
+                    "portfolio-priority": "Resolve c2 versus c7 before synthesis.",
+                    "compound-priorities": (
+                        "c2 | MEDIUM | incumbent reference | AVAILABLE\n"
+                        "c7 | HIGH | polar growth vector | ROUTE READY"),
+                    "next-action": "Run the c2 to c7 comparison.",
+                    "stop-rule": "Stop after lead ordering is resolved.",
+                }}},
             "created_by": {"kind": "human", "id": "chemist"},
             "updated_at": now,
         },
@@ -125,6 +135,24 @@ def proposal(template: str) -> dict:
 
 
 class ResearchFepAdapterTests(unittest.TestCase):
+    def test_snapshot_exposes_human_project_context_and_binds_it_to_edges(self):
+        current = fixture()
+        domain = FixtureAdapter(current).snapshot(loop(current))
+        project = next(row for row in domain["facts"]
+                       if row["category"] == "project_decision_context")
+        self.assertEqual(project["source_class"], "system_state")
+        self.assertFalse(project["claim_boundary"][
+            "eligible_as_scientific_evidence"])
+        priorities = project["structured_value"]["compound_priorities"]
+        self.assertEqual([row["compound_id"] for row in priorities], ["c2", "c7"])
+        self.assertEqual(priorities[1]["priority"], "HIGH")
+
+        edge = next(row for row in domain["objects"]
+                    if row["ref"]["kind"] == "free_energy_transformation")
+        endpoint = edge["state"]["endpoint_project_context"]
+        self.assertEqual(endpoint["left"]["compound_id"], "c2")
+        self.assertEqual(endpoint["right"]["rationale"], "polar growth vector")
+
     def test_snapshot_preserves_completed_unvalidated_boundary_and_validates_schema(self):
         current = fixture()
         adapter = FixtureAdapter(current)

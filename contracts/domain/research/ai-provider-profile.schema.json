@@ -29,6 +29,7 @@
       "additionalProperties": false,
       "properties": {
         "enable_thinking": {"type": "boolean"},
+        "max_tokens": {"type": "integer", "minimum": 1, "maximum": 8192},
         "temperature": {"type": "number", "minimum": 0, "maximum": 2},
         "top_p": {"type": "number", "minimum": 0, "maximum": 1},
         "top_k": {"type": "integer", "minimum": -1, "maximum": 1000},
@@ -42,6 +43,7 @@
       "additionalProperties": false,
       "properties": {
         "enable_thinking": {"type": "boolean"},
+        "max_tokens": {"type": "integer", "minimum": 1, "maximum": 256},
         "temperature": {"type": "number", "minimum": 0, "maximum": 2},
         "top_p": {"type": "number", "minimum": 0, "maximum": 1},
         "top_k": {"type": "integer", "minimum": -1, "maximum": 1000},
