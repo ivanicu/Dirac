@@ -91,7 +91,12 @@ def _goal_interpretation_for_request(payload: dict) -> dict:
     return {"selected_action_id": selected["action_id"]}
 
 
-def _semantics_for_request(_payload: dict) -> dict:
+def _semantics_for_request(payload: dict) -> dict:
+    schema = (((payload.get("response_format") or {}).get("json_schema") or {})
+              .get("schema") or {})
+    properties = schema.get("properties") or {}
+    if properties and all("const" in value for value in properties.values()):
+        return {name: value["const"] for name, value in properties.items()}
     return {
         "summary": "The selected governed action addresses the current decision.",
         "scientific_question": "Would the selected comparison change the lead decision?",

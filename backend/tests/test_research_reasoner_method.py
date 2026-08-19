@@ -90,12 +90,12 @@ class ResearchReasonerMethodTests(unittest.TestCase):
         self.server.server_close()
         self.thread.join(timeout=2)
 
-    def test_local_qwen_semantics_are_bounded_below_completion_budget(self):
-        schema = build_action_semantics_schema()
-        self.assertEqual(
-            {field["maxLength"] for field in schema["properties"].values()},
-            {96},
-        )
+    def test_local_qwen_semantics_are_closed_by_selected_action(self):
+        schema = build_action_semantics_schema("fep.run_selected_edge.v1")
+        self.assertTrue(all(
+            set(field) == {"const"}
+            for field in schema["properties"].values()
+        ))
         profile = EXAMPLE["profiles"][1]
         for request_fields in (
                 "static_request_fields", "classifier_request_fields"):

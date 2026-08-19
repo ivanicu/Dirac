@@ -649,8 +649,8 @@ def main() -> None:
     parser.add_argument("--case-indexes", help="comma-separated 1-based generated case indexes")
     parser.add_argument("--show-cases", type=int, default=0,
                         help="print N generated questions and exact expected operations; do not call a model")
-    parser.add_argument("--concurrency", type=int, default=4,
-                        help="provider calls in flight; 4 is the measured stable RTX 5080/Qwen default")
+    parser.add_argument("--concurrency", type=int, default=2,
+                        help="provider calls in flight; 2 is the conservative 16 GiB local-Qwen default")
     parser.add_argument("--seed", type=int); parser.add_argument("--timeout", type=float, default=240)
     parser.add_argument("--profile-id", default="qwen-local-rtx5080")
     parser.add_argument("--provider-config", type=pathlib.Path, default=ROOT / "deploy/ai/providers.local.json")

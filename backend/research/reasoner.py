@@ -470,16 +470,54 @@ def build_generation_schema(
     return schema
 
 
-def build_action_semantics_schema() -> dict[str, Any]:
-    """Small model-owned WHY surface; IDs and governance stay server-owned."""
-    fields = ("summary", "scientific_question", "rationale",
-              "expected_observation", "falsifier")
+def build_action_semantics_schema(selected_template_id: str) -> dict[str, Any]:
+    """Closed action semantics; the model chooses, while prose cannot run away."""
+    by_template = {
+        "fep.run_selected_edge.v1": {
+            "summary": "Run the selected prepared FEP edge.",
+            "scientific_question": "What FEP result does the selected prepared edge produce?",
+            "rationale": "The selected edge is prepared and matches the current human goal.",
+            "expected_observation": "A governed FEP method result is recorded for the selected edge.",
+            "falsifier": "Stale context, failed admission, or an invalid result blocks this proposal.",
+        },
+        "fep.prepare_selected_edge.v1": {
+            "summary": "Prepare the selected edge for FEP.",
+            "scientific_question": "Can the selected edge be prepared under the governed protocol?",
+            "rationale": "The requested FEP edge exists but is not yet prepared.",
+            "expected_observation": "A governed prepared-system result is recorded for the selected edge.",
+            "falsifier": "Preparation failure or stale Campaign state blocks this proposal.",
+        },
+        "fep.replan_network.v1": {
+            "summary": "Build a governed RBFE network.",
+            "scientific_question": "Which governed RBFE network represents the current ligand series?",
+            "rationale": "The current human goal requests network construction before edge execution.",
+            "expected_observation": "A governed RBFE network artifact is recorded for the Campaign.",
+            "falsifier": "Invalid Campaign inputs or stale context blocks network construction.",
+        },
+        "fep.defer_for_experiment.v1": {
+            "summary": "Defer the next decision to the requested experiment.",
+            "scientific_question": "Which requested external observation is needed before more FEP work?",
+            "rationale": "The current human goal requests an experiment rather than computational FEP.",
+            "expected_observation": "The loop records the requested experiment as the next action boundary.",
+            "falsifier": "A revised human goal that requests a governed computational action supersedes it.",
+        },
+        "fep.stop.v1": {
+            "summary": "Stop the research loop without starting new work.",
+            "scientific_question": "Has the human goal explicitly ended this research loop?",
+            "rationale": "The current human goal explicitly requests no new governed action.",
+            "expected_observation": "The loop reaches a terminal stopped state without dispatching work.",
+            "falsifier": "A later explicit human request must create or resume an authorized workflow.",
+        },
+    }
+    values = by_template.get(selected_template_id)
+    if values is None:
+        raise failures.DiracInternal(
+            f"unknown action template for semantics schema: {selected_template_id}")
     return {
         "type": "object", "additionalProperties": False,
-        "required": list(fields),
+        "required": list(values),
         "properties": {
-            field: {"type": "string", "minLength": 1, "maxLength": 96}
-            for field in fields
+            field: {"const": value} for field, value in values.items()
         },
     }
 
@@ -799,7 +837,8 @@ def propose_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
             interpreter_result)
         provider_http_attempts += interpreter_result.attempts
         _sum_usage(usage, interpreter_result.usage)
-    output_schema = build_action_semantics_schema()
+    output_schema = build_action_semantics_schema(
+        str(goal_interpretation["selected_template_id"]))
     maximum_regenerations = int(profile.document["bounds"]["max_schema_regenerations"])
     validation_error: dict[str, Any] | None = None
     latest_metadata: dict[str, Any] = {}
