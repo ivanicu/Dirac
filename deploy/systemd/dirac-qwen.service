@@ -1,0 +1,40 @@
+# dirac-qwen.service — loopback-only Qwen3.5 inference for the Research Loop.
+# The shared RTX 5080 profile remains unusable unless dirac-fields also receives
+# DIRAC_ALLOW_SHARED_GPU_AI=1 through its operator-owned environment file.
+
+[Unit]
+Description=Dirac local Qwen3.5 inference (:8930)
+After=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+ConditionPathExists=/home/ivan/.local/share/dirac-qwen-vllm/bin/vllm
+ConditionPathExists=/mnt/e/data.ai-models.local-model-store.storage.xl.private.readonly/Qwen3.5-2B/config.json
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ivan/dirac
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=VLLM_NO_USAGE_STATS=1
+# FlashInfer's sampler JIT searches /usr/local/cuda on this CUDA-13 wheel; the
+# transformer kernels remain CUDA FlashAttention/Triton when only this sampler is off.
+Environment=VLLM_USE_FLASHINFER_SAMPLER=0
+Environment=XDG_CACHE_HOME=%C/dirac-qwen
+Environment=TORCH_HOME=%C/dirac-qwen/torch
+Environment=VLLM_CACHE_ROOT=%C/dirac-qwen/vllm
+Environment=TRITON_CACHE_DIR=%C/dirac-qwen/triton
+Environment=FLASHINFER_WORKSPACE_BASE=%C/dirac-qwen
+CacheDirectory=dirac-qwen
+ExecStart=/home/ivan/.local/share/dirac-qwen-vllm/bin/vllm serve /mnt/e/data.ai-models.local-model-store.storage.xl.private.readonly/Qwen3.5-2B --host 127.0.0.1 --port 8930 --served-model-name Qwen3.5-2B --max-model-len 16384 --gpu-memory-utilization 0.65 --language-model-only
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%C/dirac-qwen
+MemoryHigh=24G
+MemoryMax=32G
+
+[Install]
+WantedBy=default.target

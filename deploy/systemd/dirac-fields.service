@@ -24,6 +24,9 @@ Environment=PYSCF_TMPDIR=/home/ivan/.cache/dirac/scratch
 # CPU methods remain local inside the bounded controller pool.
 Environment=DIRAC_EXECUTOR=kubernetes
 Environment=DIRAC_KUBERNETES_EXCHANGE_HOST=/home/ivan/dirac/.runtime/pv/exchange
+# Optional operator-owned provider URLs, credentials and explicit shared-GPU grant.
+# The ignored file is absent on hosts that intentionally run without AI inference.
+EnvironmentFile=-/home/ivan/dirac/deploy/ai/dirac-ai.env
 ExecStart=/home/ivan/dirac/backend/env/bin/python backend/field_server.py
 Restart=on-failure
 RestartSec=5

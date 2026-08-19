@@ -114,6 +114,11 @@ profiles remain fail-closed unless the host operator sets the exact
 proposals still pass the frozen schema, current-action and scientific-evidence validators.
 The production loop requires forward migrations 049 and 050.
 
+The canonical workstation's optional local endpoint is supervised by
+`deploy/systemd/dirac-qwen.service` on loopback port 8930. Provider profiles and the
+host-scoped grant live in gitignored `deploy/ai/providers.local.json` and
+`deploy/ai/dirac-ai.env`; no provider URL or credential comes from a request payload.
+
 ```bash
 bash scripts/gates.sh research
 

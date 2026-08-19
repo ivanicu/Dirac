@@ -8,6 +8,7 @@ The canonical local deployment has one current topology:
 | `dirac-fields.service` | 8901 | unified application, Command, Method, Job and artifact service |
 | `dirac-ops.service` | 1355 | read-only operations projection |
 | `dirac-digital-twin.service` | — | source watcher and architecture-twin regeneration |
+| `dirac-qwen.service` | 8930 (loopback) | optional local Qwen3.5 Research Loop inference |
 
 The standalone `dirac-physics.service` on 8902 is superseded and retained only under
 `deploy/systemd/_archive/`. Physics implementations are reached through the unified 8901
@@ -42,6 +43,22 @@ systemctl --user link "$PWD/deploy/systemd/dirac-digital-twin.service"
 systemctl --user daemon-reload
 systemctl --user enable --now dirac-web dirac-fields dirac-ops dirac-digital-twin
 ```
+
+Local Qwen is intentionally a separate opt-in unit. Copy the provider example to the
+gitignored `deploy/ai/providers.local.json`, mark the workstation profile
+`shared_dirac_gpu`, and place its paths plus the exact
+`DIRAC_ALLOW_SHARED_GPU_AI=1` grant in gitignored `deploy/ai/dirac-ai.env`. Then:
+
+```bash
+systemctl --user link "$PWD/deploy/systemd/dirac-qwen.service"
+systemctl --user enable --now dirac-qwen
+systemctl --user restart dirac-fields
+curl --fail http://127.0.0.1:8930/health
+```
+
+The grant authorizes this host configuration; it does not turn model output into
+evidence or make physical FEP schedulable. Keep physical GPU execution disabled until a
+single lease owner coordinates model residency and FEP admission.
 
 Verify state, socket ownership and HTTP responses rather than treating installation as
 proof:
