@@ -64,6 +64,29 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
         self.assertNotIn("reasoning", repr(result))
         self.assertNotIn("test-secret-never-leak", repr(result))
 
+    def test_action_mode_binds_to_the_request_context_digest(self):
+        self.server.mode = "action"
+        result = self.provider.complete_json(
+            self.profile,
+            system_prompt="Return one bounded JSON object and never call tools.",
+            context_json=("JSON research context:\n" + json.dumps({
+                "research_context": {
+                    "digest": "sha256:" + "9" * 64,
+                    "facts": [],
+                    "available_actions": [{
+                        "template_id": "fep.run_selected_edge.v1",
+                        "subject_refs": [{
+                            "kind": "free_energy_transformation", "id": "edge-a-b",
+                        }],
+                    }],
+                },
+            })),
+        )
+        proposal = json.loads(result.content)
+        self.assertEqual(proposal["context_digest"], "sha256:" + "9" * 64)
+        self.assertEqual(proposal["candidate_actions"][0]["subject_ref"]["id"],
+                         "edge-a-b")
+
     def test_reasoning_content_is_discarded(self):
         self.server.mode = "reasoning"
         result = self.complete()

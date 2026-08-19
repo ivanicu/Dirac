@@ -24,6 +24,7 @@ PG_DRIVER = psycopg2 or psycopg
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 MIGRATION = ROOT / "backend/db/migrations/049_research_loop.sql"
+DISPATCH_MIGRATION = ROOT / "backend/db/migrations/050_research_loop_dispatch.sql"
 
 
 class ResearchLoopMigrationContractTests(unittest.TestCase):
@@ -51,18 +52,35 @@ class ResearchLoopMigrationContractTests(unittest.TestCase):
         normalized = source.replace(recorded, "PENDING")
         self.assertEqual(hashlib.sha256(normalized.encode()).hexdigest(), recorded)
 
+    def test_forward_dispatch_migration_admits_only_prepare_and_research_loop(self):
+        source = DISPATCH_MIGRATION.read_text(encoding="utf-8")
+        self.assertIn("'physics.rbfe-campaign.prepare'", source)
+        self.assertIn("'research.loop.create'", source)
+        self.assertIn("j.command_id IN", source)
+        marker = "VALUES ('050_research_loop_dispatch.sql','\\x"
+        recorded = source.split(marker, 1)[1][:64]
+        normalized = source.replace(recorded, "PENDING")
+        self.assertEqual(hashlib.sha256(normalized.encode()).hexdigest(), recorded)
+
 
 @unittest.skipUnless(os.environ.get("DIRAC_TEST_DSN") and PG_DRIVER,
-                     "requires isolated PostgreSQL DIRAC_TEST_DSN with migrations 000-049")
+                     "requires isolated PostgreSQL DIRAC_TEST_DSN with migrations 000-050")
 class ResearchLoopRepositoryPostgresTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.dsn = os.environ["DIRAC_TEST_DSN"]
         cls.connect = staticmethod(lambda: PG_DRIVER.connect(cls.dsn))
         cls.repository = ResearchLoopRepository(cls.connect)
-        cls.actor = {"kind": "human", "id": "chemist-loop-test"}
         with cls.connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT current_database()")
+            if "test" not in str(cur.fetchone()[0]).lower():
+                raise RuntimeError("repository tests refuse a database without 'test' in its name")
+            cur.execute(
+                "UPDATE app.research_loop_state SET state='cancelled',stage='completed',"
+                "lease_owner=NULL,lease_expires_at=NULL,finished_at=coalesce(finished_at,now()) "
+                "WHERE state IN ('active','waiting_approval','blocked','paused')")
             code = "RL-" + uuid.uuid4().hex[:12]
+            cls.actor = {"kind": "human", "id": code}
             cur.execute(
                 "INSERT INTO design.project(code,name) VALUES (%s,%s) RETURNING id",
                 (code, "Research loop repository test"),
@@ -154,6 +172,8 @@ class ResearchLoopRepositoryPostgresTests(unittest.TestCase):
             cur.execute(
                 "INSERT INTO app.artifact(blob_sha256,media_type,role,size_bytes) "
                 "VALUES (%s,'application/json','research.action_preview',%s) "
+                "ON CONFLICT (blob_sha256,role,encoding) DO UPDATE "
+                "SET role=EXCLUDED.role "
                 "RETURNING id", (preview_digest, len(preview)),
             )
             preview_artifact_id = str(cur.fetchone()[0])

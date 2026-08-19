@@ -171,6 +171,17 @@ class ResearchLoopControllerStateMachineTests(unittest.TestCase):
         self.assertNotIn("resume_candidate_after_snapshot",
                          snapshot_transition["updates"]["outputs"])
 
+    def test_shutdown_prevents_a_late_timer_from_resubmitting_work(self):
+        controller = self.controller()
+        controller._lock = __import__("threading").Lock()
+        controller._shutdown = True
+        controller._running = False
+        controller._wake_requested = False
+        controller._timer = None
+        controller._pool = SimpleNamespace(
+            submit=lambda *_args: self.fail("shutdown controller submitted work"))
+        controller.wake()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -48,6 +48,7 @@ class ResearchLoopController:
         self._lock = threading.Lock()
         self._running = False
         self._wake_requested = False
+        self._shutdown = False
         self._timer: threading.Timer | None = None
 
     def create(self, payload: Mapping[str, Any], actor: Mapping[str, Any]) -> dict[str, Any]:
@@ -241,6 +242,8 @@ class ResearchLoopController:
 
     def wake(self) -> None:
         with self._lock:
+            if self._shutdown:
+                return
             if self._timer is not None:
                 self._timer.cancel()
                 self._timer = None
@@ -252,6 +255,8 @@ class ResearchLoopController:
 
     def shutdown(self) -> None:
         with self._lock:
+            self._shutdown = True
+            self._wake_requested = False
             if self._timer is not None:
                 self._timer.cancel()
                 self._timer = None
@@ -274,11 +279,12 @@ class ResearchLoopController:
                 requested = self._wake_requested
                 self._wake_requested = False
                 self._running = False
-                if not requested and delay is not None:
+                shutdown = self._shutdown
+                if not shutdown and not requested and delay is not None:
                     self._timer = threading.Timer(max(0.05, delay), self.wake)
                     self._timer.daemon = True
                     self._timer.start()
-            if requested:
+            if requested and not shutdown:
                 self.wake()
 
     def _advance(self, claim: LoopClaim) -> None:

@@ -532,10 +532,16 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
                 "SELECT to_regclass('app.research_loop_state') IS NOT NULL, "
                 "to_regclass('app.research_loop_event') IS NOT NULL, "
                 "to_regclass('app.research_loop_approval') IS NOT NULL, "
-                "to_regclass('app.research_loop_artifact') IS NOT NULL")
+                "to_regclass('app.research_loop_artifact') IS NOT NULL, "
+                "EXISTS (SELECT 1 FROM meta.migration "
+                " WHERE filename='050_research_loop_dispatch.sql'), "
+                "position('research.loop.create' in pg_get_functiondef("
+                " 'app.enforce_job_dispatch_fence()'::regprocedure)) > 0")
             loop_capability = cur.fetchone()
         if loop_capability is None or not all(loop_capability):
-            raise RuntimeError('migration 049_research_loop.sql is not fully applied')
+            raise RuntimeError(
+                'migrations 049_research_loop.sql and '
+                '050_research_loop_dispatch.sql are not fully applied')
         research_loops = ResearchLoopController(
             repository=ResearchLoopRepository(connect), service=svc,
             artifact_store=st, provider_registry=ai_providers,

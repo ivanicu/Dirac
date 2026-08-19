@@ -24,6 +24,53 @@ VALID_PROPOSAL = {
 }
 
 
+def _proposal_for_request(payload: dict) -> dict:
+    messages = payload.get("messages") or []
+    user = messages[-1].get("content", "") if messages else ""
+    marker = "JSON research context:\n"
+    wrapper = json.loads(user.split(marker, 1)[1]) if marker in user else {}
+    context = wrapper.get("research_context") or {}
+    digest = context.get("digest", VALID_PROPOSAL["context_digest"])
+    actions = context.get("available_actions") or []
+    selected = next((row for row in actions
+                     if row.get("template_id") == "fep.run_selected_edge.v1"), None)
+    if selected is None:
+        return {**VALID_PROPOSAL, "context_digest": digest}
+    subject = selected["subject_refs"][0]
+    fact_ids = [row["fact_id"] for row in context.get("facts") or []][:1]
+    return {
+        "schema_version": "1.0", "context_digest": digest,
+        "summary": "One governed edge can resolve the current ranking ambiguity.",
+        "hypothesis_drafts": [{
+            "hypothesis_id": "h1", "statement": "The selected edge may change the lead ranking.",
+            "testable_prediction": "The governed result separates the current lead candidates.",
+            "falsifier": "Quality gates fail or the result leaves the ranking unresolved.",
+            "supporting_fact_ids": [], "contradicting_fact_ids": [],
+            "assumptions": ["The reviewed system remains applicable."],
+            "confidence_band": "low",
+        }],
+        "claim_assessments": [],
+        "scientific_questions": [{
+            "question_id": "q1", "question": "Would this edge change the lead choice?",
+            "subject_ref": subject,
+            "decision_relevance": "It distinguishes the current lead candidates.",
+        }],
+        "candidate_actions": [{
+            "proposal_action_id": "a1", "template_id": selected["template_id"],
+            "subject_ref": subject, "scientific_question_id": "q1",
+            "rationale": "This governed edge addresses the ranking ambiguity.",
+            "expected_observation": "A bounded relative binding estimate with uncertainty.",
+            "falsifier": "Quality gates fail or the alternatives remain unresolved.",
+            "supporting_fact_ids": fact_ids, "contradicting_fact_ids": [],
+            "parameter_hints": {"edge_id": subject["id"]},
+            "qualitative_priority": "high",
+        }],
+        "preferred_action_id": "a1",
+        "stop_recommendation": {"recommended": False, "reason_codes": []},
+        "unknowns": [], "conflicts": [], "warnings": [],
+    }
+
+
 class FakeProviderServer(ThreadingHTTPServer):
     def __init__(self, address, handler, *, mode: str):
         super().__init__(address, handler)
@@ -91,7 +138,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, b'{' + b' ' * 300000 + b'}')
             return
 
-        content: object = VALID_PROPOSAL
+        content: object = (_proposal_for_request(payload)
+                           if mode == "action" else VALID_PROPOSAL)
         message: dict[str, object] = {"role": "assistant"}
         finish_reason = "stop"
         if mode == "markdown":
@@ -125,7 +173,7 @@ def main() -> None:
         "--mode",
         default="valid",
         choices=(
-            "valid", "markdown", "invalid-json", "schema-invalid", "invalid-then-valid", "reasoning",
+            "valid", "action", "markdown", "invalid-json", "schema-invalid", "invalid-then-valid", "reasoning",
             "tool-call", "length", "oversized", "slow", "connection-reset",
             "redirect", "auth", "forbidden", "retry-429", "retry-500", "retry-502",
             "retry-503", "retry-504",
