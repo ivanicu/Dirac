@@ -124,6 +124,13 @@ bash scripts/gates.sh research
 
 # Additional durable PostgreSQL and fake-provider acceptance:
 DIRAC_TEST_DSN='dbname=<isolated-test-db>' bash scripts/gates.sh research
+
+# Fresh seed by default; every case code-switches 4–8 languages and adds
+# randomized typos, dropped/repeated characters, Unicode and quotation noise.
+backend/env/bin/python -B scripts/research_loop_multilingual_benchmark.py
+
+# Replay an exact failure from its persisted seed.
+backend/env/bin/python -B scripts/research_loop_multilingual_benchmark.py --seed <seed>
 ```
 
 The acceptance script replaces only the expensive OpenFE RunSet with an explicitly fake,

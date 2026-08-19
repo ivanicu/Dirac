@@ -36,6 +36,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 PROMPT_DIRECTORY = ROOT / "contracts/research/prompts"
 PROMPT_RELEASE_ID = "fep-action-proposal-v1"
 PROMPT_PATH = PROMPT_DIRECTORY / f"{PROMPT_RELEASE_ID}.system.txt"
+GOAL_INTERPRETER_PROMPT_PATH = (
+    PROMPT_DIRECTORY / "fep-goal-interpreter-v1.system.txt"
+)
 MANIFEST_PATH = PROMPT_DIRECTORY / f"{PROMPT_RELEASE_ID}.manifest.json"
 CONTEXT_SCHEMA_PATH = ROOT / "contracts/domain/research/context-snapshot.schema.json"
 PROPOSAL_SCHEMA_PATH = ROOT / "contracts/domain/research/proposal.schema.json"
@@ -55,6 +58,8 @@ def _prompt_release() -> tuple[dict[str, Any], str, str]:
         ) from None
     expected = {
         "system_prompt_sha256": _raw_digest(PROMPT_PATH),
+        "goal_interpreter_prompt_sha256": _raw_digest(
+            GOAL_INTERPRETER_PROMPT_PATH),
         "context_schema_sha256": _raw_digest(CONTEXT_SCHEMA_PATH),
         "proposal_schema_sha256": _raw_digest(PROPOSAL_SCHEMA_PATH),
     }
@@ -66,8 +71,92 @@ def _prompt_release() -> tuple[dict[str, Any], str, str]:
     return manifest, sha256_digest(manifest), system_prompt
 
 
+def _goal_interpreter_prompt() -> str:
+    try:
+        return GOAL_INTERPRETER_PROMPT_PATH.read_text(encoding="utf-8")
+    except OSError as error:
+        raise failures.DiracInternal(
+            "research goal interpreter prompt cannot be loaded: "
+            f"{type(error).__name__}"
+        ) from None
+
+
+def build_goal_interpretation_schema(
+    context: Mapping[str, Any],
+) -> dict[str, Any]:
+    templates = sorted({
+        str(item["template_id"]) for item in context["available_actions"]
+    })
+    if not templates:
+        raise failures.DiracInternal(
+            "goal interpreter requires at least one available action")
+    return {
+        "type": "object", "additionalProperties": False,
+        "required": ["selected_template_id"],
+        "properties": {
+            "selected_template_id": {"enum": templates},
+        },
+    }
+
+
+def build_goal_interpretation_messages(
+    context: Mapping[str, Any], *, system_prompt: str,
+) -> tuple[str, str]:
+    request = {
+        "goal_intent": context["goal"]["intent"],
+        "available_actions": [
+            {
+                "template_id": item["template_id"],
+                "intent": item["intent"],
+                "subject_refs": item["subject_refs"],
+            }
+            for item in context["available_actions"]
+        ],
+    }
+    return system_prompt, "JSON goal interpretation input:\n" + canonical_json(
+        request).decode("utf-8")
+
+
+def interpret_goal(
+    provider: OpenAICompatibleChatProvider,
+    profile: Any,
+    context: Mapping[str, Any],
+) -> tuple[dict[str, Any], ProviderChatResult | None]:
+    templates = sorted({
+        str(item["template_id"]) for item in context["available_actions"]
+    })
+    if len(templates) == 1:
+        return {
+            "selected_template_id": templates[0],
+            "source": "single_available_template",
+        }, None
+    system, user = build_goal_interpretation_messages(
+        context, system_prompt=_goal_interpreter_prompt())
+    result = provider.complete_json(
+        profile, system_prompt=system, context_json=user,
+        output_schema=build_goal_interpretation_schema(context),
+        request_profile_fields="classifier_request_fields",
+    )
+    try:
+        document = json.loads(result.content)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise ModelOutputInvalid("goal_interpretation_is_not_json") from None
+    if not isinstance(document, dict) or set(document) != {
+        "selected_template_id",
+    }:
+        raise ModelOutputInvalid("goal_interpretation_shape_invalid")
+    selected = document.get("selected_template_id")
+    if selected not in templates:
+        raise ModelOutputInvalid("goal_interpretation_value_invalid")
+    return {
+        "selected_template_id": selected,
+        "source": "bounded_model_interpretation",
+    }, result
+
+
 def build_generation_schema(
-    context: Mapping[str, Any], catalog: Mapping[str, Mapping[str, Any]]
+    context: Mapping[str, Any], catalog: Mapping[str, Mapping[str, Any]],
+    *, selected_template_id: str | None = None,
 ) -> dict[str, Any]:
     """Bind provider grammar to IDs and action shapes in the frozen context."""
 
@@ -130,6 +219,8 @@ def build_generation_schema(
     branches: list[dict[str, Any]] = []
     for available in context["available_actions"]:
         template_id = str(available["template_id"])
+        if selected_template_id is not None and template_id != selected_template_id:
+            continue
         template = catalog.get(template_id)
         if template is None:
             raise failures.DiracInternal(
@@ -269,6 +360,7 @@ def build_messages(
     *,
     system_prompt: str,
     validation_error: Mapping[str, Any] | None = None,
+    goal_interpretation: Mapping[str, Any] | None = None,
 ) -> tuple[str, str]:
     try:
         proposal_contract = json.loads(PROPOSAL_SCHEMA_PATH.read_text(encoding="utf-8"))
@@ -284,6 +376,8 @@ def build_messages(
         "proposal_contract": proposal_contract,
         "research_context": context,
     }
+    if goal_interpretation is not None:
+        wrapper["goal_interpretation"] = dict(goal_interpretation)
     if validation_error is not None:
         wrapper["previous_validation_error"] = dict(validation_error)
         wrapper["regeneration_instruction"] = (
@@ -336,17 +430,44 @@ def propose_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
             details={"reason": error.reason, **error.details},
         ) from None
     provider = OpenAICompatibleChatProvider()
-    output_schema = build_generation_schema(context, catalog)
-    maximum_regenerations = int(profile.document["bounds"]["max_schema_regenerations"])
-    validation_error: dict[str, Any] | None = None
     usage: dict[str, Any] = {}
     provider_http_attempts = 0
+    try:
+        goal_interpretation, interpreter_result = interpret_goal(
+            provider, profile, context)
+    except ProviderUnavailable as error:
+        raise failures.DiracProviderUnavailable(
+            "bounded AI goal interpretation failed",
+            details={"reason": error.reason, "attempts": error.attempts},
+        ) from None
+    except ModelOutputInvalid as error:
+        raise failures.DiracModelOutputInvalid(
+            "AI goal interpretation remained invalid",
+            details={"reason": error.reason, "attempts": error.attempts},
+        ) from None
+    interpreter_metadata: dict[str, Any] = {
+        "selected_template_id": goal_interpretation["selected_template_id"],
+        "source": goal_interpretation["source"],
+        "raw_provider_response_stored": False,
+    }
+    if interpreter_result is not None:
+        interpreter_metadata["provider"] = redact_provider_response(
+            interpreter_result)
+        provider_http_attempts += interpreter_result.attempts
+        _sum_usage(usage, interpreter_result.usage)
+    output_schema = build_generation_schema(
+        context, catalog,
+        selected_template_id=str(goal_interpretation["selected_template_id"]),
+    )
+    maximum_regenerations = int(profile.document["bounds"]["max_schema_regenerations"])
+    validation_error: dict[str, Any] | None = None
     latest_metadata: dict[str, Any] = {}
 
     for validation_attempt in range(1, maximum_regenerations + 2):
         ctx.check_budget()
         system, user = build_messages(
-            context, system_prompt=system_prompt, validation_error=validation_error
+            context, system_prompt=system_prompt, validation_error=validation_error,
+            goal_interpretation=goal_interpretation,
         )
         try:
             result = provider.complete_json(
@@ -410,6 +531,7 @@ def propose_handler(payload: dict, ctx: InvocationContext) -> HandlerResult:
             artifacts=[("research.proposal", validated.canonical_bytes)],
             provenance={
                 "provider": latest_metadata,
+                "goal_interpreter": interpreter_metadata,
                 "provider_http_attempts": provider_http_attempts,
                 "prompt_release_id": manifest["prompt_release_id"],
                 "prompt_release_digest": payload["prompt_release_digest"],

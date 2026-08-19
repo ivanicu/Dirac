@@ -196,6 +196,7 @@ if wanted research; then
         backend/tests/test_research_fep_adapter.py \
         backend/tests/test_research_loop_controller.py \
         backend/tests/test_research_loop_metrics.py \
+        backend/tests/test_research_multilingual_benchmark.py \
         backend/tests/test_research_proposal_adversarial.py \
         backend/tests/test_research_reasoner_method.py \
         backend/tests/test_rbfe_public_contracts.py

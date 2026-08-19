@@ -20,6 +20,9 @@ MAX_RETRY_AFTER_SECONDS = 10.0
 GENERATION_UNSUPPORTED_SCHEMA_KEYS = frozenset({"propertyNames", "uniqueItems"})
 GENERATION_MAX_ITEMS = 1
 GENERATION_MAX_TEXT_LENGTH = 512
+REQUEST_FIELD_PROFILES = frozenset({
+    "static_request_fields", "classifier_request_fields",
+})
 
 
 class ProviderUnavailable(RuntimeError):
@@ -119,6 +122,7 @@ class OpenAICompatibleChatProvider:
     def _request_body(
         profile: ResolvedProviderProfile, system_prompt: str, context_json: str,
         output_schema: Mapping[str, Any] | None,
+        request_profile_fields: str = "static_request_fields",
     ) -> bytes:
         if "JSON" not in system_prompt.upper() or "JSON" not in context_json.upper():
             raise ModelOutputInvalid("messages_must_explicitly_request_json")
@@ -145,7 +149,12 @@ class OpenAICompatibleChatProvider:
             "response_format": response_format,
             "stream": False,
         }
-        body.update(dict(profile.document["static_request_fields"]))
+        if request_profile_fields not in REQUEST_FIELD_PROFILES:
+            raise ModelOutputInvalid("unknown_request_field_profile")
+        fields = profile.document.get(request_profile_fields)
+        if not isinstance(fields, Mapping):
+            raise ModelOutputInvalid("request_field_profile_is_missing")
+        body.update(dict(fields))
         return json.dumps(
             body, sort_keys=True, separators=(",", ":"), ensure_ascii=False
         ).encode("utf-8")
@@ -198,13 +207,15 @@ class OpenAICompatibleChatProvider:
         system_prompt: str,
         context_json: str,
         output_schema: Mapping[str, Any] | None = None,
+        request_profile_fields: str = "static_request_fields",
     ) -> ProviderChatResult:
         started = self._monotonic()
         attempts = 0
         try:
             result = self._complete_json(
                 profile, system_prompt=system_prompt, context_json=context_json,
-                output_schema=output_schema)
+                output_schema=output_schema,
+                request_profile_fields=request_profile_fields)
             attempts = result.attempts
             return result
         except (ProviderUnavailable, ModelOutputInvalid) as error:
@@ -229,10 +240,12 @@ class OpenAICompatibleChatProvider:
         system_prompt: str,
         context_json: str,
         output_schema: Mapping[str, Any] | None,
+        request_profile_fields: str,
     ) -> ProviderChatResult:
         endpoint = self._endpoint(profile)
         payload = self._request_body(
-            profile, system_prompt, context_json, output_schema)
+            profile, system_prompt, context_json, output_schema,
+            request_profile_fields)
         max_request = int(profile.document["bounds"]["max_request_bytes"])
         max_response = int(profile.document["bounds"]["max_response_bytes"])
         if len(payload) > max_request:

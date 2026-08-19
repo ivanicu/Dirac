@@ -85,6 +85,30 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
         self.assertEqual(OUTPUT_SCHEMA["properties"]["candidate_actions"]["maxItems"], 12)
         self.assertEqual(OUTPUT_SCHEMA["$defs"]["text4096"]["maxLength"], 4096)
 
+    def test_classifier_sampling_is_profile_owned_and_cannot_be_named_arbitrarily(self):
+        self.provider.complete_json(
+            self.profile,
+            system_prompt="Return one JSON classification object.",
+            context_json='JSON goal: {"intent":"stop"}',
+            output_schema={
+                "type": "object", "additionalProperties": False,
+                "required": ["selected_template_id"],
+                "properties": {
+                    "selected_template_id": {"enum": ["fep.stop.v1"]},
+                },
+            },
+            request_profile_fields="classifier_request_fields",
+        )
+        self.assertEqual(self.server.last_payload["temperature"], 0)
+        self.assertEqual(self.server.last_payload["top_k"], -1)
+        with self.assertRaisesRegex(ModelOutputInvalid,
+                                    "unknown_request_field_profile"):
+            self.provider.complete_json(
+                self.profile, system_prompt="Return JSON.",
+                context_json="JSON context: {}", output_schema=OUTPUT_SCHEMA,
+                request_profile_fields="request_fields_from_user",
+            )
+
     def test_action_mode_binds_to_the_request_context_digest(self):
         self.server.mode = "action"
         result = self.provider.complete_json(

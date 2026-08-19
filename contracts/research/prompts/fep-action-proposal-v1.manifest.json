@@ -1,7 +1,8 @@
 {
   "schema_version": "1.0",
   "prompt_release_id": "fep-action-proposal-v1",
-  "system_prompt_sha256": "sha256:cbb3470305ad711a6b2b01d219deaee0bff8a8c9e0cf7a17aae0fadc673bb698",
+  "system_prompt_sha256": "sha256:aa60a8b4de6799f31f597b0333f3ecf7246c5430998362e911c08392f0a997a8",
+  "goal_interpreter_prompt_sha256": "sha256:aee08f32f9e8a1554195d58ea7cd66531345eb1a3dd86815016dec266c492266",
   "context_schema_sha256": "sha256:dc017a3b31ce51dd521d797bf66a9aa9d5f71b924f56cf7f6ff64fbf46e9225b",
   "proposal_schema_sha256": "sha256:3f9fd14c992326b82ee2091f3daba4da1f654964bdf5d6918d3337ecd1523d18",
   "action_catalog_sha256": "sha256:9be8409e7b3b39a7b1f959dc8624ba25009b54715940c1555539f5ad7d8007d5"

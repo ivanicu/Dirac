@@ -7,8 +7,8 @@
  * backend/PostgreSQL path is proved separately by research_loop_acceptance.py.
  */
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 
 const baseUrl = process.argv.find(value => /^https?:/.test(value))
     || 'http://127.0.0.1:1370/fep-workbench.html';
@@ -24,7 +24,49 @@ const chrome = spawn('/usr/bin/google-chrome', [
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const failures = [];
 const observed = {};
+const scenarioFilter = new Set((process.env.DIRAC_BROWSER_SCENARIOS || '')
+    .split(',').map(value => value.trim()).filter(Boolean));
+const selected = name => scenarioFilter.size === 0 || scenarioFilter.has(name);
 const check = (condition, message) => { if (!condition) failures.push(message); };
+const benchmarkSeed = Number(process.env.DIRAC_MULTILINGUAL_BENCHMARK_SEED
+    || randomBytes(4).readUInt32BE(0));
+let randomState = benchmarkSeed >>> 0;
+const random = () => {
+    randomState |= 0; randomState = randomState + 0x6D2B79F5 | 0;
+    let value = Math.imul(randomState ^ randomState >>> 15, 1 | randomState);
+    value = value + Math.imul(value ^ value >>> 7, 61 | value) ^ value;
+    return ((value ^ value >>> 14) >>> 0) / 4294967296;
+};
+const choose = values => values[Math.floor(random() * values.length)];
+const corpus = JSON.parse(readFileSync(
+    new URL('./research_loop_multilingual_corpus.json', import.meta.url), 'utf8'));
+const noisy = text => {
+    const operators = [
+        value => value.replace(/e(?=\w)/, 'ee'),
+        value => value.replace(/ /g, random() < 0.5 ? '' : '  '),
+        value => value.length > 8
+            ? `${value.slice(0, 5)}\u200b${value.slice(5)}` : value,
+        value => `??!! ${value} …//…`,
+        value => [...value].map(char => char >= 'a' && char <= 'z' && random() < 0.2
+            ? char.toUpperCase() : char).join(''),
+    ];
+    return choose(operators)(text);
+};
+function mixedIntent(target) {
+    const shuffled = [...corpus.languages].sort(() => random() - 0.5).slice(0, 6);
+    const anchor = choose(shuffled[0][target]);
+    const fragments = shuffled.slice(1).map((language, index) => noisy(
+        choose(language[index < 2 ? target : 'boundary'])));
+    fragments.splice(Math.floor(random() * (fragments.length + 1)), 0, anchor);
+    fragments.splice(Math.floor(random() * (fragments.length + 1)), 0,
+        target === 'run'
+            ? '作废草稿/ignore quoted noise: STOP; this is not the goal.'
+            : '作废草稿/ignore quoted noise: RUN C2→C7; this is not the goal.');
+    return `🎯 [mixed/混乱/objectif] ${fragments.join(choose([' · ', '\n', ' ｜ ', ' / ']))}`;
+}
+const generatedIntents = {
+    approve: mixedIntent('run'), reject: mixedIntent('run'), cancel: mixedIntent('run'),
+};
 const ids = {
     networkJob: '00000000-0000-4000-8000-000000000101',
     networkArtifact: '00000000-0000-4000-8000-000000000102',
@@ -140,15 +182,20 @@ const events = (completed, rejected = false) => [
         actor: { kind: 'service', id: 'browser-acceptance' }, occurred_at: '2026-08-19T08:00:05Z' }] : []),
 ];
 
-function loop(completed, rejected = false) {
-    const terminal = completed || rejected;
+function loop(completed, rejected = false,
+              goalIntent = 'Prioritize FEP evidence that could change the ranking.',
+              requestedState = 'waiting_approval', providerProfile = 'qwen-local-isolated',
+              controlEvents = []) {
+    const state = completed || rejected ? 'completed' : requestedState;
+    const terminal = ['completed', 'cancelled', 'failed'].includes(state);
+    const stage = terminal ? state : state === 'waiting_approval' ? 'await_approval' : state;
     return {
         run_ref: { kind: 'run', id: ids.run },
-        state: terminal ? 'completed' : 'waiting_approval',
-        stage: terminal ? 'completed' : 'await_approval', version: terminal ? 12 : 7,
+        state, stage, version: terminal ? 12 : 7 + controlEvents.length,
         iteration: terminal ? 2 : 1,
-        goal: { intent: 'Prioritize FEP evidence that could change the ranking.' },
-        provider: { profile_id: 'qwen-local-isolated', profile_digest: sha('3') },
+        goal: { intent: goalIntent },
+        provider: { profile_id: providerProfile,
+            profile_digest: providerProfile === 'qwen-local-isolated' ? sha('3') : sha('8') },
         budget: { remaining: { reasoner_calls: completed ? 2 : 3,
             fep_runsets: completed ? 0 : 1, gpu_hours: completed ? 11 : 12,
             external_cost: 10, iterations: completed ? 6 : 7 },
@@ -159,8 +206,11 @@ function loop(completed, rejected = false) {
             sha256: artifactDigest(completed ? completedContext : context) },
         proposal_ref: { kind: 'artifact', id: ids.proposal,
             sha256: artifactDigest(proposal) },
-        pending_action: terminal ? null : { preview }, attention: {},
-        events: events(completed, rejected), deep_links: { fep_workbench: '/motif/fep', jobs: '/workspace/jobs' },
+        pending_action: terminal ? null : { preview },
+        attention: state === 'blocked' ? { reason_code: 'PROVIDER_TRANSITION_TEST',
+            summary: 'The replacement provider is ready; retry is required explicitly.' } : {},
+        events: [...events(completed, rejected), ...controlEvents],
+        deep_links: { fep_workbench: '/motif/fep', jobs: '/workspace/jobs' },
         claim_boundary: 'model_proposal_not_scientific_evidence',
     };
 }
@@ -198,9 +248,15 @@ async function connectChrome() {
     return { socket, send, on: listener => listeners.push(listener) };
 }
 
-async function scenario(cdp, name, configured, decision = 'approve') {
+async function scenario(cdp, name, configured, decision = 'approve', generatedIntent = '') {
     let completed = false;
     let rejected = false;
+    let loopState = 'waiting_approval';
+    let currentProvider = 'qwen-local-isolated';
+    let currentIntent = generatedIntent || 'Prioritize FEP evidence that could change the ranking.';
+    let submittedIntent = null;
+    const controlPayloads = [];
+    const controlEvents = [];
     const unexpected = [];
     const consoleErrors = [];
     const commandCounts = new Map();
@@ -269,23 +325,49 @@ async function scenario(cdp, name, configured, decision = 'approve') {
                 locality: 'local_network', external_egress: false,
                 allowed_classifications: ['internal'], configured,
                 ...(configured ? {} : { reason: 'missing_base_url_env' }),
-            }] };
+            }, ...(configured ? [{
+                profile_id: 'qwen-local-secondary', profile_digest: sha('8'),
+                label: 'Local Qwen Secondary', configured_model: 'Qwen/Fake-Browser-Secondary',
+                locality: 'local_network', external_egress: false,
+                allowed_classifications: ['internal'], configured: true,
+            }] : [])] };
             else if (command === 'program.list') data = { programs: [{
                 ref: { kind: 'program', id: ids.program }, code: 'AI-FEP',
                 name: 'AI FEP Browser Acceptance', lifecycle: 'active',
             }] };
-            else if (command === 'research.loop.create') data = {
-                mission_ref: { kind: 'mission', id: ids.program },
-                run_ref: { kind: 'run', id: ids.run }, state: 'active',
-                stage: 'bootstrap', version: 1, created: true,
-            };
-            else if (command === 'research.loop.get') data = loop(completed, rejected);
-            else if (command === 'research.loop.approve') {
-                completed = true;
+            else if (command === 'research.loop.create') {
+                submittedIntent = body.input?.intent;
+                currentIntent = String(submittedIntent || '');
+                data = {
+                    mission_ref: { kind: 'mission', id: ids.program },
+                    run_ref: { kind: 'run', id: ids.run }, state: 'active',
+                    stage: 'bootstrap', version: 1, created: true,
+                };
+            } else if (command === 'research.loop.get') data = loop(
+                completed, rejected, currentIntent, loopState, currentProvider, controlEvents);
+            else if (command === 'research.loop.control') {
+                const input = body.input || {};
+                controlPayloads.push(structuredClone(input));
+                if (input.action === 'revise_intent') currentIntent = String(input.revised_intent || '');
+                else if (input.action === 'change_provider') {
+                    currentProvider = String(input.provider_profile_id || '');
+                    loopState = 'blocked';
+                } else if (input.action === 'retry') loopState = 'waiting_approval';
+                else if (input.action === 'pause') loopState = 'paused';
+                else if (input.action === 'resume') loopState = 'waiting_approval';
+                else if (input.action === 'cancel') loopState = 'cancelled';
+                else unexpected.push(`research.loop.control:${String(input.action)}`);
+                controlEvents.push({ event_type: `loop_${String(input.action)}`,
+                    stage: loopState, actor: { kind: 'human', id: 'local' },
+                    occurred_at: '2026-08-19T08:00:02Z' });
+                data = { run_ref: { kind: 'run', id: ids.run }, state: loopState,
+                    stage: loopState, version: 7 + controlEvents.length };
+            } else if (command === 'research.loop.approve') {
+                completed = true; loopState = 'completed';
                 data = { run_ref: { kind: 'run', id: ids.run },
                     state: 'active', stage: 'dispatch', version: 8 };
             } else if (command === 'research.loop.reject') {
-                rejected = true;
+                rejected = true; loopState = 'completed';
                 data = { run_ref: { kind: 'run', id: ids.run },
                     state: 'active', stage: 'reason', version: 8 };
             } else {
@@ -395,7 +477,7 @@ async function scenario(cdp, name, configured, decision = 'approve') {
             const start=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('START BOUNDED'));
             intent.value=''; intent.dispatchEvent(new Event('input',{bubbles:true}));
             const emptyDisabled=start.disabled;
-            intent.value='Prioritize FEP evidence that could change the ranking.';
+            intent.value=${JSON.stringify(generatedIntent || 'Prioritize FEP evidence that could change the ranking.')};
             intent.dispatchEvent(new Event('input',{bubbles:true}));
             const restoredEnabled=!start.disabled;
             start.click(); start.click();
@@ -414,14 +496,21 @@ async function scenario(cdp, name, configured, decision = 'approve') {
         const approval = await evaluate(`(()=>{
             const approve=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('APPROVE EXACT ACTION'));
             const reject=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='REJECT');
+            const goal=[...document.querySelectorAll('.research-loop-section')]
+                .find(s=>s.querySelector('header b')?.textContent==='GOAL')?.querySelector('p');
             const a=approve.getBoundingClientRect(),r=reject.getBoundingClientRect();
             return {text:document.querySelector('#research-loop-drawer').innerText,
+                goalText:goal?.textContent,
                 approvalVisible:a.top>=0&&a.bottom<=innerHeight,
                 hotZonesOverlap:!(a.right<=r.left||r.right<=a.left||a.bottom<=r.top||r.bottom<=a.top)};
         })()`);
         observed[name].approval = approval;
         check(commandCounts.get('research.loop.create') === 1,
             `fake-provider: double start emitted ${commandCounts.get('research.loop.create') || 0} create commands`);
+        check(submittedIntent === currentIntent && submittedIntent === generatedIntent.trim(),
+            `${name}: multilingual intent changed between textarea and HTTP command`);
+        check(approval.goalText === generatedIntent.trim(),
+            `${name}: multilingual intent is not rendered byte-for-byte from durable state`);
         check(approval.text.includes('network-edge:edge-c2-c7'),
             'fake-provider: proposal source fact is not visible');
         check(approval.text.includes('MODEL PROPOSAL ≠ SCIENTIFIC EVIDENCE'),
@@ -429,12 +518,15 @@ async function scenario(cdp, name, configured, decision = 'approve') {
         check(approval.approvalVisible, 'fake-provider: approval CTA is outside the 960px viewport');
         check(!approval.hotZonesOverlap, 'fake-provider: approve/reject hot zones overlap');
         const authorityControls = await evaluate(`(()=>{
-            const buttons=[...document.querySelectorAll('button')];
-            const approve=buttons.find(b=>b.textContent.includes('APPROVE EXACT ACTION'));
-            const reject=buttons.find(b=>b.textContent.trim()==='REJECT');
-            const pause=buttons.find(b=>b.textContent.trim()==='PAUSE');
-            const cancel=buttons.find(b=>b.textContent.trim()==='CANCEL');
-            const revise=buttons.find(b=>b.textContent.trim()==='REVISE GOAL');
+            const control=[...document.querySelectorAll('.research-loop-section')]
+                .find(s=>s.querySelector('header b')?.textContent==='LOOP CONTROL');
+            const allButtons=[...document.querySelectorAll('button')];
+            const controlButtons=[...control.querySelectorAll('button')];
+            const approve=allButtons.find(b=>b.textContent.includes('APPROVE EXACT ACTION'));
+            const reject=allButtons.find(b=>b.textContent.trim()==='REJECT');
+            const pause=controlButtons.find(b=>b.textContent.trim()==='PAUSE');
+            const cancel=controlButtons.find(b=>b.textContent.trim()==='CANCEL');
+            const revise=controlButtons.find(b=>b.textContent.trim()==='REVISE GOAL');
             const rationale=document.querySelector('.research-loop-approval textarea');
             const initiallyDisabled=approve.disabled&&reject.disabled&&pause.disabled&&cancel.disabled&&revise.disabled;
             rationale.value='This exact edge resolves the bounded decision gap.';
@@ -446,6 +538,75 @@ async function scenario(cdp, name, configured, decision = 'approve') {
             'fake-provider: authority controls appear actionable without a rationale');
         check(authorityControls.rationaleOnly,
             'fake-provider: acknowledgement gate does not distinguish approve from reject');
+        if (decision === 'approve') {
+            const revisedIntent = mixedIntent('run');
+            await evaluate(`(()=>{
+                const control=[...document.querySelectorAll('.research-loop-section')]
+                    .find(s=>s.querySelector('header b')?.textContent==='LOOP CONTROL');
+                const revised=document.querySelector('textarea[aria-label="Revised research goal"]');
+                const rationale=document.querySelector('input[aria-label="Control rationale"]');
+                revised.value=${JSON.stringify(revisedIntent)};
+                revised.dispatchEvent(new Event('input',{bubbles:true}));
+                rationale.value='Correct noisy multilingual goal without changing its authority.';
+                rationale.dispatchEvent(new Event('input',{bubbles:true}));
+                [...control.querySelectorAll('button')].find(b=>b.textContent.trim()==='REVISE GOAL').click();
+            })()`);
+            check(await waitFor(`[...document.querySelectorAll('.research-loop-section')]
+                .find(s=>s.querySelector('header b')?.textContent==='GOAL')
+                ?.querySelector('p')?.textContent===${JSON.stringify(revisedIntent)}`),
+                `${name}: revised multilingual goal did not round-trip byte-for-byte`);
+            await evaluate(`(()=>{
+                const control=[...document.querySelectorAll('.research-loop-section')]
+                    .find(s=>s.querySelector('header b')?.textContent==='LOOP CONTROL');
+                const provider=document.querySelector('select[aria-label="Replacement AI provider"]');
+                const rationale=document.querySelector('input[aria-label="Control rationale"]');
+                provider.value='qwen-local-secondary';
+                provider.dispatchEvent(new Event('change',{bubbles:true}));
+                rationale.value='Exercise explicit provider replacement.';
+                rationale.dispatchEvent(new Event('input',{bubbles:true}));
+                [...control.querySelectorAll('button')].find(b=>b.textContent.trim()==='CHANGE PROVIDER').click();
+            })()`);
+            check(await waitFor(`document.querySelector('#research-loop-drawer').innerText.includes('STATE BLOCKED')`),
+                `${name}: provider transition did not expose blocked state`);
+            await evaluate(`(()=>{
+                const control=[...document.querySelectorAll('.research-loop-section')]
+                    .find(s=>s.querySelector('header b')?.textContent==='LOOP CONTROL');
+                const rationale=document.querySelector('input[aria-label="Control rationale"]');
+                rationale.value='Retry after the provider transition boundary.';
+                rationale.dispatchEvent(new Event('input',{bubbles:true}));
+                [...control.querySelectorAll('button')].find(b=>b.textContent.trim()==='RETRY').click();
+            })()`);
+            check(await waitFor(`document.querySelector('#research-loop-drawer').innerText.includes('APPROVAL · EXACT CONSEQUENCES')`),
+                `${name}: retry did not restore the approval state`);
+            await evaluate(`(()=>{
+                const control=[...document.querySelectorAll('.research-loop-section')]
+                    .find(s=>s.querySelector('header b')?.textContent==='LOOP CONTROL');
+                const rationale=document.querySelector('input[aria-label="Control rationale"]');
+                rationale.value='Pause before spending governed compute.';
+                rationale.dispatchEvent(new Event('input',{bubbles:true}));
+                [...control.querySelectorAll('button')].find(b=>b.textContent.trim()==='PAUSE').click();
+            })()`);
+            check(await waitFor(`document.querySelector('#research-loop-drawer').innerText.includes('STATE PAUSED')`),
+                `${name}: pause did not reach the durable paused state`);
+            await evaluate(`(()=>{
+                const control=[...document.querySelectorAll('.research-loop-section')]
+                    .find(s=>s.querySelector('header b')?.textContent==='LOOP CONTROL');
+                const rationale=document.querySelector('input[aria-label="Control rationale"]');
+                rationale.value='Resume after explicit inspection.';
+                rationale.dispatchEvent(new Event('input',{bubbles:true}));
+                [...control.querySelectorAll('button')].find(b=>b.textContent.trim()==='RESUME').click();
+            })()`);
+            check(await waitFor(`document.querySelector('#research-loop-drawer').innerText.includes('APPROVAL · EXACT CONSEQUENCES')`),
+                `${name}: resume did not restore the exact approval preview`);
+            observed[name].controls = controlPayloads;
+            check(JSON.stringify(controlPayloads.map(row => row.action))
+                === JSON.stringify(['revise_intent', 'change_provider', 'retry', 'pause', 'resume']),
+            `${name}: control sequence or cardinality is wrong`);
+            check(controlPayloads[0]?.revised_intent === revisedIntent
+                && controlPayloads[1]?.provider_profile_id === 'qwen-local-secondary'
+                && currentIntent === revisedIntent && currentProvider === 'qwen-local-secondary',
+            `${name}: revised goal/provider changed between UI, HTTP command and durable state`);
+        }
         const approvalImage = await cdp.send('Page.captureScreenshot', {
             format: 'png', captureBeyondViewport: false,
         }, session);
@@ -482,15 +643,37 @@ async function scenario(cdp, name, configured, decision = 'approve') {
                 rationale.dispatchEvent(new Event('input',{bubbles:true}));
                 [...document.querySelectorAll('button')].find(b=>b.textContent.includes('APPROVE EXACT ACTION')).click();
             })()`);
-        } else {
+        } else if (decision === 'reject') {
             await evaluate(`(()=>{
                 const rationale=document.querySelector('.research-loop-approval textarea');
                 rationale.value='Reject this exact action because its decision value is insufficient.';
                 rationale.dispatchEvent(new Event('input',{bubbles:true}));
                 [...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='REJECT').click();
             })()`);
+        } else {
+            await evaluate(`(()=>{
+                const rationale=document.querySelector('input[aria-label="Control rationale"]');
+                rationale.focus(); rationale.value='';
+            })()`);
+            await cdp.send('Input.insertText', {
+                text: 'Cancel without dispatching any governed compute.',
+            }, session);
+            const cancelControl = await evaluate(`(()=>{
+                const control=[...document.querySelectorAll('.research-loop-section')]
+                    .find(s=>s.querySelector('header b')?.textContent==='LOOP CONTROL');
+                const rationale=document.querySelector('input[aria-label="Control rationale"]');
+                const button=[...control.querySelectorAll('button')].find(b=>b.textContent.trim()==='CANCEL');
+                const result={buttonFound:Boolean(button),disabled:button?.disabled,
+                    rationale:rationale?.value,inputDisabled:rationale?.disabled,
+                    busy:document.querySelector('#research-loop-drawer').getAttribute('aria-busy')};
+                button?.click(); return result;
+            })()`);
+            observed[name].cancelControl = cancelControl;
+            check(cancelControl.buttonFound && !cancelControl.disabled && !cancelControl.busy,
+                `${name}: cancel remained unavailable after a non-empty rationale`);
         }
-        check(await waitFor(`document.querySelector('#research-loop-drawer').innerText.includes('STATE COMPLETED')`),
+        const terminalState = decision === 'cancel' ? 'CANCELLED' : 'COMPLETED';
+        check(await waitFor(`document.querySelector('#research-loop-drawer').innerText.includes('STATE ${terminalState}')`),
             `${name}: decided loop did not reach completed UI`);
         const terminalText = await evaluate(`document.querySelector('#research-loop-drawer').innerText`);
         observed[name].terminalText = terminalText;
@@ -501,13 +684,22 @@ async function scenario(cdp, name, configured, decision = 'approve') {
             check(commandCounts.get('research.loop.approve') === 1
                 && !commandCounts.has('research.loop.reject'),
             `${name}: approval command cardinality is wrong`);
-        } else {
+        } else if (decision === 'reject') {
             check(terminalText.includes('ACTION REJECTED')
                 && !terminalText.includes('RUNSET COMPLETED'),
             `${name}: rejection is absent or fabricated a completed RunSet`);
             check(commandCounts.get('research.loop.reject') === 1
                 && !commandCounts.has('research.loop.approve'),
             `${name}: rejection command cardinality is wrong`);
+        } else {
+            check(terminalText.includes('STATE CANCELLED')
+                && !terminalText.includes('RUNSET COMPLETED')
+                && !terminalText.includes('ACTION REJECTED'),
+            `${name}: cancellation is absent or fabricated a decision outcome`);
+            check(controlPayloads.length === 1 && controlPayloads[0]?.action === 'cancel'
+                && !commandCounts.has('research.loop.approve')
+                && !commandCounts.has('research.loop.reject'),
+            `${name}: cancellation command cardinality is wrong`);
         }
         check(!terminalText.includes('\nPAUSE\n') && !terminalText.includes('\nCANCEL\n')
             && terminalText.includes('This loop is terminal'),
@@ -516,9 +708,10 @@ async function scenario(cdp, name, configured, decision = 'approve') {
         check(await waitFor(`document.readyState==='complete'&&!!document.querySelector('#research-loop-toggle')&&document.querySelector('#durable-job')?.textContent.includes('${ids.networkJob}')`, 45000),
             'fake-provider: Workbench did not survive reload');
         await evaluate(`(()=>{const button=document.querySelector('#research-loop-toggle');button.focus();button.click();})()`);
-        check(await waitFor(`document.querySelector('#research-loop-drawer').innerText.includes('LOOP COMPLETED')`),
+        check(await waitFor(`document.querySelector('#research-loop-drawer').innerText.includes('STATE ${terminalState}')`),
             `${name}: terminal timeline did not survive reload`);
-        const durableEvent = decision === 'approve' ? 'RUNSET COMPLETED' : 'ACTION REJECTED';
+        const durableEvent = decision === 'approve' ? 'RUNSET COMPLETED'
+            : decision === 'reject' ? 'ACTION REJECTED' : 'LOOP CANCEL';
         observed[name].timelineAfterReload = await evaluate(
             `document.querySelector('#research-loop-drawer').innerText.includes('${durableEvent}')`);
         check(observed[name].timelineAfterReload,
@@ -549,9 +742,16 @@ async function scenario(cdp, name, configured, decision = 'approve') {
 
 try {
     const cdp = await connectChrome();
-    await scenario(cdp, 'no-provider', false);
-    await scenario(cdp, 'fake-provider', true);
-    await scenario(cdp, 'fake-provider-reject', true, 'reject');
+    if (selected('no-provider')) await scenario(cdp, 'no-provider', false);
+    if (selected('fake-provider')) {
+        await scenario(cdp, 'fake-provider', true, 'approve', generatedIntents.approve);
+    }
+    if (selected('fake-provider-reject')) {
+        await scenario(cdp, 'fake-provider-reject', true, 'reject', generatedIntents.reject);
+    }
+    if (selected('fake-provider-cancel')) {
+        await scenario(cdp, 'fake-provider-cancel', true, 'cancel', generatedIntents.cancel);
+    }
     cdp.socket.close();
 } finally {
     chrome.kill('SIGTERM');
@@ -559,13 +759,17 @@ try {
 
 process.stdout.write(`${JSON.stringify({
     ok: failures.length === 0, failures, observed,
+    multilingual_benchmark: { seed: benchmarkSeed, generatedIntents },
     screenshots: ['/tmp/dirac-research-loop-no-provider-960.png',
         '/tmp/dirac-research-loop-fake-provider-approval-960.png',
         '/tmp/dirac-research-loop-fake-provider-approval-360.png',
         '/tmp/dirac-research-loop-fake-provider-960.png',
         '/tmp/dirac-research-loop-fake-provider-reject-approval-960.png',
         '/tmp/dirac-research-loop-fake-provider-reject-approval-360.png',
-        '/tmp/dirac-research-loop-fake-provider-reject-960.png'],
+        '/tmp/dirac-research-loop-fake-provider-reject-960.png',
+        '/tmp/dirac-research-loop-fake-provider-cancel-approval-960.png',
+        '/tmp/dirac-research-loop-fake-provider-cancel-approval-360.png',
+        '/tmp/dirac-research-loop-fake-provider-cancel-960.png'],
     physical_execution: 'NOT_RUN_BROWSER_FAKE; BACKEND ACCEPTANCE IS SEPARATE',
 }, null, 2)}\n`);
 if (failures.length) process.exitCode = 1;

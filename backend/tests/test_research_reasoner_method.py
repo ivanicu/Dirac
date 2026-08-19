@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import copy
 import json
 import pathlib
 import tempfile
@@ -14,11 +15,15 @@ from execution import ThreadExecutor
 from invocation import InvocationService
 from jobs import MemoryJobStore
 from research.action_catalog import default_action_catalog
+from research.openai_compatible import OpenAICompatibleChatProvider
 from research.provider_registry import FileAiProviderRegistry, canonical_json
 from research.reasoner import (
     _prompt_release,
     build_generation_schema,
+    build_goal_interpretation_messages,
+    build_goal_interpretation_schema,
     build_messages,
+    interpret_goal,
 )
 from scripts.research_loop_fake_provider import FakeProviderServer, Handler
 
@@ -187,6 +192,41 @@ class ResearchReasonerMethodTests(unittest.TestCase):
             schema["$defs"]["factIds"]["items"],
             {"enum": ["fact:edge:unvalidated"]},
         )
+
+    def test_multilingual_goal_interpreter_is_small_bounded_and_constrains_proposal(self):
+        context = copy.deepcopy(self.context)
+        context["goal"]["intent"] = (
+            "继续研究 / contineu C2→C7 · 作废草稿: STOP · "
+            "modèle draft ≠ 正据")
+        context["available_actions"].append({
+            "template_id": "fep.stop.v1",
+            "subject_refs": [context["campaign_ref"]],
+            "intent": "Stop with a governed receipt.", "risk_class": "R0",
+        })
+        schema = build_goal_interpretation_schema(context)
+        self.assertEqual(
+            schema["properties"]["selected_template_id"]["enum"],
+            ["fep.run_selected_edge.v1", "fep.stop.v1"],
+        )
+        _system, user = build_goal_interpretation_messages(
+            context, system_prompt="Return JSON only.")
+        request = json.loads(user.removeprefix(
+            "JSON goal interpretation input:\n"))
+        self.assertEqual(request["goal_intent"], context["goal"]["intent"])
+        interpreted, result = interpret_goal(
+            OpenAICompatibleChatProvider(), self.profile, context)
+        self.assertEqual(interpreted["selected_template_id"],
+                         "fep.run_selected_edge.v1")
+        self.assertNotIn("ambiguous", interpreted)
+        self.assertIsNotNone(result)
+        constrained = build_generation_schema(
+            context, default_action_catalog(),
+            selected_template_id=interpreted["selected_template_id"])
+        branches = constrained["properties"]["candidate_actions"]["items"]["oneOf"]
+        self.assertEqual(len(branches), 1)
+        self.assertEqual(branches[0]["properties"]["template_id"],
+                         {"const": "fep.run_selected_edge.v1"})
+        self.assertEqual(self.server.last_payload["temperature"], 0)
 
     def test_invalid_first_proposal_regenerates_once_with_bounded_error(self):
         self.server.mode = "invalid-then-valid"

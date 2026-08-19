@@ -71,6 +71,25 @@ def _proposal_for_request(payload: dict) -> dict:
     }
 
 
+def _goal_interpretation_for_request(payload: dict) -> dict:
+    messages = payload.get("messages") or []
+    user = messages[-1].get("content", "") if messages else ""
+    marker = "JSON goal interpretation input:\n"
+    request = json.loads(user.split(marker, 1)[1]) if marker in user else {}
+    actions = request.get("available_actions") or []
+    templates = [str(item.get("template_id")) for item in actions]
+    goal = str(request.get("goal_intent") or "").casefold().strip()
+    stop_markers = ("stop now", "stop the loop now", "start no new", "do not run")
+    if "fep.stop.v1" in templates and goal.startswith(stop_markers):
+        selected = "fep.stop.v1"
+    else:
+        selected = next(
+            (item for item in templates if item != "fep.stop.v1"),
+            "fep.stop.v1" if "fep.stop.v1" in templates else templates[0],
+        )
+    return {"selected_template_id": selected}
+
+
 class FakeProviderServer(ThreadingHTTPServer):
     def __init__(self, address, handler, *, mode: str):
         super().__init__(address, handler)
@@ -140,8 +159,13 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, b'{' + b' ' * 300000 + b'}')
             return
 
-        content: object = (_proposal_for_request(payload)
-                           if mode == "action" else VALID_PROPOSAL)
+        messages = payload.get("messages") or []
+        user = messages[-1].get("content", "") if messages else ""
+        if "JSON goal interpretation input:\n" in user:
+            content: object = _goal_interpretation_for_request(payload)
+        else:
+            content = (_proposal_for_request(payload)
+                       if mode == "action" else VALID_PROPOSAL)
         message: dict[str, object] = {"role": "assistant"}
         finish_reason = "stop"
         if mode == "markdown":

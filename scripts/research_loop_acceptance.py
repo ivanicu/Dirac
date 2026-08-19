@@ -310,7 +310,7 @@ def main() -> None:
                         "action_approved", "action_dispatched", "action_completed",
                         "context_refresh_requested", "loop_completed"}
             missing = sorted(required - set(events))
-            if missing or runsets.starts != 1 or provider_server.attempts != 2:
+            if missing or runsets.starts != 1 or provider_server.attempts != 3:
                 raise RuntimeError({"missing_events": missing,
                                     "runset_starts": runsets.starts,
                                     "provider_attempts": provider_server.attempts})

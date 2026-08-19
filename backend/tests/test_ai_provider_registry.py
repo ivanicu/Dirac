@@ -90,6 +90,11 @@ class AiProviderRegistryTests(unittest.TestCase):
         with self.assertRaisesRegex(AiProviderConfigurationError, "schema_invalid"):
             _registry(self.profile, self.environ)
 
+    def test_profile_schema_rejects_arbitrary_classifier_request_fields(self):
+        self.profile["classifier_request_fields"]["seed"] = 7
+        with self.assertRaisesRegex(AiProviderConfigurationError, "schema_invalid"):
+            _registry(self.profile, self.environ)
+
     def test_url_policy_separates_external_and_local_networks(self):
         public_resolver = lambda *a, **k: [
             (2, 1, 6, "", ("8.8.8.8", 443))
