@@ -5,6 +5,7 @@ import threading
 import unittest
 import uuid
 
+import failures
 from research.loop_repository import ResearchLoopRepository
 
 try:
@@ -100,6 +101,20 @@ class ResearchLoopRestartMatrixTests(unittest.TestCase):
         self.assertEqual(state["state"], "waiting_approval")
         self.assertEqual(state["pending_action"]["preview"]["template_id"],
                          "fep.run_selected_edge.v1")
+
+    def test_paused_loop_survives_restart_without_executing(self):
+        self._crash_at("dispatch", state="paused")
+        restarted = ResearchLoopRepository(self.connect)
+        self.assertIsNone(restarted.claim(owner="must-not-execute-paused-loop"))
+        state = restarted.get(self.run_id, actor=self.actor)
+        self.assertEqual((state["state"], state["stage"]),
+                         ("paused", "dispatch"))
+
+    def test_terminal_loop_cannot_resume(self):
+        with self.assertRaisesRegex(failures.DiracInvalidParameters,
+                                    "only a paused loop"):
+            ResearchLoopRepository._control_target(
+                {"state": "completed", "stage": "completed"}, "resume")
 
     def test_two_controllers_compete_with_skip_locked_and_only_one_wins(self):
         self._crash_at("reason")

@@ -59,7 +59,8 @@ def context():
             "intent": "Run one planned edge.", "risk_class": "R3",
         }],
         "open_attention": [],
-        "truncation": {"applied": False, "omitted_fact_count": 0, "policy": "research-context-v1"},
+        "truncation": {"applied": False, "omitted_fact_count": 0,
+                       "omitted_fact_ids": [], "policy": "research-context-v1"},
         "created_at": "2026-08-18T00:00:00Z", "digest": CONTEXT_DIGEST,
     }
 

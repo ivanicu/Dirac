@@ -92,8 +92,20 @@ class ResearchContextBuilderTests(unittest.TestCase):
         self.assertEqual([row["fact_id"] for row in built.document["facts"]], ["keep"])
         self.assertEqual(built.document["truncation"], {
             "applied": True, "omitted_fact_count": 1,
+            "omitted_fact_ids": ["omit"],
             "policy": "research-context-v1",
         })
+
+    def test_stale_fact_omission_is_named_not_silent(self):
+        source = domain()
+        stale = fact("stale-history", 4000, 1)
+        stale["freshness"]["stale"] = True
+        source["facts"] = [fact("current", 20, 100), stale]
+        built = ContextBuilder(max_bytes=3000).build(loop(), source)
+        self.assertEqual([row["fact_id"] for row in built.document["facts"]],
+                         ["current"])
+        self.assertEqual(built.document["truncation"]["omitted_fact_ids"],
+                         ["stale-history"])
 
     def test_untrusted_content_cannot_add_actions_or_change_claim_boundary(self):
         source = domain()

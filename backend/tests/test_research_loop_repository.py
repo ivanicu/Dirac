@@ -95,9 +95,9 @@ class ResearchLoopRepositoryPostgresTests(unittest.TestCase):
             )
             cls.campaign_id = str(cur.fetchone()[0])
 
-    def _create(self):
+    def _create(self, request_key="repository-integration-create"):
         return self.repository.create(
-            request_key="repository-integration-create",
+            request_key=request_key,
             program_id=self.program_id,
             campaign_id=self.campaign_id,
             actor=self.actor,
@@ -217,6 +217,34 @@ class ResearchLoopRepositoryPostgresTests(unittest.TestCase):
                 (preview_artifact_id, self.actor["id"]),
             )
             self.assertEqual(cur.fetchone()[0], 1)
+
+    def test_one_open_loop_per_campaign_returns_a_bounded_conflict(self):
+        existing = self._create()
+        with self.assertRaises(failures.DiracIdempotencyConflict) as caught:
+            self._create(request_key="repository-second-open-loop")
+        self.assertEqual(caught.exception.details, {
+            "campaign_id": self.campaign_id,
+            "run_id": existing["run_id"],
+        })
+
+    def test_repository_retry_increments_the_origin_stage_attempt(self):
+        existing = self._create()
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE app.research_loop_state SET state='blocked',stage='wait_job',"
+                "attention=%s::jsonb,stage_attempts='{}'::jsonb,"
+                "lease_owner=NULL,lease_expires_at=NULL WHERE run_id=%s",
+                (json.dumps({"retry_stage": "reason"}), existing["run_id"]),
+            )
+        current = self.repository.get(existing["run_id"], actor=self.actor)
+        retried = self.repository.control(
+            run_id=existing["run_id"], expected_version=current["version"],
+            action="retry", actor=self.actor,
+            rationale="Retry the same bounded provider stage",
+        )
+        self.assertEqual((retried["state"], retried["stage"]),
+                         ("active", "reason"))
+        self.assertEqual(retried["stage_attempts"]["reason"], 1)
 
     def test_stage_request_key_is_attempt_scoped(self):
         from research.loop_repository import stage_request_key

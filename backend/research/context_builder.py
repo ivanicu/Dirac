@@ -91,6 +91,7 @@ class ContextBuilder:
             "open_attention": list(domain["open_attention"]),
             "truncation": {
                 "applied": False, "omitted_fact_count": 0,
+                "omitted_fact_ids": [],
                 "policy": "research-context-v1",
             },
             "created_at": str(domain["source_clock"]),
@@ -112,10 +113,14 @@ class ContextBuilder:
                     "whole-fact omission",
                     details={"max_bytes": self.max_bytes, "size_bytes": len(encoded),
                              "omitted_fact_count": omitted})
-            base["facts"].pop()
+            omitted_fact = base["facts"].pop()
             omitted += 1
             base["truncation"] = {
                 "applied": True, "omitted_fact_count": omitted,
+                "omitted_fact_ids": [
+                    *base["truncation"]["omitted_fact_ids"],
+                    str(omitted_fact["fact_id"]),
+                ],
                 "policy": "research-context-v1",
             }
 

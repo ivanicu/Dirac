@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.ivan.icu/schema/research/loop-summary.schema.json",
+  "title": "Immutable research loop summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "run_ref", "program_ref", "campaign_ref", "iteration",
+    "completion_reason", "context_ref", "context_digest", "source_classes",
+    "claims", "action_history", "budget"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "run_ref": {"$ref": "#/$defs/objectRef"},
+    "program_ref": {"$ref": "#/$defs/objectRef"},
+    "campaign_ref": {"$ref": "#/$defs/objectRef"},
+    "iteration": {"type": "integer", "minimum": 0},
+    "completion_reason": {
+      "enum": ["no_valid_information_gaining_action", "non_executing_action"]
+    },
+    "context_ref": {"$ref": "#/$defs/artifactRef"},
+    "context_digest": {"$ref": "#/$defs/sha256"},
+    "source_classes": {
+      "type": "array", "uniqueItems": true,
+      "items": {"enum": ["typed_evidence", "method_result", "human_attestation", "system_state", "unverified_external"]}
+    },
+    "claims": {
+      "type": "array", "maxItems": 4096,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["fact_id", "source_class", "source_ref", "freshness", "claim_boundary"],
+        "properties": {
+          "fact_id": {"type": "string", "minLength": 1, "maxLength": 256},
+          "source_class": {"enum": ["typed_evidence", "method_result", "human_attestation", "system_state", "unverified_external"]},
+          "source_ref": {
+            "oneOf": [
+              {"$ref": "#/$defs/artifactRef"},
+              {"$ref": "#/$defs/objectRef"}
+            ]
+          },
+          "freshness": {"type": "object"},
+          "claim_boundary": {
+            "type": "object", "additionalProperties": false,
+            "required": ["status", "eligible_as_scientific_evidence", "reason_codes"],
+            "properties": {
+              "status": {"type": "string", "minLength": 1, "maxLength": 128},
+              "eligible_as_scientific_evidence": {"type": "boolean"},
+              "reason_codes": {
+                "type": "array", "uniqueItems": true,
+                "items": {"type": "string", "minLength": 1, "maxLength": 128}
+              }
+            }
+          }
+        }
+      }
+    },
+    "action_history": {"type": "array", "maxItems": 4096},
+    "budget": {
+      "type": "object", "additionalProperties": false,
+      "required": ["remaining", "spent"],
+      "properties": {
+        "remaining": {"type": "object"},
+        "spent": {"type": "object"}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "objectRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+        "id": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "artifactRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "id", "sha256"],
+      "properties": {
+        "kind": {"const": "artifact"},
+        "id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

@@ -236,6 +236,18 @@ class ResearchLoopRepository:
                 raise failures.DiracNotFound("Campaign does not exist")
 
             cur.execute(
+                "SELECT run_id::text FROM app.research_loop_state "
+                "WHERE campaign_id=%s AND state NOT IN "
+                "('completed','cancelled','failed') FOR UPDATE",
+                (campaign_id,),
+            )
+            open_loop = cur.fetchone()
+            if open_loop is not None:
+                raise failures.DiracIdempotencyConflict(
+                    "Campaign already has an open research loop",
+                    details={"campaign_id": campaign_id, "run_id": open_loop[0]})
+
+            cur.execute(
                 "INSERT INTO app.mission "
                 "(program_id,objective,state,autonomy_class,actor_kind,actor_id) "
                 "VALUES (%s,%s,'active',%s,%s,%s) RETURNING id",

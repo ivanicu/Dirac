@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import failures
 from research.loop_controller import ResearchLoopController
 from research.loop_repository import LoopClaim, ResearchLoopRepository
+from research.loop_summary import LoopSummaryBuilder
 
 
 class RecordingRepository:
@@ -171,6 +172,73 @@ class ResearchLoopControllerStateMachineTests(unittest.TestCase):
         self.assertNotIn("resume_candidate_after_snapshot",
                          snapshot_transition["updates"]["outputs"])
 
+    def test_campaign_binding_change_invalidates_proposal_before_selection(self):
+        controller = self.controller()
+        context = {
+            "digest": "sha256:" + "1" * 64,
+            "campaign_binding": {
+                "campaign_scientific_generation": 2,
+                "campaign_scientific_digest": "sha256:" + "2" * 64,
+                "campaign_status": "planned",
+                "state_digest": "sha256:" + "3" * 64,
+            },
+        }
+        proposal = {"context_digest": context["digest"]}
+        controller._read_state_artifact = lambda _state, which: (
+            context if which == "context" else proposal)
+        controller.fep = SimpleNamespace(snapshot=lambda _state: {
+            "campaign_binding": {
+                **context["campaign_binding"],
+                "campaign_scientific_generation": 3,
+            },
+        })
+        state = {"version": 6}
+
+        controller._stage_validate_proposal(claim(state))
+
+        transition = controller.repository.transitions[-1][1]
+        self.assertEqual(transition["stage"], "snapshot_context")
+        self.assertEqual(transition["event_type"], "proposal_stale")
+        self.assertEqual(transition["payload"]["reason"],
+                         "campaign_binding_changed")
+
+    def test_cancel_does_not_cancel_an_already_dispatched_physical_runset(self):
+        controller = self.controller()
+        state = {
+            "run_id": "00000000-0000-0000-0000-000000000001",
+            "version": 9, "state": "active", "stage": "wait_job",
+            "data_classification": "internal", "policy": {},
+            "stage_jobs": {"active": {
+                "kind": "runset",
+                "runset_id": "00000000-0000-0000-0000-000000000055",
+            }},
+        }
+        calls = []
+
+        class Repository:
+            def get(self, *_args, **_kwargs):
+                return state
+
+            def control(self, **kwargs):
+                calls.append(kwargs)
+                return {**state, "state": "cancelled", "stage": "completed",
+                        "version": 10}
+
+        controller.repository = Repository()
+        controller.fep = SimpleNamespace(runsets=SimpleNamespace(
+            cancel=lambda *_args, **_kwargs: self.fail(
+                "loop cancellation silently cancelled physical work")))
+        controller.wake = lambda: None
+        result = controller.control({
+            "run_ref": {"kind": "run", "id": state["run_id"]},
+            "expected_version": 9,
+            "action": "cancel",
+            "rationale": "Stop AI iteration but preserve approved compute",
+        }, {"kind": "human", "id": "chemist"})
+
+        self.assertEqual(result["state"], "cancelled")
+        self.assertEqual(calls[0]["action"], "cancel")
+
     def test_shutdown_prevents_a_late_timer_from_resubmitting_work(self):
         controller = self.controller()
         controller._lock = __import__("threading").Lock()
@@ -181,6 +249,75 @@ class ResearchLoopControllerStateMachineTests(unittest.TestCase):
         controller._pool = SimpleNamespace(
             submit=lambda *_args: self.fail("shutdown controller submitted work"))
         controller.wake()
+
+    def test_completion_persists_source_exact_immutable_summary_before_terminal_state(self):
+        controller = self.controller()
+        controller.summary_builder = LoopSummaryBuilder()
+        stored = []
+
+        def put(raw, *, role, media_type):
+            stored.append((raw, role, media_type))
+            return SimpleNamespace(
+                id="00000000-0000-0000-0000-000000000088",
+                sha256="8" * 64,
+            )
+
+        controller.store = SimpleNamespace(put=put)
+        context = {
+            "digest": "sha256:" + "3" * 64,
+            "facts": [{
+                "fact_id": "fact:edge:result",
+                "source_class": "method_result",
+                "source_ref": {
+                    "kind": "artifact",
+                    "id": "00000000-0000-0000-0000-000000000099",
+                    "sha256": "sha256:" + "9" * 64,
+                },
+                "freshness": {"stale": False, "source_generation": 4},
+                "claim_boundary": {
+                    "status": "completed_unvalidated",
+                    "eligible_as_scientific_evidence": False,
+                    "reason_codes": ["METHOD_RESULT_NOT_EVIDENCE"],
+                },
+            }],
+            "action_history": [{"template_id": "fep.run_selected_edge.v1"}],
+        }
+        controller._read_state_artifact = lambda _state, which: (
+            context if which == "context" else self.fail("unexpected Artifact read"))
+        state = {
+            "run_id": "00000000-0000-0000-0000-000000000001",
+            "program_id": "00000000-0000-0000-0000-000000000002",
+            "campaign_id": "00000000-0000-0000-0000-000000000003",
+            "version": 12, "iteration": 2,
+            "data_classification": "internal",
+            "context_artifact_id": "00000000-0000-0000-0000-000000000077",
+            "outputs": {"context_artifact_sha256": "sha256:" + "7" * 64},
+            "budget_remaining": {"reasoner_calls": 0, "fep_runsets": 0},
+            "budget_spent": {"reasoner_calls": 2, "fep_runsets": 1},
+        }
+
+        controller._stage_guard(claim(state))
+
+        self.assertEqual(stored[0][1:], ("research.loop_summary", "application/json"))
+        summary = json.loads(stored[0][0])
+        self.assertEqual(summary["source_classes"], ["method_result"])
+        self.assertEqual(summary["claims"][0]["source_ref"]["sha256"],
+                         "sha256:" + "9" * 64)
+        self.assertEqual(summary["claims"][0]["claim_boundary"], {
+            "status": "completed_unvalidated",
+            "eligible_as_scientific_evidence": False,
+            "reason_codes": ["METHOD_RESULT_NOT_EVIDENCE"],
+        })
+        transition = controller.repository.transitions[-1][1]
+        self.assertEqual((transition["state"], transition["stage"]),
+                         ("completed", "completed"))
+        self.assertEqual(transition["artifact_id"],
+                         "00000000-0000-0000-0000-000000000088")
+        self.assertEqual(transition["updates"]["outputs"]["summary_ref"], {
+            "kind": "artifact",
+            "id": "00000000-0000-0000-0000-000000000088",
+            "sha256": "sha256:" + "8" * 64,
+        })
 
 
 if __name__ == "__main__":

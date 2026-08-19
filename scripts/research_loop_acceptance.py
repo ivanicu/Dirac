@@ -314,6 +314,24 @@ def main() -> None:
                 raise RuntimeError({"missing_events": missing,
                                     "runset_starts": runsets.starts,
                                     "provider_attempts": provider_server.attempts})
+            summary_ref = reloaded.get("summary_ref")
+            if not summary_ref or not summary_ref.get("sha256"):
+                raise RuntimeError("completed loop omitted its immutable summary Artifact")
+            summary_artifact, summary_raw = service.store.read(summary_ref["id"])
+            summary = json.loads(summary_raw)
+            if summary_artifact.role != "research.loop_summary":
+                raise RuntimeError("terminal summary Artifact has the wrong role")
+            expected_boundary = {
+                "status": "completed_unvalidated",
+                "eligible_as_scientific_evidence": False,
+                "reason_codes": ["METHOD_RESULT_NOT_EVIDENCE",
+                                 "QUALITY_PROJECTION_REQUIRED"],
+            }
+            if (summary["source_classes"] != ["method_result"]
+                    or len(summary["claims"]) != 1
+                    or summary["claims"][0]["source_class"] != "method_result"
+                    or summary["claims"][0]["claim_boundary"] != expected_boundary):
+                raise RuntimeError({"invalid_terminal_summary": summary})
             serialized = json.dumps(reloaded, sort_keys=True)
             if "acceptance-secret-never-persist" in serialized:
                 raise RuntimeError("provider secret reached the public durable snapshot")
@@ -346,6 +364,7 @@ def main() -> None:
                 "stage": reloaded["stage"], "provider_attempts": provider_server.attempts,
                 "fake_runset_starts": runsets.starts, "events": events,
                 "claim_boundary": reloaded["claim_boundary"],
+                "summary_sha256": summary_ref["sha256"],
                 "timeline_survived_new_dispatcher": True,
                 "physical_execution": "FAKE_RUNSET_ONLY",
             }, sort_keys=True))

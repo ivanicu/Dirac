@@ -13,6 +13,7 @@ from research.action_catalog import default_action_catalog
 from research.action_compiler import ActionCompiler
 from research.context_builder import ContextBuilder
 from research.loop_repository import LoopClaim, ResearchLoopRepository, stage_request_key
+from research.loop_summary import LoopSummaryBuilder
 from research.metrics import METRICS
 from research.provider_registry import AiProviderConfigurationError
 from research.reasoner import _prompt_release
@@ -42,6 +43,7 @@ class ResearchLoopController:
         self.context_builder = ContextBuilder()
         self.action_catalog = default_action_catalog()
         self.compiler = ActionCompiler(fep_adapter, action_catalog=self.action_catalog)
+        self.summary_builder = LoopSummaryBuilder()
         self.dispatcher = CommandDispatcher(kernel)
         self._pool = ThreadPoolExecutor(max_workers=2,
                                         thread_name_prefix="research-loop-controller")
@@ -138,6 +140,7 @@ class ResearchLoopController:
                        "spent": state["budget_spent"]},
             "context_ref": self._state_artifact_ref(state, "context"),
             "proposal_ref": self._state_artifact_ref(state, "proposal"),
+            "summary_ref": (state.get("outputs") or {}).get("summary_ref"),
             "pending_action": state["pending_action"],
             "attention": state["attention"], "events": events,
             "deep_links": {
@@ -535,11 +538,9 @@ class ResearchLoopController:
             actor=self._initiating_actor(claim.state))
         resolved = preview.get("resolved_command")
         if resolved is None:
-            self.repository.transition(
-                claim, expected_version=claim.version, state="completed", stage="completed",
-                event_type="loop_completed", actor=self._automation_actor(),
-                payload={"template_id": preview["template_id"],
-                         "reason": "non_executing_action"})
+            self._complete_loop(
+                claim, reason="non_executing_action",
+                extra_payload={"template_id": preview["template_id"]})
             return
         attempt = int(claim.state["stage_attempts"].get("dispatch", 0))
         request_key = stage_request_key(
@@ -622,10 +623,31 @@ class ResearchLoopController:
                      "budget_remaining": remaining})
 
     def _stage_guard(self, claim: LoopClaim) -> None:
+        self._complete_loop(claim, reason="no_valid_information_gaining_action")
+
+    def _complete_loop(
+        self, claim: LoopClaim, *, reason: str,
+        extra_payload: Mapping[str, Any] | None = None,
+    ) -> None:
+        context = self._read_state_artifact(claim.state, "context")
+        context_ref = self._state_artifact_ref(claim.state, "context")
+        if context_ref is None or "sha256" not in context_ref:
+            raise failures.DiracInternal(
+                "completed research loop requires a digest-bound Context Artifact")
+        raw = self.summary_builder.build(
+            claim.state, context, context_ref=context_ref,
+            completion_reason=reason)
+        summary_ref = self._store_artifact(
+            claim.state, raw, "research.loop_summary")
+        outputs = dict(claim.state["outputs"])
+        outputs["summary_ref"] = summary_ref
         self.repository.transition(
             claim, expected_version=claim.version, state="completed", stage="completed",
             event_type="loop_completed", actor=self._automation_actor(),
-            payload={"reason": "no_valid_information_gaining_action"})
+            artifact_id=summary_ref["id"],
+            payload={"reason": reason, "summary_ref": summary_ref,
+                     **dict(extra_payload or {})},
+            updates={"outputs": outputs})
 
     def _stage_await_approval(self, claim: LoopClaim) -> None:
         raise failures.DiracInternal("waiting_approval loop must not be controller-claimable")
