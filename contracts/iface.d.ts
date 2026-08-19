@@ -17,7 +17,8 @@ export type ErrorCode =
     | 'BAD_HOST' | 'CANCELLED' | 'INTERNAL' | 'NOT_FOUND'
     | 'DB_UNAVAILABLE' | 'AUTH_REQUIRED' | 'FORBIDDEN'
     | 'RATE_LIMITED' | 'QUOTA_EXCEEDED' | 'TLS_REQUIRED'
-    | 'INVALID_PARAMETERS' | 'IDEMPOTENCY_CONFLICT';
+    | 'INVALID_PARAMETERS' | 'IDEMPOTENCY_CONFLICT'
+    | 'PROVIDER_UNAVAILABLE' | 'MODEL_OUTPUT_INVALID' | 'STALE_PREVIEW';
 
 /** Discriminated union — a molfile alone is lossy (frontend review, blocker 3). */
 export type Ligand =

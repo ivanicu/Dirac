@@ -29,6 +29,9 @@ export const ERROR_CODES = {
     TLS_REQUIRED: { user_copy: "HTTPS is required for remote access.", retryable: false, points_at: null },
     INVALID_PARAMETERS: { user_copy: "That request is not valid for this method.", retryable: false, points_at: null },
     IDEMPOTENCY_CONFLICT: { user_copy: "That request key already belongs to a different operation.", retryable: false, points_at: null },
+    PROVIDER_UNAVAILABLE: { user_copy: "The configured AI provider is unavailable.", retryable: true, points_at: null },
+    MODEL_OUTPUT_INVALID: { user_copy: "The model did not return a valid research proposal.", retryable: true, points_at: null },
+    STALE_PREVIEW: { user_copy: "The scientific context changed; review a fresh action preview.", retryable: true, points_at: null },
 } as const;
 
 /** The full, and only, error vocabulary — derived from the object above so

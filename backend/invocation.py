@@ -61,7 +61,7 @@ from execution_control.identity import (
 
 
 _RESOURCE_CLASSES = frozenset({
-    'cpu', 'cpu-classical', 'cpu-cheminformatics', 'cpu-qm', 'gpu',
+    'cpu', 'cpu-classical', 'cpu-cheminformatics', 'cpu-qm', 'gpu', 'external-api',
 })
 
 
@@ -101,6 +101,7 @@ class InvocationContext:
     artifact_writer: Any = None
     checkpoint_writer: Any = None
     rbfe_reference_resolver: Any = None
+    ai_provider_registry: Any = None
     # Server-owned admission facts are outside the client payload. Remote
     # executors seal them into their fenced input manifest after resolving
     # capabilities that intentionally do not cross the worker sandbox.
@@ -178,6 +179,7 @@ class InvocationService:
                  artifact_writer: Any | None = None,
                  checkpoint_writer: Any | None = None,
                  rbfe_reference_resolver: Any | None = None,
+                 ai_provider_registry: Any | None = None,
                  attempt_store: Any | None = None,
                  motif_governance: Any | None = None,
                  program_repository: Any | None = None,
@@ -194,6 +196,7 @@ class InvocationService:
         self.artifact_writer = artifact_writer
         self.checkpoint_writer = checkpoint_writer
         self.rbfe_reference_resolver = rbfe_reference_resolver
+        self.ai_provider_registry = ai_provider_registry
         self.attempt_store = attempt_store
         self.motif_governance = motif_governance
         self.program_repository = program_repository
@@ -258,6 +261,15 @@ class InvocationService:
                     'health_error': f'{type(error).__name__}: {error}',
                 }
         gpu_execution = bool(executor_health.get('gpu_execution', False))
+        ai_profiles: list[dict[str, Any]] = []
+        ai_health = 'unconfigured'
+        if self.ai_provider_registry is not None:
+            try:
+                ai_profiles = list(self.ai_provider_registry.list_public())
+                ai_health = ('configured' if any(
+                    item.get('configured') for item in ai_profiles) else 'degraded')
+            except Exception:  # noqa: BLE001 - AI cannot take down scientific health
+                ai_health = 'degraded'
         return {
             'job_store': {
                 'kind': getattr(self.ledger, 'kind', 'none') if self.ledger else 'none',
@@ -288,6 +300,11 @@ class InvocationService:
             'program_repository': {
                 'kind': getattr(self.program_repository, 'kind', 'none'),
                 'durability': getattr(self.program_repository, 'durability', 'none'),
+            },
+            'ai_reasoning': {
+                'configured': ai_health == 'configured',
+                'state': ai_health,
+                'profiles': ai_profiles,
             },
             'cancellation': ('route-specific' if callable(getattr(
                 self.executor, 'cancellation_capability_for', None))
@@ -772,6 +789,7 @@ class InvocationService:
                 artifact_writer=self.artifact_writer,
                 checkpoint_writer=self.checkpoint_writer,
                 rbfe_reference_resolver=self.rbfe_reference_resolver,
+                ai_provider_registry=self.ai_provider_registry,
                 cancellation_token=_cancellation_token or CancellationToken(),
                 dispatch_fence=(
                     (lambda cursor=None: self.ledger.assert_dispatch(

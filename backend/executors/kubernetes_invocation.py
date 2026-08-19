@@ -32,7 +32,7 @@ from invocation import HandlerResult, InvocationContext
 
 _TERMINAL = {"succeeded", "failed", "cancelled", "unknown"}
 _RESOURCE_CLASSES = frozenset({
-    "cpu", "cpu-classical", "cpu-cheminformatics", "cpu-qm", "gpu",
+    "cpu", "cpu-classical", "cpu-cheminformatics", "cpu-qm", "gpu", "external-api",
 })
 _ADAPTER_PROTOCOL = ("submit", "inspect", "request_cancel", "logs", "health")
 _OCI_DIGEST = re.compile(r"^[^\s]+@sha256:[0-9a-f]{64}$")

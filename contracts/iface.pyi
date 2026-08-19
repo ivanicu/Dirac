@@ -16,7 +16,9 @@ ErrorCode = Literal['PARSE', 'UNCONVERGED', 'UNPARAMETERIZED', 'BUDGET',
                     'BAD_HOST', 'CANCELLED', 'INTERNAL', 'NOT_FOUND',
                     'DB_UNAVAILABLE', 'AUTH_REQUIRED', 'FORBIDDEN',
                     'RATE_LIMITED', 'QUOTA_EXCEEDED', 'TLS_REQUIRED',
-                    'INVALID_PARAMETERS', 'IDEMPOTENCY_CONFLICT']
+                    'INVALID_PARAMETERS', 'IDEMPOTENCY_CONFLICT',
+                    'PROVIDER_UNAVAILABLE', 'MODEL_OUTPUT_INVALID',
+                    'STALE_PREVIEW']
 JobState = Literal['queued', 'running', 'done', 'failed', 'cancelled']  # seam: app.job (PLANNED)
 
 class EmbedMeta(TypedDict):

@@ -210,7 +210,7 @@
           "exclusiveMinimum": 0
         },
         "resource_class": {
-          "enum": ["cpu", "cpu-classical", "cpu-cheminformatics", "cpu-qm", "gpu"]
+          "enum": ["cpu", "cpu-classical", "cpu-cheminformatics", "cpu-qm", "gpu", "external-api"]
         },
         "concurrency_class": {
           "type": "string",

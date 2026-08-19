@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "template_id": "fep.prepare_selected_edge.v1",
+  "domain": "fep",
+  "intent": "Prepare the governed complex and solvent systems for one selected edge.",
+  "model_hint_schema": {
+    "type": "object", "additionalProperties": false,
+    "required": ["edge_id"],
+    "properties": {"edge_id": {"type": "string", "minLength": 1, "maxLength": 256}}
+  },
+  "resolver": "research.fep_adapter:resolve_prepare_selected_edge",
+  "precondition": "research.fep_adapter:check_prepare_selected_edge",
+  "consequence": {
+    "risk_class": "R2", "approval": "session_grant", "reversible": true,
+    "external_effect": false
+  },
+  "execution": {
+    "command_id": "physics.rbfe-system.prepare", "estimate_source": "server",
+    "result_observer": "research.fep_adapter:observe_prepared_system"
+  },
+  "expected_outputs": ["rbfe.openfe.system"],
+  "claim_boundary": "Prepared systems are execution inputs, not scientific evidence."
+}

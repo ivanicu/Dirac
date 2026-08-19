@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dirac.ivan.icu/schema/research/action-template.schema.json",
+  "title": "Bounded research action template",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "template_id", "domain", "intent", "model_hint_schema",
+    "resolver", "precondition", "consequence", "execution", "expected_outputs",
+    "claim_boundary"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "template_id": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
+    "domain": {"const": "fep"},
+    "intent": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "model_hint_schema": {"type": "object"},
+    "resolver": {
+      "type": ["string", "null"],
+      "pattern": "^[a-zA-Z_][a-zA-Z0-9_.]*:[a-zA-Z_][a-zA-Z0-9_]*$"
+    },
+    "precondition": {
+      "type": ["string", "null"],
+      "pattern": "^[a-zA-Z_][a-zA-Z0-9_.]*:[a-zA-Z_][a-zA-Z0-9_]*$"
+    },
+    "consequence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["risk_class", "approval", "reversible", "external_effect"],
+      "properties": {
+        "risk_class": {"enum": ["R0", "R1", "R2", "R3", "R4"]},
+        "approval": {"enum": ["none", "session_grant", "per_action", "human_only"]},
+        "reversible": {"type": "boolean"},
+        "external_effect": {"type": "boolean"}
+      }
+    },
+    "execution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["command_id", "estimate_source", "result_observer"],
+      "properties": {
+        "command_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 128},
+        "estimate_source": {"enum": ["server", "none"]},
+        "result_observer": {
+          "type": ["string", "null"],
+          "pattern": "^[a-zA-Z_][a-zA-Z0-9_.]*:[a-zA-Z_][a-zA-Z0-9_]*$"
+        }
+      }
+    },
+    "expected_outputs": {
+      "type": "array", "maxItems": 16, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9_]*)*$"}
+    },
+    "claim_boundary": {"type": "string", "minLength": 1, "maxLength": 4096}
+  }
+}

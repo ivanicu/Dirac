@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "template_id": "fep.replan_network.v1",
+  "domain": "fep",
+  "intent": "Rebuild the bounded RBFE edge network when currentness policy permits it.",
+  "model_hint_schema": {
+    "type": "object", "additionalProperties": false,
+    "properties": {"reason_code": {"type": "string", "minLength": 1, "maxLength": 128}}
+  },
+  "resolver": "research.fep_adapter:resolve_replan_network",
+  "precondition": "research.fep_adapter:check_replan_network",
+  "consequence": {
+    "risk_class": "R2", "approval": "session_grant", "reversible": true,
+    "external_effect": false
+  },
+  "execution": {
+    "command_id": "physics.rbfe-network", "estimate_source": "server",
+    "result_observer": "research.fep_adapter:observe_network"
+  },
+  "expected_outputs": ["rbfe.network", "rbfe.edge_spec"],
+  "claim_boundary": "A planned network is a governed execution plan, not a scientific result."
+}

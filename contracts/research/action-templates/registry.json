@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "templates": [
+    {"template_id": "fep.defer_for_experiment.v1", "file": "fep.defer-for-experiment.v1.json"},
+    {"template_id": "fep.prepare_selected_edge.v1", "file": "fep.prepare-selected-edge.v1.json"},
+    {"template_id": "fep.replan_network.v1", "file": "fep.replan-network.v1.json"},
+    {"template_id": "fep.run_selected_edge.v1", "file": "fep.run-selected-edge.v1.json"},
+    {"template_id": "fep.stop.v1", "file": "fep.stop.v1.json"}
+  ]
+}

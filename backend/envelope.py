@@ -396,6 +396,11 @@ _V1_REASON_FOR_CODE: dict[str, str] = {
     # exactly why v2 carries the code itself. The lossiness is the argument.
     'NOT_FOUND': 'internal',
     'DB_UNAVAILABLE': 'internal',
+    # AI research-loop failures have no v1 semantic surface. Flattening is
+    # unavoidable there; v2 retains the provider/model/staleness distinction.
+    'PROVIDER_UNAVAILABLE': 'internal',
+    'MODEL_OUTPUT_INVALID': 'internal',
+    'STALE_PREVIEW': 'internal',
 }
 assert set(_V1_REASON_FOR_CODE) == set(CODES), (
     'the v1 reason bucket table has drifted from the vocabulary it buckets')

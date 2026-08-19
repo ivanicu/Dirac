@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "template_id": "fep.run_selected_edge.v1",
+  "domain": "fep",
+  "intent": "Run one already-planned and qualified RBFE edge.",
+  "model_hint_schema": {
+    "type": "object", "additionalProperties": false,
+    "required": ["edge_id"],
+    "properties": {"edge_id": {"type": "string", "minLength": 1, "maxLength": 256}}
+  },
+  "resolver": "research.fep_adapter:resolve_run_selected_edge",
+  "precondition": "research.fep_adapter:check_run_selected_edge",
+  "consequence": {
+    "risk_class": "R3", "approval": "per_action", "reversible": false,
+    "external_effect": false
+  },
+  "execution": {
+    "command_id": "physics.rbfe-run.start", "estimate_source": "server",
+    "result_observer": "research.fep_adapter:observe_runset"
+  },
+  "expected_outputs": ["rbfe.openfe.result", "rbfe.openfe.run_report", "rbfe.result"],
+  "claim_boundary": "Completed computation remains unvalidated until quality and evidence projection."
+}

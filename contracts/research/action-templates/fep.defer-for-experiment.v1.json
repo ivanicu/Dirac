@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "template_id": "fep.defer_for_experiment.v1",
+  "domain": "fep",
+  "intent": "Draft an experimental follow-up without creating an external order or result.",
+  "model_hint_schema": {
+    "type": "object", "additionalProperties": false,
+    "required": ["reason"],
+    "properties": {"reason": {"type": "string", "minLength": 1, "maxLength": 4096}}
+  },
+  "resolver": null,
+  "precondition": null,
+  "consequence": {
+    "risk_class": "R0", "approval": "none", "reversible": true,
+    "external_effect": false
+  },
+  "execution": {"command_id": null, "estimate_source": "none", "result_observer": null},
+  "expected_outputs": ["research.followup_draft"],
+  "claim_boundary": "This is a draft only and never creates an experiment, CRO order, or measurement."
+}

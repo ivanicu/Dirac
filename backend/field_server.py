@@ -286,6 +286,7 @@ def _security_cost_units(method: str, path: str, body: dict | None) -> int:
         'cpu-cheminformatics': 5,
         'cpu-qm': 100,
         'gpu': 250,
+        'external-api': 25,
         'remote': 250,
     }.get(str(resource), 100)
 

@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": "2.0.0",
+  "method_id": "ai.research.propose",
+  "summary": "Generate one bounded, schema-validated research proposal from a frozen Dirac context snapshot.",
+  "implementation": {
+    "module": "backend.research.reasoner",
+    "functions": [
+      "attest_reasoner_admission", "build_messages", "propose_handler",
+      "validate_proposal", "redact_provider_response"
+    ],
+    "constants": ["MAX_CONTEXT_BYTES", "MAX_PROPOSAL_BYTES"]
+  },
+  "input": {
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_key", "run_ref", "loop_version", "iteration",
+        "context_snapshot_ref", "context_digest", "context_size_bytes",
+        "provider_profile_id", "provider_profile_digest", "prompt_release_id",
+        "prompt_release_digest", "output_schema_digest", "action_catalog_digest",
+        "data_classification"
+      ],
+      "properties": {
+        "request_key": {"type": "string", "minLength": 1, "maxLength": 256},
+        "run_ref": {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "id"],
+          "properties": {
+            "kind": {"const": "run"},
+            "id": {"type": "string", "format": "uuid"}
+          }
+        },
+        "loop_version": {"type": "integer", "minimum": 1},
+        "iteration": {"type": "integer", "minimum": 0},
+        "context_snapshot_ref": {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "id", "sha256"],
+          "properties": {
+            "kind": {"const": "artifact"},
+            "id": {"type": "string", "format": "uuid"},
+            "sha256": {"type": "string", "format": "sha256-digest"}
+          }
+        },
+        "context_digest": {"type": "string", "format": "sha256-digest"},
+        "context_size_bytes": {"type": "integer", "minimum": 1, "maximum": 262144},
+        "provider_profile_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "provider_profile_digest": {"type": "string", "format": "sha256-digest"},
+        "prompt_release_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "prompt_release_digest": {"type": "string", "format": "sha256-digest"},
+        "output_schema_digest": {"type": "string", "format": "sha256-digest"},
+        "action_catalog_digest": {"type": "string", "format": "sha256-digest"},
+        "data_classification": {
+          "enum": ["public", "internal", "partner_confidential", "restricted", "regulated"]
+        }
+      }
+    }
+  },
+  "output": {
+    "schema": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "context_digest", "proposal_digest", "provider_profile_id",
+        "provider_profile_digest", "configured_model", "resolved_model",
+        "provider_request_id", "usage", "validation_attempts", "claim_boundary"
+      ],
+      "properties": {
+        "context_digest": {"type": "string", "format": "sha256-digest"},
+        "proposal_digest": {"type": "string", "format": "sha256-digest"},
+        "provider_profile_id": {"type": "string"},
+        "provider_profile_digest": {"type": "string", "format": "sha256-digest"},
+        "configured_model": {"type": "string"},
+        "resolved_model": {"type": ["string", "null"]},
+        "provider_request_id": {"type": ["string", "null"]},
+        "usage": {"type": "object"},
+        "validation_attempts": {"type": "integer", "minimum": 1, "maximum": 2},
+        "claim_boundary": {"const": "model_proposal_not_scientific_evidence"}
+      }
+    },
+    "artifacts": [{"role": "research.proposal", "media_type": "application/json"}]
+  },
+  "refusals": [
+    {
+      "code": "PROVIDER_UNAVAILABLE",
+      "condition": "The configured model provider cannot complete the request within bounded retries."
+    },
+    {
+      "code": "MODEL_OUTPUT_INVALID",
+      "condition": "The provider output remains invalid after bounded regeneration."
+    },
+    {
+      "code": "UNSUPPORTED",
+      "condition": "The provider profile, data classification, or resource isolation is not allowed."
+    }
+  ],
+  "execution": {
+    "supported_modes": ["job"],
+    "default_mode": "job",
+    "resource_class": "external-api",
+    "determinism": "non_deterministic",
+    "checkpointable": false,
+    "cancellation": "queued_only",
+    "artifact_access": ["read:research-context", "write:research-proposal"],
+    "supported_adapters": ["local_cpu"],
+    "scale_profile": {
+      "shardable": false, "distributed": false, "cpu_cores": 1,
+      "min_gpus": 0, "max_gpus": 0
+    },
+    "cacheable": false,
+    "deterministic": false,
+    "side_effects": "immutable_artifacts"
+  },
+  "exposure": {"sdk": false, "cli": false, "mcp": "hidden"},
+  "invocation": {
+    "handler": "research.reasoner:propose_handler",
+    "admission": {
+      "handler": "research.reasoner:attest_reasoner_admission",
+      "attestation_key": "ai_provider_profile"
+    },
+    "artifacts": [
+      {"role": "research.proposal", "media_type": "application/json", "required": true}
+    ]
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "template_id": "fep.stop.v1",
+  "domain": "fep",
+  "intent": "Stop the loop with a deterministic receipt.",
+  "model_hint_schema": {
+    "type": "object", "additionalProperties": false,
+    "required": ["reason_code"],
+    "properties": {"reason_code": {"type": "string", "minLength": 1, "maxLength": 128}}
+  },
+  "resolver": null,
+  "precondition": null,
+  "consequence": {
+    "risk_class": "R0", "approval": "none", "reversible": true,
+    "external_effect": false
+  },
+  "execution": {"command_id": null, "estimate_source": "none", "result_observer": null},
+  "expected_outputs": [],
+  "claim_boundary": "Stopping records a governed decision boundary and creates no evidence."
+}

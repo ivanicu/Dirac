@@ -33,6 +33,7 @@ export type DiracEnvelope<TData = unknown> = {
 };
 
 export type MethodId =
+    | 'ai.research.propose'
     | 'data.motif.snapshot'
     | 'design.motif.acquire'
     | 'design.motif.bayesian_acquire'
@@ -63,6 +64,49 @@ export type MethodId =
     | 'surface.mep'
     | 'surface.mep_at'
     | 'torsion.strain';
+
+/** ai.research.propose output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
+export type AiResearchProposeOutput = {
+    context_digest: string;
+    proposal_digest: string;
+    provider_profile_id: string;
+    provider_profile_digest: string;
+    configured_model: string;
+    resolved_model: (string | null);
+    provider_request_id: (string | null);
+    usage: Record<string, unknown>;
+    validation_attempts: number;
+    claim_boundary: "model_proposal_not_scientific_evidence";
+};
+
+/** ai.research.propose — Generate one bounded, schema-validated research proposal from a frozen Dirac context snapshot. */
+export const AiResearchProposeExecution = {
+    "supported_modes": [
+        "job"
+    ],
+    "default_mode": "job",
+    "resource_class": "external-api",
+    "determinism": "non_deterministic",
+    "checkpointable": false,
+    "cancellation": "queued_only",
+    "artifact_access": [
+        "read:research-context",
+        "write:research-proposal"
+    ],
+    "supported_adapters": [
+        "local_cpu"
+    ],
+    "scale_profile": {
+        "shardable": false,
+        "distributed": false,
+        "cpu_cores": 1,
+        "min_gpus": 0,
+        "max_gpus": 0
+    },
+    "cacheable": false,
+    "deterministic": false,
+    "side_effects": "immutable_artifacts"
+} as const;
 
 /** data.motif.snapshot output — generated from its declared output schema. The renderer reads THIS, not a hand-kept mirror of it. */
 export type DataMotifSnapshotOutput = {
@@ -2056,6 +2100,7 @@ export const TorsionStrainExecution = {
 } as const;
 
 export const METHOD_IDS: readonly MethodId[] = [
+    "ai.research.propose",
     "data.motif.snapshot",
     "design.motif.acquire",
     "design.motif.bayesian_acquire",

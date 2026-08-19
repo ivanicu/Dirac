@@ -460,6 +460,8 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
     programs = (program_repository if program_repository is not None
                 else default_program_repository(dsn))
     rbfe_references = default_rbfe_reference_resolver(dsn)
+    from research.provider_registry import default_ai_provider_registry
+    ai_providers = default_ai_provider_registry()
     # A ThreadExecutor still executes sync calls inline, while also making descriptor
     # default_mode=job truthful for /v2/jobs submissions.
     ex = executor or default_executor()
@@ -483,6 +485,7 @@ def build(*, dsn: str = DEFAULT_DSN, with_versions: bool = True,
                                       motif_governance=governance,
                                       program_repository=programs,
                                       rbfe_reference_resolver=rbfe_references,
+                                      ai_provider_registry=ai_providers,
                                       execution_identity_resolver=identity_resolver,
                                       production_execution=production_execution,
                                       toolkit_versions=toolkit_versions())

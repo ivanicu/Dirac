@@ -188,9 +188,10 @@ UNITS.update({
     'fields.qm.mep_qm': _qm_unit('mep_qm', 'electrostatic_potential', 'Ha/e'),
 })
 
-# Motif methods use the same registry and Job ledger as the existing physics
-# methods. Their contracts are loaded from the canonical descriptors so the DB
-# snapshot cannot drift into a second hand-maintained API definition.
+# Motif and governed research-support methods use the same registry and Job
+# ledger as the existing physics methods. Their contracts are loaded from the
+# canonical descriptors so the DB snapshot cannot drift into a second
+# hand-maintained API definition.
 _CONTRACTS = pathlib.Path(__file__).resolve().parent.parent / 'contracts' / 'methods'
 for _descriptor_path in sorted(_CONTRACTS.glob('*.method.json')):
     _descriptor = json.loads(_descriptor_path.read_text(encoding='utf-8'))
@@ -202,7 +203,7 @@ for _descriptor_path in sorted(_CONTRACTS.glob('*.method.json')):
     # could correctly name a new admission/helper function while runtime kept
     # hashing the stale hard-coded subset.  Discover this family by its owned
     # module and copy functions/constants directly from the descriptor.
-    if not _declared_module.startswith('backend.motif.'):
+    if not _declared_module.startswith(('backend.motif.', 'backend.research.')):
         continue
     _module = _declared_module.removeprefix('backend.')
     _functions = list(_implementation.get('functions') or ())
@@ -226,6 +227,8 @@ for _descriptor_path in sorted(_CONTRACTS.glob('*.method.json')):
                           (_descriptor.get('invocation') or {}).get('artifacts', [])],
             'refuses': [item['code'] for item in _descriptor.get('refusals', [])],
         },
+        'toolkit': ('ai-provider' if _declared_module.startswith('backend.research.')
+                    else 'rdkit'),
     }
 UNITS['fields.region.mlp'] = {
     **UNITS['fields.region.mep'],

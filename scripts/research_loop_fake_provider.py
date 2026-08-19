@@ -96,7 +96,9 @@ class Handler(BaseHTTPRequestHandler):
         finish_reason = "stop"
         if mode == "markdown":
             message["content"] = "```json\n{}\n```"
-        elif mode == "schema-invalid":
+        elif mode == "schema-invalid" or (
+            mode == "invalid-then-valid" and self.server.attempts == 1
+        ):
             message["content"] = json.dumps({"schema_version": "wrong"})
         else:
             message["content"] = json.dumps(content, separators=(",", ":"))
@@ -123,7 +125,7 @@ def main() -> None:
         "--mode",
         default="valid",
         choices=(
-            "valid", "markdown", "invalid-json", "schema-invalid", "reasoning",
+            "valid", "markdown", "invalid-json", "schema-invalid", "invalid-then-valid", "reasoning",
             "tool-call", "length", "oversized", "slow", "connection-reset",
             "redirect", "auth", "forbidden", "retry-429", "retry-500", "retry-502",
             "retry-503", "retry-504",

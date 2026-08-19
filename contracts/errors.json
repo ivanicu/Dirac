@@ -171,6 +171,30 @@
       "caller_action": "Generate a new request_key for the changed operation, or replay the original payload byte-for-byte to recover its existing Job.",
       "user_copy": "That request key already belongs to a different operation.",
       "points_at": null
+    },
+    "PROVIDER_UNAVAILABLE": {
+      "meaning": "The configured inference provider could not complete a bounded request.",
+      "caller_action": "Inspect provider configuration or retry the blocked loop; do not silently switch providers.",
+      "retryable": true,
+      "http": 503,
+      "user_copy": "The configured AI provider is unavailable.",
+      "points_at": null
+    },
+    "MODEL_OUTPUT_INVALID": {
+      "meaning": "The provider returned content that remained invalid after bounded regeneration.",
+      "caller_action": "Inspect the validation report, prompt release, and provider profile; retry creates a new inference attempt.",
+      "retryable": true,
+      "http": 200,
+      "user_copy": "The model did not return a valid research proposal.",
+      "points_at": null
+    },
+    "STALE_PREVIEW": {
+      "meaning": "The loop, Campaign, or source artifacts changed after the action preview was created.",
+      "caller_action": "Refresh the loop and review the newly compiled action.",
+      "retryable": true,
+      "http": 409,
+      "user_copy": "The scientific context changed; review a fresh action preview.",
+      "points_at": null
     }
   },
   "db_enum_note": [
@@ -178,6 +202,7 @@
     "Runtime scientific parameter refusals are Job-reachable because schemas validate shape before opening a row, while chemistry engines can still reject inconsistent values after the Job starts; migration 029 added that state.",
     "BAD_HOST, AUTH_REQUIRED, FORBIDDEN, RATE_LIMITED, QUOTA_EXCEEDED and TLS_REQUIRED are rejected by the remote transport boundary before a job exists; IDEMPOTENCY_CONFLICT rejects reuse before a second Job may be created;",
     "OPEN_SHELL_SPIN_REQUIRED was added after 007 shipped; and the two ops codes NOT_FOUND / DB_UNAVAILABLE \u2014 neither",
+    "STALE_PREVIEW is a command-level refusal issued before a Job starts, so it is intentionally absent from app.job_error;",
     "of which can ever be a job's error, because a job that failed BECAUSE the",
     "database was unreachable has no row to record it in. That is not a gap; it is",
     "the one error class this ledger structurally cannot hold, and saying so here is",

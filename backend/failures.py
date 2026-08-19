@@ -117,6 +117,21 @@ class DiracIdempotencyConflict(DiracFailure):
         super().__init__('IDEMPOTENCY_CONFLICT', message, **kw)
 
 
+class DiracProviderUnavailable(DiracFailure):
+    def __init__(self, message: str, **kw: Any) -> None:
+        super().__init__('PROVIDER_UNAVAILABLE', message, **kw)
+
+
+class DiracModelOutputInvalid(DiracFailure):
+    def __init__(self, message: str, **kw: Any) -> None:
+        super().__init__('MODEL_OUTPUT_INVALID', message, **kw)
+
+
+class DiracStalePreview(DiracFailure):
+    def __init__(self, message: str, **kw: Any) -> None:
+        super().__init__('STALE_PREVIEW', message, **kw)
+
+
 class DiracUnsupported(DiracFailure):
     """The request is well-formed and outside what this method can do.
 
