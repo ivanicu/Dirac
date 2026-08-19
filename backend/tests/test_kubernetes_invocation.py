@@ -531,7 +531,7 @@ class KubernetesInvocationExecutorTests(unittest.TestCase):
                                          "gpu_memory_bytes_min": 8 << 30},
                 })
 
-    def test_worker_refuses_tf32_label_when_cuda_tf32_paths_are_disabled(self):
+    def test_worker_configures_tf32_paths_to_match_the_admitted_numeric_mode(self):
         cuda = SimpleNamespace(
             is_available=lambda: True,
             device_count=lambda: 1,
@@ -554,8 +554,9 @@ class KubernetesInvocationExecutorTests(unittest.TestCase):
         }
 
         with mock.patch.dict("sys.modules", {"torch": torch}):
-            with self.assertRaisesRegex(RuntimeError, "TF32 flags"):
-                motif_worker._gpu_evidence(request)
+            evidence = motif_worker._gpu_evidence(request)
+        self.assertTrue(evidence["matmul_allow_tf32"])
+        self.assertTrue(evidence["cudnn_allow_tf32"])
 
     def test_unauthorized_cancel_cannot_touch_owner_cancellation_token(self):
         ledger = MemoryJobStore()

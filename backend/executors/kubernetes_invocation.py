@@ -155,7 +155,8 @@ class KubernetesInvocationExecutor:
                  container_image: str, max_controllers: int = 4,
                  poll_seconds: float = .25, resource_broker: Any | None = None,
                  attempt_store: Any | None = None,
-                 artifact_reader: Any | None = None) -> None:
+                 artifact_reader: Any | None = None,
+                 shared_gpu_coordinator: Any | None = None) -> None:
         self.adapter = adapter
         self.exchange_root = exchange_root.resolve()
         self.container_image = container_image
@@ -163,6 +164,7 @@ class KubernetesInvocationExecutor:
         self.resource_broker = resource_broker
         self.attempt_store = attempt_store
         self.artifact_reader = artifact_reader
+        self.shared_gpu_coordinator = shared_gpu_coordinator
         self._pool = ThreadPoolExecutor(
             max_workers=max(1, int(max_controllers)),
             thread_name_prefix="dirac-k8s-controller")
@@ -227,6 +229,13 @@ class KubernetesInvocationExecutor:
                     pass
         if route != "kubernetes":
             raise failures.DiracInternal(f"unsupported admitted execution route {route!r}")
+        if self.shared_gpu_coordinator is not None:
+            profile = ((ctx.spec.execution.get("scale_profile") or {})
+                       if ctx.spec is not None else {})
+            required_bytes = int(profile.get("gpu_memory_bytes") or 1)
+            with self.shared_gpu_coordinator.exclusive(
+                    required_bytes=required_bytes):
+                return self._execute_remote(handler, payload, ctx)
         return self._execute_remote(handler, payload, ctx)
 
     @staticmethod

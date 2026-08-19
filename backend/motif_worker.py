@@ -84,6 +84,27 @@ def _gpu_evidence(request: dict[str, Any]) -> dict[str, Any]:
             f"worker GPU architecture {architecture} does not match admitted "
             f"constraint {requested_arch}")
     numeric_mode = str(request["determinism"].get("numeric_mode") or "")
+    dtype_by_mode = {
+        "fp64": getattr(torch, "float64", None),
+        "fp32": getattr(torch, "float32", None),
+        "tf32": getattr(torch, "float32", None),
+        "bf16": getattr(torch, "bfloat16", None),
+        "fp16": getattr(torch, "float16", None),
+    }
+    target_dtype = dtype_by_mode.get(numeric_mode)
+    set_default_dtype = getattr(torch, "set_default_dtype", None)
+    if target_dtype is not None and callable(set_default_dtype):
+        set_default_dtype(target_dtype)
+    backends = getattr(torch, "backends", None)
+    cuda_backend = getattr(backends, "cuda", None)
+    matmul_backend = getattr(cuda_backend, "matmul", None)
+    cudnn_backend = getattr(backends, "cudnn", None)
+    if numeric_mode in {"fp32", "tf32"}:
+        expected_tf32 = numeric_mode == "tf32"
+        if matmul_backend is not None:
+            matmul_backend.allow_tf32 = expected_tf32
+        if cudnn_backend is not None:
+            cudnn_backend.allow_tf32 = expected_tf32
     memory_bytes = int(torch.cuda.get_device_properties(0).total_memory)
     admitted_memory_bytes = int(
         request["resource_request"].get("gpu_memory_bytes_min") or 0)
@@ -102,10 +123,6 @@ def _gpu_evidence(request: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError(
             f"worker numeric mode {numeric_mode!r} is not attested by default "
             f"dtype {actual_dtype!r}")
-    backends = getattr(torch, "backends", None)
-    cuda_backend = getattr(backends, "cuda", None)
-    matmul_backend = getattr(cuda_backend, "matmul", None)
-    cudnn_backend = getattr(backends, "cudnn", None)
     matmul_tf32 = getattr(matmul_backend, "allow_tf32", None)
     cudnn_tf32 = getattr(cudnn_backend, "allow_tf32", None)
     if numeric_mode in {"fp32", "tf32"}:

@@ -4,6 +4,23 @@ set -euo pipefail
 # This is deliberately a gate, not a blind patch. A positive Kueue quota on a
 # node that advertises zero GPUs admits work that Kubernetes can never place.
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader >/dev/null
+# The worker attests capacity through torch.cuda, whose allocatable total can be
+# lower than nvidia-smi's board-memory total.  Scheduling must bind to the same
+# instrument the worker will later verify.
+gpu_probe="$(backend/env/bin/python -c 'import torch; p=torch.cuda.get_device_properties(0); m,n=torch.cuda.get_device_capability(0); print(f"{m}.{n},{p.total_memory}")')"
+compute_cap="$(cut -d, -f1 <<<"$gpu_probe" | xargs)"
+memory_bytes="$(cut -d, -f2 <<<"$gpu_probe" | xargs)"
+case "$compute_cap" in
+  12.*|10.*) gpu_arch="blackwell" ;;
+  9.*) gpu_arch="hopper" ;;
+  8.9) gpu_arch="ada" ;;
+  8.*) gpu_arch="ampere" ;;
+  *) echo "unsupported CUDA compute capability: $compute_cap" >&2; exit 1 ;;
+esac
+if ! [[ "$memory_bytes" =~ ^[0-9]+$ ]]; then
+  echo "invalid measured GPU memory: $memory_bytes" >&2
+  exit 1
+fi
 
 operator_state="$(kubectl get clusterpolicy cluster-policy -o jsonpath='{.status.state}')"
 if [[ "$operator_state" != "ready" ]]; then
@@ -17,6 +34,20 @@ if [[ "$allocatable" != "1" ]]; then
   exit 1
 fi
 
+# These labels are scheduler constraints, not descriptive metadata.  The API
+# only reports GPU readiness when the measured node profile and Pod selector
+# are identical.
+kubectl label node icu --overwrite \
+  "dirac.io/gpu-arch=$gpu_arch" \
+  "dirac.io/gpu-numeric-mode=fp32" \
+  "dirac.io/gpu-memory-bytes=$memory_bytes"
+observed_labels="$(kubectl get node icu -o jsonpath='{.metadata.labels.dirac\.io/gpu-arch},{.metadata.labels.dirac\.io/gpu-numeric-mode},{.metadata.labels.dirac\.io/gpu-memory-bytes}')"
+expected_labels="$gpu_arch,fp32,$memory_bytes"
+if [[ "$observed_labels" != "$expected_labels" ]]; then
+  echo "GPU scheduling labels failed verification: $observed_labels" >&2
+  exit 1
+fi
+
 resource_name="$(kubectl get clusterqueue motif -o jsonpath='{.spec.resourceGroups[0].flavors[0].resources[3].name}')"
 if [[ "$resource_name" != "nvidia.com/gpu" ]]; then
   echo "refusing fragile quota patch: resource index 3 is $resource_name" >&2
@@ -25,4 +56,4 @@ fi
 
 kubectl patch clusterqueue motif --type=json \
   --patch='[{"op":"replace","path":"/spec/resourceGroups/0/flavors/0/resources/3/nominalQuota","value":"1"}]'
-echo "Motif GPU quota activated: 1"
+echo "Motif GPU quota activated: 1 ($gpu_arch fp32 $memory_bytes bytes)"

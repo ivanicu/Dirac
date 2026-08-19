@@ -121,9 +121,11 @@ def default_executor():
             "process_slots": 20, "scf_slots": 2, "campaign_credits": 1e12,
         })
     attempt_store = PostgresAttemptStore(lambda: psycopg.connect(DEFAULT_DSN))
+    from execution_control.shared_gpu import coordinator_from_environment
     return KubernetesInvocationExecutor(
         adapter=adapter, exchange_root=exchange, container_image=worker_image,
-        resource_broker=broker, attempt_store=attempt_store)
+        resource_broker=broker, attempt_store=attempt_store,
+        shared_gpu_coordinator=coordinator_from_environment(repository))
 
 
 def toolkit_versions() -> dict[str, str]:
