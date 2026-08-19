@@ -1,6 +1,6 @@
 # Dirac Architecture
 
-Current as of 2026-08-17. This document describes live boundaries; product intent and
+Current as of 2026-08-19. This document describes live boundaries; product intent and
 information architecture live under `docs/product/`, exact schemas under `contracts/`,
 and runtime evidence in `STATUS.md`.
 
@@ -20,7 +20,7 @@ Invocation kernel
         │                    │                │
         │                    │                └─ Inline / Thread / Process / Remote
         │                    └─ field cache + generic method-version result cache
-        └─ 30 executable scientific Methods
+        └─ 31 executable scientific Methods
                      │
           ┌──────────┼──────────┐
           ▼          ▼          ▼
@@ -59,7 +59,7 @@ errors and provenance belong below those adapters.
 validates command input and output, records `human | agent | service` actor identity,
 and enforces that long commands declared `job_policy=required` actually return a Job.
 
-`backend/invocation.py` is the single scientific invocation path for 30 executable scientific Methods. It validates method
+`backend/invocation.py` is the single scientific invocation path for 31 executable scientific Methods. It validates method
 input/output, consults method-current caches, creates or joins Jobs, runs an injected
 Executor, stores content-addressed artifacts, and returns one v2 envelope with exact
 method version and provenance. Long scientific commands always submit through the
@@ -92,7 +92,7 @@ PostgreSQL is the durable authority:
 - `app.command_trace` and `app.v_command_observation` retain semantic-command outcomes,
   latency, cache, actor and linked-Job evidence for the architecture twin.
 
-Migrations are forward-only and content-hash checked. Migrations 000–048 are the
+Migrations are forward-only and content-hash checked. Migrations 000–050 are the
 current schema history.
 
 ## Client application

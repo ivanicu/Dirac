@@ -1,6 +1,6 @@
 # Construction status
 
-Last re-derived: **2026-08-17** from the canonical registries, contracts, migrations,
+Last re-derived: **2026-08-19** from the canonical registries, contracts, migrations,
 repository gates, GitHub CI and live supervised local services.
 
 This page distinguishes platform plumbing, connected product capability and scientific
@@ -11,9 +11,9 @@ validation. A green contract or transport gate does not validate a scientific mo
 | Capability | Current evidence |
 |---|---|
 | Canonical domain | 83 ObjectKinds and 27 controlled relation kinds; ObjectRef types generated for Python and TypeScript |
-| Semantic Commands | 92 registered Commands with schemas, actor identity, mutation policy, required-Job policy and typed errors |
-| Scientific Methods | 30 Method manifests behind one InvocationService |
-| Durable schema | 49 forward-only migrations, `000` through `048` |
+| Semantic Commands | 98 registered Commands with schemas, actor identity, mutation policy, required-Job policy and typed errors |
+| Scientific Methods | 31 Method manifests behind one InvocationService |
+| Durable schema | 51 forward-only migrations, `000` through `050` |
 | Product shell | 8 Workspaces and 30 routable Views |
 | Connected UI | 12 of 30 Views connected to 15 composable modules; the remaining 18 are explicit shells |
 | Interfaces | HTTP v2, Python SDK, CLI and generated safe MCP projection share the command boundary |

@@ -276,7 +276,7 @@ def via_cli_json(molfile: str) -> dict:
     t0 = time.time()
     r = subprocess.run(
         [sys.executable, '-m', 'dirac.cli', 'run', METHOD, '--molfile', path,
-         '--basis', BASIS, '--json'],
+         '--basis', BASIS, '--transport', 'http', '--url', BASE, '--json'],
         capture_output=True, text=True, env=env, cwd=str(ROOT), timeout=900)
     os.unlink(path)
     if r.returncode not in (0, 1):
@@ -307,6 +307,7 @@ def via_mcp(molfile: str) -> dict:
     """
     import io
     sys.path.insert(0, str(ROOT / 'python' / 'src'))
+    from dirac.client import DiracClient
     from dirac.mcp import DiracMCP
     reqs = [
         {'jsonrpc': '2.0', 'id': 1, 'method': 'initialize', 'params': {}},
@@ -320,7 +321,7 @@ def via_mcp(molfile: str) -> dict:
     ]
     out = io.StringIO()
     t0 = time.time()
-    mcp = DiracMCP()
+    mcp = DiracMCP(DiracClient('http', base_url=BASE, timeout=900))
     mcp.serve(stdin=io.StringIO('\n'.join(json.dumps(r) for r in reqs)), stdout=out)
     resps = {r.get('id'): r for r in
              (json.loads(l) for l in out.getvalue().splitlines() if l.strip())}
@@ -412,7 +413,7 @@ def main() -> int:
           f'(excluded from the comparison)')
     print(f'  sdk transport: {(sdk_env.get("meta") or {}).get("transport")}')
     print(f'  mcp: {mcp_env.get("_n_tools")} tools · tool result '
-          f'{mcp_env.get("_tool_result_chars"):,} chars for a '
+          f'{int(mcp_env.get("_tool_result_chars") or 0):,} chars for a '
           f'{(legs["mcp"].get("cube_bytes") or 0):,}-byte artifact · contains base64: '
           f'{mcp_env.get("_contains_base64")}')
     print(f'  cli exit code: {cli_env.get("_cli_exit")} · stdout parsed as JSON: '
