@@ -217,8 +217,9 @@ class PostgresArtifactStore:
             "AND contype='f' "
             "AND conname='rbfe_campaign_artifact_role_fk' "
             "AND pg_get_constraintdef(oid) LIKE "
-            "'%%FOREIGN KEY (artifact_id, role)%%')")
-        capability = tuple(cur.fetchone() or (False, False, False))
+            "'%%FOREIGN KEY (artifact_id, role)%%'), "
+            "to_regclass('app.research_loop_artifact') IS NOT NULL")
+        capability = tuple(cur.fetchone() or (False, False, False, False))
         if all(capability):
             return
         missing = []
@@ -226,6 +227,8 @@ class PostgresArtifactStore:
             missing.append('040_rbfe_campaign_state.sql')
         if not all(capability[1:3]):
             missing.append('045_rbfe_campaign_artifact_ownership.sql')
+        if not capability[3]:
+            missing.append('049_research_loop.sql')
         self.counters['authorization_schema_unavailable'] += 1
         raise failures.DiracFailure(
             'DB_UNAVAILABLE',
@@ -280,12 +283,19 @@ class PostgresArtifactStore:
                 WHERE o.document_artifact_id={alias}.id
                   AND c.created_by_kind=%s AND c.created_by_id=%s
             )
+            OR EXISTS (
+                SELECT 1
+                FROM app.research_loop_artifact la
+                JOIN app.research_loop_state ls ON ls.run_id=la.run_id
+                WHERE la.artifact_id={alias}.id
+                  AND ls.actor_kind=%s AND ls.actor_id=%s
+            )
         )'''
 
     @staticmethod
     def _access_params(kind: str, actor_id: str) -> tuple[str, ...]:
         return (kind, actor_id, kind, actor_id, kind, actor_id,
-                kind, actor_id)
+                kind, actor_id, kind, actor_id)
 
     def head(self, address: str) -> A.Artifact:
         """Metadata without bytes — the request a client makes to decide.
