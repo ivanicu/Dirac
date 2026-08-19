@@ -10,9 +10,11 @@ from execution_control.shared_gpu import SharedGpuCoordinator
 
 
 class CommandRunner:
-    def __init__(self, *, active: bool = True, free_mib: list[int] | None = None):
+    def __init__(self, *, active: bool = True, free_mib: list[int] | None = None,
+                 ready: list[bool] | None = None):
         self.active = active
         self.free_mib = list(free_mib or [16_000])
+        self.ready = list(ready or [True])
         self.commands: list[tuple[str, ...]] = []
 
     def __call__(self, command, **_kwargs):
@@ -31,6 +33,10 @@ class CommandRunner:
         if command[0] == "nvidia-smi":
             value = self.free_mib.pop(0) if len(self.free_mib) > 1 else self.free_mib[0]
             return subprocess.CompletedProcess(command, 0, f"{value}\n", "")
+        if command[0] == "curl":
+            value = self.ready.pop(0) if len(self.ready) > 1 else self.ready[0]
+            return subprocess.CompletedProcess(
+                command, 0 if value else 7, "" if value else "", "")
         raise AssertionError(command)
 
 
@@ -48,8 +54,27 @@ def test_active_reasoner_is_stopped_before_gpu_work_and_restarted(tmp_path: Path
     assert runner.commands.index(("systemctl", "--user", "stop",
                                   "dirac-qwen.service")) < runner.commands.index(
                                       ("scientific-gpu-work",))
-    assert runner.commands[-1] == (
-        "systemctl", "--user", "start", "dirac-qwen.service")
+    start = ("systemctl", "--user", "start", "dirac-qwen.service")
+    assert start in runner.commands
+    assert runner.commands.index(start) < next(
+        index for index, command in enumerate(runner.commands)
+        if command[0] == "curl")
+
+
+def test_restart_waits_until_reasoner_http_is_ready(tmp_path: Path):
+    runner = CommandRunner(active=True, ready=[False, False, True])
+    sleeps: list[float] = []
+    coordinator = SharedGpuCoordinator(
+        lock_path=tmp_path / "gpu.lock", runner=runner,
+        sleep=sleeps.append, timeout_seconds=5, poll_seconds=.01)
+
+    with coordinator.exclusive(required_bytes=1 << 20):
+        pass
+
+    health_checks = [command for command in runner.commands
+                     if command[0] == "curl"]
+    assert len(health_checks) == 3
+    assert sleeps == [.05, .05]
 
 
 def test_reasoner_is_restarted_when_scientific_work_fails(tmp_path: Path):

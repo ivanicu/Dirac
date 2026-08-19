@@ -22,12 +22,14 @@ class SharedGpuCoordinator:
     """
 
     def __init__(self, *, lock_path: Path, service: str = "dirac-qwen.service",
+                 health_url: str = "http://127.0.0.1:8930/health",
                  runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
                  sleep: Callable[[float], None] = time.sleep,
                  timeout_seconds: float = 120.0,
                  poll_seconds: float = 1.0) -> None:
         self.lock_path = lock_path.resolve()
         self.service = service
+        self.health_url = health_url
         self._runner = runner
         self._sleep = sleep
         self.timeout_seconds = max(1.0, float(timeout_seconds))
@@ -86,6 +88,24 @@ class SharedGpuCoordinator:
                      "observed_free_bytes": observed,
                      "timeout_seconds": self.timeout_seconds})
 
+    def _wait_for_reasoner_ready(self) -> None:
+        deadline = time.monotonic() + self.timeout_seconds
+        last_status = 0
+        while time.monotonic() <= deadline:
+            result = self._run([
+                "curl", "--fail", "--silent", "--show-error",
+                "--max-time", "2", self.health_url,
+            ], check=False)
+            last_status = result.returncode
+            if result.returncode == 0:
+                return
+            self._sleep(self.poll_seconds)
+        raise failures.DiracUnsupported(
+            "local reasoner service started but did not become HTTP ready",
+            details={"service": self.service, "health_url": self.health_url,
+                     "last_status": last_status,
+                     "timeout_seconds": self.timeout_seconds})
+
     @contextmanager
     def exclusive(self, *, required_bytes: int) -> Iterator[None]:
         if type(required_bytes) is not int or required_bytes < 1:
@@ -109,6 +129,7 @@ class SharedGpuCoordinator:
                 if reasoner_was_active:
                     try:
                         self._run(["systemctl", "--user", "start", self.service])
+                        self._wait_for_reasoner_ready()
                     except BaseException:
                         if body_error is None:
                             raise
@@ -126,6 +147,8 @@ def coordinator_from_environment(repository: Path) -> SharedGpuCoordinator | Non
             "DIRAC_SHARED_GPU_LOCK",
             repository / ".runtime/shared-gpu/scientific-execution.lock")),
         service=os.environ.get("DIRAC_QWEN_SYSTEMD_SERVICE", "dirac-qwen.service"),
+        health_url=os.environ.get(
+            "DIRAC_QWEN_HEALTH_URL", "http://127.0.0.1:8930/health"),
         timeout_seconds=float(os.environ.get(
             "DIRAC_SHARED_GPU_RELEASE_TIMEOUT_SECONDS", "120")),
     )
