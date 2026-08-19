@@ -53,12 +53,16 @@ class ResearchLoopPanel {
     private polling = 0;
     private busy = false;
     private returnFocus: HTMLElement | null = null;
+    private refreshEpoch = 0;
+    private campaignId: string | null = null;
 
     constructor(private host: HTMLElement, private toggle: HTMLButtonElement,
                 private options: MountOptions) {
         this.host.hidden = true;
         this.host.setAttribute('aria-hidden', 'true');
-        this.toggle.addEventListener('click', () => this.open());
+        this.toggle.addEventListener('click', () => {
+            if (this.host.hidden) void this.open(); else this.close();
+        });
         this.host.addEventListener('keydown', event => {
             if (event.key === 'Escape') this.close();
         });
@@ -89,11 +93,14 @@ class ResearchLoopPanel {
             'Reading provider admission and durable loop state…'));
         this.host.querySelector<HTMLElement>('button')?.focus();
         await this.refresh();
-        this.host.querySelector<HTMLElement>('button,select,input,textarea')?.focus();
+        if (!this.host.hidden) {
+            this.host.querySelector<HTMLElement>('button,select,input,textarea')?.focus();
+        }
     }
 
     private close(): void {
         window.clearTimeout(this.polling);
+        this.refreshEpoch += 1;
         this.host.hidden = true;
         this.host.setAttribute('aria-hidden', 'true');
         this.toggle.setAttribute('aria-expanded', 'false');
@@ -101,34 +108,67 @@ class ResearchLoopPanel {
     }
 
     private async refresh(): Promise<void> {
+        window.clearTimeout(this.polling);
+        const epoch = ++this.refreshEpoch;
         const campaign = this.options.campaign();
         if (!campaign) {
-            this.renderNotice('NO GOVERNED CAMPAIGN',
+            if (!this.host.hidden) this.renderNotice('NO GOVERNED CAMPAIGN',
                 'Build or restore a planned FEP Campaign before starting an AI research loop.');
             return;
         }
+        if (campaign.campaignId !== this.campaignId) {
+            this.campaignId = campaign.campaignId;
+            this.loop = null; this.context = null; this.proposal = null;
+        }
         try {
             const receipt = this.receipt(campaign.campaignId);
-            if (!this.profiles.length) {
-                [this.profiles, this.programs] = await Promise.all([
+            let profiles = this.profiles;
+            let programs = this.programs;
+            if (!profiles.length) {
+                [profiles, programs] = await Promise.all([
                     this.options.client.providers(), this.options.client.programs(),
                 ]);
             }
+            let loop = this.loop;
+            let context = this.context;
+            let proposal = this.proposal;
             if (receipt.runId) {
-                this.loop = await this.options.client.get(receipt.runId);
-                [this.context, this.proposal] = await Promise.all([
-                    this.options.client.context(this.loop.context_ref),
-                    this.options.client.proposal(this.loop.proposal_ref),
+                loop = await this.options.client.get(receipt.runId);
+                [context, proposal] = await Promise.all([
+                    this.options.client.context(loop.context_ref),
+                    this.options.client.proposal(loop.proposal_ref),
                 ]);
+            } else {
+                loop = null; context = null; proposal = null;
             }
+            if (epoch !== this.refreshEpoch || this.host.hidden) return;
+            this.profiles = profiles; this.programs = programs;
+            this.loop = loop; this.context = context; this.proposal = proposal;
             this.render(campaign);
             if (this.loop && ['active', 'waiting_approval'].includes(this.loop.state)) {
                 this.polling = window.setTimeout(() => void this.refresh(), 2000);
             }
         } catch (error) {
-            this.renderNotice('RESEARCH LOOP UNAVAILABLE',
-                error instanceof Error ? error.message : String(error), true);
+            if (epoch === this.refreshEpoch && !this.host.hidden) {
+                this.renderNotice('RESEARCH LOOP UNAVAILABLE',
+                    error instanceof Error ? error.message : String(error), true);
+            }
         }
+    }
+
+    private startBusy(): boolean {
+        if (this.busy) return false;
+        this.busy = true;
+        this.host.setAttribute('aria-busy', 'true');
+        this.host.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+            'button:not(.research-loop-close),input,select,textarea',
+        ).forEach(control => { control.disabled = true; });
+        return true;
+    }
+
+    private endBusy(): void {
+        this.busy = false;
+        this.host.removeAttribute('aria-busy');
     }
 
     private frame(title: string): HTMLElement {
@@ -164,15 +204,18 @@ class ResearchLoopPanel {
 
     private render(campaign: CampaignBinding): void {
         if (!this.loop) { this.renderCreate(campaign); return; }
-        const live = this.frame(`${this.loop.state.toUpperCase()} · ${this.loop.stage.toUpperCase()}`);
+        const stateLabel = this.loop.state.replace(/_/g, ' ').toUpperCase();
+        const stageLabel = this.loop.stage.replace(/_/g, ' ').toUpperCase();
+        const live = this.frame(`${stateLabel} · ${stageLabel}`);
         const status = node('div', 'research-loop-status');
         status.append(
-            node('span', '', `STATE ${this.loop.state.toUpperCase()}`),
-            node('span', '', `STAGE ${this.loop.stage.toUpperCase()}`),
+            node('span', '', `STATE ${stateLabel}`),
+            node('span', '', `STAGE ${stageLabel}`),
             node('span', '', `ITERATION ${this.loop.iteration}`),
             node('span', '', `PROVIDER ${this.loop.provider.profile_id}`),
         );
         live.append(status);
+        this.renderTerminalOutcome(live);
         this.renderGoal(live);
         if (this.loop.state === 'waiting_approval') this.renderAction(live);
         this.renderFacts(live);
@@ -182,6 +225,20 @@ class ResearchLoopPanel {
         this.renderAttention(live);
         this.renderTimeline(live);
         this.renderControls(live);
+    }
+
+    private renderTerminalOutcome(root: HTMLElement): void {
+        if (!['completed', 'cancelled', 'failed'].includes(this.loop!.state)) return;
+        const eventTypes = new Set(this.loop!.events.map(event => event.event_type));
+        const rejected = eventTypes.has('action_rejected');
+        const runsetCompleted = eventTypes.has('runset_completed');
+        if (!rejected && !runsetCompleted) return;
+        const item = section('TERMINAL OUTCOME',
+            rejected ? 'HUMAN DECISION' : 'COMPUTATION OBSERVED');
+        item.append(node('div', 'research-loop-boundary', rejected
+            ? 'ACTION REJECTED · NO RUNSET WAS DISPATCHED'
+            : 'RUNSET COMPLETED · METHOD RESULT REMAINS UNVALIDATED'));
+        root.append(item);
     }
 
     private renderCreate(campaign: CampaignBinding): void {
@@ -231,7 +288,13 @@ class ResearchLoopPanel {
         fields.append(this.label('PROGRAM', program), this.label('PROVIDER', provider));
         goal.append(intent, fields, disclosure);
         const create = node('button', 'research-loop-primary', 'START BOUNDED RESEARCH LOOP');
-        create.disabled = !this.programs.length;
+        const synchronize = () => {
+            create.disabled = !program.value || !provider.value || !intent.value.trim();
+        };
+        intent.addEventListener('input', synchronize);
+        program.addEventListener('change', synchronize);
+        provider.addEventListener('change', synchronize);
+        synchronize();
         create.addEventListener('click', () => void this.create(campaign, program.value,
             provider.value, intent.value));
         goal.append(create);
@@ -244,8 +307,7 @@ class ResearchLoopPanel {
 
     private async create(campaign: CampaignBinding, programId: string,
                          providerId: string, intent: string): Promise<void> {
-        if (this.busy || !programId || !providerId || !intent.trim()) return;
-        this.busy = true;
+        if (!programId || !providerId || !intent.trim() || !this.startBusy()) return;
         const provider = this.profiles.find(row => row.profile_id === providerId)!;
         const request = {
             program_ref: { kind: 'program' as const, id: programId },
@@ -276,7 +338,7 @@ class ResearchLoopPanel {
         } catch (error) {
             this.renderNotice('LOOP CREATION REFUSED',
                 error instanceof Error ? error.message : String(error), true);
-        } finally { this.busy = false; }
+        } finally { this.endBusy(); }
     }
 
     private renderGoal(root: HTMLElement): void {
@@ -325,9 +387,11 @@ class ResearchLoopPanel {
         const preview = pending.preview as Record<string, any> | undefined;
         const item = section('RECOMMENDED NEXT ACTION', preview ? 'SERVER COMPILED' : 'NO PREVIEW');
         if (!preview) {
- item.append(node('p', 'research-loop-empty',
-            this.proposal?.summary || 'The controller is deriving the next bounded action.')); root.append(item); return;
-}
+            item.append(node('p', 'research-loop-empty',
+                this.proposal?.summary || 'The controller is deriving the next bounded action.'));
+            root.append(item);
+            return;
+        }
         item.append(node('b', 'research-loop-action-title', String(preview.template_id)),
             node('p', '', `${String(preview.subject_ref?.kind)} · ${String(preview.subject_ref?.id)}`),
             node('p', '', String(preview.scientific_question)),
@@ -372,8 +436,7 @@ class ResearchLoopPanel {
 
     private async decide(approved: boolean, preview: Record<string, any>, rationale: string,
                          acknowledgements: string[]): Promise<void> {
-        if (this.busy || !this.loop || !rationale.trim()) return;
-        this.busy = true;
+        if (!this.loop || !rationale.trim() || !this.startBusy()) return;
         try {
             if (approved) await this.options.client.approve(
                 this.loop, String(preview.action_fingerprint), acknowledgements, rationale.trim());
@@ -381,9 +444,9 @@ class ResearchLoopPanel {
                 this.loop, String(preview.action_fingerprint), rationale.trim());
             await this.refresh();
         } catch (error) {
- this.renderNotice('DECISION REFUSED',
-            error instanceof Error ? error.message : String(error), true);
-} finally { this.busy = false; }
+            this.renderNotice('DECISION REFUSED',
+                error instanceof Error ? error.message : String(error), true);
+        } finally { this.endBusy(); }
     }
 
     private renderBudget(root: HTMLElement): void {
@@ -437,8 +500,10 @@ class ResearchLoopPanel {
         const choices = this.loop!.state === 'paused' ? ['resume', 'cancel']
             : this.loop!.state === 'blocked' ? ['retry', 'pause', 'cancel']
                 : ['pause', 'cancel'];
+        const stateButtons: HTMLButtonElement[] = [];
         choices.forEach(action => {
             const button = node('button', action === 'cancel' ? 'research-loop-danger' : 'research-loop-secondary', action.toUpperCase());
+            stateButtons.push(button);
             button.addEventListener('click', () => void this.control(action, rationale.value)); actions.append(button);
         });
         const revise = node('button', 'research-loop-secondary', 'REVISE GOAL');
@@ -453,10 +518,18 @@ class ResearchLoopPanel {
             provider.append(option);
         });
         const changeProvider = node('button', 'research-loop-secondary', 'CHANGE PROVIDER');
-        changeProvider.disabled = provider.value === this.loop!.provider.profile_id;
-        provider.addEventListener('change', () => {
-            changeProvider.disabled = provider.value === this.loop!.provider.profile_id;
-        });
+        const synchronize = () => {
+            const hasRationale = Boolean(rationale.value.trim());
+            stateButtons.forEach(button => { button.disabled = !hasRationale; });
+            revise.disabled = !hasRationale || !revised.value.trim()
+                || revised.value.trim() === this.loop!.goal.intent;
+            changeProvider.disabled = !hasRationale || !provider.value
+                || provider.value === this.loop!.provider.profile_id;
+        };
+        rationale.addEventListener('input', synchronize);
+        revised.addEventListener('input', synchronize);
+        provider.addEventListener('change', synchronize);
+        synchronize();
         changeProvider.addEventListener('click', () => void this.control(
             'change_provider', rationale.value, { provider_profile_id: provider.value }));
         const review = node('button', 'research-loop-secondary', 'OPEN FEP REVIEW');
@@ -467,12 +540,11 @@ class ResearchLoopPanel {
 
     private async control(action: string, rationale: string,
                           extra: Record<string, unknown> = {}): Promise<void> {
-        if (this.busy || !this.loop || !rationale.trim()) return;
-        this.busy = true;
+        if (!this.loop || !rationale.trim() || !this.startBusy()) return;
         try { await this.options.client.control(this.loop, action, rationale.trim(), extra); await this.refresh(); } catch (error) {
- this.renderNotice('CONTROL REFUSED',
-            error instanceof Error ? error.message : String(error), true);
-} finally { this.busy = false; }
+            this.renderNotice('CONTROL REFUSED',
+                error instanceof Error ? error.message : String(error), true);
+        } finally { this.endBusy(); }
     }
 
     private openReview(): void {
