@@ -1,7 +1,8 @@
 {
   "schema_version": "1.0",
-  "reviewed_repository_commit": "7a480bd8a8c8aa3d48837d5a50663a1140fdb41e",
+  "reviewed_repository_commit": "2675f228f718f1a0f7c319c958e13c14d38d43c8",
   "commands": [
+    "ai.provider.list",
     "attention.list",
     "campaign.bayesian-rank",
     "campaign.closed-loop.get",
@@ -78,6 +79,11 @@
     "program.work_package.record",
     "proposal.generate",
     "protocol.version.record",
+    "research.loop.approve",
+    "research.loop.control",
+    "research.loop.create",
+    "research.loop.get",
+    "research.loop.reject",
     "result.ingest",
     "sample.create",
     "sample.transfer",

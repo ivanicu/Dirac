@@ -132,7 +132,7 @@ def test_db_enum_is_a_subset_of_the_error_vocabulary():
 
 def test_the_reverse_does_not_hold_and_the_gap_is_exactly_named_codes():
     """The direction that must NOT hold, asserted exactly — not 'at least
-    these two', but EXACTLY these two, so that the day a THIRD code appears
+    these codes', but EXACTLY these codes, so that the day another code appears
     in errors.json but not the enum, this test fails and someone has to look
     at it rather than let a silent third case join the two legitimate ones.
 
@@ -146,7 +146,7 @@ def test_the_reverse_does_not_hold_and_the_gap_is_exactly_named_codes():
     assert only_in_vocabulary == {
         'BAD_HOST', 'OPEN_SHELL_SPIN_REQUIRED', 'NOT_FOUND', 'DB_UNAVAILABLE',
         'AUTH_REQUIRED', 'FORBIDDEN', 'RATE_LIMITED', 'QUOTA_EXCEEDED',
-        'TLS_REQUIRED', 'IDEMPOTENCY_CONFLICT'}, (
+        'TLS_REQUIRED', 'IDEMPOTENCY_CONFLICT', 'STALE_PREVIEW'}, (
         f'the errors.json-minus-enum set difference moved to '
         f'{sorted(only_in_vocabulary)} — re-read db_enum_note in errors.json '
         f'and update either the note, the enum, or this test, deliberately')
